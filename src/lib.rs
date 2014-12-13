@@ -366,16 +366,6 @@
        html_favicon_url = "http://www.rust-lang.org/favicon.ico",
        html_root_url = "http://doc.rust-lang.org/regex/")]
 
-#[cfg(test)]
-extern crate "test" as stdtest;
-#[cfg(test)]
-extern crate rand;
-
-// During tests, this links with the `regex` crate so that the `regex!` macro
-// can be tested.
-#[cfg(test)]
-extern crate regex;
-
 // Unicode tables for character classes are defined in libunicode
 extern crate unicode;
 
