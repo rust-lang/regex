@@ -838,8 +838,9 @@ impl<'a> Parser<'a> {
     // Otherwise, an error will be returned.
     // Generally, `allow_start` is only true when you're *not* expecting an
     // opening parenthesis.
-    fn pos_last(&self, allow_start: bool, pred: |&BuildAst| -> bool)
-               -> Result<uint, Error> {
+    fn pos_last<F>(&self, allow_start: bool, pred: F)
+               -> Result<uint, Error>
+               where F: Fn(&BuildAst) -> bool {
         let from = match self.stack.iter().rev().position(pred) {
             Some(i) => i,
             None => {
@@ -1029,7 +1030,7 @@ fn is_valid_cap(c: char) -> bool {
 
 fn find_class(classes: NamedClasses, name: &str) -> Option<Vec<(char, char)>> {
     match classes.binary_search(|&(s, _)| s.cmp(name)) {
-        BinarySearchResult::Found(i) => Some(classes[i].val1().to_vec()),
+        BinarySearchResult::Found(i) => Some(classes[i].1.to_vec()),
         BinarySearchResult::NotFound(_) => None,
     }
 }
