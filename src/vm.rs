@@ -38,6 +38,7 @@ pub use self::StepState::*;
 
 use std::cmp;
 use std::mem;
+use std::slice::SliceExt;
 use compile::{
     Program,
     Match, OneChar, CharClass, Any, EmptyBegin, EmptyEnd, EmptyWordBoundary,
