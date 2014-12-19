@@ -32,7 +32,7 @@ macro_rules! regex(
             Err(err) => panic!("{}", err),
         }
     );
-)
+);
 
 #[path = "bench.rs"]
 mod dynamic_bench;
