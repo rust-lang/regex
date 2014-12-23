@@ -541,8 +541,8 @@ impl Regex {
 }
 
 pub enum NamesIter<'a> {
-    NamesIterNative(::std::slice::Items<'a, Option<&'static str>>),
-    NamesIterDynamic(::std::slice::Items<'a, Option<String>>)
+    NamesIterNative(::std::slice::Iter<'a, Option<&'static str>>),
+    NamesIterDynamic(::std::slice::Iter<'a, Option<String>>)
 }
 
 impl<'a> Iterator<Option<String>> for NamesIter<'a> {
@@ -770,7 +770,7 @@ impl<'t> Captures<'t> {
             let pre = refs.at(1).unwrap_or("");
             let name = refs.at(2).unwrap_or("");
             format!("{}{}", pre,
-                    match from_str::<uint>(name.as_slice()) {
+                    match name.parse::<uint>() {
                 None => self.name(name).unwrap_or("").to_string(),
                 Some(i) => self.at(i).unwrap_or("").to_string(),
             })

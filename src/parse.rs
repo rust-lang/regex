@@ -908,7 +908,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_uint(&self, s: &str) -> Result<uint, Error> {
-        match from_str::<uint>(s) {
+        match s.parse::<uint>() {
             Some(i) => Ok(i),
             None => {
                 self.err(format!("Expected an unsigned integer but got '{}'.",
