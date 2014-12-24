@@ -9,6 +9,7 @@
 // except according to those terms.
 #![allow(non_snake_case)]
 
+use std::iter::repeat;
 use std::rand::{Rng, task_rng};
 use stdtest::Bencher;
 
@@ -21,31 +22,33 @@ fn bench_assert_match(b: &mut Bencher, re: Regex, text: &str) {
 #[bench]
 fn no_exponential(b: &mut Bencher) {
     let n = 100;
-    let re = Regex::new(format!("{}{}",
-                                "a?".repeat(n),
-                                "a".repeat(n)).as_slice()).unwrap();
-    let text = "a".repeat(n);
+    let regex_string = format!(
+        "{}{}",
+        repeat("a?").take(n).collect::<String>(),
+        repeat("a").take(n).collect::<String>());
+    let re = Regex::new(regex_string.as_slice()).unwrap();
+    let text: String = repeat("a").take(n).collect();
     bench_assert_match(b, re, text.as_slice());
 }
 
 #[bench]
 fn literal(b: &mut Bencher) {
     let re = regex!("y");
-    let text = format!("{}y", "x".repeat(50));
+    let text = format!("{}y", repeat("x").take(50).collect::<String>());
     bench_assert_match(b, re, text.as_slice());
 }
 
 #[bench]
 fn not_literal(b: &mut Bencher) {
     let re = regex!(".y");
-    let text = format!("{}y", "x".repeat(50));
+    let text = format!("{}y", repeat("x").take(50).collect::<String>());
     bench_assert_match(b, re, text.as_slice());
 }
 
 #[bench]
 fn match_class(b: &mut Bencher) {
     let re = regex!("[abcdw]");
-    let text = format!("{}w", "xxxx".repeat(20));
+    let text = format!("{}w", repeat("xxxx").take(20).collect::<String>());
     bench_assert_match(b, re, text.as_slice());
 }
 
@@ -53,7 +56,7 @@ fn match_class(b: &mut Bencher) {
 fn match_class_in_range(b: &mut Bencher) {
     // 'b' is between 'a' and 'c', so the class range checking doesn't help.
     let re = regex!("[ac]");
-    let text = format!("{}c", "bbbb".repeat(20));
+    let text = format!("{}c", repeat("bbbb").take(20).collect::<String>());
     bench_assert_match(b, re, text.as_slice());
 }
 
@@ -77,7 +80,7 @@ fn anchored_literal_short_non_match(b: &mut Bencher) {
 #[bench]
 fn anchored_literal_long_non_match(b: &mut Bencher) {
     let re = regex!("^zbc(d|e)");
-    let text = "abcdefghijklmnopqrstuvwxyz".repeat(15);
+    let text: String = repeat("abcdefghijklmnopqrstuvwxyz").take(15).collect();
     b.iter(|| re.is_match(text.as_slice()));
 }
 
@@ -91,7 +94,7 @@ fn anchored_literal_short_match(b: &mut Bencher) {
 #[bench]
 fn anchored_literal_long_match(b: &mut Bencher) {
     let re = regex!("^.bc(d|e)");
-    let text = "abcdefghijklmnopqrstuvwxyz".repeat(15);
+    let text: String = repeat("abcdefghijklmnopqrstuvwxyz").take(15).collect();
     b.iter(|| re.is_match(text.as_slice()));
 }
 
