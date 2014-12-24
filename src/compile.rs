@@ -11,63 +11,62 @@
 // Enable this to squash warnings due to exporting pieces of the representation
 // for use with the regex! macro. See lib.rs for explanation.
 
-pub use self::Inst::*;
+use self::Inst::*;
 
 use std::cmp;
 use parse;
-use parse::{
-    Flags, FLAG_EMPTY,
-    Nothing, Literal, Dot, AstClass, Begin, End, WordBoundary, Capture, Cat, Alt,
-    Rep,
-    ZeroOne, ZeroMore, OneMore,
-};
+use parse::{Flags, FLAG_EMPTY};
+use parse::Ast::{Nothing, Literal, Dot, AstClass, Begin, End, WordBoundary, Capture, Cat, Alt,
+                 Rep};
+use parse::Repeater::{ZeroOne, ZeroMore, OneMore};
 
-type InstIdx = uint;
+pub type InstIdx = uint;
 
+/// An instruction, the underlying unit of a compiled regular expression
 #[deriving(Show, Clone)]
 pub enum Inst {
-    // When a Match instruction is executed, the current thread is successful.
+    /// When a Match instruction is executed, the current thread is successful.
     Match,
 
-    // The OneChar instruction matches a literal character.
-    // The flags indicate whether to do a case insensitive match.
+    /// The OneChar instruction matches a literal character.
+    /// The flags indicate whether to do a case insensitive match.
     OneChar(char, Flags),
 
-    // The CharClass instruction tries to match one input character against
-    // the range of characters given.
-    // The flags indicate whether to do a case insensitive match and whether
-    // the character class is negated or not.
+    /// The CharClass instruction tries to match one input character against
+    /// the range of characters given.
+    /// The flags indicate whether to do a case insensitive match and whether
+    /// the character class is negated or not.
     CharClass(Vec<(char, char)>, Flags),
 
-    // Matches any character except new lines.
-    // The flags indicate whether to include the '\n' character.
+    /// Matches any character except new lines.
+    /// The flags indicate whether to include the '\n' character.
     Any(Flags),
 
-    // Matches the beginning of the string, consumes no characters.
-    // The flags indicate whether it matches if the preceding character
-    // is a new line.
+    /// Matches the beginning of the string, consumes no characters.
+    /// The flags indicate whether it matches if the preceding character
+    /// is a new line.
     EmptyBegin(Flags),
 
-    // Matches the end of the string, consumes no characters.
-    // The flags indicate whether it matches if the proceeding character
-    // is a new line.
+    /// Matches the end of the string, consumes no characters.
+    /// The flags indicate whether it matches if the proceeding character
+    /// is a new line.
     EmptyEnd(Flags),
 
-    // Matches a word boundary (\w on one side and \W \A or \z on the other),
-    // and consumes no character.
-    // The flags indicate whether this matches a word boundary or something
-    // that isn't a word boundary.
+    /// Matches a word boundary (\w on one side and \W \A or \z on the other),
+    /// and consumes no character.
+    /// The flags indicate whether this matches a word boundary or something
+    /// that isn't a word boundary.
     EmptyWordBoundary(Flags),
 
-    // Saves the current position in the input string to the Nth save slot.
+    /// Saves the current position in the input string to the Nth save slot.
     Save(uint),
 
-    // Jumps to the instruction at the index given.
+    /// Jumps to the instruction at the index given.
     Jump(InstIdx),
 
-    // Jumps to the instruction at the first index given. If that leads to
-    // a panic state, then the instruction at the second index given is
-    // tried.
+    /// Jumps to the instruction at the first index given. If that leads to
+    /// a panic state, then the instruction at the second index given is
+    /// tried.
     Split(InstIdx, InstIdx),
 }
 

@@ -400,19 +400,16 @@ pub mod native {
     //
     // On the bright side, `rustdoc` lets us hide this from the public API
     // documentation.
-    pub use compile::{
-        Program,
-        OneChar, CharClass, Any, Save, Jump, Split,
-        Match, EmptyBegin, EmptyEnd, EmptyWordBoundary,
-    };
+    pub use compile::Program;
+    pub use compile::Inst::{Match, OneChar, CharClass, Any, EmptyBegin, EmptyEnd,
+                            EmptyWordBoundary, Save, Jump, Split};
     pub use parse::{
         FLAG_EMPTY, FLAG_NOCASE, FLAG_MULTI, FLAG_DOTNL,
         FLAG_SWAP_GREED, FLAG_NEGATED,
     };
-    pub use re::{Dynamic, ExDynamic, Native, ExNative};
-    pub use vm::{
-        MatchKind, Exists, Location, Submatches,
-        StepState, StepMatchEarlyReturn, StepMatch, StepContinue,
-        CharReader, find_prefix,
-    };
+    pub use re::{ExDynamic, ExNative};
+    pub use re::Regex::{Dynamic, Native};
+    pub use vm::{CharReader, find_prefix};
+    pub use vm::MatchKind::{mod, Exists, Location, Submatches};
+    pub use vm::StepState::{mod, StepMatchEarlyReturn, StepMatch, StepContinue};
 }

@@ -33,17 +33,15 @@
 //
 // [1] - http://swtch.com/~rsc/regex/regex3.html
 
-pub use self::MatchKind::*;
-pub use self::StepState::*;
+use self::MatchKind::*;
+use self::StepState::*;
 
 use std::cmp;
 use std::mem;
 use std::slice::SliceExt;
-use compile::{
-    Program,
-    Match, OneChar, CharClass, Any, EmptyBegin, EmptyEnd, EmptyWordBoundary,
-    Save, Jump, Split,
-};
+use compile::Program;
+use compile::Inst::{Match, OneChar, CharClass, Any, EmptyBegin, EmptyEnd, EmptyWordBoundary,
+                    Save, Jump, Split};
 use parse::{FLAG_NOCASE, FLAG_MULTI, FLAG_DOTNL, FLAG_NEGATED};
 use unicode::regex::PERLW;
 
