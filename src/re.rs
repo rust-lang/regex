@@ -8,8 +8,8 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-pub use self::NamesIter::*;
-pub use self::Regex::*;
+use self::NamesIter::*;
+use self::Regex::*;
 
 use std::collections::HashMap;
 use std::fmt;
@@ -18,7 +18,8 @@ use std::str::CowString;
 use compile::Program;
 use parse;
 use vm;
-use vm::{CaptureLocs, MatchKind, Exists, Location, Submatches};
+use vm::CaptureLocs;
+use vm::MatchKind::{mod, Exists, Location, Submatches};
 
 /// Escapes all regular expression meta characters in `text`.
 ///
