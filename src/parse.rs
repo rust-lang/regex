@@ -18,7 +18,6 @@ use std::cmp;
 use std::fmt;
 use std::iter;
 use std::num;
-use std::slice::BinarySearchResult;
 
 /// Static data containing Unicode ranges for general categories and scripts.
 use unicode::regex::{UNICODE_CLASSES, PERLD, PERLS, PERLW};
@@ -520,8 +519,7 @@ impl<'a> Parser<'a> {
             };
         self.chari = closer;
         let greed = try!(self.get_next_greedy());
-        let inner = String::from_chars(
-            self.chars[start+1..closer]);
+        let inner = self.chars[start+1..closer].iter().cloned().collect::<String>();
 
         // Parse the min and max values from the regex.
         let (mut min, mut max): (uint, Option<uint>);
@@ -956,7 +954,7 @@ impl<'a> Parser<'a> {
     }
 
     fn slice(&self, start: uint, end: uint) -> String {
-        String::from_chars(self.chars[start..end])
+        self.chars[start..end].iter().cloned().collect()
     }
 }
 
@@ -1030,9 +1028,9 @@ fn is_valid_cap(c: char) -> bool {
 }
 
 fn find_class(classes: NamedClasses, name: &str) -> Option<Vec<(char, char)>> {
-    match classes.binary_search(|&(s, _)| s.cmp(name)) {
-        BinarySearchResult::Found(i) => Some(classes[i].1.to_vec()),
-        BinarySearchResult::NotFound(_) => None,
+    match classes.binary_search_by(|&(s, _)| s.cmp(name)) {
+        Ok(i) => Some(classes[i].1.to_vec()),
+        Err(_) => None,
     }
 }
 

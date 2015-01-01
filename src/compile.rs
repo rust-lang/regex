@@ -14,6 +14,7 @@
 use self::Inst::*;
 
 use std::cmp;
+use std::iter::repeat;
 use parse;
 use parse::{Flags, FLAG_EMPTY};
 use parse::Ast::{Nothing, Literal, Dot, AstClass, Begin, End, WordBoundary, Capture, Cat, Alt,
@@ -156,7 +157,7 @@ impl<'r> Compiler<'r> {
             Capture(cap, name, x) => {
                 let len = self.names.len();
                 if cap >= len {
-                    self.names.grow(10 + cap - len, None)
+                    self.names.extend(repeat(None).take(10 + cap - len))
                 }
                 self.names[cap] = name;
 
