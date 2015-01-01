@@ -14,3 +14,6 @@ after_success: |
 env:
   global:
     secure: VvIrYRW/a8FmBA61hn1bDrqWwR92tANOT6PCeLYd9A9ViQrN07PE6uGsnd9iwr8itck10Ctl1mThZYUkK8BDFEmlvSxOFJ/Po5eRe6A1CYuFF40zizJ+3NllVkN20kwoQDe0kxwZVDGO9Yi1icHUrbRPWDfS+1tfobO/UT8Dlng=
+notifications:
+  email:
+    on_success: never
