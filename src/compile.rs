@@ -24,7 +24,7 @@ use parse::Repeater::{ZeroOne, ZeroMore, OneMore};
 pub type InstIdx = uint;
 
 /// An instruction, the underlying unit of a compiled regular expression
-#[deriving(Show, Clone)]
+#[derive(Show, Clone)]
 pub enum Inst {
     /// When a Match instruction is executed, the current thread is successful.
     Match,
@@ -77,7 +77,7 @@ pub enum Inst {
 /// All of the data in a compiled expression is wrapped in "MaybeStatic" or
 /// "MaybeOwned" types so that a `Program` can be represented as static data.
 /// (This makes it convenient and efficient for use with the `regex!` macro.)
-#[deriving(Clone)]
+#[derive(Clone)]
 pub struct Program {
     /// A sequence of instructions.
     pub insts: Vec<Inst>,

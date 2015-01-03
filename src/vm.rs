@@ -36,7 +36,7 @@
 use self::MatchKind::*;
 use self::StepState::*;
 
-use std::cmp;
+use std::cmp::{self, Ordering};
 use std::mem;
 use std::iter::repeat;
 use std::slice::SliceExt;
@@ -521,11 +521,11 @@ pub fn is_word(c: Option<char>) -> bool {
         '_' | '0' ... '9' | 'a' ... 'z' | 'A' ... 'Z' => true,
         _ => PERLW.binary_search_by(|&(start, end)| {
             if c >= start && c <= end {
-                Equal
+                Ordering::Equal
             } else if start > c {
-                Greater
+                Ordering::Greater
             } else {
-                Less
+                Ordering::Less
             }
         }).ok().is_some()
     }
@@ -554,11 +554,11 @@ fn class_cmp(casei: bool, mut textc: char,
         end = end.to_uppercase();
     }
     if textc >= start && textc <= end {
-        Equal
+        Ordering::Equal
     } else if start > textc {
-        Greater
+        Ordering::Greater
     } else {
-        Less
+        Ordering::Less
     }
 }
 
