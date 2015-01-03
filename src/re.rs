@@ -11,6 +11,7 @@
 use self::NamesIter::*;
 use self::Regex::*;
 
+use std::borrow::IntoCow;
 use std::collections::HashMap;
 use std::fmt;
 use std::str::CowString;
@@ -19,7 +20,7 @@ use compile::Program;
 use parse;
 use vm;
 use vm::CaptureLocs;
-use vm::MatchKind::{mod, Exists, Location, Submatches};
+use vm::MatchKind::{self, Exists, Location, Submatches};
 
 /// Escapes all regular expression meta characters in `text`.
 ///
@@ -104,7 +105,7 @@ pub fn is_match(regex: &str, text: &str) -> Result<bool, parse::Error> {
 /// makes it much faster when searching text.
 /// More details about the `regex!` macro can be found in the `regex` crate
 /// documentation.
-#[deriving(Clone)]
+#[derive(Clone)]
 pub enum Regex {
     // The representation of `Regex` is exported to support the `regex!`
     // syntax extension. Do not rely on it.
@@ -117,7 +118,7 @@ pub enum Regex {
     Native(ExNative),
 }
 
-#[deriving(Clone)]
+#[derive(Clone)]
 #[doc(hidden)]
 pub struct ExDynamic {
     original: String,
