@@ -18,7 +18,7 @@
        html_favicon_url = "http://www.rust-lang.org/favicon.ico",
        html_root_url = "http://doc.rust-lang.org/nightly/")]
 
-#![feature(plugin_registrar, quote)]
+#![feature(associated_types, plugin_registrar, quote)]
 
 extern crate regex;
 extern crate syntax;
@@ -601,7 +601,7 @@ fn exec<'t>(which: ::regex::native::MatchKind, input: &'t str,
 
     // Converts `xs` to a `[x1, x2, .., xN]` expression by calling `to_expr`
     // on each element in `xs`.
-    fn vec_expr<T, It: Iterator<T>>(&self, xs: It,
+    fn vec_expr<T, It: Iterator<Item=T>>(&self, xs: It,
                                     to_expr: |&ExtCtxt, T| -> P<ast::Expr>)
                   -> P<ast::Expr> {
         let exprs = xs.map(|x| to_expr(self.cx, x)).collect();
