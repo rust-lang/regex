@@ -13,7 +13,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-regex = "0.1.0"
+regex = "0.1.7"
 ```
 
 and this to your crate root:
