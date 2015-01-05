@@ -1,2 +1,4 @@
 /target
 /Cargo.lock
+/regex_macros/target
+/regex_macros/Cargo.lock
