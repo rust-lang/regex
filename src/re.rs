@@ -14,7 +14,7 @@ use self::Regex::*;
 use std::borrow::IntoCow;
 use std::collections::HashMap;
 use std::fmt;
-use std::str::CowString;
+use std::string::CowString;
 
 use compile::Program;
 use parse;
