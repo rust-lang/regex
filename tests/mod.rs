@@ -8,9 +8,9 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![feature(phase, macro_rules)]
+#![feature(plugin)]
 
-#[phase(plugin)]
+#[plugin]
 extern crate regex_macros;
 extern crate regex;
 extern crate "test" as stdtest;

@@ -67,8 +67,8 @@
 //! the `regex_macros` crate as a syntax extension:
 //!
 //! ```rust
-//! #![feature(phase)]
-//! #[phase(plugin)]
+//! #![feature(plugin)]
+//! #[plugin]
 //! extern crate regex_macros;
 //! extern crate regex;
 //!
@@ -97,8 +97,8 @@
 //! them by their component pieces:
 //!
 //! ```rust
-//! # #![feature(phase)]
-//! # extern crate regex; #[phase(plugin)] extern crate regex_macros;
+//! # #![feature(plugin)]
+//! # extern crate regex; #[plugin] extern crate regex_macros;
 //! # fn main() {
 //! let re = regex!(r"(\d{4})-(\d{2})-(\d{2})");
 //! let text = "2012-03-14, 2013-01-01 and 2014-07-05";
@@ -125,8 +125,8 @@
 //! in our replacement text:
 //!
 //! ```rust
-//! # #![feature(phase)]
-//! # extern crate regex; #[phase(plugin)] extern crate regex_macros;
+//! # #![feature(plugin)]
+//! # extern crate regex; #[plugin] extern crate regex_macros;
 //! # fn main() {
 //! let re = regex!(r"(?P<y>\d{4})-(?P<m>\d{2})-(?P<d>\d{2})");
 //! let before = "2012-03-14, 2013-01-01 and 2014-07-05";
@@ -172,8 +172,8 @@
 //! directly in your expression:
 //!
 //! ```rust
-//! # #![feature(phase)]
-//! # extern crate regex; #[phase(plugin)] extern crate regex_macros;
+//! # #![feature(plugin)]
+//! # extern crate regex; #[plugin] extern crate regex_macros;
 //! # fn main() {
 //! let re = regex!(r"(?i)Δ+");
 //! assert_eq!(re.find("ΔδΔ"), Some((0, 6)));
@@ -185,8 +185,8 @@
 //! Cherokee letters:
 //!
 //! ```rust
-//! # #![feature(phase)]
-//! # extern crate regex; #[phase(plugin)] extern crate regex_macros;
+//! # #![feature(plugin)]
+//! # extern crate regex; #[plugin] extern crate regex_macros;
 //! # fn main() {
 //! let re = regex!(r"[\pN\p{Greek}\p{Cherokee}]+");
 //! assert_eq!(re.find("abcΔᎠβⅠᏴγδⅡxyz"), Some((3, 23)));
@@ -282,8 +282,8 @@
 //! expression:
 //!
 //! ```rust
-//! # #![feature(phase)]
-//! # extern crate regex; #[phase(plugin)] extern crate regex_macros;
+//! # #![feature(plugin)]
+//! # extern crate regex; #[plugin] extern crate regex_macros;
 //! # fn main() {
 //! let re = regex!(r"(?i)a+(?-i)b+");
 //! let cap = re.captures("AaAaAbbBBBb").unwrap();
@@ -361,7 +361,7 @@
 //! characters in the search text and `m` is the number of instructions in a
 //! compiled expression.
 
-#![feature(associated_types, macro_rules, slicing_syntax, globs)]
+#![feature(slicing_syntax)]
 #![deny(missing_docs)]
 #![cfg_attr(test, deny(warnings))]
 #![doc(html_logo_url = "http://www.rust-lang.org/logos/rust-logo-128x128-blk-v2.png",
