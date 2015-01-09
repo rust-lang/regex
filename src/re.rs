@@ -134,7 +134,7 @@ pub struct ExNative {
     #[doc(hidden)]
     pub names: &'static &'static [Option<&'static str>],
     #[doc(hidden)]
-    pub prog: fn(MatchKind, &str, uint, uint) -> Vec<Option<uint>>
+    pub prog: fn(MatchKind, &str, usize, usize) -> Vec<Option<usize>>
 }
 
 impl Copy for ExNative {}
@@ -218,7 +218,7 @@ impl Regex {
     /// assert_eq!(pos, Some((2, 15)));
     /// # }
     /// ```
-    pub fn find(&self, text: &str) -> Option<(uint, uint)> {
+    pub fn find(&self, text: &str) -> Option<(usize, usize)> {
         let caps = exec(self, Location, text);
         if has_match(&caps) {
             Some((caps[0].unwrap(), caps[1].unwrap()))
@@ -401,7 +401,7 @@ impl Regex {
     /// assert_eq!(fields, vec!("Hey", "How", "are you?"));
     /// # }
     /// ```
-    pub fn splitn<'r, 't>(&'r self, text: &'t str, limit: uint)
+    pub fn splitn<'r, 't>(&'r self, text: &'t str, limit: usize)
                          -> RegexSplitsN<'r, 't> {
         RegexSplitsN {
             splits: self.split(text),
@@ -427,7 +427,7 @@ impl Regex {
     /// # extern crate regex; #[plugin] extern crate regex_macros;
     /// # fn main() {
     /// let re = regex!("[^01]+");
-    /// assert_eq!(re.replace("1078910", "").as_slice(), "1010");
+    /// assert_eq!(re.replace("1078910", ""), "1010");
     /// # }
     /// ```
     ///
@@ -445,7 +445,7 @@ impl Regex {
     /// let result = re.replace("Springsteen, Bruce", |&: caps: &Captures| {
     ///     format!("{} {}", caps.at(2).unwrap_or(""), caps.at(1).unwrap_or(""))
     /// });
-    /// assert_eq!(result.as_slice(), "Bruce Springsteen");
+    /// assert_eq!(result, "Bruce Springsteen");
     /// # }
     /// ```
     ///
@@ -460,7 +460,7 @@ impl Regex {
     /// # fn main() {
     /// let re = regex!(r"(?P<last>[^,\s]+),\s+(?P<first>\S+)");
     /// let result = re.replace("Springsteen, Bruce", "$first $last");
-    /// assert_eq!(result.as_slice(), "Bruce Springsteen");
+    /// assert_eq!(result, "Bruce Springsteen");
     /// # }
     /// ```
     ///
@@ -479,7 +479,7 @@ impl Regex {
     ///
     /// let re = regex!(r"(?P<last>[^,\s]+),\s+(\S+)");
     /// let result = re.replace("Springsteen, Bruce", NoExpand("$2 $last"));
-    /// assert_eq!(result.as_slice(), "$2 $last");
+    /// assert_eq!(result, "$2 $last");
     /// # }
     /// ```
     pub fn replace<R: Replacer>(&self, text: &str, rep: R) -> String {
@@ -503,9 +503,9 @@ impl Regex {
     /// See the documentation for `replace` for details on how to access
     /// submatches in the replacement string.
     pub fn replacen<R: Replacer>
-                   (&self, text: &str, limit: uint, mut rep: R) -> String {
+                   (&self, text: &str, limit: usize, mut rep: R) -> String {
         let mut new = String::with_capacity(text.len());
-        let mut last_match = 0u;
+        let mut last_match = 0;
 
         for (i, cap) in self.captures_iter(text).enumerate() {
             // It'd be nicer to use the 'take' iterator instead, but it seemed
@@ -532,7 +532,6 @@ impl Regex {
     }
 
     #[doc(hidden)]
-    #[experimental]
     pub fn names_iter<'a>(&'a self) -> NamesIter<'a> {
         match *self {
             Native(ref n) => NamesIterNative(n.names.iter()),
@@ -540,7 +539,7 @@ impl Regex {
         }
     }
 
-    fn names_len(&self) -> uint {
+    fn names_len(&self) -> usize {
         match *self {
             Native(ref n) => n.names.len(),
             Dynamic(ref d) => d.names.len()
@@ -609,7 +608,7 @@ impl<F> Replacer for F where F: FnMut(&Captures) -> String {
 /// of the string being split.
 pub struct RegexSplits<'r, 't> {
     finder: FindMatches<'r, 't>,
-    last: uint,
+    last: usize,
 }
 
 impl<'r, 't> Iterator for RegexSplits<'r, 't> {
@@ -644,8 +643,8 @@ impl<'r, 't> Iterator for RegexSplits<'r, 't> {
 /// of the string being split.
 pub struct RegexSplitsN<'r, 't> {
     splits: RegexSplits<'r, 't>,
-    cur: uint,
-    limit: uint,
+    cur: usize,
+    limit: usize,
 }
 
 impl<'r, 't> Iterator for RegexSplitsN<'r, 't> {
@@ -680,11 +679,10 @@ impl<'r, 't> Iterator for RegexSplitsN<'r, 't> {
 pub struct Captures<'t> {
     text: &'t str,
     locs: CaptureLocs,
-    named: Option<HashMap<String, uint>>,
+    named: Option<HashMap<String, usize>>,
 }
 
 impl<'t> Captures<'t> {
-    #[allow(experimental)]
     fn new(re: &Regex, search: &'t str, locs: CaptureLocs)
           -> Option<Captures<'t>> {
         if !has_match(&locs) {
@@ -718,7 +716,7 @@ impl<'t> Captures<'t> {
     /// group did not match anything.
     /// The positions returned are *always* byte indices with respect to the
     /// original string matched.
-    pub fn pos(&self, i: uint) -> Option<(uint, uint)> {
+    pub fn pos(&self, i: usize) -> Option<(usize, usize)> {
         let (s, e) = (i * 2, i * 2 + 1);
         if e >= self.locs.len() || self.locs[s].is_none() {
             // VM guarantees that each pair of locations are both Some or None.
@@ -730,7 +728,7 @@ impl<'t> Captures<'t> {
     /// Returns the matched string for the capture group `i`.  If `i` isn't
     /// a valid capture group or didn't match anything, then `None` is
     /// returned.
-    pub fn at(&self, i: uint) -> Option<&'t str> {
+    pub fn at(&self, i: usize) -> Option<&'t str> {
         match self.pos(i) {
             None => None,
             Some((s, e)) => Some(self.text.slice(s, e))
@@ -785,7 +783,7 @@ impl<'t> Captures<'t> {
             let pre = refs.at(1).unwrap_or("");
             let name = refs.at(2).unwrap_or("");
             format!("{}{}", pre,
-                    match name.parse::<uint>() {
+                    match name.parse::<usize>() {
                 None => self.name(name).unwrap_or("").to_string(),
                 Some(i) => self.at(i).unwrap_or("").to_string(),
             })
@@ -796,7 +794,7 @@ impl<'t> Captures<'t> {
 
     /// Returns the number of captured groups.
     #[inline]
-    pub fn len(&self) -> uint { self.locs.len() / 2 }
+    pub fn len(&self) -> usize { self.locs.len() / 2 }
 
     /// Returns if there are no captured groups.
     #[inline]
@@ -808,7 +806,7 @@ impl<'t> Captures<'t> {
 ///
 /// `'t` is the lifetime of the matched text.
 pub struct SubCaptures<'t> {
-    idx: uint,
+    idx: usize,
     caps: &'t Captures<'t>,
 }
 
@@ -832,14 +830,14 @@ impl<'t> Iterator for SubCaptures<'t> {
 ///
 /// `'t` is the lifetime of the matched text.
 pub struct SubCapturesPos<'t> {
-    idx: uint,
+    idx: usize,
     caps: &'t Captures<'t>,
 }
 
 impl<'t> Iterator for SubCapturesPos<'t> {
-    type Item = Option<(uint, uint)>;
+    type Item = Option<(usize, usize)>;
 
-    fn next(&mut self) -> Option<Option<(uint, uint)>> {
+    fn next(&mut self) -> Option<Option<(usize, usize)>> {
         if self.idx < self.caps.len() {
             self.idx += 1;
             Some(self.caps.pos(self.idx - 1))
@@ -859,8 +857,8 @@ impl<'t> Iterator for SubCapturesPos<'t> {
 pub struct FindCaptures<'r, 't> {
     re: &'r Regex,
     search: &'t str,
-    last_match: Option<uint>,
-    last_end: uint,
+    last_match: Option<usize>,
+    last_end: usize,
 }
 
 impl<'r, 't> Iterator for FindCaptures<'r, 't> {
@@ -903,14 +901,14 @@ impl<'r, 't> Iterator for FindCaptures<'r, 't> {
 pub struct FindMatches<'r, 't> {
     re: &'r Regex,
     search: &'t str,
-    last_match: Option<uint>,
-    last_end: uint,
+    last_match: Option<usize>,
+    last_end: usize,
 }
 
 impl<'r, 't> Iterator for FindMatches<'r, 't> {
-    type Item = (uint, uint);
+    type Item = (usize, usize);
 
-    fn next(&mut self) -> Option<(uint, uint)> {
+    fn next(&mut self) -> Option<(usize, usize)> {
         if self.last_end > self.search.len() {
             return None
         }
@@ -941,7 +939,7 @@ fn exec(re: &Regex, which: MatchKind, input: &str) -> CaptureLocs {
 }
 
 fn exec_slice(re: &Regex, which: MatchKind,
-              input: &str, s: uint, e: uint) -> CaptureLocs {
+              input: &str, s: usize, e: usize) -> CaptureLocs {
     match *re {
         Dynamic(ExDynamic { ref prog, .. }) => vm::run(which, prog, input, s, e),
         Native(ExNative { ref prog, .. }) => (*prog)(which, input, s, e),

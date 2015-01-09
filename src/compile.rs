@@ -21,7 +21,7 @@ use parse::Ast::{Nothing, Literal, Dot, AstClass, Begin, End, WordBoundary, Capt
                  Rep};
 use parse::Repeater::{ZeroOne, ZeroMore, OneMore};
 
-pub type InstIdx = uint;
+pub type InstIdx = usize;
 
 /// An instruction, the underlying unit of a compiled regular expression
 #[derive(Show, Clone)]
@@ -60,7 +60,7 @@ pub enum Inst {
     EmptyWordBoundary(Flags),
 
     /// Saves the current position in the input string to the Nth save slot.
-    Save(uint),
+    Save(usize),
 
     /// Jumps to the instruction at the index given.
     Jump(InstIdx),
@@ -121,7 +121,7 @@ impl Program {
 
     /// Returns the total number of capture groups in the regular expression.
     /// This includes the zeroth capture.
-    pub fn num_captures(&self) -> uint {
+    pub fn num_captures(&self) -> usize {
         let mut n = 0;
         for inst in self.insts.iter() {
             match *inst {

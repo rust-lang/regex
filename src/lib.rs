@@ -68,6 +68,7 @@
 //!
 //! ```rust
 //! #![feature(plugin)]
+//! # #![allow(unstable)]
 //! #[plugin]
 //! extern crate regex_macros;
 //! extern crate regex;
@@ -98,6 +99,7 @@
 //!
 //! ```rust
 //! # #![feature(plugin)]
+//! # #![allow(unstable)]
 //! # extern crate regex; #[plugin] extern crate regex_macros;
 //! # fn main() {
 //! let re = regex!(r"(\d{4})-(\d{2})-(\d{2})");
@@ -126,6 +128,7 @@
 //!
 //! ```rust
 //! # #![feature(plugin)]
+//! # #![allow(unstable)]
 //! # extern crate regex; #[plugin] extern crate regex_macros;
 //! # fn main() {
 //! let re = regex!(r"(?P<y>\d{4})-(?P<m>\d{2})-(?P<d>\d{2})");
@@ -173,6 +176,7 @@
 //!
 //! ```rust
 //! # #![feature(plugin)]
+//! # #![allow(unstable)]
 //! # extern crate regex; #[plugin] extern crate regex_macros;
 //! # fn main() {
 //! let re = regex!(r"(?i)Δ+");
@@ -186,6 +190,7 @@
 //!
 //! ```rust
 //! # #![feature(plugin)]
+//! # #![allow(unstable)]
 //! # extern crate regex; #[plugin] extern crate regex_macros;
 //! # fn main() {
 //! let re = regex!(r"[\pN\p{Greek}\p{Cherokee}]+");
@@ -283,6 +288,7 @@
 //!
 //! ```rust
 //! # #![feature(plugin)]
+//! # #![allow(unstable)]
 //! # extern crate regex; #[plugin] extern crate regex_macros;
 //! # fn main() {
 //! let re = regex!(r"(?i)a+(?-i)b+");
@@ -361,11 +367,9 @@
 //! characters in the search text and `m` is the number of instructions in a
 //! compiled expression.
 
-#![feature(int_uint)]
-
-#![feature(slicing_syntax)]
 #![deny(missing_docs)]
 #![cfg_attr(test, deny(warnings))]
+#![allow(unstable)]
 #![doc(html_logo_url = "http://www.rust-lang.org/logos/rust-logo-128x128-blk-v2.png",
        html_favicon_url = "http://www.rust-lang.org/favicon.ico",
        html_root_url = "http://doc.rust-lang.org/regex/")]

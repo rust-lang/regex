@@ -23,24 +23,19 @@ use std::num;
 use unicode::regex::{UNICODE_CLASSES, PERLD, PERLS, PERLW};
 
 /// The maximum number of repetitions allowed with the `{n,m}` syntax.
-static MAX_REPEAT: uint = 1000;
+static MAX_REPEAT: usize = 1000;
 
 /// Error corresponds to something that can go wrong while parsing
 /// a regular expression.
 ///
 /// (Once an expression is compiled, it is not possible to produce an error
 /// via searching, splitting or replacing.)
+#[derive(Show)]
 pub struct Error {
     /// The *approximate* character index of where the error occurred.
-    pub pos: uint,
+    pub pos: usize,
     /// A message describing the error.
     pub msg: String,
-}
-
-impl fmt::Show for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        fmt::String::fmt(self, f)
-    }
 }
 
 impl fmt::String for Error {
@@ -49,13 +44,6 @@ impl fmt::String for Error {
                self.pos, self.msg)
     }
 }
-
-impl fmt::String for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        fmt::String::fmt(self, f)
-    }
-}
-
 
 /// Represents the abstract syntax of a regular expression.
 /// It is showable so that error messages resulting from a bug can provide
@@ -74,7 +62,7 @@ pub enum Ast {
     Begin(Flags),
     End(Flags),
     WordBoundary(Flags),
-    Capture(uint, Option<String>, Box<Ast>),
+    Capture(usize, Option<String>, Box<Ast>),
     // Represent concatenation as a flat vector to avoid blowing the
     // stack in the compiler.
     Cat(Vec<Ast>),
@@ -121,7 +109,7 @@ impl Greed {
 #[derive(Show)]
 enum BuildAst {
     Expr(Ast),
-    Paren(Flags, uint, String), // '('
+    Paren(Flags, usize, String), // '('
     Bar, // '|'
 }
 
@@ -140,7 +128,7 @@ impl BuildAst {
         }
     }
 
-    fn capture(&self) -> Option<uint> {
+    fn capture(&self) -> Option<usize> {
         match *self {
             Paren(_, 0, _) => None,
             Paren(_, c, _) => Some(c),
@@ -192,7 +180,7 @@ struct Parser<'a> {
     // The input, parsed only as a sequence of UTF8 code points.
     chars: Vec<char>,
     // The index of the current character in the input.
-    chari: uint,
+    chari: usize,
     // The intermediate state representing the AST.
     stack: Vec<BuildAst>,
     // The current set of flags.
@@ -200,7 +188,7 @@ struct Parser<'a> {
     // The total number of capture groups.
     // Incremented each time an opening left paren is seen (assuming it is
     // opening a capture group).
-    caps: uint,
+    caps: usize,
     // A set of all capture group names used only to detect duplicates.
     names: Vec<String>,
 }
@@ -535,9 +523,9 @@ impl<'a> Parser<'a> {
         let inner = self.chars[(start + 1)..closer].iter().cloned().collect::<String>();
 
         // Parse the min and max values from the regex.
-        let (mut min, mut max): (uint, Option<uint>);
+        let (mut min, mut max): (usize, Option<usize>);
         if !inner.contains(",") {
-            min = try!(self.parse_uint(inner.as_slice()));
+            min = try!(self.parse_usize(inner.as_slice()));
             max = Some(min);
         } else {
             let pieces: Vec<&str> = inner.splitn(1, ',').collect();
@@ -546,12 +534,12 @@ impl<'a> Parser<'a> {
                 return self.err("Max repetitions cannot be specified \
                                     without min repetitions.")
             }
-            min = try!(self.parse_uint(smin));
+            min = try!(self.parse_usize(smin));
             max =
                 if smax.len() == 0 {
                     None
                 } else {
-                    Some(try!(self.parse_uint(smax)))
+                    Some(try!(self.parse_usize(smax)))
                 };
         }
 
@@ -789,7 +777,7 @@ impl<'a> Parser<'a> {
         }
         let start = self.chari;
         let mut flags = self.flags;
-        let mut sign = 1i;
+        let mut sign = 1;
         let mut saw_flag = false;
         loop {
             try!(self.noteof("expected non-empty set of flags or closing ')'"));
@@ -849,7 +837,7 @@ impl<'a> Parser<'a> {
     // Otherwise, an error will be returned.
     // Generally, `allow_start` is only true when you're *not* expecting an
     // opening parenthesis.
-    fn pos_last<P>(&self, allow_start: bool, pred: P) -> Result<uint, Error> where
+    fn pos_last<P>(&self, allow_start: bool, pred: P) -> Result<usize, Error> where
         P: FnMut(&BuildAst) -> bool,
    {
         let from = match self.stack.iter().rev().position(pred) {
@@ -872,7 +860,7 @@ impl<'a> Parser<'a> {
     // then pushed on to the stack.
     // Usually `from` corresponds to the position of an opening parenthesis,
     // a '|' (alternation) or the start of the entire expression.
-    fn concat(&mut self, from: uint) -> Result<(), Error> {
+    fn concat(&mut self, from: usize) -> Result<(), Error> {
         let ast = try!(self.build_from(from, concat_flatten));
         self.push(ast);
         Ok(())
@@ -885,7 +873,7 @@ impl<'a> Parser<'a> {
     // or the start of the entire expression.
     // This will also drop any opening parens or alternation bars found in
     // the intermediate AST.
-    fn alternate(&mut self, mut from: uint) -> Result<(), Error> {
+    fn alternate(&mut self, mut from: usize) -> Result<(), Error> {
         // Unlike in the concatenation case, we want 'build_from' to continue
         // all the way to the opening left paren (so it will be popped off and
         // thrown away). But be careful with overflow---we can't count on the
@@ -899,7 +887,7 @@ impl<'a> Parser<'a> {
     // build_from combines all AST elements starting at 'from' in the
     // parser's stack using 'mk' to combine them. If any such element is not an
     // AST then it is popped off the stack and ignored.
-    fn build_from<F>(&mut self, from: uint, mut mk: F) -> Result<Ast, Error> where
+    fn build_from<F>(&mut self, from: usize, mut mk: F) -> Result<Ast, Error> where
         F: FnMut(Ast, Ast) -> Ast,
     {
         if from >= self.stack.len() {
@@ -918,8 +906,8 @@ impl<'a> Parser<'a> {
         Ok(combined)
     }
 
-    fn parse_uint(&self, s: &str) -> Result<uint, Error> {
-        match s.parse::<uint>() {
+    fn parse_usize(&self, s: &str) -> Result<usize, Error> {
+        match s.parse::<usize>() {
             Some(i) => Ok(i),
             None => {
                 self.err(format!("Expected an unsigned integer but got '{}'.",
@@ -939,7 +927,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn pos(&self, c: char) -> Option<uint> {
+    fn pos(&self, c: char) -> Option<usize> {
         self.chars.iter()
             .skip(self.chari).position(|&c2| c2 == c).map(|i| self.chari + i)
     }
@@ -951,14 +939,14 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn peek(&self, offset: uint) -> Option<char> {
+    fn peek(&self, offset: usize) -> Option<char> {
         if self.chari + offset >= self.chars.len() {
             return None
         }
         Some(self.chars[self.chari + offset])
     }
 
-    fn peek_is(&self, offset: uint, is: char) -> bool {
+    fn peek_is(&self, offset: usize, is: char) -> bool {
         self.peek(offset) == Some(is)
     }
 
@@ -966,7 +954,7 @@ impl<'a> Parser<'a> {
         self.chars[self.chari]
     }
 
-    fn slice(&self, start: uint, end: uint) -> String {
+    fn slice(&self, start: usize, end: usize) -> String {
         self.chars[start..end].iter().cloned().collect()
     }
 }
@@ -987,7 +975,7 @@ fn combine_ranges(unordered: Vec<(char, char)>) -> Vec<(char, char)> {
     for (us, ue) in unordered.into_iter() {
         let (mut us, mut ue) = (us, ue);
         assert!(us <= ue);
-        let mut which: Option<uint> = None;
+        let mut which: Option<usize> = None;
         for (i, &(os, oe)) in ordered.iter().enumerate() {
             if should_merge((us, ue), (os, oe)) {
                 us = cmp::min(us, os);

@@ -11,9 +11,7 @@
 //! This crate provides the `regex!` macro. Its use is documented in the
 //! `regex` crate.
 
-#![crate_name = "regex_macros"]
-#![crate_type = "dylib"]
-#![experimental]
+#![allow(unstable)]
 #![doc(html_logo_url = "http://www.rust-lang.org/logos/rust-logo-128x128-blk-v2.png",
        html_favicon_url = "http://www.rust-lang.org/favicon.ico",
        html_root_url = "http://doc.rust-lang.org/nightly/")]
@@ -74,7 +72,6 @@ pub fn plugin_registrar(reg: &mut Registry) {
 /// It is strongly recommended to read the dynamic implementation in vm.rs
 /// first before trying to understand the code generator. The implementation
 /// strategy is identical and vm.rs has comments and will be easier to follow.
-#[allow(experimental)]
 fn native(cx: &mut ExtCtxt, sp: codemap::Span, tts: &[ast::TokenTree])
           -> Box<MacResult+'static> {
     let regex = match parse(cx, tts) {
@@ -151,7 +148,7 @@ static CAP_NAMES: &'static [Option<&'static str>] = &$cap_names;
 
 #[allow(dead_code)]
 fn exec<'t>(which: ::regex::native::MatchKind, input: &'t str,
-            start: uint, end: uint) -> Vec<Option<uint>> {
+            start: usize, end: usize) -> Vec<Option<usize>> {
     #![allow(unused_imports)]
     #![allow(unused_mut)]
 
@@ -168,18 +165,18 @@ fn exec<'t>(which: ::regex::native::MatchKind, input: &'t str,
         chars: CharReader::new(input),
     }.run(start, end);
 
-    type Captures = [Option<uint>; $num_cap_locs];
+    type Captures = [Option<usize>; $num_cap_locs];
 
     struct Nfa<'t> {
         which: MatchKind,
         input: &'t str,
-        ic: uint,
+        ic: usize,
         chars: CharReader<'t>,
     }
 
     impl<'t> Nfa<'t> {
         #[allow(unused_variables)]
-        fn run(&mut self, start: uint, end: uint) -> Vec<Option<uint>> {
+        fn run(&mut self, start: usize, end: usize) -> Vec<Option<usize>> {
             let mut matched = false;
             let prefix_bytes: &[u8] = $prefix_bytes;
             let mut clist = &mut Threads::new(self.which);
@@ -209,7 +206,7 @@ fn exec<'t>(which: ::regex::native::MatchKind, input: &'t str,
                                                clist.groups(i), pc);
                     match step_state {
                         StepMatchEarlyReturn =>
-                            return vec![Some(0u), Some(0u)],
+                            return vec![Some(0), Some(0)],
                         StepMatch => { matched = true; break },
                         StepContinue => {},
                     }
@@ -218,7 +215,7 @@ fn exec<'t>(which: ::regex::native::MatchKind, input: &'t str,
                 nlist.empty();
             }
             match self.which {
-                Exists if matched     => vec![Some(0u), Some(0u)],
+                Exists if matched     => vec![Some(0), Some(0)],
                 Exists                => vec![None, None],
                 Location | Submatches => groups.iter().map(|x| *x).collect(),
             }
@@ -228,12 +225,12 @@ fn exec<'t>(which: ::regex::native::MatchKind, input: &'t str,
         #[allow(unused_variables)]
         #[inline]
         fn step(&self, groups: &mut Captures, nlist: &mut Threads,
-                caps: &mut Captures, pc: uint) -> StepState {
+                caps: &mut Captures, pc: usize) -> StepState {
             $step_insts
             StepContinue
         }
 
-        fn add(&self, nlist: &mut Threads, pc: uint,
+        fn add(&self, nlist: &mut Threads, pc: usize,
                groups: &mut Captures) {
             if nlist.contains(pc) {
                 return
@@ -243,15 +240,15 @@ fn exec<'t>(which: ::regex::native::MatchKind, input: &'t str,
     }
 
     struct Thread {
-        pc: uint,
+        pc: usize,
         groups: Captures,
     }
 
     struct Threads {
         which: MatchKind,
         queue: [Thread; $num_insts],
-        sparse: [uint; $num_insts],
-        size: uint,
+        sparse: [usize; $num_insts],
+        size: usize,
     }
 
     impl Threads {
@@ -272,7 +269,7 @@ fn exec<'t>(which: ::regex::native::MatchKind, input: &'t str,
         }
 
         #[inline]
-        fn add(&mut self, pc: uint, groups: &Captures) {
+        fn add(&mut self, pc: usize, groups: &Captures) {
             let t = &mut self.queue[self.size];
             t.pc = pc;
             match self.which {
@@ -292,14 +289,14 @@ fn exec<'t>(which: ::regex::native::MatchKind, input: &'t str,
         }
 
         #[inline]
-        fn add_empty(&mut self, pc: uint) {
+        fn add_empty(&mut self, pc: usize) {
             self.queue[self.size].pc = pc;
             self.sparse[pc] = self.size;
             self.size += 1;
         }
 
         #[inline]
-        fn contains(&self, pc: uint) -> bool {
+        fn contains(&self, pc: usize) -> bool {
             let s = self.sparse[pc];
             s < self.size && self.queue[s].pc == pc
         }
@@ -310,12 +307,12 @@ fn exec<'t>(which: ::regex::native::MatchKind, input: &'t str,
         }
 
         #[inline]
-        fn pc(&self, i: uint) -> uint {
+        fn pc(&self, i: usize) -> usize {
             self.queue[i].pc
         }
 
         #[inline]
-        fn groups<'r>(&'r mut self, i: uint) -> &'r mut Captures {
+        fn groups<'r>(&'r mut self, i: usize) -> &'r mut Captures {
             &mut self.queue[i].groups
         }
     }
@@ -578,7 +575,7 @@ fn exec<'t>(which: ::regex::native::MatchKind, input: &'t str,
 
     // Creates a match arm for the instruction at `pc` with the expression
     // `body`.
-    fn arm_inst(&self, pc: uint, body: P<ast::Expr>) -> ast::Arm {
+    fn arm_inst(&self, pc: usize, body: P<ast::Expr>) -> ast::Arm {
         let pc_pat = self.cx.pat_lit(self.sp, quote_expr!(self.cx, $pc));
 
         self.cx.arm(self.sp, vec!(pc_pat), body)

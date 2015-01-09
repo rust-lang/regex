@@ -9,6 +9,7 @@
 // except according to those terms.
 
 #![feature(plugin)]
+#![allow(unstable)]
 
 #[plugin]
 extern crate regex_macros;

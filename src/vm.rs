@@ -46,7 +46,7 @@ use compile::Inst::{Match, OneChar, CharClass, Any, EmptyBegin, EmptyEnd, EmptyW
 use parse::{FLAG_NOCASE, FLAG_MULTI, FLAG_DOTNL, FLAG_NEGATED};
 use unicode::regex::PERLW;
 
-pub type CaptureLocs = Vec<Option<uint>>;
+pub type CaptureLocs = Vec<Option<usize>>;
 
 /// Indicates the type of match to be performed by the VM.
 pub enum MatchKind {
@@ -71,7 +71,7 @@ impl Copy for MatchKind {}
 /// entire match or the locations of the entire match in addition to the
 /// locations of each submatch.
 pub fn run<'r, 't>(which: MatchKind, prog: &'r Program, input: &'t str,
-                   start: uint, end: uint) -> CaptureLocs {
+                   start: usize, end: usize) -> CaptureLocs {
     Nfa {
         which: which,
         prog: prog,
@@ -87,9 +87,9 @@ struct Nfa<'r, 't> {
     which: MatchKind,
     prog: &'r Program,
     input: &'t str,
-    start: uint,
-    end: uint,
-    ic: uint,
+    start: usize,
+    end: usize,
+    ic: usize,
     chars: CharReader<'t>,
 }
 
@@ -195,8 +195,8 @@ impl<'r, 't> Nfa<'r, 't> {
         }
     }
 
-    fn step(&self, groups: &mut [Option<uint>], nlist: &mut Threads,
-            caps: &mut [Option<uint>], pc: uint)
+    fn step(&self, groups: &mut [Option<usize>], nlist: &mut Threads,
+            caps: &mut [Option<usize>], pc: usize)
            -> StepState {
         match self.prog.insts[pc] {
             Match => {
@@ -247,7 +247,7 @@ impl<'r, 't> Nfa<'r, 't> {
         StepContinue
     }
 
-    fn add(&self, nlist: &mut Threads, pc: uint, groups: &mut [Option<uint>]) {
+    fn add(&self, nlist: &mut Threads, pc: usize, groups: &mut [Option<usize>]) {
         if nlist.contains(pc) {
             return
         }
@@ -353,7 +353,7 @@ pub struct CharReader<'t> {
     /// The current character.
     pub cur: Option<char>,
     input: &'t str,
-    next: uint,
+    next: usize,
 }
 
 impl<'t> CharReader<'t> {
@@ -372,7 +372,7 @@ impl<'t> CharReader<'t> {
     /// Sets the previous and current character given any arbitrary byte
     /// index (at a Unicode codepoint boundary).
     #[inline]
-    pub fn set(&mut self, ic: uint) -> uint {
+    pub fn set(&mut self, ic: usize) -> usize {
         self.prev = None;
         self.cur = None;
         self.next = 0;
@@ -398,7 +398,7 @@ impl<'t> CharReader<'t> {
     /// Does the same as `set`, except it always advances to the next
     /// character in the input (and therefore does half as many UTF8 decodings).
     #[inline]
-    pub fn advance(&mut self) -> uint {
+    pub fn advance(&mut self) -> usize {
         self.prev = self.cur;
         if self.next < self.input.len() {
             let cur = self.input.char_range_at(self.next);
@@ -436,15 +436,15 @@ impl<'t> CharReader<'t> {
 }
 
 struct Thread {
-    pc: uint,
-    groups: Vec<Option<uint>>,
+    pc: usize,
+    groups: Vec<Option<usize>>,
 }
 
 struct Threads {
     which: MatchKind,
     queue: Vec<Thread>,
-    sparse: Vec<uint>,
-    size: uint,
+    sparse: Vec<usize>,
+    size: usize,
 }
 
 impl Threads {
@@ -455,18 +455,18 @@ impl Threads {
     // the execution of a VM.
     //
     // See http://research.swtch.com/sparse for the deets.
-    fn new(which: MatchKind, num_insts: uint, ncaps: uint) -> Threads {
+    fn new(which: MatchKind, num_insts: usize, ncaps: usize) -> Threads {
         Threads {
             which: which,
             queue: range(0, num_insts).map(|_| {
                 Thread {pc: 0, groups: repeat(None).take(ncaps * 2).collect() }
             }).collect(),
-            sparse: repeat(0u).take(num_insts).collect(),
+            sparse: repeat(0).take(num_insts).collect(),
             size: 0,
         }
     }
 
-    fn add(&mut self, pc: uint, groups: &[Option<uint>], empty: bool) {
+    fn add(&mut self, pc: usize, groups: &[Option<usize>], empty: bool) {
         let t = &mut self.queue[self.size];
         t.pc = pc;
         match (empty, self.which) {
@@ -486,7 +486,7 @@ impl Threads {
     }
 
     #[inline]
-    fn contains(&self, pc: uint) -> bool {
+    fn contains(&self, pc: usize) -> bool {
         let s = self.sparse[pc];
         s < self.size && self.queue[s].pc == pc
     }
@@ -497,12 +497,12 @@ impl Threads {
     }
 
     #[inline]
-    fn pc(&self, i: uint) -> uint {
+    fn pc(&self, i: usize) -> usize {
         self.queue[i].pc
     }
 
     #[inline]
-    fn groups<'r>(&'r mut self, i: uint) -> &'r mut [Option<uint>] {
+    fn groups(&mut self, i: usize) -> &mut [Option<usize>] {
         self.queue[i].groups.as_mut_slice()
     }
 }
@@ -567,7 +567,7 @@ fn class_cmp(casei: bool, mut textc: char,
 ///
 /// Note that this is using a naive substring algorithm.
 #[inline]
-pub fn find_prefix(needle: &[u8], haystack: &[u8]) -> Option<uint> {
+pub fn find_prefix(needle: &[u8], haystack: &[u8]) -> Option<usize> {
     let (hlen, nlen) = (haystack.len(), needle.len());
     if nlen > hlen || nlen == 0 {
         return None

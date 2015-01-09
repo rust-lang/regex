@@ -8,9 +8,6 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// ignore-tidy-linelength
-// ignore-lexer-test FIXME #15679
-
 use regex::{Regex, NoExpand};
 
 #[test]
@@ -32,38 +29,38 @@ fn split() {
 #[test]
 fn empty_regex_empty_match() {
     let re = regex!("");
-    let ms = re.find_iter("").collect::<Vec<(uint, uint)>>();
+    let ms = re.find_iter("").collect::<Vec<_>>();
     assert_eq!(ms, vec![(0, 0)]);
 }
 
 #[test]
 fn empty_regex_nonempty_match() {
     let re = regex!("");
-    let ms = re.find_iter("abc").collect::<Vec<(uint, uint)>>();
+    let ms = re.find_iter("abc").collect::<Vec<_>>();
     assert_eq!(ms, vec![(0, 0), (1, 1), (2, 2), (3, 3)]);
 }
 
 #[test]
 fn quoted_bracket_set() {
     let re = regex!(r"([\x{5b}\x{5d}])");
-    let ms = re.find_iter("[]").collect::<Vec<(uint, uint)>>();
+    let ms = re.find_iter("[]").collect::<Vec<_>>();
     assert_eq!(ms, vec![(0, 1), (1, 2)]);
     let re = regex!(r"([\[\]])");
-    let ms = re.find_iter("[]").collect::<Vec<(uint, uint)>>();
+    let ms = re.find_iter("[]").collect::<Vec<_>>();
     assert_eq!(ms, vec![(0, 1), (1, 2)]);
 }
 
 #[test]
 fn first_range_starts_with_left_bracket() {
     let re = regex!(r"([[-z])");
-    let ms = re.find_iter("[]").collect::<Vec<(uint, uint)>>();
+    let ms = re.find_iter("[]").collect::<Vec<_>>();
     assert_eq!(ms, vec![(0, 1), (1, 2)]);
 }
 
 #[test]
 fn range_ends_with_escape() {
     let re = regex!(r"([\[-\x{5d}])");
-    let ms = re.find_iter("[]").collect::<Vec<(uint, uint)>>();
+    let ms = re.find_iter("[]").collect::<Vec<_>>();
     assert_eq!(ms, vec![(0, 1), (1, 2)]);
 }
 
@@ -148,10 +145,10 @@ macro_rules! mat(
         #[test]
         fn $name() {
             let text = $text;
-            let expected: Vec<Option<(uint, uint)>> = vec!($($loc)+);
+            let expected: Vec<Option<_>> = vec!($($loc)+);
             let r = regex!($re);
             let got = match r.captures(text) {
-                Some(c) => c.iter_pos().collect::<Vec<Option<(uint, uint)>>>(),
+                Some(c) => c.iter_pos().collect::<Vec<Option<_>>>(),
                 None => vec!(None),
             };
             // The test set sometimes leave out capture groups, so truncate

@@ -156,7 +156,7 @@ fn easy1() -> Regex { regex!("A[AB]B[BC]C[CD]D[DE]E[EF]F[FG]G[GH]H[HI]I[IJ]J$") 
 fn medium() -> Regex { regex!("[XYZ]ABCDEFGHIJKLMNOPQRSTUVWXYZ$") }
 fn hard() -> Regex { regex!("[ -~]*ABCDEFGHIJKLMNOPQRSTUVWXYZ$") }
 
-fn gen_text(n: uint) -> String {
+fn gen_text(n: usize) -> String {
     let mut rng = thread_rng();
     let mut bytes = rng.gen_ascii_chars().map(|n| n as u8).take(n)
                        .collect::<Vec<u8>>();
