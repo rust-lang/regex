@@ -145,10 +145,17 @@ impl Clone for ExNative {
     }
 }
 
-impl fmt::Show for Regex {
+impl fmt::String for Regex {
     /// Shows the original regular expression.
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.as_str())
+    }
+}
+
+impl fmt::Show for Regex {
+    /// Shows the original regular expression.
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fmt::String::fmt(self, f)
     }
 }
 
@@ -235,7 +242,7 @@ impl Regex {
     /// # fn main() {
     /// let text = "Retroactively relinquishing remunerations is reprehensible.";
     /// for pos in regex!(r"\b\w{13}\b").find_iter(text) {
-    ///     println!("{}", pos);
+    ///     println!("{:?}", pos);
     /// }
     /// // Output:
     /// // (0, 13)
@@ -326,7 +333,7 @@ impl Regex {
     /// let re = regex!(r"'(?P<title>[^']+)'\s+\((?P<year>\d{4})\)");
     /// let text = "'Citizen Kane' (1941), 'The Wizard of Oz' (1939), 'M' (1931).";
     /// for caps in re.captures_iter(text) {
-    ///     println!("Movie: {}, Released: {}", caps.name("title"), caps.name("year"));
+    ///     println!("Movie: {:?}, Released: {:?}", caps.name("title"), caps.name("year"));
     /// }
     /// // Output:
     /// // Movie: Citizen Kane, Released: 1941
