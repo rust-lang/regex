@@ -50,6 +50,13 @@ impl fmt::String for Error {
     }
 }
 
+impl fmt::String for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fmt::String::fmt(self, f)
+    }
+}
+
+
 /// Represents the abstract syntax of a regular expression.
 /// It is showable so that error messages resulting from a bug can provide
 /// useful information.
@@ -258,7 +265,7 @@ impl<'a> Parser<'a> {
                     // alternate and make it a capture.
                     if cap.is_some() {
                         let ast = try!(self.pop_ast());
-                        self.push(Capture(cap.unwrap(), cap_name, box ast));
+                        self.push(Capture(cap.unwrap(), cap_name, Box::new(ast)));
                     }
                 }
                 '|' => {
@@ -350,7 +357,7 @@ impl<'a> Parser<'a> {
             _ => {}
         }
         let greed = try!(self.get_next_greedy());
-        self.push(Rep(box ast, rep, greed));
+        self.push(Rep(Box::new(ast), rep, greed));
         Ok(())
     }
 
@@ -424,13 +431,13 @@ impl<'a> Parser<'a> {
                         let flags = negated | (self.flags & FLAG_NOCASE);
                         let mut ast = AstClass(combine_ranges(ranges), flags);
                         for alt in alts.into_iter() {
-                            ast = Alt(box alt, box ast)
+                            ast = Alt(Box::new(alt), Box::new(ast))
                         }
                         self.push(ast);
                     } else if alts.len() > 0 {
                         let mut ast = alts.pop().unwrap();
                         for alt in alts.into_iter() {
-                            ast = Alt(box alt, box ast)
+                            ast = Alt(Box::new(alt), Box::new(ast))
                         }
                         self.push(ast);
                     }
@@ -575,7 +582,7 @@ impl<'a> Parser<'a> {
             for _ in iter::range(0, min) {
                 self.push(ast.clone())
             }
-            self.push(Rep(box ast, ZeroMore, greed));
+            self.push(Rep(Box::new(ast), ZeroMore, greed));
         } else {
             // Require N copies of what's on the stack and then repeat it
             // up to M times optionally.
@@ -585,7 +592,7 @@ impl<'a> Parser<'a> {
             }
             if max.is_some() {
                 for _ in iter::range(min, max.unwrap()) {
-                    self.push(Rep(box ast.clone(), ZeroOne, greed))
+                    self.push(Rep(Box::new(ast.clone()), ZeroOne, greed))
                 }
             }
             // It's possible that we popped something off the stack but
@@ -884,7 +891,7 @@ impl<'a> Parser<'a> {
         // thrown away). But be careful with overflow---we can't count on the
         // open paren to be there.
         if from > 0 { from = from - 1}
-        let ast = try!(self.build_from(from, |l,r| Alt(box l, box r)));
+        let ast = try!(self.build_from(from, |l,r| Alt(Box::new(l), Box::new(r))));
         self.push(ast);
         Ok(())
     }

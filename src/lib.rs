@@ -361,6 +361,8 @@
 //! characters in the search text and `m` is the number of instructions in a
 //! compiled expression.
 
+#![feature(int_uint)]
+
 #![feature(slicing_syntax)]
 #![deny(missing_docs)]
 #![cfg_attr(test, deny(warnings))]
