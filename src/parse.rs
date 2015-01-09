@@ -44,6 +44,13 @@ impl fmt::Show for Error {
     }
 }
 
+impl fmt::String for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fmt::String::fmt(self, f)
+    }
+}
+
+
 /// Represents the abstract syntax of a regular expression.
 /// It is showable so that error messages resulting from a bug can provide
 /// useful information.
@@ -123,7 +130,7 @@ impl BuildAst {
     fn flags(&self) -> Flags {
         match *self {
             Paren(flags, _, _) => flags,
-            _ => panic!("Cannot get flags from {}", self),
+            _ => panic!("Cannot get flags from {:?}", self),
         }
     }
 
@@ -131,7 +138,7 @@ impl BuildAst {
         match *self {
             Paren(_, 0, _) => None,
             Paren(_, c, _) => Some(c),
-            _ => panic!("Cannot get capture group from {}", self),
+            _ => panic!("Cannot get capture group from {:?}", self),
         }
     }
 
@@ -145,7 +152,7 @@ impl BuildAst {
                     Some(name.clone())
                 }
             }
-            _ => panic!("Cannot get capture name from {}", self),
+            _ => panic!("Cannot get capture name from {:?}", self),
         }
     }
 
@@ -159,7 +166,7 @@ impl BuildAst {
     fn unwrap(self) -> Result<Ast, Error> {
         match self {
             Expr(x) => Ok(x),
-            _ => panic!("Tried to unwrap non-AST item: {}", self),
+            _ => panic!("Tried to unwrap non-AST item: {:?}", self),
         }
     }
 }
@@ -252,7 +259,7 @@ impl<'a> Parser<'a> {
                     // alternate and make it a capture.
                     if cap.is_some() {
                         let ast = try!(self.pop_ast());
-                        self.push(Capture(cap.unwrap(), cap_name, box ast));
+                        self.push(Capture(cap.unwrap(), cap_name, Box::new(ast)));
                     }
                 }
                 '|' => {
@@ -344,7 +351,7 @@ impl<'a> Parser<'a> {
             _ => {}
         }
         let greed = try!(self.get_next_greedy());
-        self.push(Rep(box ast, rep, greed));
+        self.push(Rep(Box::new(ast), rep, greed));
         Ok(())
     }
 
@@ -395,7 +402,7 @@ impl<'a> Parser<'a> {
                             continue
                         }
                         Some(ast) =>
-                            panic!("Expected Class AST but got '{}'", ast),
+                            panic!("Expected Class AST but got '{:?}'", ast),
                         // Just drop down and try to add as a regular character.
                         None => {},
                     },
@@ -410,7 +417,7 @@ impl<'a> Parser<'a> {
                             return self.err(
                                 "\\A, \\z, \\b and \\B are not valid escape \
                                  sequences inside a character class."),
-                        ast => panic!("Unexpected AST item '{}'", ast),
+                        ast => panic!("Unexpected AST item '{:?}'", ast),
                     }
                 }
                 ']' if ranges.len() > 0 || alts.len() > 0 => {
@@ -418,13 +425,13 @@ impl<'a> Parser<'a> {
                         let flags = negated | (self.flags & FLAG_NOCASE);
                         let mut ast = AstClass(combine_ranges(ranges), flags);
                         for alt in alts.into_iter() {
-                            ast = Alt(box alt, box ast)
+                            ast = Alt(Box::new(alt), Box::new(ast))
                         }
                         self.push(ast);
                     } else if alts.len() > 0 {
                         let mut ast = alts.pop().unwrap();
                         for alt in alts.into_iter() {
-                            ast = Alt(box alt, box ast)
+                            ast = Alt(Box::new(alt), Box::new(ast))
                         }
                         self.push(ast);
                     }
@@ -443,7 +450,7 @@ impl<'a> Parser<'a> {
                     match try!(self.parse_escape()) {
                         Literal(c3, _) => c2 = c3, // allow literal escapes below
                         ast =>
-                            return self.err(format!("Expected a literal, but got {}.",
+                            return self.err(format!("Expected a literal, but got {:?}.",
                                                     ast).as_slice()),
                     }
                 }
@@ -569,7 +576,7 @@ impl<'a> Parser<'a> {
             for _ in iter::range(0, min) {
                 self.push(ast.clone())
             }
-            self.push(Rep(box ast, ZeroMore, greed));
+            self.push(Rep(Box::new(ast), ZeroMore, greed));
         } else {
             // Require N copies of what's on the stack and then repeat it
             // up to M times optionally.
@@ -579,7 +586,7 @@ impl<'a> Parser<'a> {
             }
             if max.is_some() {
                 for _ in iter::range(min, max.unwrap()) {
-                    self.push(Rep(box ast.clone(), ZeroOne, greed))
+                    self.push(Rep(Box::new(ast.clone()), ZeroOne, greed))
                 }
             }
             // It's possible that we popped something off the stack but
@@ -878,7 +885,7 @@ impl<'a> Parser<'a> {
         // thrown away). But be careful with overflow---we can't count on the
         // open paren to be there.
         if from > 0 { from = from - 1}
-        let ast = try!(self.build_from(from, |l,r| Alt(box l, box r)));
+        let ast = try!(self.build_from(from, |l,r| Alt(Box::new(l), Box::new(r))));
         self.push(ast);
         Ok(())
     }
