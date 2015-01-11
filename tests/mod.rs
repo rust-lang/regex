@@ -11,7 +11,7 @@
 #![feature(plugin)]
 #![allow(unstable)]
 
-#[plugin]
+#[plugin] #[no_link]
 extern crate regex_macros;
 extern crate regex;
 extern crate "test" as stdtest;

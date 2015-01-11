@@ -69,7 +69,7 @@
 //! ```rust
 //! #![feature(plugin)]
 //! # #![allow(unstable)]
-//! #[plugin]
+//! #[plugin] #[no_link]
 //! extern crate regex_macros;
 //! extern crate regex;
 //!
@@ -100,7 +100,7 @@
 //! ```rust
 //! # #![feature(plugin)]
 //! # #![allow(unstable)]
-//! # extern crate regex; #[plugin] extern crate regex_macros;
+//! # extern crate regex; #[plugin] #[no_link] extern crate regex_macros;
 //! # fn main() {
 //! let re = regex!(r"(\d{4})-(\d{2})-(\d{2})");
 //! let text = "2012-03-14, 2013-01-01 and 2014-07-05";
@@ -129,7 +129,7 @@
 //! ```rust
 //! # #![feature(plugin)]
 //! # #![allow(unstable)]
-//! # extern crate regex; #[plugin] extern crate regex_macros;
+//! # extern crate regex; #[plugin] #[no_link] extern crate regex_macros;
 //! # fn main() {
 //! let re = regex!(r"(?P<y>\d{4})-(?P<m>\d{2})-(?P<d>\d{2})");
 //! let before = "2012-03-14, 2013-01-01 and 2014-07-05";
@@ -177,7 +177,7 @@
 //! ```rust
 //! # #![feature(plugin)]
 //! # #![allow(unstable)]
-//! # extern crate regex; #[plugin] extern crate regex_macros;
+//! # extern crate regex; #[plugin] #[no_link] extern crate regex_macros;
 //! # fn main() {
 //! let re = regex!(r"(?i)Δ+");
 //! assert_eq!(re.find("ΔδΔ"), Some((0, 6)));
@@ -191,7 +191,7 @@
 //! ```rust
 //! # #![feature(plugin)]
 //! # #![allow(unstable)]
-//! # extern crate regex; #[plugin] extern crate regex_macros;
+//! # extern crate regex; #[plugin] #[no_link] extern crate regex_macros;
 //! # fn main() {
 //! let re = regex!(r"[\pN\p{Greek}\p{Cherokee}]+");
 //! assert_eq!(re.find("abcΔᎠβⅠᏴγδⅡxyz"), Some((3, 23)));
@@ -289,7 +289,7 @@
 //! ```rust
 //! # #![feature(plugin)]
 //! # #![allow(unstable)]
-//! # extern crate regex; #[plugin] extern crate regex_macros;
+//! # extern crate regex; #[plugin] #[no_link] extern crate regex_macros;
 //! # fn main() {
 //! let re = regex!(r"(?i)a+(?-i)b+");
 //! let cap = re.captures("AaAaAbbBBBb").unwrap();
