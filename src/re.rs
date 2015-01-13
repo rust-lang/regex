@@ -15,6 +15,7 @@ use std::borrow::IntoCow;
 use std::collections::HashMap;
 use std::fmt;
 use std::string::CowString;
+use unicode::str::utf8_char_width;
 
 use compile::Program;
 use parse;
@@ -881,7 +882,11 @@ impl<'r, 't> Iterator for FindCaptures<'r, 't> {
         // Don't accept empty matches immediately following a match.
         // i.e., no infinite loops please.
         if e == s && Some(self.last_end) == self.last_match {
-            self.last_end += 1;
+            if self.last_end >= self.search.len() {
+                return None;
+            }
+            self.last_end +=
+                utf8_char_width(self.search.as_bytes()[self.last_end]);
             return self.next()
         }
         self.last_end = e;
@@ -925,7 +930,11 @@ impl<'r, 't> Iterator for FindMatches<'r, 't> {
         // Don't accept empty matches immediately following a match.
         // i.e., no infinite loops please.
         if e == s && Some(self.last_end) == self.last_match {
-            self.last_end += 1;
+            if self.last_end >= self.search.len() {
+                return None;
+            }
+            self.last_end +=
+                utf8_char_width(self.search.as_bytes()[self.last_end]);
             return self.next()
         }
         self.last_end = e;

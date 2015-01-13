@@ -64,6 +64,38 @@ fn range_ends_with_escape() {
     assert_eq!(ms, vec![(0, 1), (1, 2)]);
 }
 
+#[test]
+fn empty_match_find_iter() {
+    let re = regex!(r".*?");
+    let ms: Vec<_> = re.find_iter("abc").collect();
+    assert_eq!(ms, vec![(0, 0), (1, 1), (2, 2), (3, 3)]);
+}
+
+#[test]
+fn empty_match_captures_iter() {
+    let re = regex!(r".*?");
+    let ms: Vec<_> = re.captures_iter("abc")
+                       .map(|c| c.pos(0).unwrap())
+                       .collect();
+    assert_eq!(ms, vec![(0, 0), (1, 1), (2, 2), (3, 3)]);
+}
+
+#[test]
+fn empty_match_unicode_find_iter() {
+    let re = regex!(r".*?");
+    let ms: Vec<_> = re.find_iter("Ⅰ1Ⅱ2").collect();
+    assert_eq!(ms, vec![(0, 0), (3, 3), (4, 4), (7, 7), (8, 8)]);
+}
+
+#[test]
+fn empty_match_unicode_captures_iter() {
+    let re = regex!(r".*?");
+    let ms: Vec<_> = re.captures_iter("Ⅰ1Ⅱ2")
+                       .map(|c| c.pos(0).unwrap())
+                       .collect();
+    assert_eq!(ms, vec![(0, 0), (3, 3), (4, 4), (7, 7), (8, 8)]);
+}
+
 macro_rules! replace(
     ($name:ident, $which:ident, $re:expr,
      $search:expr, $replace:expr, $result:expr) => (
