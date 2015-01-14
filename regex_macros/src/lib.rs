@@ -191,6 +191,11 @@ fn exec<'t>(which: ::regex::native::MatchKind, input: &'t str,
                     if matched {
                         break
                     }
+
+                    if $prefix_anchor && self.ic != 0 {
+                        break
+                    }
+
                     $check_prefix
                 }
                 if clist.size == 0 || (!$prefix_anchor && !matched) {
