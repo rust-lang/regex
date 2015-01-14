@@ -144,12 +144,18 @@ impl<'r, 't> Nfa<'r, 't> {
                     break
                 }
 
+                // If the expression starts with a '^' we can terminate as soon
+                // as the last thread dies.
+                if self.ic != 0 && prefix_anchor {
+                    break;
+                }
+                
                 // If there are no threads to try, then we'll have to start
                 // over at the beginning of the regex.
                 // BUT, if there's a literal prefix for the program, try to
                 // jump ahead quickly. If it can't be found, then we can bail
                 // out early.
-                if self.prog.prefix.len() > 0 && clist.size == 0 {
+                if self.prog.prefix.len() > 0 {
                     let needle = self.prog.prefix.as_bytes();
                     let haystack = &self.input.as_bytes()[self.ic..];
                     match find_prefix(needle, haystack) {
