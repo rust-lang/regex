@@ -95,6 +95,8 @@ pub enum Repeater {
     OneMore,
 }
 
+impl Copy for Repeater {}
+
 #[derive(Show, Clone)]
 /// Greediness specification for repetition.
 pub enum Greed {
