@@ -55,37 +55,61 @@ impl fmt::String for Error {
 /// it was typed. (But it could be used to reproduce an equivalent regex.)
 #[derive(Show, Clone)]
 pub enum Ast {
+    /// Match nothing (e.g. for an empty regex).
     Nothing,
+    /// Match a single character.
     Literal(char, Flags),
+    /// Match any single character.
     Dot(Flags),
+    /// Match a range of characters, in the format [from, to].
     AstClass(Vec<(char, char)>, Flags),
+    /// Match the beginning of a string.
     Begin(Flags),
+    /// Match the end of a string.
     End(Flags),
+    /// Match the boundary of a word.
+    /// Note that if the flags contains FLAG_NEGATED, then we match anything
+    /// that is *not* a word boundary.
     WordBoundary(Flags),
+    /// Capture TKTK, optionally naming this capture.
     Capture(usize, Option<String>, Box<Ast>),
     // Represent concatenation as a flat vector to avoid blowing the
     // stack in the compiler.
+    /// Concatenation - match a sequence of sub-expressions in order.
     Cat(Vec<Ast>),
+    /// Alternation - match either one of the subexpressions.
     Alt(Box<Ast>, Box<Ast>),
+    /// Repetition - match the given subexpression, repeated in the specified
+    /// manner, and with the given greedy flag.
     Rep(Box<Ast>, Repeater, Greed),
 }
 
 #[derive(Show, PartialEq, Clone)]
+/// Types of repetition.
 pub enum Repeater {
+    /// Repeat zero or once: `r?`
     ZeroOne,
+    /// Repeat zero or more: `r*`
     ZeroMore,
+    /// Repeat once or more `r+`
     OneMore,
 }
 
+impl Copy for Repeater {}
+
 #[derive(Show, Clone)]
+/// Greediness specification for repetition.
 pub enum Greed {
+    /// Greedy repetition: `.*`
     Greedy,
+    /// Ungreedy repetition: `.*?`
     Ungreedy,
 }
 
 impl Copy for Greed {}
 
 impl Greed {
+    /// Does this represent greedy repetition?
     pub fn is_greedy(&self) -> bool {
         match *self {
             Greedy => true,
@@ -193,6 +217,7 @@ struct Parser<'a> {
     names: Vec<String>,
 }
 
+/// Parse the given regex and return the AST.
 pub fn parse(s: &str) -> Result<Ast, Error> {
     Parser {
         chars: s.chars().collect(),
@@ -1015,6 +1040,8 @@ fn concat_flatten(x: Ast, y: Ast) -> Ast {
     }
 }
 
+/// Return whether or not the given character is regex punctuation -
+/// i.e. whether or not it has a special meaning.
 pub fn is_punct(c: char) -> bool {
     match c {
         '\\' | '.' | '+' | '*' | '?' | '(' | ')' | '|' |
