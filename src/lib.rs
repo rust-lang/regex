@@ -384,7 +384,10 @@ pub use re::{Replacer, NoExpand, RegexSplits, RegexSplitsN};
 pub use re::{quote, is_match};
 
 mod compile;
-mod parse;
+
+/// The `parse` module contains the infrastructure for parsing a string
+/// containing a regular expression into an abstract syntax tree (AST).
+pub mod parse;
 mod re;
 mod vm;
 
