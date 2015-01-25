@@ -146,17 +146,17 @@ impl Clone for ExNative {
     }
 }
 
-impl fmt::String for Regex {
+impl fmt::Display for Regex {
     /// Shows the original regular expression.
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.as_str())
     }
 }
 
-impl fmt::Show for Regex {
+impl fmt::Debug for Regex {
     /// Shows the original regular expression.
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        fmt::String::fmt(self, f)
+        fmt::Display::fmt(self, f)
     }
 }
 
@@ -516,11 +516,11 @@ impl Regex {
             }
 
             let (s, e) = cap.pos(0).unwrap(); // captures only reports matches
-            new.push_str(text.slice(last_match, s));
+            new.push_str(&text[last_match..s]);
             new.push_str(rep.reg_replace(&cap).as_slice());
             last_match = e;
         }
-        new.push_str(text.slice(last_match, text.len()));
+        new.push_str(&text[last_match..]);
         return new;
     }
 
@@ -622,13 +622,13 @@ impl<'r, 't> Iterator for RegexSplits<'r, 't> {
                 if self.last >= text.len() {
                     None
                 } else {
-                    let s = text.slice(self.last, text.len());
+                    let s = &text[self.last..];
                     self.last = text.len();
                     Some(s)
                 }
             }
             Some((s, e)) => {
-                let matched = text.slice(self.last, s);
+                let matched = &text[self.last..s];
                 self.last = e;
                 Some(matched)
             }
@@ -658,7 +658,7 @@ impl<'r, 't> Iterator for RegexSplitsN<'r, 't> {
         } else {
             self.cur += 1;
             if self.cur >= self.limit {
-                Some(text.slice(self.splits.last, text.len()))
+                Some(&text[self.splits.last..])
             } else {
                 self.splits.next()
             }
@@ -732,7 +732,7 @@ impl<'t> Captures<'t> {
     pub fn at(&self, i: usize) -> Option<&'t str> {
         match self.pos(i) {
             None => None,
-            Some((s, e)) => Some(self.text.slice(s, e))
+            Some((s, e)) => Some(&self.text[s..e])
         }
     }
 
