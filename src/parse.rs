@@ -38,7 +38,7 @@ pub struct Error {
     pub msg: String,
 }
 
-impl fmt::String for Error {
+impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "Regex syntax error near position {}: {}",
                self.pos, self.msg)
