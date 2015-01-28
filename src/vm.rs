@@ -119,8 +119,8 @@ impl<'r, 't> Nfa<'r, 't> {
         };
         let mut matched = false;
         let ninsts = self.prog.insts.len();
-        let mut clist = &mut Threads::new(self.which, ninsts, ncaps);
-        let mut nlist = &mut Threads::new(self.which, ninsts, ncaps);
+        let mut clist = Threads::new(self.which, ninsts, ncaps);
+        let mut nlist = Threads::new(self.which, ninsts, ncaps);
 
         let mut groups = repeat(None).take(ncaps * 2).collect::<Vec<_>>();
 
@@ -172,7 +172,7 @@ impl<'r, 't> Nfa<'r, 't> {
             // a state starting at the current position in the input for the
             // beginning of the program only if we don't already have a match.
             if clist.size == 0 || (!prefix_anchor && !matched) {
-                self.add(clist, 0, groups.as_mut_slice())
+                self.add(&mut clist, 0, groups.as_mut_slice())
             }
 
             // Now we try to read the next character.
@@ -183,7 +183,7 @@ impl<'r, 't> Nfa<'r, 't> {
 
             for i in range(0, clist.size) {
                 let pc = clist.pc(i);
-                let step_state = self.step(groups.as_mut_slice(), nlist,
+                let step_state = self.step(groups.as_mut_slice(), &mut nlist,
                                            clist.groups(i), pc);
                 match step_state {
                     StepMatchEarlyReturn => return vec![Some(0), Some(0)],
