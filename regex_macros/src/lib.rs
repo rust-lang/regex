@@ -179,8 +179,8 @@ fn exec<'t>(which: ::regex::native::MatchKind, input: &'t str,
         fn run(&mut self, start: usize, end: usize) -> Vec<Option<usize>> {
             let mut matched = false;
             let prefix_bytes: &[u8] = $prefix_bytes;
-            let mut clist = &mut Threads::new(self.which);
-            let mut nlist = &mut Threads::new(self.which);
+            let mut clist = Threads::new(self.which);
+            let mut nlist = Threads::new(self.which);
 
             let mut groups = $init_groups;
 
@@ -199,7 +199,7 @@ fn exec<'t>(which: ::regex::native::MatchKind, input: &'t str,
                     $check_prefix
                 }
                 if clist.size == 0 || (!$prefix_anchor && !matched) {
-                    self.add(clist, 0, &mut groups)
+                    self.add(&mut clist, 0, &mut groups)
                 }
 
                 self.ic = next_ic;
@@ -207,7 +207,7 @@ fn exec<'t>(which: ::regex::native::MatchKind, input: &'t str,
 
                 for i in range(0, clist.size) {
                     let pc = clist.pc(i);
-                    let step_state = self.step(&mut groups, nlist,
+                    let step_state = self.step(&mut groups, &mut nlist,
                                                clist.groups(i), pc);
                     match step_state {
                         StepMatchEarlyReturn =>
