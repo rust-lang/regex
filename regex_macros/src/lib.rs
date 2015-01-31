@@ -11,12 +11,11 @@
 //! This crate provides the `regex!` macro. Its use is documented in the
 //! `regex` crate.
 
-#![allow(unstable)]
 #![doc(html_logo_url = "http://www.rust-lang.org/logos/rust-logo-128x128-blk-v2.png",
        html_favicon_url = "http://www.rust-lang.org/favicon.ico",
        html_root_url = "http://doc.rust-lang.org/nightly/")]
 
-#![feature(plugin_registrar, quote)]
+#![feature(collections, core, plugin_registrar, quote, rustc_private, unicode)]
 
 extern crate regex;
 extern crate syntax;
