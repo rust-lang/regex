@@ -8,8 +8,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![feature(plugin)]
-#![allow(unstable)]
+#![feature(core, plugin, rand, test)]
 
 #[plugin] #[no_link]
 extern crate regex_macros;
