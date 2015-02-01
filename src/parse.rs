@@ -30,7 +30,7 @@ static MAX_REPEAT: usize = 1000;
 ///
 /// (Once an expression is compiled, it is not possible to produce an error
 /// via searching, splitting or replacing.)
-#[derive(Show)]
+#[derive(Debug)]
 pub struct Error {
     /// The *approximate* character index of where the error occurred.
     pub pos: usize,
@@ -53,7 +53,7 @@ impl fmt::Display for Error {
 ///
 /// Note that this representation prevents one from reproducing the regex as
 /// it was typed. (But it could be used to reproduce an equivalent regex.)
-#[derive(Show, Clone)]
+#[derive(Debug, Clone)]
 pub enum Ast {
     Nothing,
     Literal(char, Flags),
@@ -70,14 +70,14 @@ pub enum Ast {
     Rep(Box<Ast>, Repeater, Greed),
 }
 
-#[derive(Show, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Repeater {
     ZeroOne,
     ZeroMore,
     OneMore,
 }
 
-#[derive(Show, Clone)]
+#[derive(Debug, Clone)]
 pub enum Greed {
     Greedy,
     Ungreedy,
@@ -106,7 +106,7 @@ impl Greed {
 /// constructing an abstract syntax tree. Its central purpose is to facilitate
 /// parsing groups and alternations while also maintaining a stack of flag
 /// state.
-#[derive(Show)]
+#[derive(Debug)]
 enum BuildAst {
     Expr(Ast),
     Paren(Flags, usize, String), // '('
@@ -685,8 +685,8 @@ impl<'a> Parser<'a> {
         }
         let s = self.slice(start, end);
         match num::from_str_radix::<u32>(s.as_slice(), 8) {
-            Some(n) => Ok(Literal(try!(self.char_from_u32(n)), FLAG_EMPTY)),
-            None => {
+            Ok(n) => Ok(Literal(try!(self.char_from_u32(n)), FLAG_EMPTY)),
+            Err(_) => {
                 self.err(format!("Could not parse '{}' as octal number.",
                                  s).as_slice())
             }
@@ -729,8 +729,8 @@ impl<'a> Parser<'a> {
     // Parses `s` as a hexadecimal number.
     fn parse_hex_digits(&self, s: &str) -> Result<Ast, Error> {
         match num::from_str_radix::<u32>(s, 16) {
-            Some(n) => Ok(Literal(try!(self.char_from_u32(n)), FLAG_EMPTY)),
-            None => {
+            Ok(n) => Ok(Literal(try!(self.char_from_u32(n)), FLAG_EMPTY)),
+            Err(_) => {
                 self.err(format!("Could not parse '{}' as hex number.",
                                  s).as_slice())
             }
@@ -908,8 +908,8 @@ impl<'a> Parser<'a> {
 
     fn parse_usize(&self, s: &str) -> Result<usize, Error> {
         match s.parse::<usize>() {
-            Some(i) => Ok(i),
-            None => {
+            Ok(i) => Ok(i),
+            Err(_) => {
                 self.err(format!("Expected an unsigned integer but got '{}'.",
                                  s).as_slice())
             }

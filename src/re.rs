@@ -785,8 +785,8 @@ impl<'t> Captures<'t> {
             let name = refs.at(2).unwrap_or("");
             format!("{}{}", pre,
                     match name.parse::<usize>() {
-                None => self.name(name).unwrap_or("").to_string(),
-                Some(i) => self.at(i).unwrap_or("").to_string(),
+                Err(_) => self.name(name).unwrap_or("").to_string(),
+                Ok(i) => self.at(i).unwrap_or("").to_string(),
             })
         });
         let re = Regex::new(r"\$\$").unwrap();

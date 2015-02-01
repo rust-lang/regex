@@ -15,7 +15,7 @@
        html_favicon_url = "http://www.rust-lang.org/favicon.ico",
        html_root_url = "http://doc.rust-lang.org/nightly/")]
 
-#![feature(collections, core, plugin_registrar, quote, rustc_private, unicode)]
+#![feature(core, plugin_registrar, quote, rustc_private, unicode)]
 
 extern crate regex;
 extern crate syntax;

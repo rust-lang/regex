@@ -24,7 +24,7 @@ use parse::Repeater::{ZeroOne, ZeroMore, OneMore};
 pub type InstIdx = usize;
 
 /// An instruction, the underlying unit of a compiled regular expression
-#[derive(Show, Clone)]
+#[derive(Debug, Clone)]
 pub enum Inst {
     /// When a Match instruction is executed, the current thread is successful.
     Match,
