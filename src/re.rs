@@ -780,7 +780,7 @@ impl<'t> Captures<'t> {
         // How evil can you get?
         // FIXME: Don't use regexes for this. It's completely unnecessary.
         let re = Regex::new(r"(^|[^$]|\b)\$(\w+)").unwrap();
-        let text = re.replace_all(text, |&mut: refs: &Captures| -> String {
+        let text = re.replace_all(text, |refs: &Captures| -> String {
             let pre = refs.at(1).unwrap_or("");
             let name = refs.at(2).unwrap_or("");
             format!("{}{}", pre,
