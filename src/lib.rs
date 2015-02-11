@@ -96,7 +96,7 @@
 //! them by their component pieces:
 //!
 //! ```rust
-//! # #![feature(plugin)] #![plugin(regex)macros)]
+//! # #![feature(plugin)] #![plugin(regex_macros)]
 //! # extern crate regex;
 //! # fn main() {
 //! let re = regex!(r"(\d{4})-(\d{2})-(\d{2})");
