@@ -10,9 +10,9 @@
 #![allow(non_snake_case)]
 
 use std::iter::repeat;
-use std::rand::{Rng, thread_rng};
 use stdtest::Bencher;
 
+use rand::{Rng, thread_rng};
 use regex::{Regex, NoExpand};
 
 fn bench_assert_match(b: &mut Bencher, re: Regex, text: &str) {

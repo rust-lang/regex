@@ -16,6 +16,9 @@ An implementation of regular expressions for Rust.
 path = "tests/mod.rs"
 name = "all"
 
+[dev-dependencies]
+rand = "0.1"
+
 [dev-dependencies.regex_macros]
 path = "regex_macros"
 version = "0.1.0"

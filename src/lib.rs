@@ -68,8 +68,7 @@
 //!
 //! ```rust
 //! #![feature(plugin)]
-//! #[plugin] #[no_link]
-//! extern crate regex_macros;
+//! #![plugin(regex_macros)]
 //! extern crate regex;
 //!
 //! fn main() {
@@ -97,8 +96,8 @@
 //! them by their component pieces:
 //!
 //! ```rust
-//! # #![feature(plugin)]
-//! # extern crate regex; #[plugin] #[no_link] extern crate regex_macros;
+//! # #![feature(plugin)] #![plugin(regex)macros)]
+//! # extern crate regex;
 //! # fn main() {
 //! let re = regex!(r"(\d{4})-(\d{2})-(\d{2})");
 //! let text = "2012-03-14, 2013-01-01 and 2014-07-05";
@@ -125,8 +124,8 @@
 //! in our replacement text:
 //!
 //! ```rust
-//! # #![feature(plugin)]
-//! # extern crate regex; #[plugin] #[no_link] extern crate regex_macros;
+//! # #![feature(plugin)] #![plugin(regex_macros)]
+//! # extern crate regex;
 //! # fn main() {
 //! let re = regex!(r"(?P<y>\d{4})-(?P<m>\d{2})-(?P<d>\d{2})");
 //! let before = "2012-03-14, 2013-01-01 and 2014-07-05";
@@ -172,8 +171,8 @@
 //! directly in your expression:
 //!
 //! ```rust
-//! # #![feature(plugin)]
-//! # extern crate regex; #[plugin] #[no_link] extern crate regex_macros;
+//! # #![feature(plugin)] #![plugin(regex_macros)]
+//! # extern crate regex;
 //! # fn main() {
 //! let re = regex!(r"(?i)Δ+");
 //! assert_eq!(re.find("ΔδΔ"), Some((0, 6)));
@@ -185,8 +184,8 @@
 //! Cherokee letters:
 //!
 //! ```rust
-//! # #![feature(plugin)]
-//! # extern crate regex; #[plugin] #[no_link] extern crate regex_macros;
+//! # #![feature(plugin)] #![plugin(regex_macros)]
+//! # extern crate regex;
 //! # fn main() {
 //! let re = regex!(r"[\pN\p{Greek}\p{Cherokee}]+");
 //! assert_eq!(re.find("abcΔᎠβⅠᏴγδⅡxyz"), Some((3, 23)));
@@ -282,8 +281,8 @@
 //! expression:
 //!
 //! ```rust
-//! # #![feature(plugin)]
-//! # extern crate regex; #[plugin] #[no_link] extern crate regex_macros;
+//! # #![feature(plugin)] #![plugin(regex_macros)]
+//! # extern crate regex;
 //! # fn main() {
 //! let re = regex!(r"(?i)a+(?-i)b+");
 //! let cap = re.captures("AaAaAbbBBBb").unwrap();

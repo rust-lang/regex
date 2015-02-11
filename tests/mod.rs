@@ -8,10 +8,10 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![feature(core, plugin, rand, test)]
+#![feature(core, plugin, test)]
+#![plugin(regex_macros)]
 
-#[plugin] #[no_link]
-extern crate regex_macros;
+extern crate rand;
 extern crate regex;
 extern crate "test" as stdtest;
 
