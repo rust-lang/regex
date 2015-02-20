@@ -12,9 +12,9 @@ use self::NamesIter::*;
 use self::Regex::*;
 
 use std::borrow::IntoCow;
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fmt;
-use std::string::CowString;
 use unicode::str::utf8_char_width;
 
 use compile::Program;
@@ -580,24 +580,24 @@ pub trait Replacer {
     ///
     /// The `'a` lifetime refers to the lifetime of a borrowed string when
     /// a new owned string isn't needed (e.g., for `NoExpand`).
-    fn reg_replace<'a>(&'a mut self, caps: &Captures) -> CowString<'a>;
+    fn reg_replace<'a>(&'a mut self, caps: &Captures) -> Cow<'a, str>;
 }
 
 impl<'t> Replacer for NoExpand<'t> {
-    fn reg_replace<'a>(&'a mut self, _: &Captures) -> CowString<'a> {
+    fn reg_replace<'a>(&'a mut self, _: &Captures) -> Cow<'a, str> {
         let NoExpand(s) = *self;
         s.into_cow()
     }
 }
 
 impl<'t> Replacer for &'t str {
-    fn reg_replace<'a>(&'a mut self, caps: &Captures) -> CowString<'a> {
+    fn reg_replace<'a>(&'a mut self, caps: &Captures) -> Cow<'a, str> {
         caps.expand(*self).into_cow()
     }
 }
 
 impl<F> Replacer for F where F: FnMut(&Captures) -> String {
-    fn reg_replace<'a>(&'a mut self, caps: &Captures) -> CowString<'a> {
+    fn reg_replace<'a>(&'a mut self, caps: &Captures) -> Cow<'a, str> {
         (*self)(caps).into_cow()
     }
 }
