@@ -11,8 +11,7 @@
 use self::NamesIter::*;
 use self::Regex::*;
 
-use std::borrow::IntoCow;
-use std::borrow::Cow;
+use std::borrow::{IntoCow, Cow};
 use std::collections::HashMap;
 use std::fmt;
 use unicode::str::utf8_char_width;
