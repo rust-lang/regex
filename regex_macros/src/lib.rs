@@ -15,7 +15,7 @@
        html_favicon_url = "http://www.rust-lang.org/favicon.ico",
        html_root_url = "http://doc.rust-lang.org/nightly/")]
 
-#![feature(core, plugin_registrar, quote, rustc_private, unicode)]
+#![feature(plugin_registrar, quote, rustc_private, unicode)]
 
 extern crate regex;
 extern crate syntax;
@@ -78,10 +78,10 @@ fn native(cx: &mut ExtCtxt, sp: codemap::Span, tts: &[ast::TokenTree])
         // error is logged in 'parse' with cx.span_err
         None => return DummyResult::any(sp),
     };
-    let re = match Regex::new(regex.as_slice()) {
+    let re = match Regex::new(&regex) {
         Ok(re) => re,
         Err(err) => {
-            cx.span_err(sp, err.to_string().as_slice());
+            cx.span_err(sp, &err.to_string());
             return DummyResult::any(sp)
         }
     };
@@ -114,7 +114,7 @@ impl<'a> NfaGen<'a> {
         let cap_names = self.vec_expr(self.names.iter(),
             &mut |cx, name| match *name {
                 Some(ref name) => {
-                    let name = name.as_slice();
+                    let name = &**name;
                     quote_expr!(cx, Some($name))
                 }
                 None => cx.expr_none(self.sp),
@@ -125,7 +125,7 @@ impl<'a> NfaGen<'a> {
                 EmptyBegin(flags) if flags & FLAG_MULTI == 0 => true,
                 _ => false,
             };
-        let init_groups = self.vec_expr(range(0, num_cap_locs),
+        let init_groups = self.vec_expr(0..num_cap_locs,
                                         &mut |cx, _| cx.expr_none(self.sp));
 
         let prefix_lit = Rc::new(self.prog.prefix.as_bytes().to_vec());
@@ -134,7 +134,7 @@ impl<'a> NfaGen<'a> {
         let check_prefix = self.check_prefix();
         let step_insts = self.step_insts();
         let add_insts = self.add_insts();
-        let regex = self.original.as_slice();
+        let regex = &*self.original;
 
         quote_expr!(self.cx, {
 // When `regex!` is bound to a name that is not used, we have to make sure
@@ -204,7 +204,7 @@ fn exec<'t>(which: ::regex::native::MatchKind, input: &'t str,
                 self.ic = next_ic;
                 next_ic = self.chars.advance();
 
-                for i in range(0, clist.size) {
+                for i in 0..clist.size {
                     let pc = clist.pc(i);
                     let step_state = self.step(&mut groups, &mut nlist,
                                                clist.groups(i), pc);
@@ -489,7 +489,7 @@ fn exec<'t>(which: ::regex::native::MatchKind, input: &'t str,
                         } else {
                             quote_expr!(self.cx, found)
                         };
-                    let mranges = self.match_class(casei, ranges.as_slice());
+                    let mranges = self.match_class(casei, &ranges);
                     quote_expr!(self.cx, {
                         if self.chars.prev.is_some() {
                             let c = $get_char;
@@ -620,17 +620,17 @@ fn parse(cx: &mut ExtCtxt, tts: &[ast::TokenTree]) -> Option<String> {
             match lit.node {
                 ast::LitStr(ref s, _) => s.to_string(),
                 _ => {
-                    cx.span_err(entry.span, format!(
+                    cx.span_err(entry.span, &format!(
                         "expected string literal but got `{}`",
-                        pprust::lit_to_string(&**lit)).as_slice());
+                        pprust::lit_to_string(&**lit)));
                     return None
                 }
             }
         }
         _ => {
-            cx.span_err(entry.span, format!(
+            cx.span_err(entry.span, &format!(
                 "expected string literal but got `{}`",
-                pprust::expr_to_string(&*entry)).as_slice());
+                pprust::expr_to_string(&*entry)));
             return None
         }
     };
