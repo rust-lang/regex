@@ -8,12 +8,11 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use self::NamesIter::*;
-use self::Regex::*;
-
 use std::borrow::{IntoCow, Cow};
 use std::collections::HashMap;
 use std::fmt;
+use std::str::{Pattern, Searcher, SearchStep};
+
 use unicode::str::utf8_char_width;
 
 use compile::Program;
@@ -21,6 +20,9 @@ use parse;
 use vm;
 use vm::CaptureLocs;
 use vm::MatchKind::{self, Exists, Location, Submatches};
+
+use self::NamesIter::*;
+use self::Regex::*;
 
 /// Escapes all regular expression meta characters in `text`.
 ///
@@ -77,6 +79,27 @@ pub fn is_match(regex: &str, text: &str) -> Result<bool, parse::Error> {
 /// # use regex::Regex;
 /// let re = Regex::new("[0-9]{3}-[0-9]{3}-[0-9]{4}").unwrap();
 /// assert_eq!(re.find("phone: 111-222-3333"), Some((7, 19)));
+/// ```
+///
+/// # Using the `std::str::StrExt` methods with `Regex`
+///
+/// Since `Regex` implements `Pattern`, you can use regexes with methods
+/// defined on `std::str::StrExt`. For example, `is_match`, `find`, `find_iter`
+/// and `split` can be replaced with `StrExt::contains`, `StrExt::find`,
+/// `StrExt::match_indices` and `StrExt::split`.
+///
+/// Here are some examples:
+///
+/// ```rust
+/// # use regex::Regex;
+/// let re = Regex::new(r"\d+").unwrap();
+/// let haystack = "a111b222c";
+///
+/// assert!(haystack.contains(&re));
+/// assert_eq!(haystack.find(&re), Some(1));
+/// assert_eq!(haystack.match_indices(&re).collect::<Vec<_>>(),
+///            vec![(1, 4), (5, 8)]);
+/// assert_eq!(haystack.split(&re).collect::<Vec<_>>(), vec!["a", "b", "c"]);
 /// ```
 #[derive(Clone)]
 pub enum Regex {
@@ -898,6 +921,62 @@ impl<'r, 't> Iterator for FindMatches<'r, 't> {
         self.last_end = e;
         self.last_match = Some(self.last_end);
         Some((s, e))
+    }
+}
+
+struct RegexSearcher<'r, 't> {
+    it: FindMatches<'r, 't>,
+    last_step_end: usize,
+    next_match: Option<(usize, usize)>,
+}
+
+impl<'r, 't> Pattern<'t> for &'r Regex {
+    type Searcher = RegexSearcher<'r, 't>;
+
+    fn into_searcher(self, haystack: &'t str) -> RegexSearcher<'r, 't> {
+        RegexSearcher {
+            it: self.find_iter(haystack),
+            last_step_end: 0,
+            next_match: None,
+        }
+    }
+}
+
+unsafe impl<'r, 't> Searcher<'t> for RegexSearcher<'r, 't> {
+    #[inline]
+    fn haystack(&self) -> &'t str {
+        self.it.search
+    }
+
+    #[inline]
+    fn next(&mut self) -> SearchStep {
+        if let Some((s, e)) = self.next_match {
+            self.next_match = None;
+            self.last_step_end = e;
+            return SearchStep::Match(s, e);
+        }
+        match self.it.next() {
+            None => {
+                if self.last_step_end < self.haystack().len() {
+                    let last = self.last_step_end;
+                    self.last_step_end = self.haystack().len();
+                    SearchStep::Reject(last, self.haystack().len())
+                } else {
+                    SearchStep::Done
+                }
+            }
+            Some((s, e)) => {
+                if s == self.last_step_end {
+                    self.last_step_end = e;
+                    SearchStep::Match(s, e)
+                } else {
+                    self.next_match = Some((s, e));
+                    let last = self.last_step_end;
+                    self.last_step_end = s;
+                    SearchStep::Reject(last, s)
+                }
+            }
+        }
     }
 }
 
