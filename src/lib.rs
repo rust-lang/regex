@@ -7,8 +7,6 @@
 // <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-//
-// ignore-lexer-test FIXME #15679
 
 //! This crate provides a native implementation of regular expressions that is
 //! heavily based on RE2 both in syntax and in implementation. Notably,
@@ -20,6 +18,9 @@
 //! This crate's documentation provides some simple examples, describes Unicode
 //! support and exhaustively lists the supported syntax. For more specific
 //! details on the API, please see the documentation for the `Regex` type.
+//!
+//! This crates is [on crates.io](https://crates.io/crates/regex) and can be
+//! used by adding `regex` to your dependencies in your projects `Cargo.toml`.
 //!
 //! # First example: find a date
 //!
@@ -57,16 +58,10 @@
 //! given expression to native Rust code, which makes it much faster for
 //! searching text.
 //!
-//! Since `regex!` provides compiled regular expressions that are both safer
-//! and faster to use, you should use them whenever possible. The only
-//! requirement for using them is that you have a string literal corresponding
-//! to your expression. Otherwise, it is indistinguishable from an expression
-//! compiled at runtime with `Regex::new`.
-//!
-//! To use the `regex!` macro, you must enable the `phase` feature and import
+//! To use the `regex!` macro, you must enable the `plugin` feature and import
 //! the `regex_macros` crate as a syntax extension:
 //!
-//! ```rust
+//! ```ignore
 //! #![feature(plugin)]
 //! #![plugin(regex_macros)]
 //! extern crate regex;
@@ -88,6 +83,21 @@
 //! expressions, but 100+ calls to `regex!` will probably result in a
 //! noticeably bigger binary.
 //!
+//! **NOTE**: This is implemented using a compiler plugin, which will not be
+//! available on the Rust 1.0 beta/stable channels. Therefore, you'll only
+//! be able to use `regex!` on the nightlies. If you want to retain the
+//! `regex!` macro, you can cheat and define this:
+//!
+//! ```rust
+//! macro_rules! regex(
+//!     ($s:expr) => (regex::Regex::new($s).unwrap());
+//! );
+//! ```
+//!
+//! But this just replaces native regexes with dynamic regexes under the hood.
+//! Moreover, this will cause your program to panic *at runtime* if an invalid
+//! regular expression is given.
+//!
 //! # Example: iterating over capture groups
 //!
 //! This crate provides convenient iterators for matching an expression
@@ -96,10 +106,9 @@
 //! them by their component pieces:
 //!
 //! ```rust
-//! # #![feature(plugin)] #![plugin(regex_macros)]
-//! # extern crate regex;
+//! # extern crate regex; use regex::Regex;
 //! # fn main() {
-//! let re = regex!(r"(\d{4})-(\d{2})-(\d{2})");
+//! let re = Regex::new(r"(\d{4})-(\d{2})-(\d{2})").unwrap();
 //! let text = "2012-03-14, 2013-01-01 and 2014-07-05";
 //! for cap in re.captures_iter(text) {
 //!     println!("Month: {} Day: {} Year: {}",
@@ -124,10 +133,9 @@
 //! in our replacement text:
 //!
 //! ```rust
-//! # #![feature(plugin)] #![plugin(regex_macros)]
-//! # extern crate regex;
+//! # extern crate regex; use regex::Regex;
 //! # fn main() {
-//! let re = regex!(r"(?P<y>\d{4})-(?P<m>\d{2})-(?P<d>\d{2})");
+//! let re = Regex::new(r"(?P<y>\d{4})-(?P<m>\d{2})-(?P<d>\d{2})").unwrap();
 //! let before = "2012-03-14, 2013-01-01 and 2014-07-05";
 //! let after = re.replace_all(before, "$m/$d/$y");
 //! assert_eq!(after.as_slice(), "03/14/2012, 01/01/2013 and 07/05/2014");
@@ -171,10 +179,9 @@
 //! directly in your expression:
 //!
 //! ```rust
-//! # #![feature(plugin)] #![plugin(regex_macros)]
-//! # extern crate regex;
+//! # extern crate regex; use regex::Regex;
 //! # fn main() {
-//! let re = regex!(r"(?i)Δ+");
+//! let re = Regex::new(r"(?i)Δ+").unwrap();
 //! assert_eq!(re.find("ΔδΔ"), Some((0, 6)));
 //! # }
 //! ```
@@ -184,10 +191,9 @@
 //! Cherokee letters:
 //!
 //! ```rust
-//! # #![feature(plugin)] #![plugin(regex_macros)]
-//! # extern crate regex;
+//! # extern crate regex; use regex::Regex;
 //! # fn main() {
-//! let re = regex!(r"[\pN\p{Greek}\p{Cherokee}]+");
+//! let re = Regex::new(r"[\pN\p{Greek}\p{Cherokee}]+").unwrap();
 //! assert_eq!(re.find("abcΔᎠβⅠᏴγδⅡxyz"), Some((3, 23)));
 //! # }
 //! ```
@@ -281,10 +287,9 @@
 //! expression:
 //!
 //! ```rust
-//! # #![feature(plugin)] #![plugin(regex_macros)]
-//! # extern crate regex;
+//! # extern crate regex; use regex::Regex;
 //! # fn main() {
-//! let re = regex!(r"(?i)a+(?-i)b+");
+//! let re = Regex::new(r"(?i)a+(?-i)b+").unwrap();
 //! let cap = re.captures("AaAaAbbBBBb").unwrap();
 //! assert_eq!(cap.at(0), Some("AaAaAbb"));
 //! # }
@@ -401,8 +406,10 @@ pub mod native {
     // On the bright side, `rustdoc` lets us hide this from the public API
     // documentation.
     pub use compile::Program;
-    pub use compile::Inst::{Match, OneChar, CharClass, Any, EmptyBegin, EmptyEnd,
-                            EmptyWordBoundary, Save, Jump, Split};
+    pub use compile::Inst::{
+        Match, OneChar, CharClass, Any, EmptyBegin, EmptyEnd,
+        EmptyWordBoundary, Save, Jump, Split,
+    };
     pub use parse::{
         FLAG_EMPTY, FLAG_NOCASE, FLAG_MULTI, FLAG_DOTNL,
         FLAG_SWAP_GREED, FLAG_NEGATED,
@@ -411,5 +418,7 @@ pub mod native {
     pub use re::Regex::{Dynamic, Native};
     pub use vm::{CharReader, find_prefix};
     pub use vm::MatchKind::{self, Exists, Location, Submatches};
-    pub use vm::StepState::{self, StepMatchEarlyReturn, StepMatch, StepContinue};
+    pub use vm::StepState::{
+        self, StepMatchEarlyReturn, StepMatch, StepContinue,
+    };
 }

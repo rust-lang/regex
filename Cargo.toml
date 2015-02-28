@@ -1,5 +1,4 @@
 [package]
-
 name = "regex"
 version = "0.1.15"
 authors = ["The Rust Project Developers"]
@@ -13,12 +12,14 @@ An implementation of regular expressions for Rust.
 """
 
 [[test]]
-path = "tests/mod.rs"
+path = "regex_macros/tests/test_dynamic.rs"
 name = "all"
+
+[[bench]]
+name = "all"
+path = "regex_macros/benches/bench_dynamic.rs"
+test = false
+bench = true
 
 [dev-dependencies]
 rand = "0.1"
-
-[dev-dependencies.regex_macros]
-path = "regex_macros"
-version = "0.1.0"

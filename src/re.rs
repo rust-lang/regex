@@ -44,9 +44,6 @@ pub fn quote(text: &str) -> String {
 ///
 /// To find submatches, split or replace text, you'll need to compile an
 /// expression first.
-///
-/// Note that you should prefer the `regex!` macro when possible. For example,
-/// `regex!("...").is_match("...")`.
 pub fn is_match(regex: &str, text: &str) -> Result<bool, parse::Error> {
     Regex::new(regex).map(|r| r.is_match(text))
 }
@@ -78,33 +75,9 @@ pub fn is_match(regex: &str, text: &str) -> Result<bool, parse::Error> {
 ///
 /// ```rust
 /// # use regex::Regex;
-/// let re = match Regex::new("[0-9]{3}-[0-9]{3}-[0-9]{4}") {
-///     Ok(re) => re,
-///     Err(err) => panic!("{}", err),
-/// };
+/// let re = Regex::new("[0-9]{3}-[0-9]{3}-[0-9]{4}").unwrap();
 /// assert_eq!(re.find("phone: 111-222-3333"), Some((7, 19)));
 /// ```
-///
-/// You can also use the `regex!` macro to compile a regular expression when
-/// you compile your program:
-///
-/// ```rust
-/// #![feature(plugin)]
-/// #![plugin(regex_macros)]
-/// extern crate regex;
-///
-/// fn main() {
-///     let re = regex!(r"\d+");
-///     assert_eq!(re.find("123 abc"), Some((0, 3)));
-/// }
-/// ```
-///
-/// Given an incorrect regular expression, `regex!` will cause the Rust
-/// compiler to produce a compile time error.
-/// Note that `regex!` will compile the expression to native Rust code, which
-/// makes it much faster when searching text.
-/// More details about the `regex!` macro can be found in the `regex` crate
-/// documentation.
 #[derive(Clone)]
 pub enum Regex {
     // The representation of `Regex` is exported to support the `regex!`
@@ -163,9 +136,6 @@ impl Regex {
     /// Compiles a dynamic regular expression. Once compiled, it can be
     /// used repeatedly to search, split or replace text in a string.
     ///
-    /// When possible, you should prefer the `regex!` macro since it is
-    /// safer and always faster.
-    ///
     /// If an invalid expression is given, then an error is returned.
     pub fn new(re: &str) -> Result<Regex, parse::Error> {
         let ast = try!(parse::parse(re));
@@ -185,11 +155,10 @@ impl Regex {
     /// characters:
     ///
     /// ```rust
-    /// # #![feature(plugin)] #![plugin(regex_macros)]
-    /// # extern crate regex;
+    /// # extern crate regex; use regex::Regex;
     /// # fn main() {
     /// let text = "I categorically deny having triskaidekaphobia.";
-    /// let matched = regex!(r"\b\w{13}\b").is_match(text);
+    /// let matched = Regex::new(r"\b\w{13}\b").unwrap().is_match(text);
     /// assert!(matched);
     /// # }
     /// ```
@@ -210,11 +179,10 @@ impl Regex {
     /// characters:
     ///
     /// ```rust
-    /// # #![feature(plugin)] #![plugin(regex_macros)]
-    /// # extern crate regex;
+    /// # extern crate regex; use regex::Regex;
     /// # fn main() {
     /// let text = "I categorically deny having triskaidekaphobia.";
-    /// let pos = regex!(r"\b\w{13}\b").find(text);
+    /// let pos = Regex::new(r"\b\w{13}\b").unwrap().find(text);
     /// assert_eq!(pos, Some((2, 15)));
     /// # }
     /// ```
@@ -237,11 +205,10 @@ impl Regex {
     /// characters:
     ///
     /// ```rust
-    /// # #![feature(plugin)] #![plugin(regex_macros)]
-    /// # extern crate regex;
+    /// # extern crate regex; use regex::Regex;
     /// # fn main() {
     /// let text = "Retroactively relinquishing remunerations is reprehensible.";
-    /// for pos in regex!(r"\b\w{13}\b").find_iter(text) {
+    /// for pos in Regex::new(r"\b\w{13}\b").unwrap().find_iter(text) {
     ///     println!("{:?}", pos);
     /// }
     /// // Output:
@@ -276,10 +243,9 @@ impl Regex {
     /// year separately.
     ///
     /// ```rust
-    /// # #![feature(plugin)] #![plugin(regex_macros)]
-    /// # extern crate regex;
+    /// # extern crate regex; use regex::Regex;
     /// # fn main() {
-    /// let re = regex!(r"'([^']+)'\s+\((\d{4})\)");
+    /// let re = Regex::new(r"'([^']+)'\s+\((\d{4})\)").unwrap();
     /// let text = "Not my favorite movie: 'Citizen Kane' (1941).";
     /// let caps = re.captures(text).unwrap();
     /// assert_eq!(caps.at(1), Some("Citizen Kane"));
@@ -294,10 +260,10 @@ impl Regex {
     /// We can make this example a bit clearer by using *named* capture groups:
     ///
     /// ```rust
-    /// # #![feature(plugin)] #![plugin(regex_macros)]
-    /// # extern crate regex;
+    /// # extern crate regex; use regex::Regex;
     /// # fn main() {
-    /// let re = regex!(r"'(?P<title>[^']+)'\s+\((?P<year>\d{4})\)");
+    /// let re = Regex::new(r"'(?P<title>[^']+)'\s+\((?P<year>\d{4})\)")
+    ///                .unwrap();
     /// let text = "Not my favorite movie: 'Citizen Kane' (1941).";
     /// let caps = re.captures(text).unwrap();
     /// assert_eq!(caps.name("title"), Some("Citizen Kane"));
@@ -327,10 +293,10 @@ impl Regex {
     /// some text, where the movie is formatted like "'Title' (xxxx)":
     ///
     /// ```rust
-    /// # #![feature(plugin)] #![plugin(regex_macros)]
-    /// # extern crate regex;
+    /// # extern crate regex; use regex::Regex;
     /// # fn main() {
-    /// let re = regex!(r"'(?P<title>[^']+)'\s+\((?P<year>\d{4})\)");
+    /// let re = Regex::new(r"'(?P<title>[^']+)'\s+\((?P<year>\d{4})\)")
+    ///                .unwrap();
     /// let text = "'Citizen Kane' (1941), 'The Wizard of Oz' (1939), 'M' (1931).";
     /// for caps in re.captures_iter(text) {
     ///     println!("Movie: {:?}, Released: {:?}", caps.name("title"), caps.name("year"));
@@ -363,10 +329,9 @@ impl Regex {
     /// To split a string delimited by arbitrary amounts of spaces or tabs:
     ///
     /// ```rust
-    /// # #![feature(plugin)] #![plugin(regex_macros)]
-    /// # extern crate regex;
+    /// # extern crate regex; use regex::Regex;
     /// # fn main() {
-    /// let re = regex!(r"[ \t]+");
+    /// let re = Regex::new(r"[ \t]+").unwrap();
     /// let fields: Vec<&str> = re.split("a b \t  c\td    e").collect();
     /// assert_eq!(fields, vec!("a", "b", "c", "d", "e"));
     /// # }
@@ -393,10 +358,9 @@ impl Regex {
     /// Get the first two words in some text:
     ///
     /// ```rust
-    /// # #![feature(plugin)] #![plugin(regex_macros)]
-    /// # extern crate regex;
+    /// # extern crate regex; use regex::Regex;
     /// # fn main() {
-    /// let re = regex!(r"\W+");
+    /// let re = Regex::new(r"\W+").unwrap();
     /// let fields: Vec<&str> = re.splitn("Hey! How are you?", 3).collect();
     /// assert_eq!(fields, vec!("Hey", "How", "are you?"));
     /// # }
@@ -423,10 +387,9 @@ impl Regex {
     /// In typical usage, this can just be a normal string:
     ///
     /// ```rust
-    /// # #![feature(plugin)] #![plugin(regex_macros)]
-    /// # extern crate regex;
+    /// # extern crate regex; use regex::Regex;
     /// # fn main() {
-    /// let re = regex!("[^01]+");
+    /// let re = Regex::new("[^01]+").unwrap();
     /// assert_eq!(re.replace("1078910", ""), "1010");
     /// # }
     /// ```
@@ -437,10 +400,9 @@ impl Regex {
     /// submatches easily:
     ///
     /// ```rust
-    /// # #![feature(plugin)] #![plugin(regex_macros)]
-    /// # extern crate regex;
+    /// # extern crate regex; use regex::Regex;
     /// # use regex::Captures; fn main() {
-    /// let re = regex!(r"([^,\s]+),\s+(\S+)");
+    /// let re = Regex::new(r"([^,\s]+),\s+(\S+)").unwrap();
     /// let result = re.replace("Springsteen, Bruce", |caps: &Captures| {
     ///     format!("{} {}", caps.at(2).unwrap_or(""), caps.at(1).unwrap_or(""))
     /// });
@@ -454,10 +416,9 @@ impl Regex {
     /// with named capture groups:
     ///
     /// ```rust
-    /// # #![feature(plugin)] #![plugin(regex_macros)]
-    /// # extern crate regex;
+    /// # extern crate regex; use regex::Regex;
     /// # fn main() {
-    /// let re = regex!(r"(?P<last>[^,\s]+),\s+(?P<first>\S+)");
+    /// let re = Regex::new(r"(?P<last>[^,\s]+),\s+(?P<first>\S+)").unwrap();
     /// let result = re.replace("Springsteen, Bruce", "$first $last");
     /// assert_eq!(result, "Bruce Springsteen");
     /// # }
@@ -471,12 +432,11 @@ impl Regex {
     /// `NoExpand`:
     ///
     /// ```rust
-    /// # #![feature(plugin)] #![plugin(regex_macros)]
-    /// # extern crate regex;
+    /// # extern crate regex; use regex::Regex;
     /// # fn main() {
     /// use regex::NoExpand;
     ///
-    /// let re = regex!(r"(?P<last>[^,\s]+),\s+(\S+)");
+    /// let re = Regex::new(r"(?P<last>[^,\s]+),\s+(\S+)").unwrap();
     /// let result = re.replace("Springsteen, Bruce", NoExpand("$2 $last"));
     /// assert_eq!(result, "$2 $last");
     /// # }

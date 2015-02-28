@@ -8,19 +8,10 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![feature(core, plugin, test, collections)]
-#![plugin(regex_macros)]
+#![feature(collections, core, test)]
 
-extern crate rand;
 extern crate regex;
-extern crate "test" as stdtest;
-
-#[path = "bench.rs"]
-mod native_bench;
-#[path = "tests.rs"]
-mod native_tests;
-
-mod native_static;
+extern crate test;
 
 // Due to macro scoping rules, this definition only applies for the modules
 // defined below. Effectively, it allows us to use the same tests for both
@@ -34,8 +25,4 @@ macro_rules! regex(
     );
 );
 
-#[path = "bench.rs"]
-mod dynamic_bench;
-#[path = "tests.rs"]
-mod dynamic_tests;
-
+mod tests;

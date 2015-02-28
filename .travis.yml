@@ -4,6 +4,9 @@ script:
   - cargo build --verbose
   - cargo test --verbose
   - cargo doc
+  - cargo bench --verbose
+  - cargo test --verbose --manifest-path=regex_macros/Cargo.toml
+  - cargo bench --verbose --manifest-path=regex_macros/Cargo.toml
 after_success: |
   [ $TRAVIS_BRANCH = master ] &&
   [ $TRAVIS_PULL_REQUEST = false ] &&
