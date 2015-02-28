@@ -10,8 +10,7 @@
 #![allow(non_snake_case)]
 
 use std::iter::repeat;
-use stdtest::Bencher;
-
+use test::Bencher;
 use rand::{Rng, thread_rng};
 use regex::{Regex, NoExpand};
 

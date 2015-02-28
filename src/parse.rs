@@ -8,11 +8,6 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use self::Ast::*;
-use self::Repeater::*;
-use self::Greed::*;
-use self::BuildAst::*;
-
 use std::char;
 use std::cmp;
 use std::fmt;
@@ -21,6 +16,11 @@ use std::num;
 
 /// Static data containing Unicode ranges for general categories and scripts.
 use unicode::regex::{UNICODE_CLASSES, PERLD, PERLS, PERLW};
+
+use self::Ast::*;
+use self::Repeater::*;
+use self::Greed::*;
+use self::BuildAst::*;
 
 /// The maximum number of repetitions allowed with the `{n,m}` syntax.
 static MAX_REPEAT: usize = 1000;
