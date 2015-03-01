@@ -750,10 +750,7 @@ impl<'t> Captures<'t> {
     /// name and the value. The iterator returns these values in arbitrary
     /// order.
     pub fn iter_named(&'t self) -> SubCapturesNamed<'t> {
-        match self.named {
-            Some(ref n) => SubCapturesNamed { caps: self, inner: Some(n.iter()) },
-            None => SubCapturesNamed { caps: self, inner: None }
-        }
+        SubCapturesNamed { caps: self, inner: self.named.as_ref().map(|n| n.iter()) }
     }
 
     /// Expands all instances of `$name` in `text` to the corresponding capture
@@ -853,13 +850,8 @@ impl<'t> Iterator for SubCapturesNamed<'t> {
     type Item = (&'t str, &'t str);
 
     fn next(&mut self) -> Option<(&'t str, &'t str)> {
-        match self.inner {
-            Some(ref mut i) => {
-                match i.next() {
-                    Some((name, pos)) => Some((name, self.caps.at(*pos).unwrap_or(""))),
-                    None => None
-                }
-            },
+        match self.inner.as_mut().map(|it| it.next()).unwrap_or(None) {
+            Some((name, pos)) => Some((name, self.caps.at(*pos).unwrap_or(""))),
             None => None
         }
     }
