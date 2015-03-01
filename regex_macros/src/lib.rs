@@ -26,7 +26,7 @@ use std::rc::Rc;
 use syntax::ast;
 use syntax::codemap;
 use syntax::ext::build::AstBuilder;
-use syntax::ext::base::{ExtCtxt, MacResult, MacExpr, DummyResult};
+use syntax::ext::base::{ExtCtxt, MacResult, MacEager, DummyResult};
 use syntax::parse::token;
 use syntax::print::pprust;
 use syntax::fold::Folder;
@@ -94,7 +94,7 @@ fn native(cx: &mut ExtCtxt, sp: codemap::Span, tts: &[ast::TokenTree])
         cx: &*cx, sp: sp, prog: prog,
         names: re.names_iter().collect(), original: re.as_str().to_string(),
     };
-    MacExpr::new(gen.code())
+    MacEager::expr(gen.code())
 }
 
 struct NfaGen<'a> {
