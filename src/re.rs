@@ -801,12 +801,12 @@ pub struct SubCaptures<'t> {
 }
 
 impl<'t> Iterator for SubCaptures<'t> {
-    type Item = &'t str;
+    type Item = Option<&'t str>;
 
-    fn next(&mut self) -> Option<&'t str> {
+    fn next(&mut self) -> Option<Option<&'t str>> {
         if self.idx < self.caps.len() {
             self.idx += 1;
-            Some(self.caps.at(self.idx - 1).unwrap_or(""))
+            Some(self.caps.at(self.idx - 1))
         } else {
             None
         }
