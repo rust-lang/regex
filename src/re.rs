@@ -847,11 +847,11 @@ pub struct SubCapturesNamed<'t>{
 }
 
 impl<'t> Iterator for SubCapturesNamed<'t> {
-    type Item = (&'t str, &'t str);
+    type Item = (&'t str, Option<&'t str>);
 
-    fn next(&mut self) -> Option<(&'t str, &'t str)> {
+    fn next(&mut self) -> Option<(&'t str, Option<&'t str>)> {
         match self.inner.as_mut().map(|it| it.next()).unwrap_or(None) {
-            Some((name, pos)) => Some((name, self.caps.at(*pos).unwrap_or(""))),
+            Some((name, pos)) => Some((name, self.caps.at(*pos))),
             None => None
         }
     }
