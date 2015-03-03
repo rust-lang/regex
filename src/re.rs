@@ -10,6 +10,7 @@
 
 use std::borrow::{IntoCow, Cow};
 use std::collections::HashMap;
+use std::collections::hash_map::Iter;
 use std::fmt;
 use std::str::{Pattern, Searcher, SearchStep};
 
@@ -745,6 +746,13 @@ impl<'t> Captures<'t> {
         SubCapturesPos { idx: 0, caps: self, }
     }
 
+    /// Creates an iterator of all named groups as an tuple with the group
+    /// name and the value. The iterator returns these values in arbitrary
+    /// order.
+    pub fn iter_named(&'t self) -> SubCapturesNamed<'t> {
+        SubCapturesNamed { caps: self, inner: self.named.as_ref().map(|n| n.iter()) }
+    }
+
     /// Expands all instances of `$name` in `text` to the corresponding capture
     /// group `name`.
     ///
@@ -793,12 +801,12 @@ pub struct SubCaptures<'t> {
 }
 
 impl<'t> Iterator for SubCaptures<'t> {
-    type Item = &'t str;
+    type Item = Option<&'t str>;
 
-    fn next(&mut self) -> Option<&'t str> {
+    fn next(&mut self) -> Option<Option<&'t str>> {
         if self.idx < self.caps.len() {
             self.idx += 1;
-            Some(self.caps.at(self.idx - 1).unwrap_or(""))
+            Some(self.caps.at(self.idx - 1))
         } else {
             None
         }
@@ -825,6 +833,26 @@ impl<'t> Iterator for SubCapturesPos<'t> {
             Some(self.caps.pos(self.idx - 1))
         } else {
             None
+        }
+    }
+}
+
+/// An Iterator over named capture groups as a tuple with the group
+/// name and the value.
+///
+/// `'t` is the lifetime of the matched text.
+pub struct SubCapturesNamed<'t>{
+    caps: &'t Captures<'t>,
+    inner: Option<Iter<'t, String, usize>>,
+}
+
+impl<'t> Iterator for SubCapturesNamed<'t> {
+    type Item = (&'t str, Option<&'t str>);
+
+    fn next(&mut self) -> Option<(&'t str, Option<&'t str>)> {
+        match self.inner.as_mut().map(|it| it.next()).unwrap_or(None) {
+            Some((name, pos)) => Some((name, self.caps.at(*pos))),
+            None => None
         }
     }
 }
