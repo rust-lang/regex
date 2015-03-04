@@ -371,7 +371,7 @@
        html_favicon_url = "http://www.rust-lang.org/favicon.ico",
        html_root_url = "http://doc.rust-lang.org/regex/")]
 
-#![feature(collections, core, unicode)]
+#![feature(core, unicode)]
 
 // Unicode tables for character classes are defined in libunicode
 extern crate unicode;

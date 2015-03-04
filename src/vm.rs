@@ -37,9 +37,9 @@ use self::MatchKind::*;
 use self::StepState::*;
 
 use std::cmp::{self, Ordering};
-use std::mem;
 use std::iter::repeat;
-use std::slice::SliceExt;
+use std::mem;
+
 use compile::Program;
 use compile::Inst::{Match, OneChar, CharClass, Any, EmptyBegin, EmptyEnd, EmptyWordBoundary,
                     Save, Jump, Split};
@@ -388,13 +388,12 @@ impl<'t> CharReader<'t> {
         }
         if ic > 0 {
             let i = cmp::min(ic, self.input.len());
-            let prev = self.input.char_range_at_reverse(i);
-            self.prev = Some(prev.ch);
+            self.prev = self.input[..i].chars().rev().next();
         }
         if ic < self.input.len() {
-            let cur = self.input.char_range_at(ic);
-            self.cur = Some(cur.ch);
-            self.next = cur.next;
+            let cur = self.input[ic..].chars().next().unwrap();
+            self.cur = Some(cur);
+            self.next = ic + cur.len_utf8();
             self.next
         } else {
             self.input.len() + 1
@@ -407,9 +406,9 @@ impl<'t> CharReader<'t> {
     pub fn advance(&mut self) -> usize {
         self.prev = self.cur;
         if self.next < self.input.len() {
-            let cur = self.input.char_range_at(self.next);
-            self.cur = Some(cur.ch);
-            self.next = cur.next;
+            let cur = self.input[self.next..].chars().next().unwrap();
+            self.cur = Some(cur);
+            self.next += cur.len_utf8();
         } else {
             self.cur = None;
             self.next = self.input.len() + 1;
