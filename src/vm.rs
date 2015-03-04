@@ -181,7 +181,7 @@ impl<'r, 't> Nfa<'r, 't> {
             self.ic = next_ic;
             next_ic = self.chars.advance();
 
-            for i in range(0, clist.size) {
+            for i in 0..clist.size {
                 let pc = clist.pc(i);
                 let step_state = self.step(groups.as_mut_slice(), &mut nlist,
                                            clist.groups(i), pc);
@@ -233,7 +233,7 @@ impl<'r, 't> Nfa<'r, 't> {
                     let c = self.chars.prev.unwrap();
                     let negate = flags & FLAG_NEGATED > 0;
                     let casei = flags & FLAG_NOCASE > 0;
-                    let found = ranges.as_slice();
+                    let found = ranges;
                     let found = found.binary_search_by(|&rc| class_cmp(casei, c, rc))
                         .ok().is_some();
                     if found ^ negate {
@@ -464,7 +464,7 @@ impl Threads {
     fn new(which: MatchKind, num_insts: usize, ncaps: usize) -> Threads {
         Threads {
             which: which,
-            queue: range(0, num_insts).map(|_| {
+            queue: (0..num_insts).map(|_| {
                 Thread {pc: 0, groups: repeat(None).take(ncaps * 2).collect() }
             }).collect(),
             sparse: repeat(0).take(num_insts).collect(),

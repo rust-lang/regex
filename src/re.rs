@@ -499,7 +499,7 @@ impl Regex {
 
             let (s, e) = cap.pos(0).unwrap(); // captures only reports matches
             new.push_str(&text[last_match..s]);
-            new.push_str(rep.reg_replace(&cap).as_slice());
+            new.push_str(&rep.reg_replace(&cap));
             last_match = e;
         }
         new.push_str(&text[last_match..]);
@@ -509,8 +509,8 @@ impl Regex {
     /// Returns the original string of this regex.
     pub fn as_str<'a>(&'a self) -> &'a str {
         match *self {
-            Dynamic(ExDynamic { ref original, .. }) => original.as_slice(),
-            Native(ExNative { ref original, .. }) => original.as_slice(),
+            Dynamic(ExDynamic { ref original, .. }) => original,
+            Native(ExNative { ref original, .. }) => original,
         }
     }
 
@@ -779,7 +779,7 @@ impl<'t> Captures<'t> {
             })
         });
         let re = Regex::new(r"\$\$").unwrap();
-        re.replace_all(text.as_slice(), NoExpand("$"))
+        re.replace_all(&text, NoExpand("$"))
     }
 
     /// Returns the number of captured groups.
