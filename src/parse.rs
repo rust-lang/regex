@@ -1071,18 +1071,18 @@ static ASCII_CLASSES: NamedClasses = &[
     ("xdigit", &XDIGIT),
 ];
 
-static ALNUM: Class = &[('0', '9'), ('A', 'Z'), ('a', 'z')];
-static ALPHA: Class = &[('A', 'Z'), ('a', 'z')];
-static ASCII: Class = &[('\x00', '\x7F')];
-static BLANK: Class = &[(' ', ' '), ('\t', '\t')];
-static CNTRL: Class = &[('\x00', '\x1F'), ('\x7F', '\x7F')];
-static DIGIT: Class = &[('0', '9')];
-static GRAPH: Class = &[('!', '~')];
-static LOWER: Class = &[('a', 'z')];
-static PRINT: Class = &[(' ', '~')];
-static PUNCT: Class = &[('!', '/'), (':', '@'), ('[', '`'), ('{', '~')];
-static SPACE: Class = &[('\t', '\t'), ('\n', '\n'), ('\x0B', '\x0B'),
+const ALNUM: Class = &[('0', '9'), ('A', 'Z'), ('a', 'z')];
+const ALPHA: Class = &[('A', 'Z'), ('a', 'z')];
+const ASCII: Class = &[('\x00', '\x7F')];
+const BLANK: Class = &[(' ', ' '), ('\t', '\t')];
+const CNTRL: Class = &[('\x00', '\x1F'), ('\x7F', '\x7F')];
+const DIGIT: Class = &[('0', '9')];
+const GRAPH: Class = &[('!', '~')];
+const LOWER: Class = &[('a', 'z')];
+const PRINT: Class = &[(' ', '~')];
+const PUNCT: Class = &[('!', '/'), (':', '@'), ('[', '`'), ('{', '~')];
+const SPACE: Class = &[('\t', '\t'), ('\n', '\n'), ('\x0B', '\x0B'),
                         ('\x0C', '\x0C'), ('\r', '\r'), (' ', ' ')];
-static UPPER: Class = &[('A', 'Z')];
-static WORD: Class = &[('0', '9'), ('A', 'Z'), ('a', 'z'), ('_', '_')];
-static XDIGIT: Class = &[('0', '9'), ('A', 'F'), ('a', 'f')];
+const UPPER: Class = &[('A', 'Z')];
+const WORD: Class = &[('0', '9'), ('A', 'Z'), ('a', 'z'), ('_', '_')];
+const XDIGIT: Class = &[('0', '9'), ('A', 'F'), ('a', 'f')];
