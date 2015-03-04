@@ -952,7 +952,7 @@ impl<'r, 't> Iterator for FindMatches<'r, 't> {
     }
 }
 
-struct RegexSearcher<'r, 't> {
+pub struct RegexSearcher<'r, 't> {
     it: FindMatches<'r, 't>,
     last_step_end: usize,
     next_match: Option<(usize, usize)>,

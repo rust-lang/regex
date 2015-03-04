@@ -1036,7 +1036,7 @@ fn find_class(classes: NamedClasses, name: &str) -> Option<Vec<(char, char)>> {
 }
 
 type Class = &'static [(char, char)];
-type NamedClasses = &'static [(&'static str, &'static Class)];
+type NamedClasses = &'static [(&'static str, Class)];
 
 static ASCII_CLASSES: NamedClasses = &[
     // Classes must be in alphabetical order so that bsearch works.
