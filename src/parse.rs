@@ -335,13 +335,15 @@ impl Parser {
                     "Double repeat operators are not supported."),
             _ => {},
         }
-        let ast = try!(self.pop_ast());
-        match ast {
-            Begin(_) | End(_) | WordBoundary(_) =>
+        let ast = match self.stack.pop().unwrap() { // checked empty stack ^^
+            Paren(_, _, _) | Bar | Expr(Nothing) | Expr(Rep(_, _, _)) =>
+                return self.err("A repreat operator must be preceded by a \
+                                 valid expression."),
+            Expr(Begin(_)) | Expr(End(_)) | Expr(WordBoundary(_)) =>
                 return self.err(
                     "Repeat arguments cannot be empty width assertions."),
-            _ => {}
-        }
+            Expr(ast) => ast,
+        };
         let greed = try!(self.get_next_greedy());
         self.push(Rep(Box::new(ast), rep, greed));
         Ok(())
@@ -372,12 +374,11 @@ impl Parser {
         let negated =
             if self.peek_is(1, '^') {
                 try!(self.expect('^'));
-                FLAG_NEGATED
+                true
             } else {
-                FLAG_EMPTY
+                false
             };
         let mut ranges: Vec<(char, char)> = vec!();
-        let mut alts: Vec<Ast> = vec!();
 
         while self.peek_is(1, '-') {
             try!(self.expect('-'));
@@ -389,8 +390,12 @@ impl Parser {
             match c {
                 '[' =>
                     match self.try_parse_ascii() {
-                        Some(AstClass(asciis, flags)) => {
-                            alts.push(AstClass(asciis, flags ^ negated));
+                        Some(AstClass(mut more_ranges, flags)) => {
+                            more_ranges = combine_ranges(more_ranges);
+                            if flags & FLAG_NEGATED > 0 {
+                                more_ranges = invert_ranges(more_ranges);
+                            }
+                            ranges.extend(more_ranges);
                             continue
                         }
                         Some(ast) =>
@@ -400,8 +405,12 @@ impl Parser {
                     },
                 '\\' => {
                     match try!(self.parse_escape()) {
-                        AstClass(asciis, flags) => {
-                            alts.push(AstClass(asciis, flags ^ negated));
+                        AstClass(mut more_ranges, flags) => {
+                            more_ranges = combine_ranges(more_ranges);
+                            if flags & FLAG_NEGATED > 0 {
+                                more_ranges = invert_ranges(more_ranges);
+                            }
+                            ranges.extend(more_ranges);
                             continue
                         }
                         Literal(c2, _) => c = c2, // process below
@@ -412,21 +421,13 @@ impl Parser {
                         ast => panic!("Unexpected AST item '{:?}'", ast),
                     }
                 }
-                ']' if ranges.len() > 0 || alts.len() > 0 => {
-                    if ranges.len() > 0 {
-                        let flags = negated | (self.flags & FLAG_NOCASE);
-                        let mut ast = AstClass(combine_ranges(ranges), flags);
-                        for alt in alts.into_iter() {
-                            ast = Alt(Box::new(alt), Box::new(ast))
-                        }
-                        self.push(ast);
-                    } else if alts.len() > 0 {
-                        let mut ast = alts.pop().unwrap();
-                        for alt in alts.into_iter() {
-                            ast = Alt(Box::new(alt), Box::new(ast))
-                        }
-                        self.push(ast);
+                ']' if ranges.len() > 0 => {
+                    ranges = combine_ranges(ranges);
+                    if negated {
+                        ranges = invert_ranges(ranges);
                     }
+                    let flags = self.flags & FLAG_NOCASE;
+                    self.push(AstClass(ranges, flags));
                     return Ok(())
                 }
                 _ => {}
@@ -441,15 +442,13 @@ impl Parser {
                 if c2 == '\\' {
                     match try!(self.parse_escape()) {
                         Literal(c3, _) => c2 = c3, // allow literal escapes below
-                        ast =>
-                            return self.err(&format!("Expected a literal, but got {:?}.",
-                                                     ast)),
+                        ast => return self.err(&format!(
+                            "Expected a literal, but got {:?}.", ast)),
                     }
                 }
                 if c2 < c {
-                    return self.err(&format!("Invalid character class \
-                                              range '{}-{}'",
-                                             c, c2))
+                    return self.err(&format!(
+                        "Invalid character class range '{}-{}'", c, c2))
                 }
                 ranges.push((c, self.cur()))
             } else {
@@ -951,15 +950,16 @@ impl Parser {
 // Given an unordered collection of character ranges, combine_ranges returns
 // an ordered sequence of character ranges where no two ranges overlap. They
 // are ordered from least to greatest (using start position).
-fn combine_ranges(unordered: Vec<(char, char)>) -> Vec<(char, char)> {
+fn combine_ranges(mut unordered: Vec<(char, char)>) -> Vec<(char, char)> {
     // Returns true iff the two character classes overlap or share a boundary.
     // e.g., ('a', 'g') and ('h', 'm') would return true.
     fn should_merge((a, b): (char, char), (x, y): (char, char)) -> bool {
-        cmp::max(a, x) as u32 <= cmp::min(b, y) as u32 + 1
+        cmp::max(a, x) <= inc_char(cmp::min(b, y))
     }
 
     // This is currently O(n^2), but I think with sufficient cleverness,
     // it can be reduced to O(n) **if necessary**.
+    unordered.sort();
     let mut ordered: Vec<(char, char)> = Vec::with_capacity(unordered.len());
     for (us, ue) in unordered.into_iter() {
         let (mut us, mut ue) = (us, ue);
@@ -980,6 +980,39 @@ fn combine_ranges(unordered: Vec<(char, char)>) -> Vec<(char, char)> {
     }
     ordered.sort();
     ordered
+}
+
+fn invert_ranges(ranges: Vec<(char, char)>) -> Vec<(char, char)> {
+    if ranges.is_empty() { return ranges; }
+
+    let mut inv = Vec::with_capacity(ranges.len());
+    if ranges[0].0 > '\x00' {
+        inv.push(('\x00', dec_char(ranges[0].0)));
+    }
+    for win in ranges.windows(2) {
+        let ((_, e1), (s2, _)) = (win[0], win[1]);
+        inv.push((inc_char(e1), dec_char(s2)));
+    }
+    if ranges[ranges.len() - 1].1 < char::MAX {
+        inv.push((inc_char(ranges[ranges.len() - 1].1), char::MAX));
+    }
+    inv
+}
+
+fn inc_char(c: char) -> char {
+    assert!(c < char::MAX);
+    match c {
+        '\u{D7FF}' => '\u{E000}',
+        c => char::from_u32(c as u32 + 1).unwrap(),
+    }
+}
+
+fn dec_char(c: char) -> char {
+    assert!(c > '\x00');
+    match c {
+        '\u{E000}' => '\u{D7FF}',
+        c => char::from_u32(c as u32 - 1).unwrap(),
+    }
 }
 
 // Constructs a Unicode friendly Perl character class from \d, \s or \w

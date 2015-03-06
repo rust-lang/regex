@@ -17,8 +17,10 @@ use std::cmp;
 use std::iter::repeat;
 use parse;
 use parse::{Flags, FLAG_EMPTY};
-use parse::Ast::{Nothing, Literal, Dot, AstClass, Begin, End, WordBoundary, Capture, Cat, Alt,
-                 Rep};
+use parse::Ast::{
+    Nothing, Literal, Dot, AstClass, Begin, End, WordBoundary, Capture,
+    Cat, Alt, Rep,
+};
 use parse::Repeater::{ZeroOne, ZeroMore, OneMore};
 
 pub type InstIdx = usize;
@@ -35,8 +37,7 @@ pub enum Inst {
 
     /// The CharClass instruction tries to match one input character against
     /// the range of characters given.
-    /// The flags indicate whether to do a case insensitive match and whether
-    /// the character class is negated or not.
+    /// The flags indicate whether to do a case insensitive match.
     CharClass(Vec<(char, char)>, Flags),
 
     /// Matches any character except new lines.
@@ -77,7 +78,7 @@ pub enum Inst {
 /// All of the data in a compiled expression is wrapped in "MaybeStatic" or
 /// "MaybeOwned" types so that a `Program` can be represented as static data.
 /// (This makes it convenient and efficient for use with the `regex!` macro.)
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Program {
     /// A sequence of instructions.
     pub insts: Vec<Inst>,
@@ -149,8 +150,7 @@ impl Compiler {
             Nothing => {},
             Literal(c, flags) => self.push(OneChar(c, flags)),
             Dot(nl) => self.push(Any(nl)),
-            AstClass(ranges, flags) =>
-                self.push(CharClass(ranges, flags)),
+            AstClass(ranges, flags) => self.push(CharClass(ranges, flags)),
             Begin(flags) => self.push(EmptyBegin(flags)),
             End(flags) => self.push(EmptyEnd(flags)),
             WordBoundary(flags) => self.push(EmptyWordBoundary(flags)),

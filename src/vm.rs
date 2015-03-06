@@ -41,8 +41,10 @@ use std::iter::repeat;
 use std::mem;
 
 use compile::Program;
-use compile::Inst::{Match, OneChar, CharClass, Any, EmptyBegin, EmptyEnd, EmptyWordBoundary,
-                    Save, Jump, Split};
+use compile::Inst::{
+    Match, OneChar, CharClass, Any, EmptyBegin, EmptyEnd, EmptyWordBoundary,
+    Save, Jump, Split,
+};
 use parse::{FLAG_NOCASE, FLAG_MULTI, FLAG_DOTNL, FLAG_NEGATED};
 use unicode::regex::PERLW;
 
@@ -229,13 +231,12 @@ impl<'r, 't> Nfa<'r, 't> {
                 }
             }
             CharClass(ref ranges, flags) => {
-                if self.chars.prev.is_some() {
-                    let c = self.chars.prev.unwrap();
+                if let Some(c) = self.chars.prev {
                     let negate = flags & FLAG_NEGATED > 0;
                     let casei = flags & FLAG_NOCASE > 0;
-                    let found = ranges;
-                    let found = found.binary_search_by(|&rc| class_cmp(casei, c, rc))
-                        .ok().is_some();
+                    let found =
+                        ranges.binary_search_by(|&rc| class_cmp(casei, c, rc))
+                              .is_ok();
                     if found ^ negate {
                         self.add(nlist, pc+1, caps);
                     }
