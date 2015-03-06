@@ -1,6 +1,6 @@
 [package]
 name = "regex_macros"
-version = "0.1.9"
+version = "0.1.11"
 authors = ["The Rust Project Developers"]
 license = "MIT/Apache-2.0"
 repository = "https://github.com/rust-lang/regex"
