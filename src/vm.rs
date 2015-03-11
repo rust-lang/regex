@@ -338,8 +338,9 @@ impl<'r, 't> Nfa<'r, 't> {
         match textc {
             None => false,
             Some(textc) => {
-                regc == textc
-                    || (casei && regc.to_uppercase() == textc.to_uppercase())
+                let uregc = regc.to_uppercase().next().unwrap();
+                let utextc = textc.to_uppercase().next().unwrap();
+                regc == textc || (casei && uregc == utextc)
             }
         }
     }
@@ -555,9 +556,11 @@ fn class_cmp(casei: bool, mut textc: char,
         //    parser or the compiler.
         // FIXME: This is too simplistic for correct Unicode support.
         //        See also: char_eq
-        textc = textc.to_uppercase();
-        start = start.to_uppercase();
-        end = end.to_uppercase();
+        // FIXME: Standard library now yields iterators, so we should take
+        //        advantage of them.
+        textc = textc.to_uppercase().next().unwrap();
+        start = start.to_uppercase().next().unwrap();
+        end = end.to_uppercase().next().unwrap();
     }
     if textc >= start && textc <= end {
         Ordering::Equal

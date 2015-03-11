@@ -15,7 +15,7 @@
        html_favicon_url = "http://www.rust-lang.org/favicon.ico",
        html_root_url = "http://doc.rust-lang.org/nightly/")]
 
-#![feature(plugin_registrar, quote, rustc_private, unicode)]
+#![feature(plugin_registrar, quote, rustc_private)]
 
 extern crate regex;
 extern crate syntax;
@@ -459,9 +459,11 @@ fn exec<'t>(which: ::regex::native::MatchKind, input: &'t str,
                 }
                 OneChar(c, flags) => {
                     if flags & FLAG_NOCASE > 0 {
-                        let upc = c.to_uppercase();
+                        let upc = c.to_uppercase().next().unwrap();
                         quote_expr!(self.cx, {
-                            let upc = self.chars.prev.map(|c| c.to_uppercase());
+                            let upc = self.chars.prev.map(|c| {
+                                c.to_uppercase().next().unwrap()
+                            });
                             if upc == Some($upc) {
                                 self.add(nlist, $nextpc, caps);
                             }
@@ -479,7 +481,10 @@ fn exec<'t>(which: ::regex::native::MatchKind, input: &'t str,
                     let casei = flags & FLAG_NOCASE > 0;
                     let get_char =
                         if casei {
-                            quote_expr!(self.cx, self.chars.prev.unwrap().to_uppercase())
+                            quote_expr!(
+                                self.cx,
+                                self.chars.prev.unwrap()
+                                    .to_uppercase().next().unwrap())
                         } else {
                             quote_expr!(self.cx, self.chars.prev.unwrap())
                         };
@@ -527,8 +532,8 @@ fn exec<'t>(which: ::regex::native::MatchKind, input: &'t str,
     fn match_class(&self, casei: bool, ranges: &[(char, char)]) -> P<ast::Expr> {
         let mut arms = ranges.iter().map(|&(mut start, mut end)| {
             if casei {
-                start = start.to_uppercase();
-                end = end.to_uppercase();
+                start = start.to_uppercase().next().unwrap();
+                end = end.to_uppercase().next().unwrap();
             }
             let pat = self.cx.pat(self.sp, ast::PatRange(quote_expr!(self.cx, $start),
                                                          quote_expr!(self.cx, $end)));

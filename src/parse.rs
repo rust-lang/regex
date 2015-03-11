@@ -1018,10 +1018,10 @@ fn dec_char(c: char) -> char {
 // Constructs a Unicode friendly Perl character class from \d, \s or \w
 // (or any of their negated forms). Note that this does not handle negation.
 fn perl_unicode_class(which: char) -> Vec<(char, char)> {
-    match which.to_lowercase() {
-        'd' => PERLD.to_vec(),
-        's' => PERLS.to_vec(),
-        'w' => PERLW.to_vec(),
+    match which {
+        'd' | 'D' => PERLD.to_vec(),
+        's' | 'S' => PERLS.to_vec(),
+        'w' | 'W' => PERLW.to_vec(),
         _ => unreachable!(),
     }
 }
