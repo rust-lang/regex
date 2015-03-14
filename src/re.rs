@@ -14,8 +14,6 @@ use std::collections::hash_map::Iter;
 use std::fmt;
 use std::str::{Pattern, Searcher, SearchStep};
 
-use unicode::str::utf8_char_width;
-
 use compile::Program;
 use parse;
 use vm;
@@ -894,8 +892,8 @@ impl<'r, 't> Iterator for FindCaptures<'r, 't> {
             if self.last_end >= self.search.len() {
                 return None;
             }
-            self.last_end +=
-                utf8_char_width(self.search.as_bytes()[self.last_end]);
+            self.last_end += self.search[self.last_end..].chars()
+                                 .next().unwrap().len_utf8();
             return self.next()
         }
         self.last_end = e;
@@ -942,8 +940,8 @@ impl<'r, 't> Iterator for FindMatches<'r, 't> {
             if self.last_end >= self.search.len() {
                 return None;
             }
-            self.last_end +=
-                utf8_char_width(self.search.as_bytes()[self.last_end]);
+            self.last_end += self.search[self.last_end..].chars()
+                                 .next().unwrap().len_utf8();
             return self.next()
         }
         self.last_end = e;
