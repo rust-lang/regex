@@ -371,10 +371,7 @@
        html_favicon_url = "http://www.rust-lang.org/favicon.ico",
        html_root_url = "http://doc.rust-lang.org/regex/")]
 
-#![feature(core, unicode)]
-
-// Unicode tables for character classes are defined in libunicode
-extern crate unicode;
+#![feature(core)]
 
 pub use parse::Error;
 pub use re::{Regex, Captures, SubCaptures, SubCapturesPos};
@@ -385,6 +382,7 @@ pub use re::{quote, is_match};
 mod compile;
 mod parse;
 mod re;
+mod unicode;
 mod vm;
 
 /// The `native` module exists to support the `regex!` macro. Do not use.
