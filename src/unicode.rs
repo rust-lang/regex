@@ -4923,7 +4923,8 @@ pub mod property {
         '\u{6ffff}'), ('\u{7fffe}', '\u{7ffff}'), ('\u{8fffe}', '\u{8ffff}'),
         ('\u{9fffe}', '\u{9ffff}'), ('\u{afffe}', '\u{affff}'), ('\u{bfffe}',
         '\u{bffff}'), ('\u{cfffe}', '\u{cffff}'), ('\u{dfffe}', '\u{dffff}'),
-        ('\u{efffe}', '\u{effff}'), ('\u{ffffe}', '\u{fffff}')
+        ('\u{efffe}', '\u{effff}'), ('\u{ffffe}', '\u{fffff}'), ('\u{10fffe}',
+        '\u{10ffff}')
     ];
 
     pub const White_Space_table: &'static [(char, char)] = &[

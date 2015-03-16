@@ -176,8 +176,8 @@ def format_table_content(f, content, indent):
 def load_properties(f, interestingprops):
     fetch(f)
     props = {}
-    re1 = re.compile("^([0-9A-F]+) +; (\w+)")
-    re2 = re.compile("^([0-9A-F]+)\.\.([0-9A-F]+) +; (\w+)")
+    re1 = re.compile("^ *([0-9A-F]+) *; *(\w+)")
+    re2 = re.compile("^ *([0-9A-F]+)\.\.([0-9A-F]+) *; *(\w+)")
 
     for line in fileinput.input(f):
         prop = None
@@ -324,7 +324,7 @@ def optimize_width_table(wtable):
     return wtable_out
 
 if __name__ == "__main__":
-    r = "tables.rs"
+    r = "unicode.rs"
     if os.path.exists(r):
         os.remove(r)
     with open(r, "w") as rf:
