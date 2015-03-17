@@ -12,6 +12,7 @@ use std::borrow::{IntoCow, Cow};
 use std::collections::HashMap;
 use std::collections::hash_map::Iter;
 use std::fmt;
+#[cfg(feature = "pattern")]
 use std::str::{Pattern, Searcher, SearchStep};
 
 use compile::Program;
@@ -82,6 +83,9 @@ pub fn is_match(regex: &str, text: &str) -> Result<bool, parse::Error> {
 ///
 /// # Using the `std::str::StrExt` methods with `Regex`
 ///
+/// > **Note**: This section requires that this crate is currently compiled with
+/// >           the `pattern` Cargo feature enabled.
+///
 /// Since `Regex` implements `Pattern`, you can use regexes with methods
 /// defined on `std::str::StrExt`. For example, `is_match`, `find`, `find_iter`
 /// and `split` can be replaced with `StrExt::contains`, `StrExt::find`,
@@ -89,7 +93,7 @@ pub fn is_match(regex: &str, text: &str) -> Result<bool, parse::Error> {
 ///
 /// Here are some examples:
 ///
-/// ```rust
+/// ```rust,ignore
 /// # use regex::Regex;
 /// let re = Regex::new(r"\d+").unwrap();
 /// let haystack = "a111b222c";
@@ -950,12 +954,14 @@ impl<'r, 't> Iterator for FindMatches<'r, 't> {
     }
 }
 
+#[cfg(feature = "pattern")]
 pub struct RegexSearcher<'r, 't> {
     it: FindMatches<'r, 't>,
     last_step_end: usize,
     next_match: Option<(usize, usize)>,
 }
 
+#[cfg(feature = "pattern")]
 impl<'r, 't> Pattern<'t> for &'r Regex {
     type Searcher = RegexSearcher<'r, 't>;
 
@@ -968,6 +974,7 @@ impl<'r, 't> Pattern<'t> for &'r Regex {
     }
 }
 
+#[cfg(feature = "pattern")]
 unsafe impl<'r, 't> Searcher<'t> for RegexSearcher<'r, 't> {
     #[inline]
     fn haystack(&self) -> &'t str {

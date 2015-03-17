@@ -3,6 +3,7 @@ sudo: false
 script:
   - cargo build --verbose
   - cargo test --verbose
+  - cargo test --verbose --features pattern
   - cargo doc
   - cargo bench --verbose
   - cargo test --verbose --manifest-path=regex_macros/Cargo.toml

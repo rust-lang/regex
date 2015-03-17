@@ -25,4 +25,9 @@ macro_rules! regex(
     );
 );
 
+#[cfg(feature = "pattern")]
+macro_rules! searcher_expr { ($e:expr) => ($e) }
+#[cfg(not(feature = "pattern"))]
+macro_rules! searcher_expr { ($e:expr) => ({}) }
+
 mod tests;

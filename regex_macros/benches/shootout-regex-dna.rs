@@ -38,13 +38,15 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
 // OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#![feature(old_io, plugin, std_misc)]
+#![feature(plugin)]
 #![plugin(regex_macros)]
+
 extern crate regex;
 
-use std::old_io as io;
-use std::sync::{Arc, Future};
-use regex::{NoExpand, Regex};
+use std::io::{self, Read};
+use std::sync::Arc;
+use std::thread;
+use regex::NoExpand;
 
 #[test]
 fn check() {
@@ -69,7 +71,9 @@ agggtaa[cgt]|[acg]ttaccct 5
 
 #[allow(dead_code)]
 fn main() {
-    println!("{}", run(io::stdin().read_to_string().unwrap()).connect("\n"));
+    let mut input = String::new();
+    io::stdin().read_to_string(&mut input).unwrap();
+    println!("{}", run(input).connect("\n"));
 }
 
 fn run(mut seq: String) -> Vec<String> {
@@ -79,7 +83,7 @@ fn run(mut seq: String) -> Vec<String> {
     let seq_arc = Arc::new(seq.clone()); // copy before it moves
     let clen = seq.len();
 
-    let mut seqlen = Future::spawn(move|| {
+    let seqlen = thread::scoped(move|| {
         let substs = vec![
             (regex!("B"), "(c|g|t)"),
             (regex!("D"), "(a|g|t)"),
@@ -115,18 +119,18 @@ fn run(mut seq: String) -> Vec<String> {
     for variant in variants.into_iter() {
         let seq_arc_copy = seq_arc.clone();
         variant_strs.push(variant.to_string());
-        counts.push(Future::spawn(move|| {
+        counts.push(thread::scoped(move|| {
             variant.find_iter(&seq_arc_copy).count()
         }));
     }
 
     let mut olines = Vec::new();
-    for (i, variant) in variant_strs.iter().enumerate() {
-        olines.push(format!("{} {}", variant, counts[i].get()));
+    for (variant, count) in variant_strs.iter().zip(counts.into_iter()) {
+        olines.push(format!("{} {}", variant, count.join()));
     }
     olines.push("".to_string());
     olines.push(format!("{}", ilen));
     olines.push(format!("{}", clen));
-    olines.push(format!("{}", seqlen.get()));
+    olines.push(format!("{}", seqlen.join()));
     olines
 }

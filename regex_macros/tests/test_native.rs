@@ -14,5 +14,7 @@
 extern crate regex;
 extern crate test;
 
+macro_rules! searcher_expr { ($e:expr) => ($e) }
+
 mod tests;
 mod native_static;

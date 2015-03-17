@@ -8,8 +8,6 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use std::str::{Pattern, Searcher};
-use std::str::SearchStep::{Match, Reject, Done};
 use regex::{Regex, NoExpand};
 
 #[test]
@@ -119,17 +117,22 @@ macro_rules! searcher {
     );
     ($name:ident, $re:expr, $haystack:expr, vec $expect_steps:expr) => (
         #[test]
+        #[allow(unused_imports)]
         fn $name() {
-            let re = regex!($re);
-            let mut se = re.into_searcher($haystack);
-            let mut got_steps = vec![];
-            loop {
-                match se.next() {
-                    Done => break,
-                    step => { got_steps.push(step); }
+            searcher_expr! {{
+                use std::str::{Pattern, Searcher};
+                use std::str::SearchStep::{Match, Reject, Done};
+                let re = regex!($re);
+                let mut se = re.into_searcher($haystack);
+                let mut got_steps = vec![];
+                loop {
+                    match se.next() {
+                        Done => break,
+                        step => { got_steps.push(step); }
+                    }
                 }
-            }
-            assert_eq!(got_steps, $expect_steps);
+                assert_eq!(got_steps, $expect_steps);
+            }}
         }
     );
 }
