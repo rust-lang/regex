@@ -374,7 +374,7 @@
 #![feature(core)]
 
 pub use parse::Error;
-pub use re::{Regex, Captures, SubCaptures, SubCapturesPos};
+pub use re::{Regex, Captures, SubCaptures, SubCapturesPos, SubCapturesNamed};
 pub use re::{FindCaptures, FindMatches};
 pub use re::{Replacer, NoExpand, RegexSplits, RegexSplitsN};
 pub use re::{quote, is_match};
