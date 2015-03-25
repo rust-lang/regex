@@ -25,30 +25,30 @@ fn no_exponential(b: &mut Bencher) {
         "{}{}",
         repeat("a?").take(n).collect::<String>(),
         repeat("a").take(n).collect::<String>());
-    let re = Regex::new(regex_string.as_slice()).unwrap();
+    let re = Regex::new(&regex_string).unwrap();
     let text: String = repeat("a").take(n).collect();
-    bench_assert_match(b, re, text.as_slice());
+    bench_assert_match(b, re, &text);
 }
 
 #[bench]
 fn literal(b: &mut Bencher) {
     let re = regex!("y");
     let text = format!("{}y", repeat("x").take(50).collect::<String>());
-    bench_assert_match(b, re, text.as_slice());
+    bench_assert_match(b, re, &text);
 }
 
 #[bench]
 fn not_literal(b: &mut Bencher) {
     let re = regex!(".y");
     let text = format!("{}y", repeat("x").take(50).collect::<String>());
-    bench_assert_match(b, re, text.as_slice());
+    bench_assert_match(b, re, &text);
 }
 
 #[bench]
 fn match_class(b: &mut Bencher) {
     let re = regex!("[abcdw]");
     let text = format!("{}w", repeat("xxxx").take(20).collect::<String>());
-    bench_assert_match(b, re, text.as_slice());
+    bench_assert_match(b, re, &text);
 }
 
 #[bench]
@@ -56,7 +56,7 @@ fn match_class_in_range(b: &mut Bencher) {
     // 'b' is between 'a' and 'c', so the class range checking doesn't help.
     let re = regex!("[ac]");
     let text = format!("{}c", repeat("bbbb").take(20).collect::<String>());
-    bench_assert_match(b, re, text.as_slice());
+    bench_assert_match(b, re, &text);
 }
 
 #[bench]
@@ -80,7 +80,7 @@ fn anchored_literal_short_non_match(b: &mut Bencher) {
 fn anchored_literal_long_non_match(b: &mut Bencher) {
     let re = regex!("^zbc(d|e)");
     let text: String = repeat("abcdefghijklmnopqrstuvwxyz").take(15).collect();
-    b.iter(|| re.is_match(text.as_slice()));
+    b.iter(|| re.is_match(&text));
 }
 
 #[bench]
@@ -94,7 +94,7 @@ fn anchored_literal_short_match(b: &mut Bencher) {
 fn anchored_literal_long_match(b: &mut Bencher) {
     let re = regex!("^.bc(d|e)");
     let text: String = repeat("abcdefghijklmnopqrstuvwxyz").take(15).collect();
-    b.iter(|| re.is_match(text.as_slice()));
+    b.iter(|| re.is_match(&text));
 }
 
 #[bench]
@@ -145,7 +145,7 @@ macro_rules! throughput(
         fn $name(b: &mut Bencher) {
             let text = gen_text($size);
             b.bytes = $size;
-            b.iter(|| if $regex.is_match(text.as_slice()) { panic!("match") });
+            b.iter(|| if $regex.is_match(&text) { panic!("match") });
         }
     );
 );

@@ -19,7 +19,7 @@ name = "all"
 
 [[test]]
 path = "benches/shootout-regex-dna.rs"
-name = "shootout-regex-dna"
+name = "shootout_regex_dna"
 
 [[bench]]
 name = "all"

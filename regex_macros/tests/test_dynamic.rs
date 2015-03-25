@@ -9,6 +9,7 @@
 // except according to those terms.
 
 #![feature(collections, test)]
+#![cfg_attr(feature = "pattern", feature(core))]
 
 extern crate regex;
 extern crate test;
