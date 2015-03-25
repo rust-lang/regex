@@ -8,7 +8,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![feature(collections, core, test)]
+#![feature(collections, test)]
 
 extern crate regex;
 extern crate test;

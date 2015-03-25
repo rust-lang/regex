@@ -8,7 +8,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use std::borrow::{IntoCow, Cow};
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::collections::hash_map::Iter;
 use std::fmt;
@@ -571,19 +571,19 @@ pub trait Replacer {
 impl<'t> Replacer for NoExpand<'t> {
     fn reg_replace<'a>(&'a mut self, _: &Captures) -> Cow<'a, str> {
         let NoExpand(s) = *self;
-        s.into_cow()
+        Cow::Borrowed(s)
     }
 }
 
 impl<'t> Replacer for &'t str {
     fn reg_replace<'a>(&'a mut self, caps: &Captures) -> Cow<'a, str> {
-        caps.expand(*self).into_cow()
+        Cow::Owned(caps.expand(*self))
     }
 }
 
 impl<F> Replacer for F where F: FnMut(&Captures) -> String {
     fn reg_replace<'a>(&'a mut self, caps: &Captures) -> Cow<'a, str> {
-        (*self)(caps).into_cow()
+        Cow::Owned((*self)(caps))
     }
 }
 

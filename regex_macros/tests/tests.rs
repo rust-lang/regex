@@ -261,7 +261,7 @@ macro_rules! mat(
             };
             // The test set sometimes leave out capture groups, so truncate
             // actual capture groups to match test set.
-            let mut sgot = got.as_slice();
+            let mut sgot = &got[..];
             if sgot.len() > expected.len() {
                 sgot = &sgot[0..expected.len()]
             }
