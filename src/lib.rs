@@ -371,8 +371,6 @@
        html_favicon_url = "http://www.rust-lang.org/favicon.ico",
        html_root_url = "http://doc.rust-lang.org/regex/")]
 
-#![feature(core)]
-
 pub use parse::Error;
 pub use re::{Regex, Captures, SubCaptures, SubCapturesPos, SubCapturesNamed};
 pub use re::{FindCaptures, FindMatches};

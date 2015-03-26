@@ -178,7 +178,7 @@ macro_rules! replace(
         #[test]
         fn $name() {
             let re = regex!($re);
-            assert_eq!(re.$which($search, $replace), String::from_str($result));
+            assert_eq!(re.$which($search, $replace), $result);
         }
     );
 );

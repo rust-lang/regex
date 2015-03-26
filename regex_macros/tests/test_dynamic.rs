@@ -8,7 +8,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![feature(collections, test)]
+#![feature(test)]
 #![cfg_attr(feature = "pattern", feature(core))]
 
 extern crate regex;

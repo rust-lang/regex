@@ -11,7 +11,6 @@
 use std::char;
 use std::cmp;
 use std::fmt;
-use std::num;
 
 /// Static data containing Unicode ranges for general categories and scripts.
 use unicode::regex::{UNICODE_CLASSES, PERLD, PERLS, PERLW};
@@ -677,12 +676,9 @@ impl Parser {
                 end += 1;
             }
         }
-        let s = self.slice(start, end);
-        match num::from_str_radix::<u32>(&s, 8) {
+        match from_str_radix_pos_integer(&self.slice(start, end), 8) {
             Ok(n) => Ok(Literal(try!(self.char_from_u32(n)), FLAG_EMPTY)),
-            Err(_) => {
-                self.err(&format!("Could not parse '{}' as octal number.", s))
-            }
+            Err(err) => self.err(&err),
         }
     }
 
@@ -719,11 +715,9 @@ impl Parser {
 
     // Parses `s` as a hexadecimal number.
     fn parse_hex_digits(&self, s: &str) -> Result<Ast, Error> {
-        match num::from_str_radix::<u32>(s, 16) {
+        match from_str_radix_pos_integer(s, 16) {
             Ok(n) => Ok(Literal(try!(self.char_from_u32(n)), FLAG_EMPTY)),
-            Err(_) => {
-                self.err(&format!("Could not parse '{}' as hex number.", s))
-            }
+            Err(err) => self.err(&err),
         }
     }
 
@@ -1035,6 +1029,21 @@ fn concat_flatten(x: Ast, y: Ast) -> Ast {
         (ast, Cat(mut xs)) => { xs.insert(0, ast); Cat(xs) }
         (ast1, ast2) => Cat(vec!(ast1, ast2)),
     }
+}
+
+fn from_str_radix_pos_integer(s: &str, radix: u32) -> Result<u32, String> {
+    let mut num = 0;
+    for c in s.chars() {
+        match c.to_digit(radix) {
+            None => return Err(
+                format!("Could not parse '{}' as a hex number.", s)),
+            Some(n) => {
+                num *= radix;
+                num += n;
+            }
+        }
+    }
+    Ok(num)
 }
 
 pub fn is_punct(c: char) -> bool {
