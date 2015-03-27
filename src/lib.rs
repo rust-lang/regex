@@ -210,8 +210,8 @@
 //! [xyz]       A character class matching either x, y or z.
 //! [^xyz]      A character class matching any character except x, y and z.
 //! [a-z]       A character class matching any character in range a-z.
-//! \d          Perl character class ([0-9])
-//! \D          Negated Perl character class ([^0-9])
+//! \d          digit (\p{Nd})
+//! \D          not digit
 //! [:alpha:]   ASCII character class ([A-Za-z])
 //! [:^alpha:]  Negated ASCII character class ([^A-Za-z])
 //! \pN         One letter name Unicode character class
