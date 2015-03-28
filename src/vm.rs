@@ -174,7 +174,7 @@ impl<'r, 't> Nfa<'r, 't> {
             // a state starting at the current position in the input for the
             // beginning of the program only if we don't already have a match.
             if clist.size == 0 || (!prefix_anchor && !matched) {
-                self.add(&mut clist, 0, groups.as_mut_slice())
+                self.add(&mut clist, 0, &mut groups)
             }
 
             // Now we try to read the next character.
@@ -185,7 +185,7 @@ impl<'r, 't> Nfa<'r, 't> {
 
             for i in 0..clist.size {
                 let pc = clist.pc(i);
-                let step_state = self.step(groups.as_mut_slice(), &mut nlist,
+                let step_state = self.step(&mut groups, &mut nlist,
                                            clist.groups(i), pc);
                 match step_state {
                     StepMatchEarlyReturn => return vec![Some(0), Some(0)],
@@ -510,7 +510,7 @@ impl Threads {
 
     #[inline]
     fn groups(&mut self, i: usize) -> &mut [Option<usize>] {
-        self.queue[i].groups.as_mut_slice()
+        &mut self.queue[i].groups
     }
 }
 
