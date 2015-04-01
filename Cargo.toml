@@ -22,7 +22,7 @@ test = false
 bench = true
 
 [dev-dependencies]
-rand = "0.2"
+rand = "0.3"
 
 [features]
 pattern = []

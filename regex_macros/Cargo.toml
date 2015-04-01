@@ -33,4 +33,4 @@ version = "0.1.0"
 features = ["pattern"]
 
 [dev-dependencies]
-rand = "0.2"
+rand = "0.3"
