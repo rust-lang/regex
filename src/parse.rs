@@ -522,7 +522,7 @@ impl Parser {
             min = try!(self.parse_usize(&inner));
             max = Some(min);
         } else {
-            let pieces: Vec<&str> = inner.splitn(1, ',').collect();
+            let pieces: Vec<&str> = inner.splitn(2, ',').collect();
             let (smin, smax) = (pieces[0], pieces[1]);
             if smin.len() == 0 {
                 return self.err("Max repetitions cannot be specified \
