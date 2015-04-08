@@ -13,7 +13,7 @@ use std::collections::HashMap;
 use std::collections::hash_map::Iter;
 use std::fmt;
 #[cfg(feature = "pattern")]
-use std::str::{Pattern, Searcher, SearchStep};
+use std::str::pattern::{Pattern, Searcher, SearchStep};
 
 use compile::Program;
 use parse;

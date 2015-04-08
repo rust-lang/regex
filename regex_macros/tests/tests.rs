@@ -120,8 +120,8 @@ macro_rules! searcher {
         #[allow(unused_imports)]
         fn $name() {
             searcher_expr! {{
-                use std::str::{Pattern, Searcher};
-                use std::str::SearchStep::{Match, Reject, Done};
+                use std::str::pattern::{Pattern, Searcher};
+                use std::str::pattern::SearchStep::{Match, Reject, Done};
                 let re = regex!($re);
                 let mut se = re.into_searcher($haystack);
                 let mut got_steps = vec![];
