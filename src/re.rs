@@ -14,6 +14,7 @@ use std::collections::hash_map::Iter;
 use std::fmt;
 #[cfg(feature = "pattern")]
 use std::str::pattern::{Pattern, Searcher, SearchStep};
+use std::str::FromStr;
 
 use compile::Program;
 use parse;
@@ -155,6 +156,15 @@ impl fmt::Debug for Regex {
     /// Shows the original regular expression.
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         fmt::Display::fmt(self, f)
+    }
+}
+
+impl FromStr for Regex {
+    type Err = parse::Error;
+
+    /// Attempts to parse a string into a regular expression
+    fn from_str(s: &str) -> Result<Regex, parse::Error> {
+        Regex::new(s)
     }
 }
 
