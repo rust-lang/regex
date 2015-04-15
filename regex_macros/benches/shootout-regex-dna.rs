@@ -38,7 +38,7 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
 // OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#![feature(plugin)]
+#![feature(plugin, scoped)]
 #![plugin(regex_macros)]
 
 extern crate regex;
