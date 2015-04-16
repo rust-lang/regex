@@ -4,6 +4,7 @@ regex
 A Rust library for parsing, compiling, and executing regular expressions.
 
 [![Build Status](https://travis-ci.org/rust-lang/regex.svg?branch=master)](https://travis-ci.org/rust-lang/regex)
+[![](http://meritbadge.herokuapp.com/regex)](https://crates.io/crates/regex)
 
 [Documentation](http://doc.rust-lang.org/regex)
 
