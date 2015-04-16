@@ -22,7 +22,7 @@
 
 import fileinput, re, os, sys, operator
 
-preamble = '''// Copyright 2012-2014 The Rust Project Developers. See the COPYRIGHT
+preamble = '''// Copyright 2012-2015 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -67,7 +67,6 @@ def is_surrogate(n):
 def load_unicode_data(f):
     fetch(f)
     gencats = {}
-    combines = {}
 
     udict = {};
     range_start = -1;
@@ -98,12 +97,6 @@ def load_unicode_data(f):
                 gencats[cat] = []
             gencats[cat].append(code)
 
-        # record combining class, if any
-        if combine != "0":
-            if combine not in combines:
-                combines[combine] = []
-            combines[combine].append(code)
-
     # generate Not_Assigned from Assigned
     gencats["Cn"] = gen_unassigned(gencats["Assigned"])
     # Assigned is not a real category
@@ -111,9 +104,8 @@ def load_unicode_data(f):
     # Other contains Not_Assigned
     gencats["C"].extend(gencats["Cn"])
     gencats = group_cats(gencats)
-    combines = to_combines(group_cats(combines))
 
-    return (gencats, combines)
+    return gencats
 
 def group_cats(cats):
     cats_out = {}
@@ -149,14 +141,6 @@ def gen_unassigned(assigned):
     assigned = set(assigned)
     return ([i for i in range(0, 0xd800) if i not in assigned] +
             [i for i in range(0xe000, 0x110000) if i not in assigned])
-
-def to_combines(combs):
-    combs_out = []
-    for comb in combs:
-        for (lo, hi) in combs[comb]:
-            combs_out.append((lo, hi, comb))
-    combs_out.sort(key=lambda comb: comb[0])
-    return combs_out
 
 def format_table_content(f, content, indent):
     line = " "*indent
@@ -203,44 +187,12 @@ def load_properties(f, interestingprops):
         if prop not in props:
             props[prop] = []
         props[prop].append((d_lo, d_hi))
+
+    # optimize props if possible
+    for prop in props:
+        props[prop] = group_cat(ungroup_cat(props[prop]))
+
     return props
-
-# load all widths of want_widths, except those in except_cats
-def load_east_asian_width(want_widths, except_cats):
-    f = "EastAsianWidth.txt"
-    fetch(f)
-    widths = {}
-    re1 = re.compile("^([0-9A-F]+);(\w+) +# (\w+)")
-    re2 = re.compile("^([0-9A-F]+)\.\.([0-9A-F]+);(\w+) +# (\w+)")
-
-    for line in fileinput.input(f):
-        width = None
-        d_lo = 0
-        d_hi = 0
-        cat = None
-        m = re1.match(line)
-        if m:
-            d_lo = m.group(1)
-            d_hi = m.group(1)
-            width = m.group(2)
-            cat = m.group(3)
-        else:
-            m = re2.match(line)
-            if m:
-                d_lo = m.group(1)
-                d_hi = m.group(2)
-                width = m.group(3)
-                cat = m.group(4)
-            else:
-                continue
-        if cat in except_cats or width not in want_widths:
-            continue
-        d_lo = int(d_lo, 16)
-        d_hi = int(d_hi, 16)
-        if width not in widths:
-            widths[width] = []
-        widths[width].append((d_lo, d_hi))
-    return widths
 
 def escape_char(c):
     return "'\\u{%x}'" % c
@@ -261,7 +213,7 @@ def emit_table(f, name, t_data, t_type = "&'static [(char, char)]", is_pub=True,
     format_table_content(f, data, 8)
     f.write("\n    ];\n\n")
 
-def emit_property_module(f, mod, tbl, emit_fn):
+def emit_property_module(f, mod, tbl):
     f.write("pub mod %s {\n" % mod)
     keys = tbl.keys()
     keys.sort()
@@ -286,43 +238,6 @@ def emit_regex_module(f, cats, w_data):
 
     f.write("}\n\n")
 
-def remove_from_wtable(wtable, val):
-    wtable_out = []
-    while wtable:
-        if wtable[0][1] < val:
-            wtable_out.append(wtable.pop(0))
-        elif wtable[0][0] > val:
-            break
-        else:
-            (wt_lo, wt_hi, width, width_cjk) = wtable.pop(0)
-            if wt_lo == wt_hi == val:
-                continue
-            elif wt_lo == val:
-                wtable_out.append((wt_lo+1, wt_hi, width, width_cjk))
-            elif wt_hi == val:
-                wtable_out.append((wt_lo, wt_hi-1, width, width_cjk))
-            else:
-                wtable_out.append((wt_lo, val-1, width, width_cjk))
-                wtable_out.append((val+1, wt_hi, width, width_cjk))
-    if wtable:
-        wtable_out.extend(wtable)
-    return wtable_out
-
-
-
-def optimize_width_table(wtable):
-    wtable_out = []
-    w_this = wtable.pop(0)
-    while wtable:
-        if w_this[1] == wtable[0][0] - 1 and w_this[2:3] == wtable[0][2:3]:
-            w_tmp = wtable.pop(0)
-            w_this = (w_this[0], w_tmp[1], w_tmp[2], w_tmp[3])
-        else:
-            wtable_out.append(w_this)
-            w_this = wtable.pop(0)
-    wtable_out.append(w_this)
-    return wtable_out
-
 if __name__ == "__main__":
     r = "unicode.rs"
     if os.path.exists(r):
@@ -336,7 +251,7 @@ if __name__ == "__main__":
         with open("ReadMe.txt") as readme:
             pattern = "for Version (\d+)\.(\d+)\.(\d+) of the Unicode"
             unicode_version = re.search(pattern, readme.read()).groups()
-        (gencats, combines) = load_unicode_data("UnicodeData.txt")
+        gencats = load_unicode_data("UnicodeData.txt")
         want_derived = ["XID_Start", "XID_Continue", "Alphabetic", "Lowercase", "Uppercase"]
         other_derived = ["Default_Ignorable_Code_Point", "Grapheme_Extend"]
         derived = load_properties("DerivedCoreProperties.txt", want_derived + other_derived)
@@ -346,11 +261,11 @@ if __name__ == "__main__":
 
         # all of these categories will also be available as \p{} in libregex
         allcats = []
-        for (name, cat, pfuns) in ("general_category", gencats, ["N", "Cc"]), \
-                                  ("derived_property", derived, want_derived), \
-                                  ("script", scripts, []), \
-                                  ("property", props, ["White_Space"]):
-            emit_property_module(rf, name, cat, pfuns)
+        for (name, cat) in ("general_category", gencats), \
+                           ("derived_property", derived), \
+                           ("script", scripts), \
+                           ("property", props):
+            emit_property_module(rf, name, cat)
             allcats.extend(map(lambda x: (x, name), cat))
         allcats.sort(key=lambda c: c[0])
 
