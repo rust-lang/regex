@@ -421,6 +421,13 @@ impl Parser {
                     }
                 }
                 ']' if ranges.len() > 0 => {
+                    if self.flags & FLAG_NOCASE > 0 {
+                        // FIMXE(https://github.com/rust-lang/regex/issues/76): This is wrong.
+                        for range in &mut ranges {
+                            range.0 = range.0.to_uppercase().next().unwrap();
+                            range.1 = range.1.to_uppercase().next().unwrap();
+                        }
+                    }
                     ranges = combine_ranges(ranges);
                     if negated {
                         ranges = invert_ranges(ranges);
