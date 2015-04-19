@@ -330,6 +330,9 @@ mat!(uni_case_upper_nocase_flag, r"(?i)\p{Lu}+", "ΛΘΓΔα", Some((0, 10)));
 mat!(uni_case_upper_nocase, r"\p{L}+", "ΛΘΓΔα", Some((0, 10)));
 mat!(uni_case_lower, r"\p{Ll}+", "ΛΘΓΔα", Some((8, 10)));
 
+// https://github.com/rust-lang/regex/issues/76
+mat!(uni_case_lower_nocase_flag, r"(?i)\p{Ll}+", "ΛΘΓΔα", Some((0, 10)));
+
 // Test the Unicode friendliness of Perl character classes.
 mat!(uni_perl_w, r"\w+", "dδd", Some((0, 4)));
 mat!(uni_perl_w_not, r"\w+", "⥡", None);

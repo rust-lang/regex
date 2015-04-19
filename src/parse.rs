@@ -213,7 +213,14 @@ impl Parser {
                 '?' | '*' | '+' => try!(self.push_repeater(c)),
                 '\\' => {
                     let ast = try!(self.parse_escape());
-                    self.push(ast)
+                    if let AstClass(mut ranges, flags) = ast {
+                        if flags & FLAG_NOCASE > 0 {
+                            ranges = case_fold_and_combine_ranges(ranges);
+                        }
+                        self.push(AstClass(ranges, flags))
+                    } else {
+                        self.push(ast)
+                    }
                 }
                 '{' => try!(self.parse_counted()),
                 '[' => match self.try_parse_ascii() {
@@ -422,13 +429,10 @@ impl Parser {
                 }
                 ']' if ranges.len() > 0 => {
                     if self.flags & FLAG_NOCASE > 0 {
-                        // FIMXE(https://github.com/rust-lang/regex/issues/76): This is wrong.
-                        for range in &mut ranges {
-                            range.0 = range.0.to_uppercase().next().unwrap();
-                            range.1 = range.1.to_uppercase().next().unwrap();
-                        }
+                        ranges = case_fold_and_combine_ranges(ranges)
+                    } else {
+                        ranges = combine_ranges(ranges);
                     }
-                    ranges = combine_ranges(ranges);
                     if negated {
                         ranges = invert_ranges(ranges);
                     }
@@ -981,6 +985,32 @@ fn combine_ranges(mut unordered: Vec<(char, char)>) -> Vec<(char, char)> {
     }
     ordered.sort();
     ordered
+}
+
+fn case_fold_and_combine_ranges(ranges: Vec<(char, char)>) -> Vec<(char, char)> {
+    if ranges.is_empty() {
+        return ranges
+    }
+    let mut chars: Vec<char> = ranges
+        .into_iter()
+        .flat_map(|(start, end)| start as u32 .. end as u32 + 1)
+        .filter_map(char::from_u32)
+        .map(|c| c.to_uppercase().next().unwrap())
+        .collect();
+    chars.sort();
+    let mut chars = chars.into_iter();
+    let mut start = chars.next().unwrap();
+    let mut end = start;
+    let mut ranges = Vec::new();
+    for c in chars {
+        if c != inc_char(end) {
+            ranges.push((start, end));
+            start = c;
+        }
+        end = c;
+    }
+    ranges.push((start, end));
+    ranges
 }
 
 fn invert_ranges(ranges: Vec<(char, char)>) -> Vec<(char, char)> {
