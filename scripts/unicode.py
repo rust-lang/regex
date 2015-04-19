@@ -194,6 +194,19 @@ def load_properties(f, interestingprops):
 
     return props
 
+def load_case_folding(f):
+    fetch(f)
+    re1 = re.compile("^ *([0-9A-F]+) *; *[CS] *; *([0-9A-F]+) *;")
+    c_plus_s = []
+    for line in fileinput.input(f):
+        m = re1.match(line)
+        if m:
+            a = int(m.group(1), 16)
+            b = int(m.group(2), 16)
+            c_plus_s.append((a, b))
+
+    return {"C_plus_S": c_plus_s}
+
 def escape_char(c):
     return "'\\u{%x}'" % c
 
@@ -258,6 +271,7 @@ if __name__ == "__main__":
         scripts = load_properties("Scripts.txt", [])
         props = load_properties("PropList.txt",
                 ["White_Space", "Join_Control", "Noncharacter_Code_Point"])
+        case_folding = load_case_folding("CaseFolding.txt")
 
         # all of these categories will also be available as \p{} in libregex
         allcats = []
@@ -280,3 +294,4 @@ if __name__ == "__main__":
 
         # emit lookup tables for \p{}, along with \d, \w, and \s for libregex
         emit_regex_module(rf, allcats, perl_words)
+        emit_property_module(rf, "case_folding", case_folding)

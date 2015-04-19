@@ -40,6 +40,7 @@ use regex::native::{
     Match, EmptyBegin, EmptyEnd, EmptyWordBoundary,
     Program, Dynamic, ExDynamic, Native,
     FLAG_NOCASE, FLAG_MULTI, FLAG_DOTNL, FLAG_NEGATED,
+    simple_case_fold,
 };
 
 /// For the `regex!` syntax extension. Do not use.
@@ -154,7 +155,7 @@ fn exec<'t>(which: ::regex::native::MatchKind, input: &'t str,
     use regex::native::{
         MatchKind, Exists, Location, Submatches,
         StepState, StepMatchEarlyReturn, StepMatch, StepContinue,
-        CharReader, find_prefix,
+        CharReader, find_prefix, simple_case_fold,
     };
 
     return Nfa {
@@ -459,11 +460,9 @@ fn exec<'t>(which: ::regex::native::MatchKind, input: &'t str,
                 }
                 OneChar(c, flags) => {
                     if flags & FLAG_NOCASE > 0 {
-                        let upc = c.to_uppercase().next().unwrap();
+                        let upc = simple_case_fold(c);
                         quote_expr!(self.cx, {
-                            let upc = self.chars.prev.map(|c| {
-                                c.to_uppercase().next().unwrap()
-                            });
+                            let upc = self.chars.prev.map(simple_case_fold);
                             if upc == Some($upc) {
                                 self.add(nlist, $nextpc, caps);
                             }
@@ -483,8 +482,7 @@ fn exec<'t>(which: ::regex::native::MatchKind, input: &'t str,
                         if casei {
                             quote_expr!(
                                 self.cx,
-                                self.chars.prev.unwrap()
-                                    .to_uppercase().next().unwrap())
+                                simple_case_fold(self.chars.prev.unwrap()))
                         } else {
                             quote_expr!(self.cx, self.chars.prev.unwrap())
                         };
@@ -494,7 +492,7 @@ fn exec<'t>(which: ::regex::native::MatchKind, input: &'t str,
                         } else {
                             quote_expr!(self.cx, found)
                         };
-                    let mranges = self.match_class(casei, &ranges);
+                    let mranges = self.match_class(&ranges);
                     quote_expr!(self.cx, {
                         if self.chars.prev.is_some() {
                             let c = $get_char;
@@ -529,12 +527,8 @@ fn exec<'t>(which: ::regex::native::MatchKind, input: &'t str,
     // Translates a character class into a match expression.
     // This avoids a binary search (and is hopefully replaced by a jump
     // table).
-    fn match_class(&self, casei: bool, ranges: &[(char, char)]) -> P<ast::Expr> {
-        let mut arms = ranges.iter().map(|&(mut start, mut end)| {
-            if casei {
-                start = start.to_uppercase().next().unwrap();
-                end = end.to_uppercase().next().unwrap();
-            }
+    fn match_class(&self, ranges: &[(char, char)]) -> P<ast::Expr> {
+        let mut arms = ranges.iter().map(|&(start, end)| {
             let pat = self.cx.pat(self.sp, ast::PatRange(quote_expr!(self.cx, $start),
                                                          quote_expr!(self.cx, $end)));
             self.cx.arm(self.sp, vec!(pat), quote_expr!(self.cx, true))

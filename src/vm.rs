@@ -47,6 +47,7 @@ use compile::Inst::{
 };
 use parse::{FLAG_NOCASE, FLAG_MULTI, FLAG_DOTNL, FLAG_NEGATED};
 use unicode::regex::PERLW;
+use unicode::case_folding;
 
 pub type CaptureLocs = Vec<Option<usize>>;
 
@@ -229,12 +230,12 @@ impl<'r, 't> Nfa<'r, 't> {
                 }
             }
             CharClass(ref ranges, flags) => {
-                if let Some(c) = self.chars.prev {
+                if let Some(mut c) = self.chars.prev {
                     let negate = flags & FLAG_NEGATED > 0;
-                    let casei = flags & FLAG_NOCASE > 0;
-                    let found =
-                        ranges.binary_search_by(|&rc| class_cmp(casei, c, rc))
-                              .is_ok();
+                    if flags & FLAG_NOCASE > 0 {
+                        c = simple_case_fold(c);
+                    }
+                    let found = ranges.binary_search_by(|&rc| class_cmp(c, rc)).is_ok();
                     if found ^ negate {
                         self.add(nlist, pc+1, caps);
                     }
@@ -326,19 +327,14 @@ impl<'r, 't> Nfa<'r, 't> {
         }
     }
 
-    // FIXME: For case insensitive comparisons, it uses the uppercase
-    // character and tests for equality. IIUC, this does not generalize to
-    // all of Unicode. I believe we need to check the entire fold for each
-    // character. This will be easy to add if and when it gets added to Rust's
-    // standard library.
+    // Use Unicode simple case folding for case insensitive comparisons,
+    // as we’re matching individual code points.
     #[inline]
     fn char_eq(&self, casei: bool, textc: Option<char>, regc: char) -> bool {
         match textc {
             None => false,
             Some(textc) => {
-                let uregc = regc.to_uppercase().next().unwrap();
-                let utextc = textc.to_uppercase().next().unwrap();
-                regc == textc || (casei && uregc == utextc)
+                regc == textc || (casei && simple_case_fold(regc) == simple_case_fold(textc))
             }
         }
     }
@@ -536,30 +532,25 @@ pub fn is_word(c: Option<char>) -> bool {
     }
 }
 
+
+/// Returns the Unicode *simple* case folding of `c`.
+/// Uses the mappings with status C + S form Unicode’s `CaseFolding.txt`.
+/// This is not as “correct” as full case folding, but preserves the number of code points.
+pub fn simple_case_fold(c: char) -> char {
+    match case_folding::C_plus_S_table.binary_search_by(|&(x, _)| x.cmp(&c)) {
+        Ok(i) => case_folding::C_plus_S_table[i].1,
+        Err(_) => c
+    }
+}
+
+
 /// Given a character and a single character class range, return an ordering
 /// indicating whether the character is less than the start of the range,
 /// in the range (inclusive) or greater than the end of the range.
 ///
-/// If `casei` is `true`, then this ordering is computed case insensitively.
-///
 /// This function is meant to be used with a binary search.
 #[inline]
-fn class_cmp(casei: bool, mut textc: char,
-             (mut start, mut end): (char, char)) -> Ordering {
-    if casei {
-        // FIXME: This is pretty ridiculous. All of this case conversion
-        // can be moved outside this function:
-        // 1) textc should be uppercased outside the bsearch.
-        // 2) the character class itself should be uppercased either in the
-        //    parser or the compiler.
-        // FIXME: This is too simplistic for correct Unicode support.
-        //        See also: char_eq
-        // FIXME: Standard library now yields iterators, so we should take
-        //        advantage of them.
-        textc = textc.to_uppercase().next().unwrap();
-        start = start.to_uppercase().next().unwrap();
-        end = end.to_uppercase().next().unwrap();
-    }
+fn class_cmp(textc: char, (start, end): (char, char)) -> Ordering {
     if textc >= start && textc <= end {
         Ordering::Equal
     } else if start > textc {

@@ -14,6 +14,7 @@ use std::fmt;
 
 /// Static data containing Unicode ranges for general categories and scripts.
 use unicode::regex::{UNICODE_CLASSES, PERLD, PERLS, PERLW};
+use vm::simple_case_fold;
 
 use self::Ast::*;
 use self::Repeater::*;
@@ -213,7 +214,14 @@ impl Parser {
                 '?' | '*' | '+' => try!(self.push_repeater(c)),
                 '\\' => {
                     let ast = try!(self.parse_escape());
-                    self.push(ast)
+                    if let AstClass(mut ranges, flags) = ast {
+                        if flags & FLAG_NOCASE > 0 {
+                            ranges = case_fold_and_combine_ranges(ranges);
+                        }
+                        self.push(AstClass(ranges, flags))
+                    } else {
+                        self.push(ast)
+                    }
                 }
                 '{' => try!(self.parse_counted()),
                 '[' => match self.try_parse_ascii() {
@@ -421,7 +429,11 @@ impl Parser {
                     }
                 }
                 ']' if ranges.len() > 0 => {
-                    ranges = combine_ranges(ranges);
+                    if self.flags & FLAG_NOCASE > 0 {
+                        ranges = case_fold_and_combine_ranges(ranges)
+                    } else {
+                        ranges = combine_ranges(ranges);
+                    }
                     if negated {
                         ranges = invert_ranges(ranges);
                     }
@@ -974,6 +986,35 @@ fn combine_ranges(mut unordered: Vec<(char, char)>) -> Vec<(char, char)> {
     }
     ordered.sort();
     ordered
+}
+
+// FIXME: Is there a clever way to do this by considering ranges rather than individual chars?
+// E.g. binary search for overlap with entries in unicode::case_folding::C_plus_S_table
+fn case_fold_and_combine_ranges(ranges: Vec<(char, char)>) -> Vec<(char, char)> {
+    if ranges.is_empty() {
+        return ranges
+    }
+    let mut chars: Vec<char> = ranges
+        .into_iter()
+        .flat_map(|(start, end)| start as u32 .. end as u32 + 1)
+        .filter_map(char::from_u32)
+        .map(simple_case_fold)
+        .collect();
+    chars.sort();
+    chars.dedup();
+    let mut chars = chars.into_iter();
+    let mut start = chars.next().unwrap();
+    let mut end = start;
+    let mut ranges = Vec::new();
+    for c in chars {
+        if c != inc_char(end) {
+            ranges.push((start, end));
+            start = c;
+        }
+        end = c;
+    }
+    ranges.push((start, end));
+    ranges
 }
 
 fn invert_ranges(ranges: Vec<(char, char)>) -> Vec<(char, char)> {

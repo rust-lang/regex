@@ -413,7 +413,7 @@ pub mod native {
     };
     pub use re::{ExDynamic, ExNative};
     pub use re::Regex::{Dynamic, Native};
-    pub use vm::{CharReader, find_prefix};
+    pub use vm::{CharReader, find_prefix, simple_case_fold};
     pub use vm::MatchKind::{self, Exists, Location, Submatches};
     pub use vm::StepState::{
         self, StepMatchEarlyReturn, StepMatch, StepContinue,
