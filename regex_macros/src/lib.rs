@@ -494,7 +494,7 @@ fn exec<'t>(which: ::regex::native::MatchKind, input: &'t str,
                         } else {
                             quote_expr!(self.cx, found)
                         };
-                    let mranges = self.match_class(casei, &ranges);
+                    let mranges = self.match_class(&ranges);
                     quote_expr!(self.cx, {
                         if self.chars.prev.is_some() {
                             let c = $get_char;
@@ -529,12 +529,8 @@ fn exec<'t>(which: ::regex::native::MatchKind, input: &'t str,
     // Translates a character class into a match expression.
     // This avoids a binary search (and is hopefully replaced by a jump
     // table).
-    fn match_class(&self, casei: bool, ranges: &[(char, char)]) -> P<ast::Expr> {
-        let mut arms = ranges.iter().map(|&(mut start, mut end)| {
-            if casei {
-                start = start.to_uppercase().next().unwrap();
-                end = end.to_uppercase().next().unwrap();
-            }
+    fn match_class(&self, ranges: &[(char, char)]) -> P<ast::Expr> {
+        let mut arms = ranges.iter().map(|&(start, end)| {
             let pat = self.cx.pat(self.sp, ast::PatRange(quote_expr!(self.cx, $start),
                                                          quote_expr!(self.cx, $end)));
             self.cx.arm(self.sp, vec!(pat), quote_expr!(self.cx, true))

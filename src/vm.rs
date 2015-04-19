@@ -229,12 +229,12 @@ impl<'r, 't> Nfa<'r, 't> {
                 }
             }
             CharClass(ref ranges, flags) => {
-                if let Some(c) = self.chars.prev {
+                if let Some(mut c) = self.chars.prev {
                     let negate = flags & FLAG_NEGATED > 0;
-                    let casei = flags & FLAG_NOCASE > 0;
-                    let found =
-                        ranges.binary_search_by(|&rc| class_cmp(casei, c, rc))
-                              .is_ok();
+                    if flags & FLAG_NOCASE > 0 {
+                        c = c.to_uppercase().next().unwrap();
+                    }
+                    let found = ranges.binary_search_by(|&rc| class_cmp(c, rc)).is_ok();
                     if found ^ negate {
                         self.add(nlist, pc+1, caps);
                     }
@@ -540,26 +540,9 @@ pub fn is_word(c: Option<char>) -> bool {
 /// indicating whether the character is less than the start of the range,
 /// in the range (inclusive) or greater than the end of the range.
 ///
-/// If `casei` is `true`, then this ordering is computed case insensitively.
-///
 /// This function is meant to be used with a binary search.
 #[inline]
-fn class_cmp(casei: bool, mut textc: char,
-             (mut start, mut end): (char, char)) -> Ordering {
-    if casei {
-        // FIXME: This is pretty ridiculous. All of this case conversion
-        // can be moved outside this function:
-        // 1) textc should be uppercased outside the bsearch.
-        // 2) the character class itself should be uppercased either in the
-        //    parser or the compiler.
-        // FIXME: This is too simplistic for correct Unicode support.
-        //        See also: char_eq
-        // FIXME: Standard library now yields iterators, so we should take
-        //        advantage of them.
-        textc = textc.to_uppercase().next().unwrap();
-        start = start.to_uppercase().next().unwrap();
-        end = end.to_uppercase().next().unwrap();
-    }
+fn class_cmp(textc: char, (start, end): (char, char)) -> Ordering {
     if textc >= start && textc <= end {
         Ordering::Equal
     } else if start > textc {
