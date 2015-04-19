@@ -47,6 +47,7 @@ use compile::Inst::{
 };
 use parse::{FLAG_NOCASE, FLAG_MULTI, FLAG_DOTNL, FLAG_NEGATED};
 use unicode::regex::PERLW;
+use unicode::case_folding;
 
 pub type CaptureLocs = Vec<Option<usize>>;
 
@@ -232,7 +233,7 @@ impl<'r, 't> Nfa<'r, 't> {
                 if let Some(mut c) = self.chars.prev {
                     let negate = flags & FLAG_NEGATED > 0;
                     if flags & FLAG_NOCASE > 0 {
-                        c = c.to_uppercase().next().unwrap();
+                        c = simple_case_fold(c);
                     }
                     let found = ranges.binary_search_by(|&rc| class_cmp(c, rc)).is_ok();
                     if found ^ negate {
@@ -326,19 +327,14 @@ impl<'r, 't> Nfa<'r, 't> {
         }
     }
 
-    // FIXME: For case insensitive comparisons, it uses the uppercase
-    // character and tests for equality. IIUC, this does not generalize to
-    // all of Unicode. I believe we need to check the entire fold for each
-    // character. This will be easy to add if and when it gets added to Rust's
-    // standard library.
+    // Use Unicode simple case folding for case insensitive comparisons,
+    // as we’re matching individual code points.
     #[inline]
     fn char_eq(&self, casei: bool, textc: Option<char>, regc: char) -> bool {
         match textc {
             None => false,
             Some(textc) => {
-                let uregc = regc.to_uppercase().next().unwrap();
-                let utextc = textc.to_uppercase().next().unwrap();
-                regc == textc || (casei && uregc == utextc)
+                regc == textc || (casei && simple_case_fold(regc) == simple_case_fold(textc))
             }
         }
     }
@@ -535,6 +531,18 @@ pub fn is_word(c: Option<char>) -> bool {
         }).ok().is_some()
     }
 }
+
+
+/// Returns the Unicode *simple* case folding of `c`.
+/// Uses the mappings with status C + S form Unicode’s `CaseFolding.txt`.
+/// This is not as “correct” as full case folding, but preserves the number of code points.
+pub fn simple_case_fold(c: char) -> char {
+    match case_folding::C_plus_S_table.binary_search_by(|&(x, _)| x.cmp(&c)) {
+        Ok(i) => case_folding::C_plus_S_table[i].1,
+        Err(_) => c
+    }
+}
+
 
 /// Given a character and a single character class range, return an ordering
 /// indicating whether the character is less than the start of the range,

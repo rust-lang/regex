@@ -14,6 +14,7 @@ use std::fmt;
 
 /// Static data containing Unicode ranges for general categories and scripts.
 use unicode::regex::{UNICODE_CLASSES, PERLD, PERLS, PERLW};
+use vm::simple_case_fold;
 
 use self::Ast::*;
 use self::Repeater::*;
@@ -987,6 +988,8 @@ fn combine_ranges(mut unordered: Vec<(char, char)>) -> Vec<(char, char)> {
     ordered
 }
 
+// FIXME: Is there a clever way to do this by considering ranges rather than individual chars?
+// E.g. binary search for overlap with entries in unicode::case_folding::C_plus_S_table
 fn case_fold_and_combine_ranges(ranges: Vec<(char, char)>) -> Vec<(char, char)> {
     if ranges.is_empty() {
         return ranges
@@ -995,9 +998,10 @@ fn case_fold_and_combine_ranges(ranges: Vec<(char, char)>) -> Vec<(char, char)> 
         .into_iter()
         .flat_map(|(start, end)| start as u32 .. end as u32 + 1)
         .filter_map(char::from_u32)
-        .map(|c| c.to_uppercase().next().unwrap())
+        .map(simple_case_fold)
         .collect();
     chars.sort();
+    chars.dedup();
     let mut chars = chars.into_iter();
     let mut start = chars.next().unwrap();
     let mut end = start;
