@@ -11,6 +11,11 @@
 use regex::{Regex, NoExpand};
 
 #[test]
+fn eq() {
+    assert_eq!(regex!(r"[a-z]+"), Regex::new("[a-z]+").unwrap());
+}
+
+#[test]
 fn splitn() {
     let re = regex!(r"\d+");
     let text = "cauchy123plato456tyler789binx";

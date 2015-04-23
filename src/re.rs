@@ -159,6 +159,14 @@ impl fmt::Debug for Regex {
     }
 }
 
+impl PartialEq for Regex {
+    fn eq(&self, other: &Regex) -> bool {
+        self.as_str() == other.as_str()
+    }
+}
+
+impl Eq for Regex {}
+
 impl FromStr for Regex {
     type Err = parse::Error;
 
