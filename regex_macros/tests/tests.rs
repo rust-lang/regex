@@ -189,6 +189,8 @@ replace!(rep_all, replace_all, r"\d", "age: 26", "Z", "age: ZZ");
 replace!(rep_groups, replace, r"(\S+)\s+(\S+)", "w1 w2", "$2 $1", "w2 w1");
 replace!(rep_double_dollar, replace,
          r"(\S+)\s+(\S+)", "w1 w2", "$2 $$1", "w2 $1");
+replace!(rep_adjacent_index, replace,
+         r"([^aeiouy])ies$", "skies", "$1y", "sky");
 replace!(rep_no_expand, replace,
          r"(\S+)\s+(\S+)", "w1 w2", NoExpand("$2 $1"), "$2 $1");
 replace!(rep_named, replace_all,
