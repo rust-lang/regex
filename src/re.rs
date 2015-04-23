@@ -159,6 +159,9 @@ impl fmt::Debug for Regex {
     }
 }
 
+/// Equality comparison is based on the original string. It is possible that different regular
+/// expressions have the same matching behaviour, but are still compared inequal.  For example,
+/// `\d+` and `\d\d*` match the same set of strings, but are not considered equal.
 impl PartialEq for Regex {
     fn eq(&self, other: &Regex) -> bool {
         self.as_str() == other.as_str()
