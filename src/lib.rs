@@ -19,8 +19,21 @@
 //! support and exhaustively lists the supported syntax. For more specific
 //! details on the API, please see the documentation for the `Regex` type.
 //!
+//! # Usage
+//! 
 //! This crates is [on crates.io](https://crates.io/crates/regex) and can be
-//! used by adding `regex` to your dependencies in your projects `Cargo.toml`.
+//! used by adding `regex` to your dependencies in your project's `Cargo.toml`.
+//! 
+//! ```toml
+//! [dependencies]
+//! regex = "0.1.8"
+//! ```
+//! 
+//! and this to your crate root:
+//! 
+//! ```rust
+//! extern crate regex;
+//! ```
 //!
 //! # First example: find a date
 //!
