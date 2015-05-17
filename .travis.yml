@@ -1,16 +1,24 @@
 language: rust
+rust:
+  - 1.0.0
+  - beta
+  - nightly
 sudo: false
 script:
   - cargo build --verbose
   - cargo test --verbose
-  - cargo test --verbose --features pattern
+  - |
+    [ $TRAVIS_RUST_VERSION != nightly ] || cargo test --verbose --features pattern
   - cargo doc
   - cargo bench --verbose
-  - cargo test --verbose --manifest-path=regex_macros/Cargo.toml
-  - cargo bench --verbose --manifest-path=regex_macros/Cargo.toml
+  - |
+    [ $TRAVIS_RUST_VERSION != nightly ] || cargo test --manifest-path=regex_macros/Cargo.toml
+  - |
+    [ $TRAVIS_RUST_VERSION != nightly ] || cargo bench --manifest-path=regex_macros/Cargo.toml
 after_success: |
   [ $TRAVIS_BRANCH = master ] &&
   [ $TRAVIS_PULL_REQUEST = false ] &&
+  [ $TRAVIS_RUST_VERSION = nightly ] &&
   echo '<meta http-equiv=refresh content=0;url=regex/index.html>' > target/doc/index.html &&
   pip install ghp-import --user $USER &&
   $HOME/.local/bin/ghp-import -n target/doc &&
