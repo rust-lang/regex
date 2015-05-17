@@ -8,13 +8,13 @@ script:
   - cargo build --verbose
   - cargo test --verbose
   - |
-    [ $TRAVIS_RUST_VERSION != nightly ] || cargo test --verbose --features pattern
+    [ $TRAVIS_RUST_VERSION != nightly ] || (
+      cargo test --verbose --features pattern &&
+      cargo bench --verbose &&
+      cargo test --manifest-path=regex_macros/Cargo.toml &&
+      cargo bench --manifest-path=regex_macros/Cargo.toml
+    )
   - cargo doc
-  - cargo bench --verbose
-  - |
-    [ $TRAVIS_RUST_VERSION != nightly ] || cargo test --manifest-path=regex_macros/Cargo.toml
-  - |
-    [ $TRAVIS_RUST_VERSION != nightly ] || cargo bench --manifest-path=regex_macros/Cargo.toml
 after_success: |
   [ $TRAVIS_BRANCH = master ] &&
   [ $TRAVIS_PULL_REQUEST = false ] &&
