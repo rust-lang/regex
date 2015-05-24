@@ -181,6 +181,7 @@ fn exec<'t>(which: ::regex::native::MatchKind, input: &'t str,
             let prefix_bytes: &[u8] = $prefix_bytes;
             let mut clist = Threads::new(self.which);
             let mut nlist = Threads::new(self.which);
+            let (mut clist, mut nlist) = (&mut clist, &mut nlist);
 
             let mut groups = $init_groups;
 
