@@ -17,7 +17,7 @@ use std::str::pattern::{Pattern, Searcher, SearchStep};
 use std::str::FromStr;
 
 use compile::Program;
-use parse;
+use syntax;
 use vm;
 use vm::CaptureLocs;
 use vm::MatchKind::{self, Exists, Location, Submatches};
@@ -32,7 +32,7 @@ use self::Regex::*;
 pub fn quote(text: &str) -> String {
     let mut quoted = String::with_capacity(text.len());
     for c in text.chars() {
-        if parse::is_punct(c) {
+        if syntax::is_punct(c) {
             quoted.push('\\')
         }
         quoted.push(c);
@@ -47,8 +47,52 @@ pub fn quote(text: &str) -> String {
 ///
 /// To find submatches, split or replace text, you'll need to compile an
 /// expression first.
-pub fn is_match(regex: &str, text: &str) -> Result<bool, parse::Error> {
+pub fn is_match(regex: &str, text: &str) -> Result<bool, Error> {
     Regex::new(regex).map(|r| r.is_match(text))
+}
+
+/// An error that occurred during parsing or compiling a regular expression.
+#[derive(Debug)]
+pub enum Error {
+    /// A syntax error.
+    Syntax(syntax::Error),
+    /// The compiled program exceeded the set size limit.
+    /// The argument is the size limit imposed.
+    CompiledTooBig(usize),
+}
+
+impl ::std::error::Error for Error {
+    fn description(&self) -> &str {
+        match *self {
+            Error::Syntax(ref err) => err.description(),
+            Error::CompiledTooBig(_) => "compiled program too big",
+        }
+    }
+
+    fn cause(&self) -> Option<&::std::error::Error> {
+        match *self {
+            Error::Syntax(ref err) => Some(err),
+            _ => None,
+        }
+    }
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            Error::Syntax(ref err) => err.fmt(f),
+            Error::CompiledTooBig(limit) => {
+                write!(f, "Compiled regex exceeds size limit of {} bytes.",
+                       limit)
+            }
+        }
+    }
+}
+
+impl From<syntax::Error> for Error {
+    fn from(err: syntax::Error) -> Error {
+        Error::Syntax(err)
+    }
 }
 
 /// A compiled regular expression
@@ -159,9 +203,10 @@ impl fmt::Debug for Regex {
     }
 }
 
-/// Equality comparison is based on the original string. It is possible that different regular
-/// expressions have the same matching behavior, but are still compared unequal.  For example,
-/// `\d+` and `\d\d*` match the same set of strings, but are not considered equal.
+/// Equality comparison is based on the original string. It is possible that
+/// different regular expressions have the same matching behavior, but are
+/// still compared unequal. For example, `\d+` and `\d\d*` match the same set
+/// of strings, but are not considered equal.
 impl PartialEq for Regex {
     fn eq(&self, other: &Regex) -> bool {
         self.as_str() == other.as_str()
@@ -171,10 +216,10 @@ impl PartialEq for Regex {
 impl Eq for Regex {}
 
 impl FromStr for Regex {
-    type Err = parse::Error;
+    type Err = Error;
 
     /// Attempts to parse a string into a regular expression
-    fn from_str(s: &str) -> Result<Regex, parse::Error> {
+    fn from_str(s: &str) -> Result<Regex, Error> {
         Regex::new(s)
     }
 }
@@ -184,15 +229,27 @@ impl Regex {
     /// used repeatedly to search, split or replace text in a string.
     ///
     /// If an invalid expression is given, then an error is returned.
-    pub fn new(re: &str) -> Result<Regex, parse::Error> {
-        let ast = try!(parse::parse(re));
-        let (prog, names) = Program::new(ast);
+    pub fn new(re: &str) -> Result<Regex, Error> {
+        Regex::with_size_limit(10 * (1 << 20), re)
+    }
+
+    /// Compiles a dynamic regular expression with the given size limit.
+    ///
+    /// The size limit is applied to the size of the *compiled* data structure.
+    /// If the data structure exceeds the size given, then an error is
+    /// returned.
+    ///
+    /// The default size limit used in `new` is 10MB.
+    pub fn with_size_limit(size: usize, re: &str) -> Result<Regex, Error> {
+        let ast = try!(syntax::Expr::parse(re));
+        let (prog, names) = try!(Program::new(ast, size));
         Ok(Dynamic(ExDynamic {
             original: re.to_string(),
             names: names,
             prog: prog,
         }))
     }
+
 
     /// Returns true if and only if the regex matches the string given.
     ///
@@ -790,13 +847,19 @@ impl<'t> Captures<'t> {
     /// To write a literal `$` use `$$`.
     pub fn expand(&self, text: &str) -> String {
         // How evil can you get?
-        // FIXME: Don't use regexes for this. It's completely unnecessary.
-        let re = Regex::new(r"(^|[^$]|\b)\$(\d+|\w+)").unwrap();
+        let re = Regex::new(r"(?x)
+          (?P<before>^|\b|[^$]) # Ignore `$$name`.
+          \$
+          (?P<name> # Match the actual capture name. Can be...
+            [0-9]+  # A sequence of digits (for indexed captures), or...
+            |
+            [_a-zA-Z][_0-9a-zA-Z]* # A name for named captures.
+          )
+        ").unwrap();
         let text = re.replace_all(text, |refs: &Captures| -> String {
-            let pre = refs.at(1).unwrap_or("");
-            let name = refs.at(2).unwrap_or("");
-            format!("{}{}", pre,
-                    match name.parse::<usize>() {
+            let before = refs.name("before").unwrap_or("");
+            let name = refs.name("name").unwrap_or("");
+            format!("{}{}", before, match name.parse::<usize>() {
                 Err(_) => self.name(name).unwrap_or("").to_string(),
                 Ok(i) => self.at(i).unwrap_or("").to_string(),
             })
@@ -809,7 +872,7 @@ impl<'t> Captures<'t> {
     #[inline]
     pub fn len(&self) -> usize { self.locs.len() / 2 }
 
-    /// Returns if there are no captured groups.
+    /// Returns true if and only if there are no captured groups.
     #[inline]
     pub fn is_empty(&self) -> bool { self.len() == 0 }
 }

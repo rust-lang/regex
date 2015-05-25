@@ -21,8 +21,16 @@ path = "regex_macros/benches/bench_dynamic.rs"
 test = false
 bench = true
 
+[dependencies.regex-syntax]
+path = "regex_syntax"
+version = "*"
+
 [dev-dependencies]
 rand = "0.3"
 
 [features]
 pattern = []
+
+[profile.bench]
+opt-level = 3
+lto = true

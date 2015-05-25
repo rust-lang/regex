@@ -36,18 +36,12 @@
 use self::MatchKind::*;
 use self::StepState::*;
 
-use std::cmp::{self, Ordering};
-use std::iter::repeat;
+use std::cmp;
 use std::mem;
 
 use compile::Program;
-use compile::Inst::{
-    Match, OneChar, CharClass, Any, EmptyBegin, EmptyEnd, EmptyWordBoundary,
-    Save, Jump, Split,
-};
-use parse::{FLAG_NOCASE, FLAG_MULTI, FLAG_DOTNL, FLAG_NEGATED};
-use unicode::regex::PERLW;
-use unicode::case_folding;
+use compile::Inst::*;
+use syntax;
 
 pub type CaptureLocs = Vec<Option<usize>>;
 
@@ -122,18 +116,16 @@ impl<'r, 't> Nfa<'r, 't> {
         let ninsts = self.prog.insts.len();
         let mut clist = Threads::new(self.which, ninsts, ncaps);
         let mut nlist = Threads::new(self.which, ninsts, ncaps);
-
-        let mut groups = repeat(None).take(ncaps * 2).collect::<Vec<_>>();
+        let mut groups = vec![None; ncaps * 2];
 
         // Determine if the expression starts with a '^' so we can avoid
         // simulating .*?
         // Make sure multi-line mode isn't enabled for it, otherwise we can't
         // drop the initial .*?
-        let prefix_anchor =
-            match self.prog.insts[1] {
-                EmptyBegin(flags) if flags & FLAG_MULTI == 0 => true,
-                _ => false,
-            };
+        let prefix_anchor = match self.prog.insts[1] {
+            StartText => true,
+            _ => false,
+        };
 
         self.ic = self.start;
         let mut next_ic = self.chars.set(self.start);
@@ -224,30 +216,24 @@ impl<'r, 't> Nfa<'r, 't> {
                     }
                 }
             }
-            OneChar(c, flags) => {
-                if self.char_eq(flags & FLAG_NOCASE > 0, self.chars.prev, c) {
+            OneChar { c, casei } => {
+                if self.char_eq(casei, self.chars.prev, c) {
                     self.add(nlist, pc+1, caps);
                 }
             }
-            CharClass(ref ranges, flags) => {
-                if let Some(mut c) = self.chars.prev {
-                    let negate = flags & FLAG_NEGATED > 0;
-                    if flags & FLAG_NOCASE > 0 {
-                        c = simple_case_fold(c);
-                    }
-                    let found = ranges.binary_search_by(|&rc| class_cmp(c, rc)).is_ok();
-                    if found ^ negate {
-                        self.add(nlist, pc+1, caps);
-                    }
+            CharClass(ref cls) => {
+                if self.chars.prev.map(|c| cls.matches(c)).unwrap_or(false) {
+                    self.add(nlist, pc+1, caps);
                 }
             }
-            Any(flags) => {
-                if flags & FLAG_DOTNL > 0
-                   || !self.char_eq(false, self.chars.prev, '\n') {
+            Any => self.add(nlist, pc+1, caps),
+            AnyNoNL => {
+                if !self.char_eq(false, self.chars.prev, '\n') {
                     self.add(nlist, pc+1, caps)
                 }
             }
-            EmptyBegin(_) | EmptyEnd(_) | EmptyWordBoundary(_)
+            StartLine | EndLine | StartText | EndText
+            | WordBoundary | NotWordBoundary
             | Save(_) | Jump(_) | Split(_, _) => {},
         }
         StepContinue
@@ -272,26 +258,40 @@ impl<'r, 't> Nfa<'r, 't> {
         // We make a minor optimization by indicating that the state is "empty"
         // so that its capture groups are not filled in.
         match self.prog.insts[pc] {
-            EmptyBegin(flags) => {
-                let multi = flags & FLAG_MULTI > 0;
+            StartLine => {
                 nlist.add(pc, groups, true);
-                if self.chars.is_begin()
-                   || (multi && self.char_is(self.chars.prev, '\n')) {
+                if self.chars.is_begin() || self.char_is(self.chars.prev, '\n') {
+                    self.add(nlist, pc + 1, groups);
+                }
+            }
+            StartText => {
+                nlist.add(pc, groups, true);
+                if self.chars.is_begin() {
+                    self.add(nlist, pc + 1, groups);
+                }
+            }
+            EndLine => {
+                nlist.add(pc, groups, true);
+                if self.chars.is_end() || self.char_is(self.chars.cur, '\n') {
                     self.add(nlist, pc + 1, groups)
                 }
             }
-            EmptyEnd(flags) => {
-                let multi = flags & FLAG_MULTI > 0;
+            EndText => {
                 nlist.add(pc, groups, true);
-                if self.chars.is_end()
-                   || (multi && self.char_is(self.chars.cur, '\n')) {
+                if self.chars.is_end() {
                     self.add(nlist, pc + 1, groups)
                 }
             }
-            EmptyWordBoundary(flags) => {
+            WordBoundary => {
                 nlist.add(pc, groups, true);
-                if self.chars.is_word_boundary() == !(flags & FLAG_NEGATED > 0) {
-                    self.add(nlist, pc + 1, groups)
+                if self.chars.is_word_boundary() {
+                    self.add(nlist, pc + 1, groups);
+                }
+            }
+            NotWordBoundary => {
+                nlist.add(pc, groups, true);
+                if !self.chars.is_word_boundary() {
+                    self.add(nlist, pc + 1, groups);
                 }
             }
             Save(slot) => {
@@ -321,7 +321,7 @@ impl<'r, 't> Nfa<'r, 't> {
                 self.add(nlist, x, groups);
                 self.add(nlist, y, groups);
             }
-            Match | OneChar(_, _) | CharClass(_, _) | Any(_) => {
+            Match | OneChar{..} | CharClass(_) | Any | AnyNoNL => {
                 nlist.add(pc, groups, false);
             }
         }
@@ -334,7 +334,7 @@ impl<'r, 't> Nfa<'r, 't> {
         match textc {
             None => false,
             Some(textc) => {
-                regc == textc || (casei && simple_case_fold(regc) == simple_case_fold(textc))
+                regc == textc || (casei && syntax::simple_case_fold(regc) == syntax::simple_case_fold(textc))
             }
         }
     }
@@ -425,17 +425,22 @@ impl<'t> CharReader<'t> {
     /// Returns true if and only if the current position is a word boundary.
     /// (Ignoring the range of the input to search.)
     pub fn is_word_boundary(&self) -> bool {
+        fn is_word(c: Option<char>) -> bool {
+            c.map(syntax::is_word_char).unwrap_or(false)
+        }
+
         if self.is_begin() {
-            return is_word(self.cur)
+            return is_word(self.cur);
         }
         if self.is_end() {
-            return is_word(self.prev)
+            return is_word(self.prev);
         }
         (is_word(self.cur) && !is_word(self.prev))
         || (is_word(self.prev) && !is_word(self.cur))
     }
 }
 
+#[derive(Clone)]
 struct Thread {
     pc: usize,
     groups: Vec<Option<usize>>,
@@ -457,12 +462,11 @@ impl Threads {
     //
     // See http://research.swtch.com/sparse for the deets.
     fn new(which: MatchKind, num_insts: usize, ncaps: usize) -> Threads {
+        let t = Thread { pc: 0, groups: vec![None; ncaps * 2] };
         Threads {
             which: which,
-            queue: (0..num_insts).map(|_| {
-                Thread {pc: 0, groups: repeat(None).take(ncaps * 2).collect() }
-            }).collect(),
-            sparse: repeat(0).take(num_insts).collect(),
+            queue: vec![t; num_insts],
+            sparse: vec![0; num_insts],
             size: 0,
         }
     }
@@ -505,58 +509,6 @@ impl Threads {
     #[inline]
     fn groups(&mut self, i: usize) -> &mut [Option<usize>] {
         &mut self.queue[i].groups
-    }
-}
-
-/// Returns true if the character is a word character, according to the
-/// (Unicode friendly) Perl character class '\w'.
-/// Note that this is only use for testing word boundaries. The actual '\w'
-/// is encoded as a CharClass instruction.
-pub fn is_word(c: Option<char>) -> bool {
-    let c = match c {
-        None => return false,
-        Some(c) => c,
-    };
-    // Try the common ASCII case before invoking binary search.
-    match c {
-        '_' | '0' ... '9' | 'a' ... 'z' | 'A' ... 'Z' => true,
-        _ => PERLW.binary_search_by(|&(start, end)| {
-            if c >= start && c <= end {
-                Ordering::Equal
-            } else if start > c {
-                Ordering::Greater
-            } else {
-                Ordering::Less
-            }
-        }).ok().is_some()
-    }
-}
-
-
-/// Returns the Unicode *simple* case folding of `c`.
-/// Uses the mappings with status C + S form Unicode’s `CaseFolding.txt`.
-/// This is not as “correct” as full case folding, but preserves the number of code points.
-pub fn simple_case_fold(c: char) -> char {
-    match case_folding::C_plus_S_table.binary_search_by(|&(x, _)| x.cmp(&c)) {
-        Ok(i) => case_folding::C_plus_S_table[i].1,
-        Err(_) => c
-    }
-}
-
-
-/// Given a character and a single character class range, return an ordering
-/// indicating whether the character is less than the start of the range,
-/// in the range (inclusive) or greater than the end of the range.
-///
-/// This function is meant to be used with a binary search.
-#[inline]
-fn class_cmp(textc: char, (start, end): (char, char)) -> Ordering {
-    if textc >= start && textc <= end {
-        Ordering::Equal
-    } else if start > textc {
-        Ordering::Greater
-    } else {
-        Ordering::Less
     }
 }
 

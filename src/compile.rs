@@ -14,61 +14,29 @@
 use self::Inst::*;
 
 use std::cmp;
-use std::iter::repeat;
-use parse;
-use parse::{Flags, FLAG_EMPTY};
-use parse::Ast::{
-    Nothing, Literal, Dot, AstClass, Begin, End, WordBoundary, Capture,
-    Cat, Alt, Rep,
-};
-use parse::Repeater::{ZeroOne, ZeroMore, OneMore};
+use syntax::{self, Expr, Repeater};
+use Error;
 
 pub type InstIdx = usize;
 
 /// An instruction, the underlying unit of a compiled regular expression
+#[allow(missing_docs)]
 #[derive(Debug, Clone)]
 pub enum Inst {
     /// When a Match instruction is executed, the current thread is successful.
     Match,
-
-    /// The OneChar instruction matches a literal character.
-    /// The flags indicate whether to do a case insensitive match.
-    OneChar(char, Flags),
-
-    /// The CharClass instruction tries to match one input character against
-    /// the range of characters given.
-    /// The flags indicate whether to do a case insensitive match.
-    CharClass(Vec<(char, char)>, Flags),
-
-    /// Matches any character except new lines.
-    /// The flags indicate whether to include the '\n' character.
-    Any(Flags),
-
-    /// Matches the beginning of the string, consumes no characters.
-    /// The flags indicate whether it matches if the preceding character
-    /// is a new line.
-    EmptyBegin(Flags),
-
-    /// Matches the end of the string, consumes no characters.
-    /// The flags indicate whether it matches if the proceeding character
-    /// is a new line.
-    EmptyEnd(Flags),
-
-    /// Matches a word boundary (\w on one side and \W \A or \z on the other),
-    /// and consumes no character.
-    /// The flags indicate whether this matches a word boundary or something
-    /// that isn't a word boundary.
-    EmptyWordBoundary(Flags),
-
-    /// Saves the current position in the input string to the Nth save slot.
+    OneChar { c: char, casei: bool },
+    CharClass(syntax::CharClass),
+    Any,
+    AnyNoNL,
+    StartLine,
+    EndLine,
+    StartText,
+    EndText,
+    WordBoundary,
+    NotWordBoundary,
     Save(usize),
-
-    /// Jumps to the instruction at the index given.
     Jump(InstIdx),
-
-    /// Jumps to the instruction at the first index given. If that leads to
-    /// a panic state, then the instruction at the second index given is
-    /// tried.
     Split(InstIdx, InstIdx),
 }
 
@@ -90,14 +58,15 @@ pub struct Program {
 
 impl Program {
     /// Compiles a Regex given its AST.
-    pub fn new(ast: parse::Ast) -> (Program, Vec<Option<String>>) {
+    pub fn new(ast: Expr, size: usize) -> Result<(Program, Vec<Option<String>>), Error> {
         let mut c = Compiler {
             insts: Vec::with_capacity(100),
-            names: Vec::with_capacity(10),
+            names: vec![None],
+            size_limit: size,
         };
 
         c.insts.push(Save(0));
-        c.compile(ast);
+        try!(c.compile(ast));
         c.insts.push(Save(1));
         c.insts.push(Match);
 
@@ -107,17 +76,17 @@ impl Program {
         let mut pre = String::with_capacity(5);
         for inst in c.insts[1..].iter() {
             match *inst {
-                OneChar(c, FLAG_EMPTY) => pre.push(c),
+                OneChar { c, casei: false } => pre.push(c),
                 _ => break
             }
         }
 
-        let Compiler { insts, names } = c;
+        let Compiler { insts, names, .. } = c;
         let prog = Program {
             insts: insts,
             prefix: pre,
         };
-        (prog, names)
+        Ok((prog, names))
     }
 
     /// Returns the total number of capture groups in the regular expression.
@@ -138,6 +107,7 @@ impl Program {
 struct Compiler {
     insts: Vec<Inst>,
     names: Vec<Option<String>>,
+    size_limit: usize,
 }
 
 // The compiler implemented here is extremely simple. Most of the complexity
@@ -145,83 +115,132 @@ struct Compiler {
 // The only tricky thing here is patching jump/split instructions to point to
 // the right instruction.
 impl Compiler {
-    fn compile(&mut self, ast: parse::Ast) {
-        match ast {
-            Nothing => {},
-            Literal(c, flags) => self.push(OneChar(c, flags)),
-            Dot(nl) => self.push(Any(nl)),
-            AstClass(ranges, flags) => self.push(CharClass(ranges, flags)),
-            Begin(flags) => self.push(EmptyBegin(flags)),
-            End(flags) => self.push(EmptyEnd(flags)),
-            WordBoundary(flags) => self.push(EmptyWordBoundary(flags)),
-            Capture(cap, name, x) => {
-                let len = self.names.len();
-                if cap >= len {
-                    self.names.extend(repeat(None).take(10 + cap - len))
-                }
-                self.names[cap] = name;
+    fn check_size(&self) -> Result<(), Error> {
+        if self.insts.len() * ::std::mem::size_of::<Inst>() > self.size_limit {
+            Err(Error::CompiledTooBig(self.size_limit))
+        } else {
+            Ok(())
+        }
+    }
 
-                self.push(Save(2 * cap));
-                self.compile(*x);
-                self.push(Save(2 * cap + 1));
-            }
-            Cat(xs) => {
-                for x in xs.into_iter() {
-                    self.compile(x)
+    fn compile(&mut self, ast: Expr) -> Result<(), Error> {
+        match ast {
+            Expr::Empty => {},
+            Expr::Literal { chars, casei } => {
+                for c in chars {
+                    self.push(OneChar { c: c, casei: casei });
                 }
             }
-            Alt(x, y) => {
+            Expr::AnyChar => self.push(Any),
+            Expr::AnyCharNoNL => self.push(AnyNoNL),
+            Expr::Class(cls) => self.push(CharClass(cls)),
+            Expr::StartLine => self.push(StartLine),
+            Expr::EndLine => self.push(EndLine),
+            Expr::StartText => self.push(StartText),
+            Expr::EndText => self.push(EndText),
+            Expr::WordBoundary => self.push(WordBoundary),
+            Expr::NotWordBoundary => self.push(NotWordBoundary),
+            Expr::Group { e, i: None, name: None } => try!(self.compile(*e)),
+            Expr::Group { e, i, name } => {
+                let i = i.expect("capture index");
+                self.names.push(name);
+                self.push(Save(2 * i));
+                try!(self.compile(*e));
+                self.push(Save(2 * i + 1));
+            }
+            Expr::Concat(es) => {
+                for e in es {
+                    try!(self.compile(e));
+                }
+            }
+            Expr::Alternate(mut es) => {
+                // TODO: Don't use recursion here. ---AG
+                if es.len() == 0 {
+                    return Ok(());
+                }
+                let e1 = es.remove(0);
+                if es.len() == 0 {
+                    try!(self.compile(e1));
+                    return Ok(());
+                }
+                let e2 = Expr::Alternate(es); // this causes recursion
+
                 let split = self.empty_split(); // push: split 0, 0
                 let j1 = self.insts.len();
-                self.compile(*x);                // push: insts for x
+                try!(self.compile(e1));                // push: insts for x
                 let jmp = self.empty_jump();    // push: jmp 0
                 let j2 = self.insts.len();
-                self.compile(*y);                // push: insts for y
+                try!(self.compile(e2));                // push: insts for y
                 let j3 = self.insts.len();
 
                 self.set_split(split, j1, j2);  // split 0, 0 -> split j1, j2
                 self.set_jump(jmp, j3);         // jmp 0      -> jmp j3
             }
-            Rep(x, ZeroOne, g) => {
+            Expr::Repeat { e, r: Repeater::ZeroOrOne, greedy } => {
                 let split = self.empty_split();
                 let j1 = self.insts.len();
-                self.compile(*x);
+                try!(self.compile(*e));
                 let j2 = self.insts.len();
 
-                if g.is_greedy() {
+                if greedy {
                     self.set_split(split, j1, j2);
                 } else {
                     self.set_split(split, j2, j1);
                 }
             }
-            Rep(x, ZeroMore, g) => {
+            Expr::Repeat { e, r: Repeater::ZeroOrMore, greedy } => {
                 let j1 = self.insts.len();
                 let split = self.empty_split();
                 let j2 = self.insts.len();
-                self.compile(*x);
+                try!(self.compile(*e));
                 let jmp = self.empty_jump();
                 let j3 = self.insts.len();
 
                 self.set_jump(jmp, j1);
-                if g.is_greedy() {
+                if greedy {
                     self.set_split(split, j2, j3);
                 } else {
                     self.set_split(split, j3, j2);
                 }
             }
-            Rep(x, OneMore, g) => {
+            Expr::Repeat { e, r: Repeater::OneOrMore, greedy } => {
                 let j1 = self.insts.len();
-                self.compile(*x);
+                try!(self.compile(*e));
                 let split = self.empty_split();
                 let j2 = self.insts.len();
 
-                if g.is_greedy() {
+                if greedy {
                     self.set_split(split, j1, j2);
                 } else {
                     self.set_split(split, j2, j1);
                 }
             }
+            Expr::Repeat { e, r: Repeater::Range { min, max: None }, greedy } => {
+                let e = *e;
+                for _ in 0..min {
+                    try!(self.compile(e.clone()));
+                }
+                try!(self.compile(Expr::Repeat {
+                    e: Box::new(e),
+                    r: Repeater::ZeroOrMore,
+                    greedy: greedy,
+                }));
+            }
+            Expr::Repeat { e, r: Repeater::Range { min, max: Some(max) }, greedy } => {
+                let e = *e;
+                for _ in 0..min {
+                    try!(self.compile(e.clone()));
+                }
+                for _ in min..max {
+                    try!(self.compile(Expr::Repeat {
+                        e: Box::new(e.clone()),
+                        r: Repeater::ZeroOrOne,
+                        greedy: greedy,
+                    }));
+                }
+            }
         }
+        self.check_size()
     }
 
     /// Appends the given instruction to the program.

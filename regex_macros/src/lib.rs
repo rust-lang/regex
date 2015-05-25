@@ -36,10 +36,7 @@ use rustc::plugin::Registry;
 
 use regex::Regex;
 use regex::native::{
-    OneChar, CharClass, Any, Save, Jump, Split,
-    Match, EmptyBegin, EmptyEnd, EmptyWordBoundary,
-    Program, Dynamic, ExDynamic, Native,
-    FLAG_NOCASE, FLAG_MULTI, FLAG_DOTNL, FLAG_NEGATED,
+    Inst, Program, Dynamic, ExDynamic, Native,
     simple_case_fold,
 };
 
@@ -79,7 +76,9 @@ fn native(cx: &mut ExtCtxt, sp: codemap::Span, tts: &[ast::TokenTree])
         // error is logged in 'parse' with cx.span_err
         None => return DummyResult::any(sp),
     };
-    let re = match Regex::new(&regex) {
+    // We use the largest possible size limit because this is happening at
+    // compile time. We trust the programmer.
+    let re = match Regex::with_size_limit(::std::usize::MAX, &regex) {
         Ok(re) => re,
         Err(err) => {
             cx.span_err(sp, &err.to_string());
@@ -121,11 +120,10 @@ impl<'a> NfaGen<'a> {
                 None => cx.expr_none(self.sp),
             }
         );
-        let prefix_anchor =
-            match self.prog.insts[1] {
-                EmptyBegin(flags) if flags & FLAG_MULTI == 0 => true,
-                _ => false,
-            };
+        let prefix_anchor = match self.prog.insts[1] {
+            Inst::StartText => true,
+            _ => false,
+        };
         let init_groups = self.vec_expr(0..num_cap_locs,
                                         &mut |cx, _| cx.expr_none(self.sp));
 
@@ -338,49 +336,55 @@ fn exec<'t>(which: ::regex::native::MatchKind, input: &'t str,
         let arms = self.prog.insts.iter().enumerate().map(|(pc, inst)| {
             let nextpc = pc + 1;
             let body = match *inst {
-                EmptyBegin(flags) => {
-                    let cond =
-                        if flags & FLAG_MULTI > 0 {
-                            quote_expr!(self.cx,
-                                self.chars.is_begin()
-                                || self.chars.prev == Some('\n')
-                            )
-                        } else {
-                            quote_expr!(self.cx, self.chars.is_begin())
-                        };
+                Inst::StartLine => {
                     quote_expr!(self.cx, {
                         nlist.add_empty($pc);
-                        if $cond { self.add(nlist, $nextpc, &mut *groups) }
+                        if self.chars.is_begin() || self.chars.prev == Some('\n') {
+                            self.add(nlist, $nextpc, &mut *groups)
+                        }
                     })
                 }
-                EmptyEnd(flags) => {
-                    let cond =
-                        if flags & FLAG_MULTI > 0 {
-                            quote_expr!(self.cx,
-                                self.chars.is_end()
-                                || self.chars.cur == Some('\n')
-                            )
-                        } else {
-                            quote_expr!(self.cx, self.chars.is_end())
-                        };
+                Inst::StartText => {
                     quote_expr!(self.cx, {
                         nlist.add_empty($pc);
-                        if $cond { self.add(nlist, $nextpc, &mut *groups) }
+                        if self.chars.is_begin() {
+                            self.add(nlist, $nextpc, &mut *groups)
+                        }
                     })
                 }
-                EmptyWordBoundary(flags) => {
-                    let cond =
-                        if flags & FLAG_NEGATED > 0 {
-                            quote_expr!(self.cx, !self.chars.is_word_boundary())
-                        } else {
-                            quote_expr!(self.cx, self.chars.is_word_boundary())
-                        };
+                Inst::EndLine => {
                     quote_expr!(self.cx, {
                         nlist.add_empty($pc);
-                        if $cond { self.add(nlist, $nextpc, &mut *groups) }
+                        if self.chars.is_end() || self.chars.cur == Some('\n') {
+                            self.add(nlist, $nextpc, &mut *groups)
+                        }
                     })
                 }
-                Save(slot) => {
+                Inst::EndText => {
+                    quote_expr!(self.cx, {
+                        nlist.add_empty($pc);
+                        if self.chars.is_end() {
+                            self.add(nlist, $nextpc, &mut *groups)
+                        }
+                    })
+                }
+                Inst::WordBoundary => {
+                    quote_expr!(self.cx, {
+                        nlist.add_empty($pc);
+                        if self.chars.is_word_boundary() {
+                            self.add(nlist, $nextpc, &mut *groups)
+                        }
+                    })
+                }
+                Inst::NotWordBoundary => {
+                    quote_expr!(self.cx, {
+                        nlist.add_empty($pc);
+                        if !self.chars.is_word_boundary() {
+                            self.add(nlist, $nextpc, &mut *groups)
+                        }
+                    })
+                }
+                Inst::Save(slot) => {
                     let save = quote_expr!(self.cx, {
                         let old = groups[$slot];
                         groups[$slot] = Some(self.ic);
@@ -411,20 +415,20 @@ fn exec<'t>(which: ::regex::native::MatchKind, input: &'t str,
                         })
                     }
                 }
-                Jump(to) => {
+                Inst::Jump(to) => {
                     quote_expr!(self.cx, {
                         nlist.add_empty($pc);
                         self.add(nlist, $to, &mut *groups);
                     })
                 }
-                Split(x, y) => {
+                Inst::Split(x, y) => {
                     quote_expr!(self.cx, {
                         nlist.add_empty($pc);
                         self.add(nlist, $x, &mut *groups);
                         self.add(nlist, $y, &mut *groups);
                     })
                 }
-                // For Match, OneChar, CharClass, Any
+                // For Match, OneChar, CharClass, Any, AnyNoNL
                 _ => quote_expr!(self.cx, nlist.add($pc, &*groups)),
             };
             self.arm_inst(pc, body)
@@ -439,7 +443,7 @@ fn exec<'t>(which: ::regex::native::MatchKind, input: &'t str,
         let arms = self.prog.insts.iter().enumerate().map(|(pc, inst)| {
             let nextpc = pc + 1;
             let body = match *inst {
-                Match => {
+                Inst::Match => {
                     quote_expr!(self.cx, {
                         match self.which {
                             Exists => {
@@ -459,8 +463,8 @@ fn exec<'t>(which: ::regex::native::MatchKind, input: &'t str,
                         }
                     })
                 }
-                OneChar(c, flags) => {
-                    if flags & FLAG_NOCASE > 0 {
+                Inst::OneChar { c, casei } => {
+                    if casei {
                         let upc = simple_case_fold(c);
                         quote_expr!(self.cx, {
                             let upc = self.chars.prev.map(simple_case_fold);
@@ -476,45 +480,37 @@ fn exec<'t>(which: ::regex::native::MatchKind, input: &'t str,
                         })
                     }
                 }
-                CharClass(ref ranges, flags) => {
-                    let negate = flags & FLAG_NEGATED > 0;
-                    let casei = flags & FLAG_NOCASE > 0;
+                Inst::CharClass(ref cls) => {
+                    let ranges: Vec<(char, char)> =
+                        cls.iter().map(|r| (r.start, r.end)).collect();
+                    let mranges = self.match_class(&ranges);
                     let get_char =
-                        if casei {
+                        if cls.is_case_insensitive() {
                             quote_expr!(
                                 self.cx,
                                 simple_case_fold(self.chars.prev.unwrap()))
                         } else {
                             quote_expr!(self.cx, self.chars.prev.unwrap())
                         };
-                    let negcond =
-                        if negate {
-                            quote_expr!(self.cx, !found)
-                        } else {
-                            quote_expr!(self.cx, found)
-                        };
-                    let mranges = self.match_class(&ranges);
                     quote_expr!(self.cx, {
                         if self.chars.prev.is_some() {
                             let c = $get_char;
-                            let found = $mranges;
-                            if $negcond {
+                            if $mranges {
                                 self.add(nlist, $nextpc, caps);
                             }
                         }
                     })
                 }
-                Any(flags) => {
-                    if flags & FLAG_DOTNL > 0 {
-                        quote_expr!(self.cx, self.add(nlist, $nextpc, caps))
-                    } else {
-                        quote_expr!(self.cx, {
-                            if self.chars.prev != Some('\n') {
-                                self.add(nlist, $nextpc, caps)
-                            }
-                            ()
-                        })
-                    }
+                Inst::Any => {
+                    quote_expr!(self.cx, self.add(nlist, $nextpc, caps))
+                }
+                Inst::AnyNoNL => {
+                    quote_expr!(self.cx, {
+                        if self.chars.prev != Some('\n') {
+                            self.add(nlist, $nextpc, caps);
+                        }
+                        ()
+                    })
                 }
                 // EmptyBegin, EmptyEnd, EmptyWordBoundary, Save, Jump, Split
                 _ => self.empty_block(),

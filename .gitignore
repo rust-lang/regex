@@ -2,4 +2,7 @@
 /Cargo.lock
 /regex_macros/target
 /regex_macros/Cargo.lock
+/regex_syntax/target
+/regex_syntax/Cargo.lock
+/bench-log
 .*.swp
