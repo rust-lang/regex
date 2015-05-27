@@ -59,6 +59,13 @@ pub enum Error {
     /// The compiled program exceeded the set size limit.
     /// The argument is the size limit imposed.
     CompiledTooBig(usize),
+    /// Hints that destructuring should not be exhaustive.
+    ///
+    /// This enum may grow additional variants, so this makes sure clients
+    /// don't count on exhaustive matching. (Otherwise, adding a new variant
+    /// could break existing code.)
+    #[doc(hidden)]
+    __Nonexhaustive,
 }
 
 impl ::std::error::Error for Error {
@@ -66,6 +73,7 @@ impl ::std::error::Error for Error {
         match *self {
             Error::Syntax(ref err) => err.description(),
             Error::CompiledTooBig(_) => "compiled program too big",
+            Error::__Nonexhaustive => unreachable!(),
         }
     }
 
@@ -85,6 +93,7 @@ impl fmt::Display for Error {
                 write!(f, "Compiled regex exceeds size limit of {} bytes.",
                        limit)
             }
+            Error::__Nonexhaustive => unreachable!(),
         }
     }
 }

@@ -540,7 +540,6 @@ impl PartialOrd<ClassRange> for char {
 
 /// This implementation of `Display` will write a regular expression from the
 /// syntax tree. It does not write the original string parsed.
-// TODO(burntsushi): Write tests for the regex writer.
 impl fmt::Display for Expr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
@@ -722,6 +721,13 @@ pub enum ErrorKind {
     UnrecognizedFlag(char),
     /// Unrecognized named Unicode class. e.g., `\p{Foo}`.
     UnrecognizedUnicodeClass(String),
+    /// Hints that destructuring should not be exhaustive.
+    ///
+    /// This enum may grow additional variants, so this makes sure clients
+    /// don't count on exhaustive matching. (Otherwise, adding a new variant
+    /// could break existing code.)
+    #[doc(hidden)]
+    __Nonexhaustive,
 }
 
 impl Error {
@@ -773,6 +779,7 @@ impl ErrorKind {
             UnrecognizedEscape(_) => "unrecognized escape sequence",
             UnrecognizedFlag(_) => "unrecognized flag",
             UnrecognizedUnicodeClass(_) => "unrecognized Unicode class name",
+            __Nonexhaustive => unreachable!(),
         }
     }
 }
@@ -866,6 +873,7 @@ impl fmt::Display for ErrorKind {
                            (Allowed flags: i, s, m, U, x.)", c),
             UnrecognizedUnicodeClass(ref s) =>
                 write!(f, "Unrecognized Unicode class name: '{}'.", s),
+            __Nonexhaustive => unreachable!(),
         }
     }
 }

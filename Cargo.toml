@@ -21,9 +21,8 @@ path = "regex_macros/benches/bench_dynamic.rs"
 test = false
 bench = true
 
-[dependencies.regex-syntax]
-path = "regex_syntax"
-version = "*"
+[dependencies]
+regex-syntax = { path = "regex-syntax", version = "0.1" }
 
 [dev-dependencies]
 rand = "0.3"
@@ -32,5 +31,4 @@ rand = "0.3"
 pattern = []
 
 [profile.bench]
-opt-level = 3
 lto = true

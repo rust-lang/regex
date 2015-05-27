@@ -6,8 +6,8 @@ license = "MIT/Apache-2.0"
 repository = "https://github.com/rust-lang/regex"
 documentation = "http://doc.rust-lang.org/regex"
 homepage = "https://github.com/rust-lang/regex"
-description = "A regular expression parser (RE2 only)."
+description = "A regular expression parser."
 
 [dev-dependencies]
-quickcheck = "*"
-rand = "*"
+quickcheck = "0.2"
+rand = "0.3"
