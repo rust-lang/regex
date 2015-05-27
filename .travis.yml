@@ -15,8 +15,8 @@ script:
       cargo bench --manifest-path=regex_macros/Cargo.toml
     )
   - cargo doc
-  - cargo test --verbose --manifest-path=regex_syntax/Cargo.toml
-  - cargo doc --verbose --manifest-path=regex_syntax/Cargo.toml
+  - cargo test --verbose --manifest-path=regex-syntax/Cargo.toml
+  - cargo doc --verbose --manifest-path=regex-syntax/Cargo.toml
 after_success: |
   [ $TRAVIS_BRANCH = master ] &&
   [ $TRAVIS_PULL_REQUEST = false ] &&
