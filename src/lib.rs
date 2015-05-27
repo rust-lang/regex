@@ -20,17 +20,17 @@
 //! details on the API, please see the documentation for the `Regex` type.
 //!
 //! # Usage
-//! 
+//!
 //! This crates is [on crates.io](https://crates.io/crates/regex) and can be
 //! used by adding `regex` to your dependencies in your project's `Cargo.toml`.
-//! 
+//!
 //! ```toml
 //! [dependencies]
 //! regex = "0.1.8"
 //! ```
-//! 
+//!
 //! and this to your crate root:
-//! 
+//!
 //! ```rust
 //! extern crate regex;
 //! ```
@@ -43,11 +43,8 @@
 //!
 //! ```rust
 //! use regex::Regex;
-//! let re = match Regex::new(r"^\d{4}-\d{2}-\d{2}$") {
-//!     Ok(re) => re,
-//!     Err(err) => panic!("{}", err),
-//! };
-//! assert_eq!(re.is_match("2014-01-01"), true);
+//! let re = Regex::new(r"^\d{4}-\d{2}-\d{2}$").unwrap();
+//! assert!(re.is_match("2014-01-01"));
 //! ```
 //!
 //! Notice the use of the `^` and `$` anchors. In this crate, every expression
@@ -55,8 +52,9 @@
 //! it to match anywhere in the text. Anchors can be used to ensure that the
 //! full text matches an expression.
 //!
-//! This example also demonstrates the utility of [raw
-//! strings](../reference.html#character-and-string-literals) in Rust, which
+//! This example also demonstrates the utility of
+//! [raw strings](http://doc.rust-lang.org/stable/reference.html#raw-byte-string-literals)
+//! in Rust, which
 //! are just like regular strings except they are prefixed with an `r` and do
 //! not process any escape sequences. For example, `"\\d"` is the same
 //! expression as `r"\d"`.
@@ -81,7 +79,7 @@
 //!
 //! fn main() {
 //!     let re = regex!(r"^\d{4}-\d{2}-\d{2}$");
-//!     assert_eq!(re.is_match("2014-01-01"), true);
+//!     assert!(re.is_match("2014-01-01"));
 //! }
 //! ```
 //!
@@ -96,20 +94,9 @@
 //! expressions, but 100+ calls to `regex!` will probably result in a
 //! noticeably bigger binary.
 //!
-//! **NOTE**: This is implemented using a compiler plugin, which will not be
+//! **NOTE**: This is implemented using a compiler plugin, which is not
 //! available on the Rust 1.0 beta/stable channels. Therefore, you'll only
-//! be able to use `regex!` on the nightlies. If you want to retain the
-//! `regex!` macro, you can cheat and define this:
-//!
-//! ```rust
-//! macro_rules! regex(
-//!     ($s:expr) => (regex::Regex::new($s).unwrap());
-//! );
-//! ```
-//!
-//! But this just replaces native regexes with dynamic regexes under the hood.
-//! Moreover, this will cause your program to panic *at runtime* if an invalid
-//! regular expression is given.
+//! be able to use `regex!` on the nightlies.
 //!
 //! # Example: iterating over capture groups
 //!
@@ -159,6 +146,25 @@
 //! provides more flexibility than is seen here. (See the documentation for
 //! `Regex::replace` for more details.)
 //!
+//! Note that if your regex gets complicated, you can use the `x` flag to
+//! enable insigificant whitespace mode, which also lets you write comments:
+//!
+//! ```rust
+//! # extern crate regex; use regex::Regex;
+//! # fn main() {
+//! let re = Regex::new(r"(?x)
+//!   (?P<y>\d{4}) # the year
+//!   -
+//!   (?P<m>\d{2}) # the month
+//!   -
+//!   (?P<d>\d{2}) # the day
+//! ").unwrap();
+//! let before = "2012-03-14, 2013-01-01 and 2014-07-05";
+//! let after = re.replace_all(before, "$m/$d/$y");
+//! assert_eq!(after, "03/14/2012, 01/01/2013 and 07/05/2014");
+//! # }
+//! ```
+//!
 //! # Pay for what you use
 //!
 //! With respect to searching text with a regular expression, there are three
@@ -180,15 +186,16 @@
 //! # Unicode
 //!
 //! This implementation executes regular expressions **only** on sequences of
-//! Unicode code points while exposing match locations as byte indices into the
-//! search string.
+//! Unicode scalar values while exposing match locations as byte indices into
+//! the search string.
 //!
-//! Currently, only naive case folding is supported. Namely, when matching
-//! case insensitively, the characters are first converted to their uppercase
-//! forms and then compared.
+//! Currently, only simple case folding is supported. Namely, when matching
+//! case insensitively, the characters are first mapped using the
+//! [simple case folding](ftp://ftp.unicode.org/Public/UNIDATA/CaseFolding.txt)
+//! mapping.
 //!
 //! Regular expressions themselves are also **only** interpreted as a sequence
-//! of Unicode code points. This means you can use Unicode characters
+//! of Unicode scalar values. This means you can use Unicode characters
 //! directly in your expression:
 //!
 //! ```rust
@@ -214,7 +221,11 @@
 //! # Syntax
 //!
 //! The syntax supported in this crate is almost in an exact correspondence
-//! with the syntax supported by RE2.
+//! with the syntax supported by RE2. It is documented below.
+//!
+//! Note that the regular expression parser and abstract syntax are exposed in
+//! a separate crate,
+//! [`regex-syntax`](../regex_syntax/index.html).
 //!
 //! ## Matching one character
 //!
@@ -294,6 +305,7 @@
 //! m     multi-line mode: ^ and $ match begin/end of line
 //! s     allow . to match \n
 //! U     swap the meaning of x* and x*?
+//! x     ignore whitespace and allow line comments (starting with `#`)
 //! </pre>
 //!
 //! Here's an example that matches case insensitively for only part of the
@@ -361,22 +373,19 @@
 //!
 //! # Untrusted input
 //!
-//! There are two factors to consider here: untrusted regular expressions and
-//! untrusted search text.
+//! This crate can handle both untrusted regular expressions and untrusted
+//! search text.
 //!
-//! Currently, there are no counter-measures in place to prevent a malicious
-//! user from writing an expression that may use a lot of resources. One such
-//! example is to repeat counted repetitions: `((a{100}){100}){100}` will try
-//! to repeat the `a` instruction `100^3` times. Essentially, this means it's
-//! very easy for an attacker to exhaust your system's memory if they are
-//! allowed to execute arbitrary regular expressions. A possible solution to
-//! this is to impose a hard limit on the size of a compiled expression, but it
-//! does not yet exist.
+//! Untrusted regular expressions are handled by capping the size of a compiled
+//! regular expression. (See `Regex::with_size_limit`.) Without this, it would
+//! be trivial for an attacker to exhaust your system's memory with expressions
+//! like `a{100}{100}{100}`.
 //!
-//! The story is a bit better with untrusted search text, since this crate's
-//! implementation provides `O(nm)` search where `n` is the number of
-//! characters in the search text and `m` is the number of instructions in a
-//! compiled expression.
+//! Untrusted search text is allowed because the matching engine(s) in this
+//! crate have time complexity `O(mn)` (with `m ~ regex` and `n ~ search
+//! text`), which means there's no way to cause exponential blow-up like with
+//! some other regular expression engines. (We pay for this by disallowing
+//! features like arbitrary look-ahead and back-references.)
 
 #![deny(missing_docs)]
 #![cfg_attr(test, deny(warnings))]
@@ -385,16 +394,17 @@
        html_favicon_url = "http://www.rust-lang.org/favicon.ico",
        html_root_url = "http://doc.rust-lang.org/regex/")]
 
-pub use parse::Error;
-pub use re::{Regex, Captures, SubCaptures, SubCapturesPos, SubCapturesNamed};
-pub use re::{FindCaptures, FindMatches};
-pub use re::{Replacer, NoExpand, RegexSplits, RegexSplitsN};
-pub use re::{quote, is_match};
+extern crate regex_syntax as syntax;
+
+pub use re::{
+    Regex, Error, Captures, SubCaptures, SubCapturesPos, SubCapturesNamed,
+    FindCaptures, FindMatches,
+    Replacer, NoExpand, RegexSplits, RegexSplitsN,
+    quote, is_match,
+};
 
 mod compile;
-mod parse;
 mod re;
-mod unicode;
 mod vm;
 
 /// The `native` module exists to support the `regex!` macro. Do not use.
@@ -416,17 +426,11 @@ pub mod native {
     // On the bright side, `rustdoc` lets us hide this from the public API
     // documentation.
     pub use compile::Program;
-    pub use compile::Inst::{
-        Match, OneChar, CharClass, Any, EmptyBegin, EmptyEnd,
-        EmptyWordBoundary, Save, Jump, Split,
-    };
-    pub use parse::{
-        FLAG_EMPTY, FLAG_NOCASE, FLAG_MULTI, FLAG_DOTNL,
-        FLAG_SWAP_GREED, FLAG_NEGATED,
-    };
+    pub use compile::Inst;
+    pub use syntax::simple_case_fold;
     pub use re::{ExDynamic, ExNative};
     pub use re::Regex::{Dynamic, Native};
-    pub use vm::{CharReader, find_prefix, simple_case_fold};
+    pub use vm::{CharReader, find_prefix};
     pub use vm::MatchKind::{self, Exists, Location, Submatches};
     pub use vm::StepState::{
         self, StepMatchEarlyReturn, StepMatch, StepContinue,

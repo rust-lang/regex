@@ -203,6 +203,8 @@ replace!(rep_named, replace_all,
          "w1 w2 w3 w4", "$last $first$space", "w2 w1 w4 w3");
 replace!(rep_trim, replace_all, "^[ \t]+|[ \t]+$", " \t  trim me\t   \t",
          "", "trim me");
+replace!(rep_number_hypen, replace, r"(.)(.)", "ab", "$1-$2", "a-b");
+replace!(rep_number_underscore, replace, r"(.)(.)", "ab", "$1_$2", "a_b");
 
 macro_rules! noparse(
     ($name:ident, $re:expr) => (
@@ -219,7 +221,6 @@ macro_rules! noparse(
 
 noparse!(fail_double_repeat, "a**");
 noparse!(fail_no_repeat_arg, "*");
-noparse!(fail_no_repeat_arg_begin, "^*");
 noparse!(fail_incomplete_escape, "\\");
 noparse!(fail_class_incomplete, "[A-");
 noparse!(fail_class_not_closed, "[A");
@@ -235,8 +236,7 @@ noparse!(fail_bad_capture_name, "(?P<na-me>)");
 noparse!(fail_bad_flag, "(?a)a");
 noparse!(fail_empty_alt_before, "|a");
 noparse!(fail_empty_alt_after, "a|");
-noparse!(fail_counted_big_exact, "a{1001}");
-noparse!(fail_counted_big_min, "a{1001,}");
+noparse!(fail_too_big, "a{10000000}");
 noparse!(fail_counted_no_close, "a{1001");
 noparse!(fail_unfinished_cap, "(?");
 noparse!(fail_unfinished_escape, "\\");
