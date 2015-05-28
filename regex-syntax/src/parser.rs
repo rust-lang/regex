@@ -801,16 +801,28 @@ impl<'a> Chars<'a> {
         }
     }
 
+    /// Skip line comments and whitespace
     fn skip(&mut self) {
         if !self.ignore_space { return; }
         while self.cur < self.chars.len() {
+            // Handle escaping of `#`, i.e. don't start a comment with `\#`.
+            let next_cur = checkadd(self.cur, 1);
+            if !self.in_comment && self.c() == '\\'
+                && next_cur < self.chars.len()
+                && self.chars[next_cur] == '#'
+            {
+                self.cur = next_cur;
+                break;
+            }
+
             if !self.in_comment && self.c() == '#' {
                 self.in_comment = true;
             } else if self.in_comment && self.c() == '\n' {
                 self.in_comment = false;
             }
+
             if self.in_comment || self.c().is_whitespace() {
-                self.cur = checkadd(self.cur, 1);
+                self.cur = next_cur;
             } else {
                 break;
             }
@@ -1047,19 +1059,19 @@ fn rev_concat(mut exprs: Vec<Expr>) -> Expr {
     }
 }
 
-// Returns ture iff the given character is allowed in a capture name.
-// Note that the first char of a capture name must not be numeric.
+// Returns true if and only if the given character is allowed in a capture
+// name. Note that the first char of a capture name must not be numeric.
 fn is_valid_capture_char(c: char) -> bool {
     c == '_' || (c >= '0' && c <= '9')
     || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
 }
 
-/// Returns true iff the give character has significance in a regex.
+/// Returns true if the give character has significance in a regex.
 #[doc(hidden)]
 pub fn is_punct(c: char) -> bool {
     match c {
         '\\' | '.' | '+' | '*' | '?' | '(' | ')' | '|' |
-        '[' | ']' | '{' | '}' | '^' | '$' => true,
+        '[' | ']' | '{' | '}' | '^' | '$' | '#' => true,
         _ => false,
     }
 }
@@ -1564,10 +1576,10 @@ mod tests {
 
     #[test]
     fn escape_punctuation() {
-        assert_eq!(p(r"\\\.\+\*\?\(\)\|\[\]\{\}\^\$"), c(&[
+        assert_eq!(p(r"\\\.\+\*\?\(\)\|\[\]\{\}\^\$\#"), c(&[
             lit('\\'), lit('.'), lit('+'), lit('*'), lit('?'),
             lit('('), lit(')'), lit('|'), lit('['), lit(']'),
-            lit('{'), lit('}'), lit('^'), lit('$'),
+            lit('{'), lit('}'), lit('^'), lit('$'), lit('#'),
         ]));
     }
 
@@ -1969,6 +1981,23 @@ mod tests {
                 i: None,
                 name: None,
             },
+        ]));
+    }
+
+    #[test]
+    fn ignore_space_escape_punctuation() {
+        assert_eq!(p(r"(?x)\\\.\+\*\?\(\)\|\[\]\{\}\^\$\#"), c(&[
+            lit('\\'), lit('.'), lit('+'), lit('*'), lit('?'),
+            lit('('), lit(')'), lit('|'), lit('['), lit(']'),
+            lit('{'), lit('}'), lit('^'), lit('$'), lit('#'),
+        ]));
+    }
+
+    #[test]
+    fn ignore_space_escape_hash() {
+        assert_eq!(p(r"(?x)a\# # hi there"), Expr::Concat(vec![
+            lit('a'),
+            lit('#'),
         ]));
     }
 
