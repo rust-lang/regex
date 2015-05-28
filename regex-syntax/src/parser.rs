@@ -1047,19 +1047,19 @@ fn rev_concat(mut exprs: Vec<Expr>) -> Expr {
     }
 }
 
-// Returns ture iff the given character is allowed in a capture name.
+// Returns true if the given character is allowed in a capture name.
 // Note that the first char of a capture name must not be numeric.
 fn is_valid_capture_char(c: char) -> bool {
     c == '_' || (c >= '0' && c <= '9')
     || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
 }
 
-/// Returns true iff the give character has significance in a regex.
+/// Returns true if the give character has significance in a regex.
 #[doc(hidden)]
 pub fn is_punct(c: char) -> bool {
     match c {
         '\\' | '.' | '+' | '*' | '?' | '(' | ')' | '|' |
-        '[' | ']' | '{' | '}' | '^' | '$' => true,
+        '[' | ']' | '{' | '}' | '^' | '$' | '#' => true,
         _ => false,
     }
 }
@@ -1564,10 +1564,10 @@ mod tests {
 
     #[test]
     fn escape_punctuation() {
-        assert_eq!(p(r"\\\.\+\*\?\(\)\|\[\]\{\}\^\$"), c(&[
+        assert_eq!(p(r"\\\.\+\*\?\(\)\|\[\]\{\}\^\$\#"), c(&[
             lit('\\'), lit('.'), lit('+'), lit('*'), lit('?'),
             lit('('), lit(')'), lit('|'), lit('['), lit(']'),
-            lit('{'), lit('}'), lit('^'), lit('$'),
+            lit('{'), lit('}'), lit('^'), lit('$'), lit('#'),
         ]));
     }
 
