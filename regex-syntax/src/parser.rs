@@ -806,11 +806,12 @@ impl<'a> Chars<'a> {
         if !self.ignore_space { return; }
         while self.cur < self.chars.len() {
             // Handle escaping of `#`, i.e. don't start a comment with `\#`.
-            if !self.in_comment && (self.c() == '\\')
-                && ((self.cur + 1) < self.chars.len())
-                && (self.chars[self.cur + 1] == '#')
+            let next_cur = checkadd(self.cur, 1);
+            if !self.in_comment && self.c() == '\\'
+                && next_cur < self.chars.len()
+                && self.chars[next_cur] == '#'
             {
-                self.cur = checkadd(self.cur, 1);
+                self.cur = next_cur;
                 break;
             }
 
@@ -821,7 +822,7 @@ impl<'a> Chars<'a> {
             }
 
             if self.in_comment || self.c().is_whitespace() {
-                self.cur = checkadd(self.cur, 1);
+                self.cur = next_cur;
             } else {
                 break;
             }
@@ -1058,8 +1059,8 @@ fn rev_concat(mut exprs: Vec<Expr>) -> Expr {
     }
 }
 
-// Returns true if the given character is allowed in a capture name.
-// Note that the first char of a capture name must not be numeric.
+// Returns true if and only if the given character is allowed in a capture
+// name. Note that the first char of a capture name must not be numeric.
 fn is_valid_capture_char(c: char) -> bool {
     c == '_' || (c >= '0' && c <= '9')
     || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
