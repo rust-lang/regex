@@ -801,14 +801,25 @@ impl<'a> Chars<'a> {
         }
     }
 
+    /// Skip line comments and whitespace
     fn skip(&mut self) {
         if !self.ignore_space { return; }
         while self.cur < self.chars.len() {
+            // Handle escaping of `#`, i.e. don't start a comment with `\#`.
+            if !self.in_comment && (self.c() == '\\')
+                && ((self.cur + 1) < self.chars.len())
+                && (self.chars[self.cur + 1] == '#')
+            {
+                self.cur = checkadd(self.cur, 1);
+                break;
+            }
+
             if !self.in_comment && self.c() == '#' {
                 self.in_comment = true;
             } else if self.in_comment && self.c() == '\n' {
                 self.in_comment = false;
             }
+
             if self.in_comment || self.c().is_whitespace() {
                 self.cur = checkadd(self.cur, 1);
             } else {
@@ -1969,6 +1980,23 @@ mod tests {
                 i: None,
                 name: None,
             },
+        ]));
+    }
+
+    #[test]
+    fn ignore_space_escape_punctuation() {
+        assert_eq!(p(r"(?x)\\\.\+\*\?\(\)\|\[\]\{\}\^\$\#"), c(&[
+            lit('\\'), lit('.'), lit('+'), lit('*'), lit('?'),
+            lit('('), lit(')'), lit('|'), lit('['), lit(']'),
+            lit('{'), lit('}'), lit('^'), lit('$'), lit('#'),
+        ]));
+    }
+
+    #[test]
+    fn ignore_space_escape_hash() {
+        assert_eq!(p(r"(?x)a\# # hi there"), Expr::Concat(vec![
+            lit('a'),
+            lit('#'),
         ]));
     }
 
