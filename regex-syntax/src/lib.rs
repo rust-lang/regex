@@ -482,17 +482,24 @@ impl ClassRange {
     /// canonical order.
     fn case_fold(self) -> Vec<ClassRange> {
         let (s, e) = (self.start as u32, self.end as u32 + 1);
-        let folded = (s..e).filter_map(char::from_u32).map(simple_case_fold);
-        ClassRange::ranges(folded)
-    }
-
-    /// Turns a non-empty sequence of sorted characters into a sequence of
-    /// class ranges in canonical format/order.
-    fn ranges<I: Iterator<Item=char>>(mut chars: I) -> Vec<ClassRange> {
-        let mut ranges = Vec::with_capacity(100);
-        let mut start = chars.next().expect("non-empty char iterator");
+        let mut start = simple_case_fold(self.start);
         let mut end = start;
-        for c in chars {
+        let mut next_case_fold = self.start;
+        let mut ranges = Vec::with_capacity(100);
+        for mut c in (s+1..e).filter_map(char::from_u32) {
+            if c >= next_case_fold {
+                c = match simple_case_fold_result(c) {
+                    Ok(i) => case_folding::C_plus_S_table[i].1,
+                    Err(i) => {
+                        if i < case_folding::C_plus_S_table.len() {
+                            next_case_fold = case_folding::C_plus_S_table[i].0;
+                        } else {
+                            next_case_fold = '\u{10FFFF}'
+                        }
+                        c
+                    }
+                };
+            }
             if c != inc_char(end) {
                 ranges.push(ClassRange::new(start, end));
                 start = c;
@@ -886,10 +893,17 @@ impl fmt::Display for ErrorKind {
 /// expose it because it is used inside the various Regex engines.
 #[doc(hidden)]
 pub fn simple_case_fold(c: char) -> char {
-    match case_folding::C_plus_S_table.binary_search_by(|&(x, _)| x.cmp(&c)) {
-        Ok(i) => case_folding::C_plus_S_table[i].1,
-        Err(_) => c,
-    }
+    simple_case_fold_result(c)
+        .map(|i| case_folding::C_plus_S_table[i].1)
+        .unwrap_or(c)
+}
+
+/// The result of binary search on the simple case folding table.
+///
+/// This level of detail is exposed so that we can do case folding on a
+/// range of characters efficiently.
+fn simple_case_fold_result(c: char) -> ::std::result::Result<usize, usize> {
+    case_folding::C_plus_S_table.binary_search_by(|&(x, _)| x.cmp(&c))
 }
 
 /// Escapes all regular expression meta characters in `text`.
