@@ -145,7 +145,8 @@ macro_rules! throughput(
         fn $name(b: &mut Bencher) {
             let text = gen_text($size);
             b.bytes = $size;
-            b.iter(|| if $regex.is_match(&text) { panic!("match") });
+            let re = $regex;
+            b.iter(|| if re.is_match(&text) { panic!("match") });
         }
     );
 );
