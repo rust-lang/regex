@@ -1,0 +1,8 @@
+#!/bin/bash
+
+set -e
+
+cargo build --example shootout-regex-dna
+exec diff \
+  ./examples/regexdna-output.txt \
+  <(./target/debug/examples/shootout-regex-dna < ./examples/regexdna-input.txt)

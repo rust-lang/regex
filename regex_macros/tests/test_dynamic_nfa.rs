@@ -12,17 +12,11 @@
 
 extern crate regex;
 
-// Due to macro scoping rules, this definition only applies for the modules
-// defined below. Effectively, it allows us to use the same tests for both
-// native and dynamic regexes.
-//
-// This is also used to test the various matching engines. This one exercises
-// the normal code path which automatically chooses the engine based on the
-// regex and the input. Other dynamic tests explicitly set the engine to use.
 macro_rules! regex {
-    ($re:expr) => {
-        ::regex::Regex::with_engine(None, 10 * (1 << 20), $re).unwrap()
-    }
+    ($re:expr) => {{
+        let e = Some(::regex::internal::MatchEngine::Nfa);
+        ::regex::Regex::with_engine(e, 10 * (1 << 20), $re).unwrap()
+    }}
 }
 
 #[cfg(feature = "pattern")]

@@ -7,6 +7,7 @@ sudo: false
 script:
   - cargo build --verbose
   - cargo test --verbose
+  - ./run-shootout-test
   - |
     [ $TRAVIS_RUST_VERSION != nightly ] || (
       cargo test --verbose --features pattern &&
