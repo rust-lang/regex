@@ -1,4 +1,4 @@
-// Copyright 2014 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2014-2015 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,149 +8,87 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// Enable this to squash warnings due to exporting pieces of the representation
-// for use with the regex! macro. See lib.rs for explanation.
-
-use self::Inst::*;
-
-use std::cmp;
 use syntax::{self, Expr, Repeater};
+
 use Error;
+use program::{CharRanges, Inst, InstIdx, OneChar};
 
-pub type InstIdx = usize;
+type Compiled = (Vec<Inst>, Vec<Option<String>>);
 
-/// An instruction, the underlying unit of a compiled regular expression
-#[allow(missing_docs)]
-#[derive(Debug, Clone)]
-pub enum Inst {
-    /// When a Match instruction is executed, the current thread is successful.
-    Match,
-    OneChar { c: char, casei: bool },
-    CharClass(syntax::CharClass),
-    Any,
-    AnyNoNL,
-    StartLine,
-    EndLine,
-    StartText,
-    EndText,
-    WordBoundary,
-    NotWordBoundary,
-    Save(usize),
-    Jump(InstIdx),
-    Split(InstIdx, InstIdx),
-}
-
-/// Program represents a compiled regular expression. Once an expression is
-/// compiled, its representation is immutable and will never change.
+/// A regex compiler.
 ///
-/// All of the data in a compiled expression is wrapped in "MaybeStatic" or
-/// "MaybeOwned" types so that a `Program` can be represented as static data.
-/// (This makes it convenient and efficient for use with the `regex!` macro.)
-#[derive(Clone, Debug)]
-pub struct Program {
-    /// A sequence of instructions.
-    pub insts: Vec<Inst>,
-    /// If the regular expression requires a literal prefix in order to have a
-    /// match, that prefix is stored here. (It's used in the VM to implement
-    /// an optimization.)
-    pub prefix: String,
-}
-
-impl Program {
-    /// Compiles a Regex given its AST.
-    pub fn new(ast: Expr, size: usize) -> Result<(Program, Vec<Option<String>>), Error> {
-        let mut c = Compiler {
-            insts: Vec::with_capacity(100),
-            names: vec![None],
-            size_limit: size,
-        };
-
-        c.insts.push(Save(0));
-        try!(c.compile(ast));
-        c.insts.push(Save(1));
-        c.insts.push(Match);
-
-        // Try to discover a literal string prefix.
-        // This is a bit hacky since we have to skip over the initial
-        // 'Save' instruction.
-        let mut pre = String::with_capacity(5);
-        for inst in c.insts[1..].iter() {
-            match *inst {
-                OneChar { c, casei: false } => pre.push(c),
-                _ => break
-            }
-        }
-
-        let Compiler { insts, names, .. } = c;
-        let prog = Program {
-            insts: insts,
-            prefix: pre,
-        };
-        Ok((prog, names))
-    }
-
-    /// Returns the total number of capture groups in the regular expression.
-    /// This includes the zeroth capture.
-    pub fn num_captures(&self) -> usize {
-        let mut n = 0;
-        for inst in self.insts.iter() {
-            match *inst {
-                Save(c) => n = cmp::max(n, c+1),
-                _ => {}
-            }
-        }
-        // There's exactly 2 Save slots for every capture.
-        n / 2
-    }
-}
-
-struct Compiler {
-    insts: Vec<Inst>,
-    names: Vec<Option<String>>,
+/// A regex compiler is responsible for turning a regex's AST into a sequence
+/// of instructions.
+pub struct Compiler {
     size_limit: usize,
+    insts: Vec<Inst>,
+    cap_names: Vec<Option<String>>,
 }
 
-// The compiler implemented here is extremely simple. Most of the complexity
-// in this crate is in the parser or the VM.
-// The only tricky thing here is patching jump/split instructions to point to
-// the right instruction.
 impl Compiler {
-    fn check_size(&self) -> Result<(), Error> {
-        if self.insts.len() * ::std::mem::size_of::<Inst>() > self.size_limit {
-            Err(Error::CompiledTooBig(self.size_limit))
-        } else {
-            Ok(())
+    /// Creates a new compiler that limits the size of the regex program
+    /// to the size given (in bytes).
+    pub fn new(size_limit: usize) -> Compiler {
+        Compiler {
+            size_limit: size_limit,
+            insts: vec![],
+            cap_names: vec![None],
         }
     }
 
-    fn compile(&mut self, ast: Expr) -> Result<(), Error> {
+    /// Compiles the given regex AST into a tuple of a sequence of
+    /// instructions and a sequence of capture groups, optionally named.
+    pub fn compile(mut self, ast: Expr) -> Result<Compiled, Error> {
+        self.insts.push(Inst::Save(0));
+        try!(self.c(ast));
+        self.insts.push(Inst::Save(1));
+        self.insts.push(Inst::Match);
+        Ok((self.insts, self.cap_names))
+    }
+
+    fn c(&mut self, ast: Expr) -> Result<(), Error> {
+        use program::Inst::*;
+        use program::LookInst::*;
+
         match ast {
             Expr::Empty => {},
             Expr::Literal { chars, casei } => {
-                for c in chars {
-                    self.push(OneChar { c: c, casei: casei });
+                for mut c in chars {
+                    if casei {
+                        c = syntax::simple_case_fold(c);
+                    }
+                    self.push(Char(OneChar { c: c, casei: casei }));
                 }
             }
-            Expr::AnyChar => self.push(Any),
-            Expr::AnyCharNoNL => self.push(AnyNoNL),
-            Expr::Class(cls) => self.push(CharClass(cls)),
-            Expr::StartLine => self.push(StartLine),
-            Expr::EndLine => self.push(EndLine),
-            Expr::StartText => self.push(StartText),
-            Expr::EndText => self.push(EndText),
-            Expr::WordBoundary => self.push(WordBoundary),
-            Expr::NotWordBoundary => self.push(NotWordBoundary),
-            Expr::Group { e, i: None, name: None } => try!(self.compile(*e)),
+            Expr::AnyChar => self.push(Ranges(CharRanges::any())),
+            Expr::AnyCharNoNL => self.push(Ranges(CharRanges::any_nonl())),
+            Expr::Class(cls) => {
+                if cls.len() == 1 && cls[0].start == cls[0].end {
+                    self.push(Char(OneChar {
+                        c: cls[0].start,
+                        casei: cls.is_case_insensitive(),
+                    }));
+                } else {
+                    self.push(Ranges(CharRanges::from_class(cls)));
+                }
+            }
+            Expr::StartLine => self.push(EmptyLook(StartLine)),
+            Expr::EndLine => self.push(EmptyLook(EndLine)),
+            Expr::StartText => self.push(EmptyLook(StartText)),
+            Expr::EndText => self.push(EmptyLook(EndText)),
+            Expr::WordBoundary => self.push(EmptyLook(WordBoundary)),
+            Expr::NotWordBoundary => self.push(EmptyLook(NotWordBoundary)),
+            Expr::Group { e, i: None, name: None } => try!(self.c(*e)),
             Expr::Group { e, i, name } => {
                 let i = i.expect("capture index");
-                self.names.push(name);
+                self.cap_names.push(name);
                 self.push(Save(2 * i));
-                try!(self.compile(*e));
+                try!(self.c(*e));
                 self.push(Save(2 * i + 1));
             }
             Expr::Concat(es) => {
                 for e in es {
-                    try!(self.compile(e));
+                    try!(self.c(e));
                 }
             }
             Expr::Alternate(mut es) => {
@@ -160,26 +98,26 @@ impl Compiler {
                 }
                 let e1 = es.remove(0);
                 if es.len() == 0 {
-                    try!(self.compile(e1));
+                    try!(self.c(e1));
                     return Ok(());
                 }
                 let e2 = Expr::Alternate(es); // this causes recursion
 
-                let split = self.empty_split(); // push: split 0, 0
+                let split = self.empty_split();
                 let j1 = self.insts.len();
-                try!(self.compile(e1));                // push: insts for x
-                let jmp = self.empty_jump();    // push: jmp 0
+                try!(self.c(e1));
+                let jmp = self.empty_jump();
                 let j2 = self.insts.len();
-                try!(self.compile(e2));                // push: insts for y
+                try!(self.c(e2));
                 let j3 = self.insts.len();
 
-                self.set_split(split, j1, j2);  // split 0, 0 -> split j1, j2
-                self.set_jump(jmp, j3);         // jmp 0      -> jmp j3
+                self.set_split(split, j1, j2);
+                self.set_jump(jmp, j3);
             }
             Expr::Repeat { e, r: Repeater::ZeroOrOne, greedy } => {
                 let split = self.empty_split();
                 let j1 = self.insts.len();
-                try!(self.compile(*e));
+                try!(self.c(*e));
                 let j2 = self.insts.len();
 
                 if greedy {
@@ -192,7 +130,7 @@ impl Compiler {
                 let j1 = self.insts.len();
                 let split = self.empty_split();
                 let j2 = self.insts.len();
-                try!(self.compile(*e));
+                try!(self.c(*e));
                 let jmp = self.empty_jump();
                 let j3 = self.insts.len();
 
@@ -205,7 +143,7 @@ impl Compiler {
             }
             Expr::Repeat { e, r: Repeater::OneOrMore, greedy } => {
                 let j1 = self.insts.len();
-                try!(self.compile(*e));
+                try!(self.c(*e));
                 let split = self.empty_split();
                 let j2 = self.insts.len();
 
@@ -215,24 +153,32 @@ impl Compiler {
                     self.set_split(split, j2, j1);
                 }
             }
-            Expr::Repeat { e, r: Repeater::Range { min, max: None }, greedy } => {
+            Expr::Repeat {
+                e,
+                r: Repeater::Range { min, max: None },
+                greedy,
+            } => {
                 let e = *e;
                 for _ in 0..min {
-                    try!(self.compile(e.clone()));
+                    try!(self.c(e.clone()));
                 }
-                try!(self.compile(Expr::Repeat {
+                try!(self.c(Expr::Repeat {
                     e: Box::new(e),
                     r: Repeater::ZeroOrMore,
                     greedy: greedy,
                 }));
             }
-            Expr::Repeat { e, r: Repeater::Range { min, max: Some(max) }, greedy } => {
+            Expr::Repeat {
+                e,
+                r: Repeater::Range { min, max: Some(max) },
+                greedy,
+            } => {
                 let e = *e;
                 for _ in 0..min {
-                    try!(self.compile(e.clone()));
+                    try!(self.c(e.clone()));
                 }
                 for _ in min..max {
-                    try!(self.compile(Expr::Repeat {
+                    try!(self.c(Expr::Repeat {
                         e: Box::new(e.clone()),
                         r: Repeater::ZeroOrOne,
                         greedy: greedy,
@@ -241,6 +187,16 @@ impl Compiler {
             }
         }
         self.check_size()
+    }
+
+    fn check_size(&self) -> Result<(), Error> {
+        use std::mem::size_of;
+
+        if self.insts.len() * size_of::<Inst>() > self.size_limit {
+            Err(Error::CompiledTooBig(self.size_limit))
+        } else {
+            Ok(())
+        }
     }
 
     /// Appends the given instruction to the program.
@@ -254,7 +210,7 @@ impl Compiler {
     /// the actual locations of the split in later.)
     #[inline]
     fn empty_split(&mut self) -> InstIdx {
-        self.insts.push(Split(0, 0));
+        self.insts.push(Inst::Split(0, 0));
         self.insts.len() - 1
     }
 
@@ -266,7 +222,7 @@ impl Compiler {
     fn set_split(&mut self, i: InstIdx, pc1: InstIdx, pc2: InstIdx) {
         let split = &mut self.insts[i];
         match *split {
-            Split(_, _) => *split = Split(pc1, pc2),
+            Inst::Split(_, _) => *split = Inst::Split(pc1, pc2),
             _ => panic!("BUG: Invalid split index."),
         }
     }
@@ -275,7 +231,7 @@ impl Compiler {
     /// index of that instruction.
     #[inline]
     fn empty_jump(&mut self) -> InstIdx {
-        self.insts.push(Jump(0));
+        self.insts.push(Inst::Jump(0));
         self.insts.len() - 1
     }
 
@@ -286,7 +242,7 @@ impl Compiler {
     fn set_jump(&mut self, i: InstIdx, pc: InstIdx) {
         let jmp = &mut self.insts[i];
         match *jmp {
-            Jump(_) => *jmp = Jump(pc),
+            Inst::Jump(_) => *jmp = Inst::Jump(pc),
             _ => panic!("BUG: Invalid jump index."),
         }
     }

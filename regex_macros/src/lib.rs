@@ -21,8 +21,6 @@ extern crate regex;
 extern crate syntax;
 extern crate rustc;
 
-use std::rc::Rc;
-
 use syntax::ast;
 use syntax::codemap;
 use syntax::ext::build::AstBuilder;
@@ -35,9 +33,8 @@ use syntax::ptr::P;
 use rustc::plugin::Registry;
 
 use regex::Regex;
-use regex::native::{
-    Inst, Program, Dynamic, ExDynamic, Native,
-    simple_case_fold,
+use regex::internal::{
+    Inst, LookInst, OneChar, CharRanges, Program, Dynamic, Native,
 };
 
 /// For the `regex!` syntax extension. Do not use.
@@ -61,11 +58,6 @@ pub fn plugin_registrar(reg: &mut Registry) {
 ///    direct `match pc { ... }`. The generators can be found in
 ///    `step_insts` and `add_insts`.
 ///
-/// Other more minor changes include eliding code when possible (although this
-/// isn't completely thorough at the moment), and translating character class
-/// matching from using a binary search to a simple `match` expression (see
-/// `match_class`).
-///
 /// It is strongly recommended to read the dynamic implementation in vm.rs
 /// first before trying to understand the code generator. The implementation
 /// strategy is identical and vm.rs has comments and will be easier to follow.
@@ -86,7 +78,7 @@ fn native(cx: &mut ExtCtxt, sp: codemap::Span, tts: &[ast::TokenTree])
         }
     };
     let prog = match re {
-        Dynamic(ExDynamic { ref prog, .. }) => prog.clone(),
+        Dynamic(ref prog) => prog.clone(),
         Native(_) => unreachable!(),
     };
 
@@ -120,17 +112,12 @@ impl<'a> NfaGen<'a> {
                 None => cx.expr_none(self.sp),
             }
         );
-        let prefix_anchor = match self.prog.insts[1] {
-            Inst::StartText => true,
-            _ => false,
-        };
-        let init_groups = self.vec_expr(0..num_cap_locs,
-                                        &mut |cx, _| cx.expr_none(self.sp));
+        let prefix_anchor = self.prog.anchored_begin;
 
-        let prefix_lit = Rc::new(self.prog.prefix.as_bytes().to_vec());
-        let prefix_bytes = self.cx.expr_lit(self.sp, ast::LitBinary(prefix_lit));
+        // let prefix_lit = Rc::new(self.prog.prefix.as_bytes().to_vec());
+        // let prefix_bytes = self.cx.expr_lit(self.sp, ast::LitBinary(prefix_lit));
 
-        let check_prefix = self.check_prefix();
+        // let check_prefix = self.check_prefix();
         let step_insts = self.step_insts();
         let add_insts = self.add_insts();
         let regex = &*self.original;
@@ -145,120 +132,136 @@ impl<'a> NfaGen<'a> {
 static CAP_NAMES: &'static [Option<&'static str>] = &$cap_names;
 
 #[allow(dead_code)]
-fn exec<'t>(which: ::regex::native::MatchKind, input: &'t str,
-            start: usize, end: usize) -> Vec<Option<usize>> {
+fn exec<'t>(
+    mut caps: &mut [Option<usize>],
+    input: &'t str,
+    start: usize,
+) -> bool {
     #![allow(unused_imports)]
     #![allow(unused_mut)]
 
-    use regex::native::{
-        MatchKind, Exists, Location, Submatches,
-        StepState, StepMatchEarlyReturn, StepMatch, StepContinue,
-        CharReader, find_prefix, simple_case_fold,
-    };
+    use regex::internal::{Char, CharInput, InputAt, Input, Inst};
 
+    let input = CharInput::new(input);
+    let at = input.at(start);
     return Nfa {
-        which: which,
         input: input,
-        ic: 0,
-        chars: CharReader::new(input),
-    }.run(start, end);
-
-    type Captures = [Option<usize>; $num_cap_locs];
+        ncaps: caps.len(),
+    }.exec(&mut NfaThreads::new(), &mut caps, at);
 
     struct Nfa<'t> {
-        which: MatchKind,
-        input: &'t str,
-        ic: usize,
-        chars: CharReader<'t>,
+        input: CharInput<'t>,
+        ncaps: usize,
     }
 
     impl<'t> Nfa<'t> {
         #[allow(unused_variables)]
-        fn run(&mut self, start: usize, end: usize) -> Vec<Option<usize>> {
+        fn exec(
+            &mut self,
+            mut q: &mut NfaThreads,
+            mut caps: &mut [Option<usize>],
+            mut at: InputAt,
+        ) -> bool {
             let mut matched = false;
-            let prefix_bytes: &[u8] = $prefix_bytes;
-            let mut clist = Threads::new(self.which);
-            let mut nlist = Threads::new(self.which);
-            let (mut clist, mut nlist) = (&mut clist, &mut nlist);
-
-            let mut groups = $init_groups;
-
-            self.ic = start;
-            let mut next_ic = self.chars.set(start);
-            while self.ic <= end {
+            let (mut clist, mut nlist) = (&mut q.clist, &mut q.nlist);
+            clist.empty(); nlist.empty();
+'LOOP:      loop {
                 if clist.size == 0 {
-                    if matched {
-                        break
+                    if matched || (!at.is_beginning() && $prefix_anchor) {
+                        break;
                     }
-
-                    if $prefix_anchor && self.ic != 0 {
-                        break
-                    }
-
-                    $check_prefix
+                    // TODO: Prefix matching... Hmm.
+                    // Prefix matching now uses a DFA, so I think this is
+                    // going to require encoding that DFA statically.
                 }
                 if clist.size == 0 || (!$prefix_anchor && !matched) {
-                    self.add(&mut clist, 0, &mut groups)
+                    self.add(clist, &mut caps, 0, at);
                 }
-
-                self.ic = next_ic;
-                next_ic = self.chars.advance();
-
+                let at_next = self.input.at(at.next_pos());
                 for i in 0..clist.size {
                     let pc = clist.pc(i);
-                    let step_state = self.step(&mut groups, &mut nlist,
-                                               clist.groups(i), pc);
-                    match step_state {
-                        StepMatchEarlyReturn =>
-                            return vec![Some(0), Some(0)],
-                        StepMatch => { matched = true; break },
-                        StepContinue => {},
+                    let tcaps = clist.caps(i);
+                    if self.step(nlist, caps, tcaps, pc, at, at_next) {
+                        matched = true;
+                        if caps.len() == 0 {
+                            break 'LOOP;
+                        }
+                        break;
                     }
                 }
+                if at.char().is_none() {
+                    break;
+                }
+                at = at_next;
                 ::std::mem::swap(&mut clist, &mut nlist);
                 nlist.empty();
             }
-            match self.which {
-                Exists if matched     => vec![Some(0), Some(0)],
-                Exists                => vec![None, None],
-                Location | Submatches => groups.iter().map(|x| *x).collect(),
-            }
+            matched
         }
 
         // Sometimes `nlist` is never used (for empty regexes).
         #[allow(unused_variables)]
         #[inline]
-        fn step(&self, groups: &mut Captures, nlist: &mut Threads,
-                caps: &mut Captures, pc: usize) -> StepState {
-            $step_insts
-            StepContinue
+        fn step(
+            &self,
+            nlist: &mut Threads,
+            caps: &mut [Option<usize>],
+            thread_caps: &mut [Option<usize>],
+            pc: usize,
+            at: InputAt,
+            at_next: InputAt,
+        ) -> bool {
+            $step_insts;
+            false
         }
 
-        fn add(&self, nlist: &mut Threads, pc: usize,
-               groups: &mut Captures) {
+        fn add(
+            &self,
+            nlist: &mut Threads,
+            thread_caps: &mut [Option<usize>],
+            pc: usize,
+            at: InputAt,
+        ) {
             if nlist.contains(pc) {
-                return
+                return;
             }
+            let ti = nlist.add(pc);
             $add_insts
         }
     }
 
-    struct Thread {
-        pc: usize,
-        groups: Captures,
+    struct NfaThreads {
+        clist: Threads,
+        nlist: Threads,
     }
 
     struct Threads {
-        which: MatchKind,
-        queue: [Thread; $num_insts],
+        dense: [Thread; $num_insts],
         sparse: [usize; $num_insts],
         size: usize,
     }
 
+    struct Thread {
+        pc: usize,
+        caps: [Option<usize>; $num_cap_locs],
+    }
+
+    impl NfaThreads {
+        fn new() -> NfaThreads {
+            NfaThreads {
+                clist: Threads::new(),
+                nlist: Threads::new(),
+            }
+        }
+
+        fn swap(&mut self) {
+            ::std::mem::swap(&mut self.clist, &mut self.nlist);
+        }
+    }
+
     impl Threads {
-        fn new(which: MatchKind) -> Threads {
+        fn new() -> Threads {
             Threads {
-                which: which,
                 // These unsafe blocks are used for performance reasons, as it
                 // gives us a zero-cost initialization of a sparse set. The
                 // trick is described in more detail here:
@@ -266,43 +269,30 @@ fn exec<'t>(which: ::regex::native::MatchKind, input: &'t str,
                 // The idea here is to avoid initializing threads that never
                 // need to be initialized, particularly for larger regexs with
                 // a lot of instructions.
-                queue: unsafe { ::std::mem::uninitialized() },
+                dense: unsafe { ::std::mem::uninitialized() },
                 sparse: unsafe { ::std::mem::uninitialized() },
                 size: 0,
             }
         }
 
         #[inline]
-        fn add(&mut self, pc: usize, groups: &Captures) {
-            let t = &mut self.queue[self.size];
-            t.pc = pc;
-            match self.which {
-                Exists => {},
-                Location => {
-                    t.groups[0] = groups[0];
-                    t.groups[1] = groups[1];
-                }
-                Submatches => {
-                    for (slot, val) in t.groups.iter_mut().zip(groups.iter()) {
-                        *slot = *val;
-                    }
-                }
-            }
-            self.sparse[pc] = self.size;
+        fn add(&mut self, pc: usize) -> usize {
+            let i = self.size;
+            self.dense[i].pc = pc;
+            self.sparse[pc] = i;
             self.size += 1;
+            i
         }
 
         #[inline]
-        fn add_empty(&mut self, pc: usize) {
-            self.queue[self.size].pc = pc;
-            self.sparse[pc] = self.size;
-            self.size += 1;
+        fn thread(&mut self, i: usize) -> &mut Thread {
+            &mut self.dense[i]
         }
 
         #[inline]
         fn contains(&self, pc: usize) -> bool {
             let s = self.sparse[pc];
-            s < self.size && self.queue[s].pc == pc
+            s < self.size && self.dense[s].pc == pc
         }
 
         #[inline]
@@ -312,17 +302,17 @@ fn exec<'t>(which: ::regex::native::MatchKind, input: &'t str,
 
         #[inline]
         fn pc(&self, i: usize) -> usize {
-            self.queue[i].pc
+            self.dense[i].pc
         }
 
         #[inline]
-        fn groups<'r>(&'r mut self, i: usize) -> &'r mut Captures {
-            &mut self.queue[i].groups
+        fn caps<'r>(&'r mut self, i: usize) -> &'r mut [Option<usize>] {
+            &mut self.dense[i].caps
         }
     }
 }
 
-::regex::native::Native(::regex::native::ExNative {
+::regex::internal::Native(::regex::internal::ExNative {
     original: $regex,
     names: &CAP_NAMES,
     prog: exec,
@@ -336,104 +326,78 @@ fn exec<'t>(which: ::regex::native::MatchKind, input: &'t str,
         let arms = self.prog.insts.iter().enumerate().map(|(pc, inst)| {
             let nextpc = pc + 1;
             let body = match *inst {
-                Inst::StartLine => {
+                Inst::EmptyLook(LookInst::StartLine) => {
                     quote_expr!(self.cx, {
-                        nlist.add_empty($pc);
-                        if self.chars.is_begin() || self.chars.prev == Some('\n') {
-                            self.add(nlist, $nextpc, &mut *groups)
+                        let prev = self.input.previous_at(at.pos());
+                        if prev.char().is_none() || prev.char() == '\n' {
+                            self.add(nlist, thread_caps, $nextpc, at);
                         }
                     })
                 }
-                Inst::StartText => {
+                Inst::EmptyLook(LookInst::EndLine) => {
                     quote_expr!(self.cx, {
-                        nlist.add_empty($pc);
-                        if self.chars.is_begin() {
-                            self.add(nlist, $nextpc, &mut *groups)
+                        if at.char().is_none() || at.char() == '\n' {
+                            self.add(nlist, thread_caps, $nextpc, at);
                         }
                     })
                 }
-                Inst::EndLine => {
+                Inst::EmptyLook(LookInst::StartText) => {
                     quote_expr!(self.cx, {
-                        nlist.add_empty($pc);
-                        if self.chars.is_end() || self.chars.cur == Some('\n') {
-                            self.add(nlist, $nextpc, &mut *groups)
+                        let prev = self.input.previous_at(at.pos());
+                        if prev.char().is_none() {
+                            self.add(nlist, thread_caps, $nextpc, at);
                         }
                     })
                 }
-                Inst::EndText => {
+                Inst::EmptyLook(LookInst::EndText) => {
                     quote_expr!(self.cx, {
-                        nlist.add_empty($pc);
-                        if self.chars.is_end() {
-                            self.add(nlist, $nextpc, &mut *groups)
+                        if at.char().is_none() {
+                            self.add(nlist, thread_caps, $nextpc, at);
                         }
                     })
                 }
-                Inst::WordBoundary => {
-                    quote_expr!(self.cx, {
-                        nlist.add_empty($pc);
-                        if self.chars.is_word_boundary() {
-                            self.add(nlist, $nextpc, &mut *groups)
-                        }
-                    })
-                }
-                Inst::NotWordBoundary => {
-                    quote_expr!(self.cx, {
-                        nlist.add_empty($pc);
-                        if !self.chars.is_word_boundary() {
-                            self.add(nlist, $nextpc, &mut *groups)
-                        }
-                    })
-                }
-                Inst::Save(slot) => {
-                    let save = quote_expr!(self.cx, {
-                        let old = groups[$slot];
-                        groups[$slot] = Some(self.ic);
-                        self.add(nlist, $nextpc, &mut *groups);
-                        groups[$slot] = old;
-                    });
-                    let add = quote_expr!(self.cx, {
-                        self.add(nlist, $nextpc, &mut *groups);
-                    });
-                    // If this is saving a submatch location but we request
-                    // existence or only full match location, then we can skip
-                    // right over it every time.
-                    if slot > 1 {
-                        quote_expr!(self.cx, {
-                            nlist.add_empty($pc);
-                            match self.which {
-                                Submatches => $save,
-                                Exists | Location => $add,
-                            }
-                        })
+                Inst::EmptyLook(ref wbty) => {
+                    let m = if *wbty == LookInst::WordBoundary {
+                        quote_expr!(self.cx, { w1 ^ w2 })
                     } else {
-                        quote_expr!(self.cx, {
-                            nlist.add_empty($pc);
-                            match self.which {
-                                Submatches | Location => $save,
-                                Exists => $add,
-                            }
-                        })
+                        quote_expr!(self.cx, { !(w1 ^ w2) })
+                    };
+                    quote_expr!(self.cx, {
+                        let prev = self.input.previous_at(at.pos());
+                        let w1 = prev.char().is_word_char();
+                        let w2 = at.char().is_word_char();
+                        if $m {
+                            self.add(nlist, thread_caps, $nextpc, at);
+                        }
+                    })
+                }
+                Inst::Save(slot) => quote_expr!(self.cx, {
+                    if $slot >= self.ncaps {
+                        self.add(nlist, thread_caps, $nextpc, at);
+                    } else {
+                        let old = thread_caps[$slot];
+                        thread_caps[$slot] = Some(at.pos());
+                        self.add(nlist, thread_caps, $nextpc, at);
+                        thread_caps[$slot] = old;
                     }
-                }
-                Inst::Jump(to) => {
-                    quote_expr!(self.cx, {
-                        nlist.add_empty($pc);
-                        self.add(nlist, $to, &mut *groups);
-                    })
-                }
-                Inst::Split(x, y) => {
-                    quote_expr!(self.cx, {
-                        nlist.add_empty($pc);
-                        self.add(nlist, $x, &mut *groups);
-                        self.add(nlist, $y, &mut *groups);
-                    })
-                }
+                }),
+                Inst::Jump(to) => quote_expr!(self.cx, {
+                    self.add(nlist, thread_caps, $to, at);
+                }),
+                Inst::Split(x, y) => quote_expr!(self.cx, {
+                    self.add(nlist, thread_caps, $x, at);
+                    self.add(nlist, thread_caps, $y, at);
+                }),
                 // For Match, OneChar, CharClass, Any, AnyNoNL
-                _ => quote_expr!(self.cx, nlist.add($pc, &*groups)),
+                _ => quote_expr!(self.cx, {
+                    let mut t = &mut nlist.thread(ti);
+                    for (slot, val) in t.caps.iter_mut().zip(thread_caps.iter()) {
+                        *slot = *val;
+                    }
+                }),
             };
             self.arm_inst(pc, body)
         }).collect::<Vec<ast::Arm>>();
-
         self.match_insts(arms)
     }
 
@@ -443,77 +407,35 @@ fn exec<'t>(which: ::regex::native::MatchKind, input: &'t str,
         let arms = self.prog.insts.iter().enumerate().map(|(pc, inst)| {
             let nextpc = pc + 1;
             let body = match *inst {
-                Inst::Match => {
-                    quote_expr!(self.cx, {
-                        match self.which {
-                            Exists => {
-                                return StepMatchEarlyReturn
-                            }
-                            Location => {
-                                groups[0] = caps[0];
-                                groups[1] = caps[1];
-                                return StepMatch
-                            }
-                            Submatches => {
-                                for (slot, val) in groups.iter_mut().zip(caps.iter()) {
-                                    *slot = *val;
-                                }
-                                return StepMatch
-                            }
-                        }
-                    })
-                }
-                Inst::OneChar { c, casei } => {
-                    if casei {
-                        let upc = simple_case_fold(c);
-                        quote_expr!(self.cx, {
-                            let upc = self.chars.prev.map(simple_case_fold);
-                            if upc == Some($upc) {
-                                self.add(nlist, $nextpc, caps);
-                            }
-                        })
-                    } else {
-                        quote_expr!(self.cx, {
-                            if self.chars.prev == Some($c) {
-                                self.add(nlist, $nextpc, caps);
-                            }
-                        })
+                Inst::Match => quote_expr!(self.cx, {
+                    for (slot, val) in caps.iter_mut().zip(thread_caps.iter()) {
+                        *slot = *val;
                     }
-                }
-                Inst::CharClass(ref cls) => {
-                    let ranges: Vec<(char, char)> =
-                        cls.iter().map(|r| (r.start, r.end)).collect();
-                    let mranges = self.match_class(&ranges);
-                    let get_char =
-                        if cls.is_case_insensitive() {
-                            quote_expr!(
-                                self.cx,
-                                simple_case_fold(self.chars.prev.unwrap()))
-                        } else {
-                            quote_expr!(self.cx, self.chars.prev.unwrap())
-                        };
+                    return true;
+                }),
+                Inst::Char(OneChar { c, casei }) => quote_expr!(self.cx, {
+                    if $c == at.char() || ($casei && $c == at.char().case_fold()) {
+                        self.add(nlist, thread_caps, $nextpc, at_next);
+                    }
+                    return false;
+                }),
+                Inst::Ranges(CharRanges { ref ranges, casei }) => {
+                    let match_class = self.match_class(ranges);
                     quote_expr!(self.cx, {
-                        if self.chars.prev.is_some() {
-                            let c = $get_char;
-                            if $mranges {
-                                self.add(nlist, $nextpc, caps);
+                        let mut c = at.char();
+                        if $casei {
+                            c = c.case_fold();
+                        }
+                        if let Some(c) = c.as_char() {
+                            if $match_class {
+                                self.add(nlist, thread_caps, $nextpc, at_next);
                             }
                         }
+                        return false;
                     })
                 }
-                Inst::Any => {
-                    quote_expr!(self.cx, self.add(nlist, $nextpc, caps))
-                }
-                Inst::AnyNoNL => {
-                    quote_expr!(self.cx, {
-                        if self.chars.prev != Some('\n') {
-                            self.add(nlist, $nextpc, caps);
-                        }
-                        ()
-                    })
-                }
-                // EmptyBegin, EmptyEnd, EmptyWordBoundary, Save, Jump, Split
-                _ => self.empty_block(),
+                // EmptyLook, Save, Jump, Split
+                _ => quote_expr!(self.cx, { return false; }),
             };
             self.arm_inst(pc, body)
         }).collect::<Vec<ast::Arm>>();
@@ -526,13 +448,13 @@ fn exec<'t>(which: ::regex::native::MatchKind, input: &'t str,
     // table).
     fn match_class(&self, ranges: &[(char, char)]) -> P<ast::Expr> {
         let mut arms = ranges.iter().map(|&(start, end)| {
-            let pat = self.cx.pat(self.sp, ast::PatRange(quote_expr!(self.cx, $start),
-                                                         quote_expr!(self.cx, $end)));
+            let pat = self.cx.pat(
+                self.sp, ast::PatRange(
+                    quote_expr!(self.cx, $start), quote_expr!(self.cx, $end)));
             self.cx.arm(self.sp, vec!(pat), quote_expr!(self.cx, true))
         }).collect::<Vec<ast::Arm>>();
 
         arms.push(self.wild_arm_expr(quote_expr!(self.cx, false)));
-
         let match_on = quote_expr!(self.cx, c);
         self.cx.expr_match(self.sp, match_on, arms)
     }
@@ -540,24 +462,24 @@ fn exec<'t>(which: ::regex::native::MatchKind, input: &'t str,
     // Generates code for checking a literal prefix of the search string.
     // The code is only generated if the regex *has* a literal prefix.
     // Otherwise, a no-op is returned.
-    fn check_prefix(&self) -> P<ast::Expr> {
-        if self.prog.prefix.len() == 0 {
-            self.empty_block()
-        } else {
-            quote_expr!(self.cx,
-                if clist.size == 0 {
-                    let haystack = &self.input.as_bytes()[self.ic..];
-                    match find_prefix(prefix_bytes, haystack) {
-                        None => break,
-                        Some(i) => {
-                            self.ic += i;
-                            next_ic = self.chars.set(self.ic);
-                        }
-                    }
-                }
-            )
-        }
-    }
+    // fn check_prefix(&self) -> P<ast::Expr> {
+        // if self.prog.prefixes.len() == 0 {
+            // self.empty_block()
+        // } else {
+            // quote_expr!(self.cx,
+                // if clist.size == 0 {
+                    // let haystack = &self.input.as_bytes()[self.ic..];
+                    // match find_prefix(prefix_bytes, haystack) {
+                        // None => break,
+                        // Some(i) => {
+                            // self.ic += i;
+                            // next_ic = self.chars.set(self.ic);
+                        // }
+                    // }
+                // }
+            // )
+        // }
+    // }
 
     // Builds a `match pc { ... }` expression from a list of arms, specifically
     // for matching the current program counter with an instruction.
@@ -594,7 +516,6 @@ fn exec<'t>(which: ::regex::native::MatchKind, input: &'t str,
             body: body,
         }
     }
-
 
     // Converts `xs` to a `[x1, x2, .., xN]` expression by calling `to_expr`
     // on each element in `xs`.

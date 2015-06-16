@@ -60,6 +60,13 @@ fn match_class_in_range(b: &mut Bencher) {
 }
 
 #[bench]
+fn match_class_unicode(b: &mut Bencher) {
+    let re = regex!(r"\pL");
+    let text = format!("{}a", repeat("☃5☃5").take(20).collect::<String>());
+    bench_assert_match(b, re, &text);
+}
+
+#[bench]
 fn replace_all(b: &mut Bencher) {
     let re = regex!("[cjrw]");
     let text = "abcdefghijklmnopqrstuvwxyz";
@@ -171,15 +178,19 @@ fn gen_text(n: usize) -> String {
 throughput!(easy0_32, easy0(), 32);
 throughput!(easy0_1K, easy0(), 1<<10);
 throughput!(easy0_32K, easy0(), 32<<10);
+throughput!(easy0_1MB, easy0(), 1<<20);
 
 throughput!(easy1_32, easy1(), 32);
 throughput!(easy1_1K, easy1(), 1<<10);
 throughput!(easy1_32K, easy1(), 32<<10);
+throughput!(easy1_1MB, easy1(), 1<<20);
 
 throughput!(medium_32, medium(), 32);
 throughput!(medium_1K, medium(), 1<<10);
 throughput!(medium_32K,medium(), 32<<10);
+throughput!(medium_1MB, medium(), 1<<20);
 
 throughput!(hard_32, hard(), 32);
 throughput!(hard_1K, hard(), 1<<10);
 throughput!(hard_32K,hard(), 32<<10);
+throughput!(hard_1MB, hard(), 1<<20);

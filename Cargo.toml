@@ -13,7 +13,15 @@ An implementation of regular expressions for Rust.
 
 [[test]]
 path = "regex_macros/tests/test_dynamic.rs"
-name = "all"
+name = "dynamic"
+
+[[test]]
+path = "regex_macros/tests/test_dynamic_nfa.rs"
+name = "dynamic_nfa"
+
+[[test]]
+path = "regex_macros/tests/test_dynamic_backtrack.rs"
+name = "dynamic_backtrack"
 
 [[bench]]
 name = "all"
@@ -22,6 +30,8 @@ test = false
 bench = true
 
 [dependencies]
+aho-corasick = "0.1"
+memchr = "0.1"
 regex-syntax = { path = "regex-syntax", version = "0.1" }
 
 [dev-dependencies]

@@ -9,6 +9,7 @@ A Rust library for parsing, compiling, and executing regular expressions.
 
 [Documentation](http://doc.rust-lang.org/regex)
 
+
 ## Usage
 
 Add this to your `Cargo.toml`:
@@ -23,6 +24,7 @@ and this to your crate root:
 ```rust
 extern crate regex;
 ```
+
 
 # License
 
