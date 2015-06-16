@@ -8,7 +8,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use aho_corasick::AcAutomaton;
+use aho_corasick::{AcAutomaton, Sparse};
 use memchr::memchr;
 
 /// A prefix extracted from a compiled regular expression.
@@ -39,7 +39,7 @@ pub enum Prefix {
     /// but I don't think we care.
     Singles(Vec<bool>),
     /// A full Aho-Corasick DFA automaton.
-    Automaton(AcAutomaton),
+    Automaton(AcAutomaton<Sparse>),
 }
 
 impl Prefix {
@@ -56,7 +56,7 @@ impl Prefix {
             }
             Prefix::Singles(set)
         } else {
-            Prefix::Automaton(AcAutomaton::new(pfxs))
+            Prefix::Automaton(AcAutomaton::with_transitions(pfxs))
         }
     }
 
