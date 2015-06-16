@@ -12,7 +12,7 @@
 //! heavily based on RE2 both in syntax and in implementation. Notably,
 //! backreferences and arbitrary lookahead/lookbehind assertions are not
 //! provided. In return, regular expression searching provided by this package
-//! has excellent worst case performance. The specific syntax supported is
+//! has excellent worst-case performance. The specific syntax supported is
 //! documented further down.
 //!
 //! This crate's documentation provides some simple examples, describes Unicode
@@ -21,7 +21,7 @@
 //!
 //! # Usage
 //!
-//! This crates is [on crates.io](https://crates.io/crates/regex) and can be
+//! This crate is [on crates.io](https://crates.io/crates/regex) and can be
 //! used by adding `regex` to your dependencies in your project's `Cargo.toml`.
 //!
 //! ```toml
@@ -61,7 +61,7 @@
 //!
 //! # The `regex!` macro
 //!
-//! Rust's compile time meta-programming facilities provide a way to write a
+//! Rust's compile-time meta-programming facilities provide a way to write a
 //! `regex!` macro which compiles regular expressions *when your program
 //! compiles*. Said differently, if you only use `regex!` to build regular
 //! expressions in your program, then your program cannot compile with an
@@ -190,7 +190,7 @@
 //! the search string.
 //!
 //! Currently, only simple case folding is supported. Namely, when matching
-//! case insensitively, the characters are first mapped using the
+//! case-insensitively, the characters are first mapped using the
 //! [simple case folding](ftp://ftp.unicode.org/Public/UNIDATA/CaseFolding.txt)
 //! mapping.
 //!
@@ -238,9 +238,9 @@
 //! \D          not digit
 //! [:alpha:]   ASCII character class ([A-Za-z])
 //! [:^alpha:]  Negated ASCII character class ([^A-Za-z])
-//! \pN         One letter name Unicode character class
+//! \pN         One-letter name Unicode character class
 //! \p{Greek}   Unicode character class (general category or script)
-//! \PN         Negated one letter name Unicode character class
+//! \PN         Negated one-letter name Unicode character class
 //! \P{Greek}   negated Unicode character class (general category or script)
 //! </pre>
 //!
@@ -301,14 +301,14 @@
 //! All flags are by default disabled. They are:
 //!
 //! <pre class="rust">
-//! i     case insensitive
+//! i     case-insensitive
 //! m     multi-line mode: ^ and $ match begin/end of line
 //! s     allow . to match \n
 //! U     swap the meaning of x* and x*?
 //! x     ignore whitespace and allow line comments (starting with `#`)
 //! </pre>
 //!
-//! Here's an example that matches case insensitively for only part of the
+//! Here's an example that matches case-insensitively for only part of the
 //! expression:
 //!
 //! ```rust
