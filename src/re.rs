@@ -621,7 +621,7 @@ impl Regex {
             }
         }
         new.push_str(&text[last_match..]);
-        return new;
+        new
     }
 
     /// Returns the original string of this regex.

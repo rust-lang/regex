@@ -286,20 +286,8 @@ impl Program {
         // the chosen engine is appropriate or not.
         self.engine.unwrap_or_else(|| {
             if cap_len <= 2
-               && self.prefixes.len() == 1
+               && self.prefixes.preserves_priority()
                && self.prefixes_complete {
-                // We can only use this when the regex is entirely a literal
-                // (not an alternation of literals).
-                // The reason (for now) is that the prefix DFA doesn't handle
-                // priority the same way the regex engine does.
-                // e.g., given `ab|a`, the prefix DFA would report `a` as a
-                // match in the string `ab`, when in fact, `ab` should match.
-                //
-                // But, we can still get major winnings by avoiding the
-                // matching engine for a single literal.
-                //
-                // I guess we could teach Aho-Corasick about priority, but we
-                // might as well just implement a full DFA.
                 MatchEngine::Literals
             } else if Backtrack::should_exec(self, text) {
                 // We're only here if the input and regex combined are small.
@@ -370,8 +358,8 @@ impl Program {
             }
             if done { break; }
         }
-        self.prefixes_complete = pcomplete;
         self.prefixes = Prefix::new(prefixes);
+        self.prefixes_complete = pcomplete && self.prefixes.len() > 0;
     }
 
     /// Find a prefix starting at the given instruction.
