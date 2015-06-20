@@ -30,7 +30,7 @@ test = false
 bench = true
 
 [dependencies]
-aho-corasick = "0.1"
+aho-corasick = "0.2"
 memchr = "0.1"
 regex-syntax = { path = "regex-syntax", version = "0.1" }
 

@@ -10,7 +10,7 @@
 
 use std::fmt;
 
-use aho_corasick::{AcAutomaton, Sparse};
+use aho_corasick::{Automaton, AcAutomaton, FullAcAutomaton};
 use memchr::memchr;
 
 /// A prefix extracted from a compiled regular expression.
@@ -44,7 +44,7 @@ pub enum Prefix {
         sparse: Vec<bool>,
     },
     /// A full Aho-Corasick DFA automaton.
-    Automaton(AcAutomaton<Sparse>),
+    Automaton(FullAcAutomaton),
 }
 
 impl Prefix {
@@ -63,7 +63,7 @@ impl Prefix {
             }
             Prefix::Singles { chars: chars, sparse: set }
         } else {
-            Prefix::Automaton(AcAutomaton::with_transitions(pfxs))
+            Prefix::Automaton(AcAutomaton::new(pfxs).into_full())
         }
     }
 

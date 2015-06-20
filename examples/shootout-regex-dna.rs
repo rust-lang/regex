@@ -33,12 +33,15 @@ fn main() {
         regex!("agggta[cgt]a|t[acg]taccct"),
         regex!("agggtaa[cgt]|[acg]ttaccct"),
     ];
-    let mut counts = vec![];
-    for variant in variants {
+    let mut count_promises = vec![];
+    for i in 0..3 {
         let seq = seq_arc.clone();
-        let restr = variant.to_string();
-        let future = thread::spawn(move || variant.find_iter(&seq).count());
-        counts.push((restr, future));
+        let res = variants[i * 3..i * 3 + 3].to_vec();
+        count_promises.push(thread::spawn(move || {
+            res.into_iter()
+               .map(|re| (re.to_string(), re.find_iter(&seq).count()))
+               .collect::<Vec<_>>()
+        }));
     }
 
     let substs = vec![
@@ -58,10 +61,11 @@ fn main() {
     for (re, replacement) in substs.into_iter() {
         seq = re.replace_all(&seq, replacement);
     }
-    let rlen = seq.len();
 
-    for (variant, count) in counts {
-        println!("{} {}", variant, count.join().unwrap());
+    for promise in count_promises {
+        for (re, count) in promise.join().unwrap() {
+            println!("{} {}", re, count);
+        }
     }
-    println!("\n{}\n{}\n{}", ilen, clen, rlen);
+    println!("\n{}\n{}\n{}", ilen, clen, seq.len());
 }
