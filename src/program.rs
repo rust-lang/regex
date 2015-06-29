@@ -286,8 +286,8 @@ impl Program {
         // the chosen engine is appropriate or not.
         self.engine.unwrap_or_else(|| {
             if cap_len <= 2
-               && self.prefixes.preserves_priority()
-               && self.prefixes_complete {
+               && self.prefixes_complete
+               && self.prefixes.preserves_priority() {
                 MatchEngine::Literals
             } else if Backtrack::should_exec(self, text) {
                 // We're only here if the input and regex combined are small.
@@ -311,63 +311,69 @@ impl Program {
 
     /// Find and store a prefix machine for the current program.
     pub fn find_prefixes(&mut self) {
-        use self::Inst::*;
-
-        let (ps, complete) = self.prefixes_from_insts(1);
+        // First, look for a standard literal prefix---this includes things
+        // like `a+` and `[0-9]+`, but not `a|b`.
+        let (ps, complete) = self.literals(self.skip(1));
         if ps.len() > 0 {
             self.prefixes = Prefix::new(ps);
             self.prefixes_complete = complete;
             return;
         }
-        let mut pc = 1;
-        let mut prefixes = vec![];
-        let mut pcomplete = true;
-        while let Split(x, y) = self.insts[pc] {
-            let (xps, xcomplete) = self.prefixes_from_insts(x);
-            let (yps, ycomplete) = self.prefixes_from_insts(y);
-            let mut done = false;
-            match (&self.insts[x], &self.insts[y]) {
-                // We should be able to support this. Add explicit stack. ---AG
-                (&Split(_, _), &Split(_, _)) => return,
-                (_, &Split(_, _)) if xps.len() == 0 => return,
-                (_, &Split(_, _)) => {
-                    pcomplete = pcomplete && xcomplete;
-                    prefixes.extend(xps);
-                    pc = y;
-                }
-                (&Split(_, _), _) if yps.len() == 0 => return,
-                (&Split(_, _), _) => {
-                    pcomplete = pcomplete && ycomplete;
-                    prefixes.extend(yps);
-                    pc = x;
-                }
-                _ if xps.len() == 0 || yps.len() == 0 => return,
-                // This is our base case. We've followed splits the whole
-                // way, which means both instructions lead to a match.
-                _ => {
-                    pcomplete = pcomplete && xcomplete && ycomplete;
-                    prefixes.extend(xps);
-                    prefixes.extend(yps);
-                    done = true;
-                }
-            }
-            // Arg. We've over-extended ourselves, quit with nothing to
-            // show for it.
-            if prefixes.len() > NUM_PREFIX_LIMIT {
-                return;
-            }
-            if done { break; }
+        // Ok, now look for alternate prefixes, e.g., `a|b`.
+        if let Some((pfxs, complete)) = self.alternate_prefixes() {
+            self.prefixes = Prefix::new(pfxs);
+            self.prefixes_complete = complete;
         }
-        self.prefixes = Prefix::new(prefixes);
-        self.prefixes_complete = pcomplete && self.prefixes.len() > 0;
     }
 
-    /// Find a prefix starting at the given instruction.
+    fn alternate_prefixes(&self) -> Option<(Vec<String>, bool)> {
+        let mut prefixes = vec![];
+        let mut pcomplete = true;
+        let mut stack = vec![self.skip(1)];
+        while let Some(mut pc) = stack.pop() {
+            pc = self.skip(pc);
+            match &self.insts[pc] {
+                &Inst::Split(x, y) => { stack.push(y); stack.push(x); }
+                _ => {
+                    let (alt_prefixes, complete) = self.literals(pc);
+                    if alt_prefixes.is_empty() {
+                        // If no prefixes could be identified for this
+                        // alternate, then we can't use a prefix machine to
+                        // skip through the input. Thus, we fail and report
+                        // nothing.
+                        return None;
+                    }
+                    if prefixes.len() + alt_prefixes.len() > NUM_PREFIX_LIMIT {
+                        // Arg. We've over-extended ourselves, quit with
+                        // nothing to show for it.
+                        //
+                        // This could happen if the regex is `a|b|c|...`, where
+                        // the number of alternates is too much for us to
+                        // handle given an empirically defined threshold limit.
+                        //
+                        // When this happens, we can't capture all of the
+                        // prefixes, so our prefix machine becomes useless.
+                        // Thus, fail and report nothing.
+                        return None;
+                    }
+                    pcomplete = pcomplete && complete;
+                    prefixes.extend(alt_prefixes);
+                }
+            }
+        }
+        if prefixes.is_empty() {
+            None
+        } else {
+            Some((prefixes, pcomplete))
+        }
+    }
+
+    /// Find required literals starting at the given instruction.
     ///
-    /// Returns `true` in the tuple if the end of the prefix leads trivially
+    /// Returns `true` in the tuple if the end of the literal leads trivially
     /// to a match. (This may report false negatives, but being conservative
     /// is OK.)
-    fn prefixes_from_insts(&self, mut pc: usize) -> (Vec<String>, bool) {
+    fn literals(&self, mut pc: usize) -> (Vec<String>, bool) {
         use self::Inst::*;
 
         let mut complete = true;
@@ -377,14 +383,15 @@ impl Program {
 
             // Each iteration adds one character to every alternate prefix *or*
             // it stops. Thus, the prefix alternates grow in lock step, and it
-            // suffices to check one of them to see if the prefix limit has been
-            // exceeded.
+            // suffices to check one of them to see if the prefix limit has
+            // been exceeded.
             if alts[0].len() > PREFIX_LENGTH_LIMIT {
                 complete = false;
                 break;
             }
             match *inst {
-                Save(_) => { pc += 1; continue } // completely ignore it
+                Save(_) => { pc += 1; continue }
+                Jump(pc2) => pc = pc2,
                 Char(OneChar { c, casei: false }) => {
                     for alt in &mut alts {
                         alt.push(c);
@@ -392,6 +399,9 @@ impl Program {
                     pc += 1;
                 }
                 Ranges(CharRanges { ref ranges, casei: false }) => {
+                    // This adds a new literal for *each* character in this
+                    // range. This has the potential to use way too much
+                    // memory, so we bound it naively for now.
                     let nchars = num_chars_in_ranges(ranges);
                     if alts.len() * nchars > NUM_PREFIX_LIMIT {
                         complete = false;
@@ -411,7 +421,6 @@ impl Program {
                     }
                     pc += 1;
                 }
-                Jump(pc2) => pc = pc2,
                 _ => { complete = self.leads_to_match(pc); break }
             }
         }
@@ -422,15 +431,21 @@ impl Program {
         }
     }
 
-    fn leads_to_match(&self, mut pc: usize) -> bool {
+    fn leads_to_match(&self, pc: usize) -> bool {
         // I'm pretty sure this is conservative, so it might have some
         // false negatives.
+        match self.insts[self.skip(pc)] {
+            Inst::Match => true,
+            _ => false,
+        }
+    }
+
+    fn skip(&self, mut pc: usize) -> usize {
         loop {
             match self.insts[pc] {
-                Inst::Match => return true,
                 Inst::Save(_) => pc += 1,
                 Inst::Jump(pc2) => pc = pc2,
-                _ => return false,
+                _ => return pc,
             }
         }
     }
@@ -477,4 +492,90 @@ fn num_chars_in_ranges(ranges: &[(char, char)]) -> usize {
     ranges.iter()
           .map(|&(s, e)| (e as u32) - (s as u32))
           .fold(0, |acc, len| acc + len) as usize
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Program;
+
+    macro_rules! prog {
+        ($re:expr) => { Program::new(None, 1 << 30, $re).unwrap() }
+    }
+
+    macro_rules! prefixes {
+        ($re:expr) => {{
+            let p = prog!($re);
+            assert!(!p.prefixes_complete);
+            p.prefixes.prefixes()
+        }}
+    }
+    macro_rules! prefixes_complete {
+        ($re:expr) => {{
+            let p = prog!($re);
+            assert!(p.prefixes_complete);
+            p.prefixes.prefixes()
+        }}
+    }
+
+    #[test]
+    fn single() {
+        assert_eq!(prefixes_complete!("a"), vec!["a"]);
+        assert_eq!(prefixes_complete!("[a]"), vec!["a"]);
+        assert_eq!(prefixes!("a+"), vec!["a"]);
+        assert_eq!(prefixes!("(?:a)+"), vec!["a"]);
+        assert_eq!(prefixes!("(a)+"), vec!["a"]);
+    }
+
+    #[test]
+    fn single_alt() {
+        assert_eq!(prefixes_complete!("a|b"), vec!["a", "b"]);
+        assert_eq!(prefixes_complete!("b|a"), vec!["b", "a"]);
+        assert_eq!(prefixes_complete!("[a]|[b]"), vec!["a", "b"]);
+        assert_eq!(prefixes!("a+|b"), vec!["a", "b"]);
+        assert_eq!(prefixes!("a|b+"), vec!["a", "b"]);
+        assert_eq!(prefixes!("(?:a+)|b"), vec!["a", "b"]);
+        assert_eq!(prefixes!("(a+)|b"), vec!["a", "b"]);
+    }
+
+    #[test]
+    fn many() {
+        assert_eq!(prefixes_complete!("abcdef"), vec!["abcdef"]);
+        assert_eq!(prefixes!("abcdef+"), vec!["abcdef"]);
+        assert_eq!(prefixes!("(?:abcdef)+"), vec!["abcdef"]);
+        assert_eq!(prefixes!("(abcdef)+"), vec!["abcdef"]);
+    }
+
+    #[test]
+    fn many_alt() {
+        assert_eq!(prefixes_complete!("abc|def"), vec!["abc", "def"]);
+        assert_eq!(prefixes_complete!("def|abc"), vec!["def", "abc"]);
+        assert_eq!(prefixes!("abc+|def"), vec!["abc", "def"]);
+        assert_eq!(prefixes!("abc|def+"), vec!["abc", "def"]);
+        assert_eq!(prefixes!("(?:abc)+|def"), vec!["abc", "def"]);
+        assert_eq!(prefixes!("(abc)+|def"), vec!["abc", "def"]);
+    }
+
+    #[test]
+    fn class() {
+        assert_eq!(prefixes_complete!("[0-9]"), vec![
+            "0", "1", "2", "3", "4", "5", "6", "7", "8", "9",
+        ]);
+        assert_eq!(prefixes!("[0-9]+"), vec![
+            "0", "1", "2", "3", "4", "5", "6", "7", "8", "9",
+        ]);
+    }
+
+    #[test]
+    fn preceding_alt() {
+        assert_eq!(prefixes!("(?:a|b).+"), vec!["a", "b"]);
+        assert_eq!(prefixes!("(a|b).+"), vec!["a", "b"]);
+    }
+
+    #[test]
+    fn nested_alt() {
+        assert_eq!(prefixes_complete!("(a|b|c|d)"),
+                   vec!["a", "b", "c", "d"]);
+        assert_eq!(prefixes_complete!("((a|b)|(c|d))"),
+                   vec!["a", "b", "c", "d"]);
+    }
 }
