@@ -35,25 +35,26 @@ pub enum Prefix {
     /// No prefixes. (Never advances through the input.)
     Empty,
     /// A single byte prefix.
-    Single(u8),
+    Byte(u8),
     /// A set of two or more single byte prefixes.
     /// This could be reduced to a bitset, which would use only 8 bytes,
     /// but I don't think we care.
-    Singles {
+    Bytes {
         chars: Vec<u8>,
         sparse: Vec<bool>,
     },
+    Single(SingleSearch),
     /// A full Aho-Corasick DFA automaton.
     Automaton(FullAcAutomaton),
 }
 
 impl Prefix {
     /// Create a new prefix matching machine.
-    pub fn new(pfxs: Vec<String>) -> Prefix {
+    pub fn new(mut pfxs: Vec<String>) -> Prefix {
         if pfxs.len() == 0 || pfxs[0].len() == 0 {
             Prefix::Empty
         } else if pfxs.len() == 1 && pfxs[0].len() == 1 {
-            Prefix::Single(pfxs[0].as_bytes()[0])
+            Prefix::Byte(pfxs[0].as_bytes()[0])
         } else if pfxs.len() >= 2 && pfxs.iter().all(|s| s.len() == 1) {
             let mut set = vec![false; 256];
             let mut chars = vec![];
@@ -61,7 +62,9 @@ impl Prefix {
                 chars.push(p.as_bytes()[0]);
                 set[p.as_bytes()[0] as usize] = true;
             }
-            Prefix::Singles { chars: chars, sparse: set }
+            Prefix::Bytes { chars: chars, sparse: set }
+        } else if pfxs.len() == 1 {
+            Prefix::Single(SingleSearch::new(pfxs.pop().unwrap()))
         } else {
             Prefix::Automaton(AcAutomaton::new(pfxs).into_full())
         }
@@ -78,9 +81,12 @@ impl Prefix {
         use self::Prefix::*;
         match *self {
             Empty => Some((0, 0)),
-            Single(b) => memchr(b, haystack.as_bytes()).map(|i| (i, i+1)),
-            Singles { ref sparse, .. } => {
+            Byte(b) => memchr(b, haystack.as_bytes()).map(|i| (i, i+1)),
+            Bytes { ref sparse, .. } => {
                 find_singles(sparse, haystack.as_bytes())
+            }
+            Single(ref searcher) => {
+                searcher.find(haystack).map(|i| (i, i + searcher.pat.len()))
             }
             Automaton(ref aut) => {
                 aut.find(haystack).next().map(|m| (m.start, m.end))
@@ -97,8 +103,9 @@ impl Prefix {
     pub fn len(&self) -> usize {
         match *self {
             Prefix::Empty => 0,
+            Prefix::Byte(_) => 1,
+            Prefix::Bytes { ref chars, .. } => chars.len(),
             Prefix::Single(_) => 1,
-            Prefix::Singles { ref chars, .. } => chars.len(),
             Prefix::Automaton(ref aut) => aut.len(),
         }
     }
@@ -111,8 +118,9 @@ impl Prefix {
     pub fn preserves_priority(&self) -> bool {
         match *self {
             Prefix::Empty => true,
+            Prefix::Byte(_) => true,
+            Prefix::Bytes{..} => true,
             Prefix::Single(_) => true,
-            Prefix::Singles{..} => true,
             Prefix::Automaton(ref aut) => {
                 // Okay, so the automaton can respect priority in one
                 // particular case: when every pattern is of the same length.
@@ -127,10 +135,86 @@ impl Prefix {
             }
         }
     }
+
+    /// Returns all of the prefixes participating in this machine.
+    ///
+    /// For debug/testing only! (It allocates.)
+    #[allow(dead_code)]
+    pub fn prefixes(&self) -> Vec<String> {
+        match *self {
+            Prefix::Empty => vec![],
+            Prefix::Byte(b) => vec![format!("{}", b as char)],
+            Prefix::Bytes { ref chars, .. } => {
+                chars.iter().map(|&b| format!("{}", b as char)).collect()
+            }
+            Prefix::Single(ref searcher) => vec![searcher.pat.clone()],
+            Prefix::Automaton(ref aut) => aut.patterns().to_vec(),
+        }
+    }
 }
 
-/// A very quick scan for multiple single byte prefixes using a sparse map.
+/// Provides an implementation of fast subtring search.
+///
+/// In particular, this uses Boyer-Moore-Horspool with Tim Raita's twist:
+/// https://en.wikipedia.org/wiki/Raita_Algorithm
+///
+/// I'm skeptical of the utility here, because benchmarks suggest that it is
+/// difficult to beat Aho-Corasick on random text. Namely, both algorithms are
+/// dominated by the performance of `memchr` for the leading byte prefix.
+/// With that said, BMH does seem to surpass AC when the search text gets
+/// longer (see the `easy0_1MB` vs. `easy1_1MB` benchmarks).
+///
+/// More analysis needs to be done to test this on different search texts.
+#[derive(Clone, Debug)]
+struct SingleSearch {
+    pat: String,
+    shift: Vec<usize>,
+}
+
+impl SingleSearch {
+    fn new(pat: String) -> SingleSearch {
+        assert!(pat.len() >= 1);
+        let mut shift = vec![pat.len(); 256];
+        for i in 0..(pat.len() - 1) {
+            shift[pat.as_bytes()[i] as usize] = pat.len() - i - 1;
+        }
+        SingleSearch {
+            pat: pat,
+            shift: shift,
+        }
+    }
+
+    fn find(&self, haystack: &str) -> Option<usize> {
+        let pat = self.pat.as_bytes();
+        let haystack = haystack.as_bytes();
+        if haystack.len() < pat.len() {
+            return None;
+        }
+        let mut i = match memchr(pat[0], haystack) {
+            None => return None,
+            Some(i) => i,
+        };
+        while i <= haystack.len() - pat.len() {
+            let b = haystack[i + pat.len() - 1];
+            if b == pat[pat.len() - 1]
+               && haystack[i] == pat[0]
+               && haystack[i + (pat.len() / 2)] == pat[pat.len() / 2]
+               && pat == &haystack[i..i + pat.len()] {
+                return Some(i);
+            }
+            i += self.shift[b as usize];
+            i += match memchr(pat[0], &haystack[i..]) {
+                None => return None,
+                Some(i) => i,
+            };
+        }
+        None
+    }
+}
+
+/// A quick scan for multiple single byte prefixes using a sparse map.
 fn find_singles(sparse: &[bool], haystack: &[u8]) -> Option<(usize, usize)> {
+    // TODO: Improve this with ideas found in jetscii crate.
     for (hi, &b) in haystack.iter().enumerate() {
         if sparse[b as usize] {
             return Some((hi, hi+1));
@@ -143,14 +227,15 @@ impl fmt::Debug for Prefix {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             Prefix::Empty => write!(f, "Empty"),
-            Prefix::Single(b) => write!(f, "{:?}", b as char),
-            Prefix::Singles { ref chars, .. } => {
+            Prefix::Byte(b) => write!(f, "{:?}", b as char),
+            Prefix::Bytes { ref chars, .. } => {
                 let chars: Vec<String> =
                     chars.iter()
                          .map(|&c| format!("{:?}", c as char))
                          .collect();
                 write!(f, "{}", chars.connect(", "))
             }
+            Prefix::Single(ref searcher) => write!(f, "{:?}", searcher),
             Prefix::Automaton(ref aut) => write!(f, "{:?}", aut),
         }
     }
