@@ -12,6 +12,10 @@ An implementation of regular expressions for Rust.
 """
 
 [[test]]
+path = "src/lib.rs"
+name = "regex"
+
+[[test]]
 path = "regex_macros/tests/test_dynamic.rs"
 name = "dynamic"
 
