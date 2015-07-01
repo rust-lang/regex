@@ -12,8 +12,8 @@ script:
     [ $TRAVIS_RUST_VERSION != nightly ] || (
       cargo test --verbose --features pattern &&
       cargo bench --verbose &&
-      cargo test --manifest-path=regex_macros/Cargo.toml &&
-      cargo bench --manifest-path=regex_macros/Cargo.toml
+      travis_wait cargo test --manifest-path=regex_macros/Cargo.toml &&
+      travis_wait cargo bench --manifest-path=regex_macros/Cargo.toml
     )
   - cargo doc
   - cargo test --verbose --manifest-path=regex-syntax/Cargo.toml
