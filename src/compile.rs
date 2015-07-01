@@ -177,12 +177,43 @@ impl Compiler {
                 for _ in 0..min {
                     try!(self.c(e.clone()));
                 }
+                // It is much simpler to compile, e.g., `a{2,5}` as:
+                //
+                //     aaa?a?a?
+                //
+                // But you end up with a sequence of instructions like this:
+                //
+                //     0: 'a'
+                //     1: 'a',
+                //     2: split(3, 4)
+                //     3: 'a'
+                //     4: split(5, 6)
+                //     5: 'a'
+                //     6: split(7, 8)
+                //     7: 'a'
+                //     8: MATCH
+                //
+                // This is *incredibly* inefficient because the splits end
+                // up forming a chain. Given a much larger number than `5`,
+                // it is easy cause perverse behavior in the matching engines
+                // like stack overflows. We could fix the matching engine,
+                // but instead, we should just make the program smarter.
+                // Thus, we do a custom job here and instead of chaining the
+                // splits together, we simply point them to the MATCH
+                // instruction directly.
+                let (mut splits, mut starts) = (vec![], vec![]);
                 for _ in min..max {
-                    try!(self.c(Expr::Repeat {
-                        e: Box::new(e.clone()),
-                        r: Repeater::ZeroOrOne,
-                        greedy: greedy,
-                    }));
+                    splits.push(self.empty_split());
+                    starts.push(self.insts.len());
+                    try!(self.c(e.clone()));
+                }
+                let end = self.insts.len();
+                for (split, start) in splits.into_iter().zip(starts) {
+                    if greedy {
+                        self.set_split(split, start, end);
+                    } else {
+                        self.set_split(split, end, start);
+                    }
                 }
             }
         }
