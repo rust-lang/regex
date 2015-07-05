@@ -31,3 +31,13 @@ macro_rules! searcher_expr { ($e:expr) => ($e) }
 macro_rules! searcher_expr { ($e:expr) => ({}) }
 
 mod tests;
+
+// Regression test for https://github.com/rust-lang/regex/issues/98
+//
+// N.B. This test is here because it wreaks havoc with code generation via
+// the `regex!` plugin.
+#[test]
+fn regression_many_repeat_stack_overflow() {
+    let re = regex!("^.{1,2500}");
+    assert_eq!(re.find("a"), Some((0, 1)));
+}

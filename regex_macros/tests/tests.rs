@@ -369,9 +369,6 @@ mat!(negclass_ascii, r"[^[:alpha:]Z]", "A1", Some((1, 2)));
 mat!(regression_unsorted_binary_search_1, r"(?i)[a_]+", "A_", Some((0, 2)));
 mat!(regression_unsorted_binary_search_2, r"(?i)[A_]+", "a_", Some((0, 2)));
 
-// Regression test for https://github.com/rust-lang/regex/issues/98
-mat!(regression_many_repeat_stack_overflow, r"^.{1,2500}", "a", Some((0, 1)));
-
 // Regression tests for https://github.com/rust-lang/regex/issues/99
 mat!(regression_negated_char_class_1, r"(?i)[^x]", "x", None);
 mat!(regression_negated_char_class_2, r"(?i)[^x]", "X", None);
