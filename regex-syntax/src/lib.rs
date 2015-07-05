@@ -73,6 +73,7 @@ use std::cmp::{Ordering, max, min};
 use std::fmt;
 use std::iter::IntoIterator;
 use std::ops::Deref;
+use std::result;
 use std::slice;
 use std::vec;
 
@@ -386,17 +387,8 @@ impl CharClass {
     ///
     /// For all `c` where `c` is a Unicode scalar value, `c` matches `self`
     /// if and only if `c` does not match `self.negate()`.
-    ///
-    /// Note that this cannot be called on a character class that has had
-    /// case folding applied to it. (Because case folding turns on a flag
-    /// and doesn't store every possible matching character. Therefore,
-    /// its negation is tricky to get right. Turns out, we don't need it
-    /// anyway!)
     fn negate(mut self) -> CharClass {
         fn range(s: char, e: char) -> ClassRange { ClassRange::new(s, e) }
-
-        // Never allow negating of a class that has been case folded!
-        assert!(!self.casei);
 
         if self.is_empty() { return self; }
         self = self.canonicalize();
@@ -417,20 +409,22 @@ impl CharClass {
 
     /// Apply case folding to this character class.
     ///
-    /// One a class had been case folded, it cannot be negated.
+    /// N.B. Applying case folding to a negated character class probably
+    /// won't produce the expected result. e.g., `(?i)[^x]` really should
+    /// match any character sans `x` and `X`, but if `[^x]` is negated
+    /// before being case folded, you'll end up matching any character.
     fn case_fold(self) -> CharClass {
         let mut folded = self.to_empty();
         folded.casei = true;
         for r in self {
             // Applying case folding to a range is expensive because *every*
-            // character needed to be examined. Thus, we avoid that drudgery
+            // character needs to be examined. Thus, we avoid that drudgery
             // if no character in the current range is in our case folding
             // table.
             if r.needs_case_folding() {
                 folded.ranges.extend(r.case_fold());
-            } else {
-                folded.ranges.push(r);
             }
+            folded.ranges.push(r);
         }
         folded.canonicalize()
     }
@@ -471,7 +465,7 @@ impl ClassRange {
     /// Returns true if and only if this range contains a character that is
     /// in the case folding table.
     fn needs_case_folding(self) -> bool {
-        case_folding::C_plus_S_table
+        case_folding::C_plus_S_both_table
         .binary_search_by(|&(c, _)| self.partial_cmp(&c).unwrap()).is_ok()
     }
 
@@ -481,25 +475,40 @@ impl ClassRange {
     /// longer contiguous, this returns multiple class ranges. They are in
     /// canonical order.
     fn case_fold(self) -> Vec<ClassRange> {
+        let table = &case_folding::C_plus_S_both_table;
         let (s, e) = (self.start as u32, self.end as u32 + 1);
-        let mut start = simple_case_fold(self.start);
+        let mut start = simple_case_fold_both(self.start);
         let mut end = start;
         let mut next_case_fold = self.start;
         let mut ranges = Vec::with_capacity(100);
         for mut c in (s+1..e).filter_map(char::from_u32) {
             if c >= next_case_fold {
-                c = match simple_case_fold_result(c) {
-                    Ok(i) => case_folding::C_plus_S_table[i].1,
+                c = match simple_case_fold_both_result(c) {
+                    Ok(i) => {
+                        for &(c1, c2) in &table[i..] {
+                            if c1 != c {
+                                break;
+                            }
+                            if c2 != inc_char(end) {
+                                ranges.push(ClassRange::new(start, end));
+                                start = c2;
+                            }
+                            end = c2;
+                        }
+                        continue;
+                    }
                     Err(i) => {
-                        if i < case_folding::C_plus_S_table.len() {
-                            next_case_fold = case_folding::C_plus_S_table[i].0;
+                        if i < table.len() {
+                            next_case_fold = table[i].0;
                         } else {
-                            next_case_fold = '\u{10FFFF}'
+                            next_case_fold = '\u{10FFFF}';
                         }
                         c
                     }
                 };
             }
+            // The fast path. We know this character doesn't have an entry
+            // in the case folding table.
             if c != inc_char(end) {
                 ranges.push(ClassRange::new(start, end));
                 start = c;
@@ -885,25 +894,67 @@ impl fmt::Display for ErrorKind {
     }
 }
 
-/// Returns the Unicode *simple* case folding of `c`.
+/// Returns the canonical Unicode *simple* case folding of `c`.
+///
+/// For any c1 and c2, if c1 and c2 are defined to be simple case foldings
+/// of each other, then `canonical_simple_case_fold` applied to either `c1`
+/// or `c2` will produce the same result.
+///
+/// e.g., `f(x) -> x` and `f(X) -> x`.
 ///
 /// N.B. This is hidden because it really isn't the responsibility of this
 /// crate to do simple case folding. One hopes that either another crate or
 /// the standard library will be able to do this for us. In any case, we still
 /// expose it because it is used inside the various Regex engines.
 #[doc(hidden)]
-pub fn simple_case_fold(c: char) -> char {
-    simple_case_fold_result(c)
-        .map(|i| case_folding::C_plus_S_table[i].1)
-        .unwrap_or(c)
+pub fn simple_case_fold(c1: char) -> char {
+    case_folding::C_plus_S_table
+    .binary_search_by(|&(c2, _)| c2.cmp(&c1))
+    .map(|i| case_folding::C_plus_S_table[i].1)
+    .unwrap_or(c1)
+}
+
+/// Always applies a case folding transformation if `c` is defined in the
+/// Unicode simple case folding.
+///
+/// e.g., `f(x) -> X` and `f(X) -> x`.
+fn simple_case_fold_both(c: char) -> char {
+    simple_case_fold_both_result(c)
+    .map(|i| case_folding::C_plus_S_both_table[i].1)
+    .unwrap_or(c)
 }
 
 /// The result of binary search on the simple case folding table.
 ///
 /// This level of detail is exposed so that we can do case folding on a
 /// range of characters efficiently.
-fn simple_case_fold_result(c: char) -> ::std::result::Result<usize, usize> {
-    case_folding::C_plus_S_table.binary_search_by(|&(x, _)| x.cmp(&c))
+fn simple_case_fold_both_result(c1: char) -> result::Result<usize, usize> {
+    let table = &case_folding::C_plus_S_both_table;
+    let i = binary_search(table, |&(c2, _)| c1 <= c2);
+    if i >= table.len() || table[i].0 != c1 {
+        Err(i)
+    } else {
+        Ok(i)
+    }
+}
+
+/// Binary search to find first element such that `pred(T) == true`.
+///
+/// Assumes that if `pred(xs[i]) == true` then `pred(xs[i+1]) == true`.
+///
+/// If all elements yield `pred(T) == false`, then `xs.len()` is returned.
+fn binary_search<T, F>(xs: &[T], mut pred: F) -> usize
+        where F: FnMut(&T) -> bool {
+    let (mut left, mut right) = (0, xs.len());
+    while left < right {
+        let mid = (left + right) / 2;
+        if pred(&xs[mid]) {
+            right = mid;
+        } else {
+            left = mid + 1;
+        }
+    }
+    left
 }
 
 /// Escapes all regular expression meta characters in `text`.
@@ -1022,7 +1073,9 @@ mod tests {
             ('M', 'P'), ('L', 'S'), ('c', 'f'),
         ]);
         assert_eq!(cls.case_fold(), classi(&[
+            ('A', 'J'), ('L', 'S'),
             ('a', 'j'), ('l', 's'),
+            ('\u{17F}', '\u{17F}'),
         ]));
     }
 
@@ -1137,18 +1190,18 @@ mod tests {
     }
 
     #[test]
-    fn class_fold_retain_only_needed() {
-        let cls = class(&[('A', 'Z'), ('a', 'z')]);
-        assert_eq!(cls.case_fold(), classi(&[
-            ('a', 'z'),
-        ]));
-    }
-
-    #[test]
     fn class_fold_az() {
         let cls = class(&[('A', 'Z')]);
         assert_eq!(cls.case_fold(), classi(&[
-            ('a', 'z'),
+            ('A', 'Z'), ('a', 'z'),
+            ('\u{17F}', '\u{17F}'),
+            ('\u{212A}', '\u{212A}'),
+        ]));
+        let cls = class(&[('a', 'z')]);
+        assert_eq!(cls.case_fold(), classi(&[
+            ('A', 'Z'), ('a', 'z'),
+            ('\u{17F}', '\u{17F}'),
+            ('\u{212A}', '\u{212A}'),
         ]));
     }
 
@@ -1159,7 +1212,7 @@ mod tests {
             ('A', 'A'), ('_', '_'),
         ]));
         assert_eq!(cls.case_fold(), classi(&[
-            ('_', '_'), ('a', 'a'),
+            ('A', 'A'), ('_', '_'), ('a', 'a'),
         ]));
     }
 
@@ -1170,7 +1223,7 @@ mod tests {
             ('=', '='), ('A', 'A'),
         ]));
         assert_eq!(cls.case_fold(), classi(&[
-            ('=', '='), ('a', 'a'),
+            ('=', '='), ('A', 'A'), ('a', 'a'),
         ]));
     }
 
@@ -1179,6 +1232,17 @@ mod tests {
         let cls = class(&[('\x00', '\x10')]);
         assert_eq!(cls.case_fold(), classi(&[
             ('\x00', '\x10'),
+        ]));
+    }
+
+    #[test]
+    fn class_fold_negated() {
+        let cls = class(&[('x', 'x')]);
+        assert_eq!(cls.clone().case_fold(), classi(&[
+            ('X', 'X'), ('x', 'x'),
+        ]));
+        assert_eq!(cls.case_fold().negate(), classi(&[
+            ('\x00', 'W'), ('Y', 'w'), ('y', '\u{10FFFF}'),
         ]));
     }
 }

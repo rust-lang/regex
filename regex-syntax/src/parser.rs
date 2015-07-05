@@ -130,7 +130,6 @@ impl Parser {
                 }),
             };
             if !build_expr.is_empty() {
-                let build_expr = self.maybe_class_case_fold(build_expr);
                 self.stack.push(build_expr);
             }
         }
@@ -532,10 +531,8 @@ impl Parser {
                 }
             }
         }
-        if negated {
-            class = class.negate();
-        }
-        Ok(Build::Expr(Expr::Class(class.canonicalize())))
+        class = self.class_transform(negated, class).canonicalize();
+        Ok(Build::Expr(Expr::Class(class)))
     }
 
     // Parses a single range in a character class.
@@ -614,7 +611,7 @@ impl Parser {
                 Some(name) => name,
             };
             if !p.bump_if(":]") { return None; }
-            ascii_class(&name).map(|c| if !negate { c } else { c.negate() })
+            ascii_class(&name).map(|cls| p.class_transform(negate, cls))
         }
         let start = self.chari;
         match parse(self) {
@@ -652,7 +649,7 @@ impl Parser {
             };
         match unicode_class(&name) {
             None => Err(self.err(ErrorKind::UnrecognizedUnicodeClass(name))),
-            Some(cls) => if neg { Ok(cls.negate()) } else { Ok(cls) },
+            Some(cls) => Ok(self.class_transform(neg, cls)),
         }
     }
 
@@ -663,15 +660,13 @@ impl Parser {
     // No parser state is changed.
     fn parse_perl_class(&mut self, name: char) -> CharClass {
         use unicode::regex::{PERLD, PERLS, PERLW};
-        match name {
-            'd' => raw_class_to_expr(PERLD),
-            'D' => raw_class_to_expr(PERLD).negate(),
-            's' => raw_class_to_expr(PERLS),
-            'S' => raw_class_to_expr(PERLS).negate(),
-            'w' => raw_class_to_expr(PERLW),
-            'W' => raw_class_to_expr(PERLW).negate(),
+        let (cls, negate) = match name {
+            'd' | 'D' => (raw_class_to_expr(PERLD), name == 'D'),
+            's' | 'S' => (raw_class_to_expr(PERLS), name == 'S'),
+            'w' | 'W' => (raw_class_to_expr(PERLW), name == 'W'),
             _ => unreachable!(),
-        }
+        };
+        self.class_transform(negate, cls)
     }
 
     // Always bump to the next input and return the given expression as a
@@ -749,24 +744,17 @@ impl Parser {
         }
     }
 
-    // If the current contexts calls for case insensitivity and if the expr
-    // given is a character class, do case folding on it and return the new
-    // class.
-    //
-    // Otherwise, return the expression unchanged.
-    fn maybe_class_case_fold(&mut self, bexpr: Build) -> Build {
-        match bexpr {
-            Build::Expr(Expr::Class(cls)) => {
-                Build::Expr(Expr::Class(
-                    if self.flags.casei && !cls.casei {
-                        cls.case_fold()
-                    } else {
-                        cls
-                    }
-                ))
-            }
-            bexpr => bexpr,
+    // If the current context calls for case insensitivity, then apply
+    // case folding. Similarly, if `negate` is `true`, then negate the
+    // class. (Negation always proceeds case folding.)
+    fn class_transform(&self, negate: bool, mut cls: CharClass) -> CharClass {
+        if self.flags.casei {
+            cls = cls.case_fold();
         }
+        if negate {
+            cls = cls.negate();
+        }
+        cls
     }
 }
 
@@ -1915,9 +1903,15 @@ mod tests {
     #[test]
     fn ascii_class_negate_case_fold() {
         assert_eq!(p("(?i)[[:^upper:]]"),
-                   Expr::Class(class(UPPER).negate().case_fold()));
+                   Expr::Class(class(UPPER).case_fold().negate()));
         assert_eq!(p("(?i)[^[:^upper:]]"),
                    Expr::Class(class(UPPER).case_fold()));
+    }
+
+    #[test]
+    fn single_class_negate_case_fold() {
+        assert_eq!(p("(?i)[^x]"),
+                   Expr::Class(class(&[('x', 'x')]).case_fold().negate()));
     }
 
     #[test]

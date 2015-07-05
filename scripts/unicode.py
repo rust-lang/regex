@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2
 #
 # Copyright 2011-2013 The Rust Project Developers. See the COPYRIGHT
 # file at the top-level directory of this distribution and at
@@ -20,6 +20,7 @@
 # Since this should not require frequent updates, we just store this
 # out-of-line and check the unicode.rs file into git.
 
+from collections import defaultdict
 import fileinput, re, os, sys
 
 preamble = '''// Copyright 2012-2015 The Rust Project Developers. See the COPYRIGHT
@@ -198,14 +199,23 @@ def load_case_folding(f):
     fetch(f)
     re1 = re.compile("^ *([0-9A-F]+) *; *[CS] *; *([0-9A-F]+) *;")
     c_plus_s = []
+    all_pairs = defaultdict(list)
     for line in fileinput.input(f):
         m = re1.match(line)
         if m:
             a = int(m.group(1), 16)
             b = int(m.group(2), 16)
             c_plus_s.append((a, b))
-
-    return {"C_plus_S": c_plus_s}
+            all_pairs[a].append(b)
+            all_pairs[b].append(a)
+    both = set()
+    for k, vs in all_pairs.iteritems():
+        for v in vs:
+            both.add((k, v))
+            for v2 in all_pairs[v]:
+                both.add((k, v2))
+    c_plus_s_both = sorted((k1, k2) for k1, k2 in both if k1 != k2)
+    return {"C_plus_S": c_plus_s, "C_plus_S_both": c_plus_s_both}
 
 def escape_char(c):
     return "'\\u{%x}'" % c
