@@ -423,9 +423,7 @@ mod re;
 pub mod internal {
     pub use char::Char;
     pub use input::{Input, CharInput, InputAt};
-    pub use program::{
-        Program, MatchEngine, CharRanges, Inst, LookInst, OneChar,
-    };
+    pub use program::{Program, MatchEngine, CharRanges, Inst, LookInst};
     pub use re::ExNative;
     pub use re::Regex::{Dynamic, Native};
 }

@@ -8,10 +8,10 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use syntax::{self, Expr, Repeater};
+use syntax::{Expr, Repeater, CharClass, ClassRange};
 
 use Error;
-use program::{CharRanges, Inst, InstIdx, OneChar};
+use program::{CharRanges, Inst, InstIdx};
 
 type Compiled = (Vec<Inst>, Vec<Option<String>>);
 
@@ -53,21 +53,21 @@ impl Compiler {
         match ast {
             Expr::Empty => {},
             Expr::Literal { chars, casei } => {
-                for mut c in chars {
+                for c in chars {
                     if casei {
-                        c = syntax::simple_case_fold(c);
+                        try!(self.c(Expr::Class(CharClass::new(vec![
+                            ClassRange { start: c, end: c },
+                        ]).case_fold())));
+                    } else {
+                        self.push(Char(c));
                     }
-                    self.push(Char(OneChar { c: c, casei: casei }));
                 }
             }
             Expr::AnyChar => self.push(Ranges(CharRanges::any())),
             Expr::AnyCharNoNL => self.push(Ranges(CharRanges::any_nonl())),
             Expr::Class(cls) => {
                 if cls.len() == 1 && cls[0].start == cls[0].end {
-                    self.push(Char(OneChar {
-                        c: cls[0].start,
-                        casei: cls.is_case_insensitive(),
-                    }));
+                    self.push(Char(cls[0].start));
                 } else {
                     self.push(Ranges(CharRanges::from_class(cls)));
                 }

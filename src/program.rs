@@ -44,19 +44,9 @@ pub enum Inst {
     /// is not advanced.
     EmptyLook(LookInst),
     /// Match a single possibly case insensitive character.
-    Char(OneChar),
+    Char(char),
     /// Match one or more possibly case insensitive character ranges.
     Ranges(CharRanges),
-}
-
-/// A single character instruction.
-#[derive(Clone, Debug)]
-pub struct OneChar {
-    /// The character.
-    pub c: char,
-    /// True if the character should be matched case insensitively.
-    /// (i.e., The input character will need to be case folded.)
-    pub casei: bool,
 }
 
 /// A multi-range character class instruction.
@@ -64,8 +54,6 @@ pub struct OneChar {
 pub struct CharRanges {
     /// Sorted sequence of non-overlapping ranges.
     pub ranges: Vec<(char, char)>,
-    /// Whether to match case insensitively.
-    pub casei: bool,
 }
 
 /// The set of zero-width match instructions.
@@ -85,46 +73,27 @@ pub enum LookInst {
     NotWordBoundary,
 }
 
-impl OneChar {
-    /// Tests whether the given input character matches this instruction.
-    #[inline(always)] // About ~5-15% more throughput then `#[inline]`
-    pub fn matches(&self, c: Char) -> bool {
-        self.c == c || (self.casei && self.c == c.case_fold())
-    }
-}
-
 impl CharRanges {
-    /// Emits a range specifically for the `.` expression.
+    /// Emits a range specifically for the `(?s).` expression.
     pub fn any() -> CharRanges {
-        CharRanges {
-            ranges: vec![('\x00', '\u{10ffff}')],
-            casei: false,
-        }
+        CharRanges { ranges: vec![('\x00', '\u{10ffff}')] }
     }
 
-    /// Emits a range specifically for the `(?s).` expression.
+    /// Emits a range specifically for the `.` expression.
     pub fn any_nonl() -> CharRanges {
-        CharRanges {
-            ranges: vec![('\x00', '\x09'), ('\x0B', '\u{10ffff}')],
-            casei: false,
-        }
+        CharRanges { ranges: vec![('\x00', '\x09'), ('\x0B', '\u{10ffff}')] }
     }
 
     /// Emits a range from the AST character class.
     pub fn from_class(cls: syntax::CharClass) -> CharRanges {
-        let casei = cls.is_case_insensitive();
         CharRanges {
             ranges: cls.into_iter().map(|r| (r.start, r.end)).collect(),
-            casei: casei,
         }
     }
 
     /// Tests whether the given input character matches this instruction.
     #[inline(always)] // About ~5-15% more throughput then `#[inline]`
-    pub fn matches(&self, mut c: Char) -> Option<usize> {
-        if self.casei {
-            c = c.case_fold();
-        }
+    pub fn matches(&self, c: Char) -> Option<usize> {
         // This speeds up the `match_class_unicode` benchmark by checking
         // some common cases quickly without binary search. e.g., Matching
         // a Unicode class on predominantly ASCII text.
@@ -392,13 +361,13 @@ impl Program {
             match *inst {
                 Save(_) => { pc += 1; continue }
                 Jump(pc2) => pc = pc2,
-                Char(OneChar { c, casei: false }) => {
+                Char(c) => {
                     for alt in &mut alts {
                         alt.push(c);
                     }
                     pc += 1;
                 }
-                Ranges(CharRanges { ref ranges, casei: false }) => {
+                Ranges(CharRanges { ref ranges }) => {
                     // This adds a new literal for *each* character in this
                     // range. This has the potential to use way too much
                     // memory, so we bound it naively for now.
@@ -490,7 +459,7 @@ fn num_captures(insts: &[Inst]) -> usize {
 /// we extract from a regex program.
 fn num_chars_in_ranges(ranges: &[(char, char)]) -> usize {
     ranges.iter()
-          .map(|&(s, e)| (e as u32) - (s as u32))
+          .map(|&(s, e)| 1 + (e as u32) - (s as u32))
           .fold(0, |acc, len| acc + len) as usize
 }
 

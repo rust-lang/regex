@@ -159,8 +159,8 @@ impl<'r, 't> Nfa<'r, 't> {
                 }
                 true
             }
-            Char(ref inst) => {
-                if inst.matches(at.char()) {
+            Char(c) => {
+                if c == at.char() {
                     self.add(nlist, thread_caps, pc+1, at_next);
                 }
                 false

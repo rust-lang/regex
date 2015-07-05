@@ -198,14 +198,12 @@ def load_properties(f, interestingprops):
 def load_case_folding(f):
     fetch(f)
     re1 = re.compile("^ *([0-9A-F]+) *; *[CS] *; *([0-9A-F]+) *;")
-    c_plus_s = []
     all_pairs = defaultdict(list)
     for line in fileinput.input(f):
         m = re1.match(line)
         if m:
             a = int(m.group(1), 16)
             b = int(m.group(2), 16)
-            c_plus_s.append((a, b))
             all_pairs[a].append(b)
             all_pairs[b].append(a)
     both = set()
@@ -215,7 +213,7 @@ def load_case_folding(f):
             for v2 in all_pairs[v]:
                 both.add((k, v2))
     c_plus_s_both = sorted((k1, k2) for k1, k2 in both if k1 != k2)
-    return {"C_plus_S": c_plus_s, "C_plus_S_both": c_plus_s_both}
+    return {"C_plus_S_both": c_plus_s_both}
 
 def escape_char(c):
     return "'\\u{%x}'" % c

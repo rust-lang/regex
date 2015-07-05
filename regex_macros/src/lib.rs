@@ -34,7 +34,7 @@ use rustc::plugin::Registry;
 
 use regex::Regex;
 use regex::internal::{
-    Inst, LookInst, OneChar, CharRanges, Program, Dynamic, Native,
+    Inst, LookInst, CharRanges, Program, Dynamic, Native,
 };
 
 /// For the `regex!` syntax extension. Do not use.
@@ -388,7 +388,7 @@ fn exec<'t>(
                     self.add(nlist, thread_caps, $x, at);
                     self.add(nlist, thread_caps, $y, at);
                 }),
-                // For Match, OneChar, CharClass, Any, AnyNoNL
+                // For Match, Char, Ranges
                 _ => quote_expr!(self.cx, {
                     let mut t = &mut nlist.thread(ti);
                     for (slot, val) in t.caps.iter_mut().zip(thread_caps.iter()) {
@@ -413,19 +413,16 @@ fn exec<'t>(
                     }
                     return true;
                 }),
-                Inst::Char(OneChar { c, casei }) => quote_expr!(self.cx, {
-                    if $c == at.char() || ($casei && $c == at.char().case_fold()) {
+                Inst::Char(c) => quote_expr!(self.cx, {
+                    if $c == at.char() {
                         self.add(nlist, thread_caps, $nextpc, at_next);
                     }
                     return false;
                 }),
-                Inst::Ranges(CharRanges { ref ranges, casei }) => {
+                Inst::Ranges(CharRanges { ref ranges }) => {
                     let match_class = self.match_class(ranges);
                     quote_expr!(self.cx, {
                         let mut c = at.char();
-                        if $casei {
-                            c = c.case_fold();
-                        }
                         if let Some(c) = c.as_char() {
                             if $match_class {
                                 self.add(nlist, thread_caps, $nextpc, at_next);

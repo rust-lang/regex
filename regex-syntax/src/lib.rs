@@ -200,7 +200,6 @@ pub enum Repeater {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CharClass {
     ranges: Vec<ClassRange>,
-    casei: bool,
 }
 
 /// A single inclusive range in a character class.
@@ -317,8 +316,8 @@ impl<'a> IntoIterator for &'a CharClass {
 
 impl CharClass {
     /// Create a new class from an existing set of ranges.
-    fn new(ranges: Vec<ClassRange>) -> CharClass {
-        CharClass { ranges: ranges, casei: false }
+    pub fn new(ranges: Vec<ClassRange>) -> CharClass {
+        CharClass { ranges: ranges }
     }
 
     /// Create an empty class.
@@ -327,30 +326,15 @@ impl CharClass {
     }
 
     /// Returns true if `c` is matched by this character class.
-    ///
-    /// If this character class is case insensitive, then simple case folding
-    /// is applied to `c` before checking for a match.
-    pub fn matches(&self, mut c: char) -> bool {
-        if self.is_case_insensitive() {
-            c = simple_case_fold(c)
-        }
+    pub fn matches(&self, c: char) -> bool {
         self.binary_search_by(|range| c.partial_cmp(range).unwrap()).is_ok()
-    }
-
-    /// Returns true if this character class should be matched case
-    /// insensitively.
-    ///
-    /// When `true`, simple case folding has already been applied to the
-    /// class.
-    pub fn is_case_insensitive(&self) -> bool {
-        self.casei
     }
 
     /// Create a new empty class from this one.
     ///
     /// Namely, its capacity and case insensitive setting will be the same.
     fn to_empty(&self) -> CharClass {
-        CharClass { ranges: Vec::with_capacity(self.len()), casei: self.casei }
+        CharClass { ranges: Vec::with_capacity(self.len()) }
     }
 
     /// Merge two classes and canonicalize them.
@@ -387,7 +371,7 @@ impl CharClass {
     ///
     /// For all `c` where `c` is a Unicode scalar value, `c` matches `self`
     /// if and only if `c` does not match `self.negate()`.
-    fn negate(mut self) -> CharClass {
+    pub fn negate(mut self) -> CharClass {
         fn range(s: char, e: char) -> ClassRange { ClassRange::new(s, e) }
 
         if self.is_empty() { return self; }
@@ -413,9 +397,8 @@ impl CharClass {
     /// won't produce the expected result. e.g., `(?i)[^x]` really should
     /// match any character sans `x` and `X`, but if `[^x]` is negated
     /// before being case folded, you'll end up matching any character.
-    fn case_fold(self) -> CharClass {
+    pub fn case_fold(self) -> CharClass {
         let mut folded = self.to_empty();
-        folded.casei = true;
         for r in self {
             // Applying case folding to a range is expensive because *every*
             // character needs to be examined. Thus, we avoid that drudgery
@@ -477,11 +460,11 @@ impl ClassRange {
     fn case_fold(self) -> Vec<ClassRange> {
         let table = &case_folding::C_plus_S_both_table;
         let (s, e) = (self.start as u32, self.end as u32 + 1);
-        let mut start = simple_case_fold_both(self.start);
+        let mut start = self.start;
         let mut end = start;
-        let mut next_case_fold = self.start;
-        let mut ranges = Vec::with_capacity(100);
-        for mut c in (s+1..e).filter_map(char::from_u32) {
+        let mut next_case_fold = '\x00';
+        let mut ranges = Vec::with_capacity(10);
+        for mut c in (s..e).filter_map(char::from_u32) {
             if c >= next_case_fold {
                 c = match simple_case_fold_both_result(c) {
                     Ok(i) => {
@@ -624,17 +607,11 @@ impl fmt::Display for Repeater {
 
 impl fmt::Display for CharClass {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        if self.casei {
-            try!(write!(f, "(?i:"));
-        }
         try!(write!(f, "["));
         for range in self.iter() {
             try!(write!(f, "{}", range));
         }
         try!(write!(f, "]"));
-        if self.casei {
-            try!(write!(f, ")"));
-        }
         Ok(())
     }
 }
@@ -894,40 +871,12 @@ impl fmt::Display for ErrorKind {
     }
 }
 
-/// Returns the canonical Unicode *simple* case folding of `c`.
-///
-/// For any c1 and c2, if c1 and c2 are defined to be simple case foldings
-/// of each other, then `canonical_simple_case_fold` applied to either `c1`
-/// or `c2` will produce the same result.
-///
-/// e.g., `f(x) -> x` and `f(X) -> x`.
-///
-/// N.B. This is hidden because it really isn't the responsibility of this
-/// crate to do simple case folding. One hopes that either another crate or
-/// the standard library will be able to do this for us. In any case, we still
-/// expose it because it is used inside the various Regex engines.
-#[doc(hidden)]
-pub fn simple_case_fold(c1: char) -> char {
-    case_folding::C_plus_S_table
-    .binary_search_by(|&(c2, _)| c2.cmp(&c1))
-    .map(|i| case_folding::C_plus_S_table[i].1)
-    .unwrap_or(c1)
-}
-
-/// Always applies a case folding transformation if `c` is defined in the
-/// Unicode simple case folding.
-///
-/// e.g., `f(x) -> X` and `f(X) -> x`.
-fn simple_case_fold_both(c: char) -> char {
-    simple_case_fold_both_result(c)
-    .map(|i| case_folding::C_plus_S_both_table[i].1)
-    .unwrap_or(c)
-}
-
 /// The result of binary search on the simple case folding table.
 ///
-/// This level of detail is exposed so that we can do case folding on a
-/// range of characters efficiently.
+/// Note that this binary search is done on the "both" table, such that
+/// the index returned corresponds to the *first* location of `c1` in the
+/// table. The table can then be scanned linearly starting from the position
+/// returned to find other case mappings for `c1`.
 fn simple_case_fold_both_result(c1: char) -> result::Result<usize, usize> {
     let table = &case_folding::C_plus_S_both_table;
     let i = binary_search(table, |&(c2, _)| c1 <= c2);
@@ -1027,11 +976,7 @@ mod tests {
         CharClass::new(ranges)
     }
 
-    fn classi(ranges: &[(char, char)]) -> CharClass {
-        let mut cls = class(ranges);
-        cls.casei = true;
-        cls
-    }
+    fn classi(ranges: &[(char, char)]) -> CharClass { class(ranges) }
 
     #[test]
     fn class_canon_no_change() {
@@ -1243,6 +1188,14 @@ mod tests {
         ]));
         assert_eq!(cls.case_fold().negate(), classi(&[
             ('\x00', 'W'), ('Y', 'w'), ('y', '\u{10FFFF}'),
+        ]));
+    }
+
+    #[test]
+    fn class_fold_single_to_multiple() {
+        let cls = class(&[('k', 'k')]);
+        assert_eq!(cls.case_fold(), classi(&[
+            ('K', 'K'), ('k', 'k'), ('\u{212A}', '\u{212A}'),
         ]));
     }
 }

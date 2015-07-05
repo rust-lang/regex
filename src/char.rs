@@ -48,13 +48,6 @@ impl Char {
         char::from_u32(self.0).map(|c| c.len_utf8()).unwrap_or(0)
     }
 
-    /// Returns the simple case folding of this character.
-    ///
-    /// If the character is absent, then absence is returned.
-    pub fn case_fold(self) -> Char {
-        char::from_u32(self.0).map(syntax::simple_case_fold).into()
-    }
-
     /// Returns true iff the character is a word character.
     ///
     /// If the character is absent, then false is returned.

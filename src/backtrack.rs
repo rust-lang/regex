@@ -224,8 +224,8 @@ impl<'r, 't, 'c> Backtrack<'r, 't, 'c> {
                         return false;
                     }
                 }
-                Char(ref inst) => {
-                    if inst.matches(at.char()) {
+                Char(c) => {
+                    if c == at.char() {
                         pc += 1;
                         at = self.input.at(at.next_pos());
                     } else {

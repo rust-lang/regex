@@ -354,24 +354,15 @@ impl Arbitrary for CharClass {
         if ranges.is_empty() {
             ranges.push(Arbitrary::arbitrary(g));
         }
-        let cls = CharClass {
-            ranges: ranges,
-            casei: false,
-        }.canonicalize();
+        let cls = CharClass { ranges: ranges }.canonicalize();
         if g.gen() { cls.case_fold() } else { cls }
     }
 
     fn shrink(&self) -> Box<Iterator<Item=CharClass>> {
-        Box::new((self.ranges.clone(), self.casei)
+        Box::new(self.ranges.clone()
                  .shrink()
-                 .filter(|&(ref ranges, _)| ranges.len() > 0)
-                 .map(|(ranges, casei)| {
-                     let cls = CharClass {
-                         ranges: ranges,
-                         casei: casei,
-                     }.canonicalize();
-                     if casei { cls.case_fold() } else { cls }
-                 }))
+                 .filter(|ranges| ranges.len() > 0)
+                 .map(|ranges| CharClass { ranges: ranges }.canonicalize()))
     }
 }
 
