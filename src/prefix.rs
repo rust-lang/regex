@@ -224,6 +224,7 @@ fn find_singles(sparse: &[bool], haystack: &[u8]) -> Option<(usize, usize)> {
 }
 
 impl fmt::Debug for Prefix {
+    #[allow(deprecated)] // connect => join in 1.3
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             Prefix::Empty => write!(f, "Empty"),
