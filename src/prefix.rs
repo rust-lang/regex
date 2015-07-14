@@ -45,7 +45,7 @@ pub enum Prefix {
     },
     Single(SingleSearch),
     /// A full Aho-Corasick DFA automaton.
-    Automaton(FullAcAutomaton),
+    Automaton(FullAcAutomaton<String>),
 }
 
 impl Prefix {
