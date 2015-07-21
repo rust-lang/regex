@@ -72,6 +72,7 @@ fn main() {
     println!("\n{}\n{}\n{}", ilen, clen, seq.len());
 }
 
+#[allow(deprecated)] // for connect -> join in Rust 1.3
 fn replace_all(text: &str, substs: Vec<(u8, &str)>) -> String {
     let mut replacements = vec![""; 256];
     let mut alternates = vec![];
