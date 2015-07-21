@@ -1134,7 +1134,7 @@ const PUNCT: Class = &[('!', '/'), (':', '@'), ('[', '`'), ('{', '~')];
 const SPACE: Class = &[('\t', '\t'), ('\n', '\n'), ('\x0B', '\x0B'),
                        ('\x0C', '\x0C'), ('\r', '\r'), (' ', ' ')];
 const UPPER: Class = &[('A', 'Z')];
-const WORD: Class = &[('0', '9'), ('A', 'Z'), ('a', 'z'), ('_', '_')];
+const WORD: Class = &[('0', '9'), ('A', 'Z'), ('_', '_'), ('a', 'z')];
 const XDIGIT: Class = &[('0', '9'), ('A', 'F'), ('a', 'f')];
 
 #[cfg(test)]
