@@ -8,8 +8,8 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use std::cell::RefCell;
 use std::fmt;
+use std::ops::{Deref, DerefMut, Drop};
 use std::sync::Mutex;
 
 /// A very simple memory pool for managing cached state.
@@ -27,18 +27,20 @@ use std::sync::Mutex;
 /// We use inherited mutability and ensure that each thread gets its own
 /// state. There is no limit on the number of states that are created. If a
 /// thread requests one and one isn't available, a new one is created.
-///
-/// (N.B. It seems like there exists a way to implement this with stronger
-/// guarantees, e.g., with a guard of some sort that puts the resource back
-/// in the pool when it is dropped. However, the use case for this pool is so
-/// simple and localized that it doesn't seem worth it.)
 pub struct Pool<T> {
-    stack: Mutex<RefCell<Vec<T>>>,
+    stack: Mutex<Vec<T>>,
     create: CreateFn<T>,
 }
 
 /// The type of the function used to create resources if none exist.
 pub type CreateFn<T> = Box<Fn() -> T + Send + Sync>;
+
+/// A guard the provides access to a value pulled from the pool.
+#[derive(Debug)]
+pub struct PoolGuard<'a, T: 'a> {
+    pool: &'a Pool<T>,
+    val: Option<T>,
+}
 
 impl<T> Pool<T> {
     /// Create a new pool.
@@ -53,7 +55,7 @@ impl<T> Pool<T> {
     /// All resources are created lazily/on-demand.
     pub fn new(create: CreateFn<T>) -> Pool<T> {
         Pool {
-            stack: Mutex::new(RefCell::new(vec![])),
+            stack: Mutex::new(vec![]),
             create: create,
         }
     }
@@ -62,25 +64,37 @@ impl<T> Pool<T> {
     ///
     /// If no resources are available, a new one is created.
     ///
-    /// The caller must return the resource to the pool, otherwise the pool
-    /// will not be able to reuse the resource.
-    pub fn get(&self) -> T {
-        let stack = self.stack.lock();
-        let stack = stack.unwrap();
-        let mut stack = stack.borrow_mut();
+    /// Once the guard is dropped, the resource is returned to the pool.
+    pub fn get(&self) -> PoolGuard<T> {
+        let mut stack = self.stack.lock().unwrap();
         match stack.pop() {
-            None => (self.create)(),
-            Some(v) => v,
+            None => PoolGuard { pool: self, val: Some((self.create)()) },
+            Some(v) => PoolGuard { pool: self, val: Some(v) },
         }
     }
 
     /// Add a resource to the pool.
     ///
     /// This makes the resource available for use with `get`.
-    pub fn put(&self, v: T) {
-        let stack = self.stack.lock();
-        let stack = stack.unwrap();
-        stack.borrow_mut().push(v);
+    fn put(&self, v: T) {
+        let mut stack = self.stack.lock().unwrap();
+        stack.push(v);
+    }
+}
+
+impl<'a, T> Deref for PoolGuard<'a, T> {
+    type Target = T;
+    fn deref<'b>(&'b self) -> &'b T { self.val.as_ref().unwrap() }
+}
+
+impl<'a, T> DerefMut for PoolGuard<'a, T> {
+    fn deref_mut<'b>(&'b mut self) -> &'b mut T { self.val.as_mut().unwrap() }
+}
+
+impl<'a, T> Drop for PoolGuard<'a, T> {
+    fn drop(&mut self) {
+        let val = self.val.take().unwrap();
+        self.pool.put(val);
     }
 }
 

@@ -66,7 +66,6 @@ impl<'r, 't> Nfa<'r, 't> {
             prog: prog,
             input: input,
         }.exec_(&mut q, &mut caps, at);
-        prog.nfa_threads.put(q);
         matched
     }
 

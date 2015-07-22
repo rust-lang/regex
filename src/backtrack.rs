@@ -41,11 +41,11 @@ const MAX_INPUT_SIZE: usize = 256 * (1 << 10);
 
 /// A backtracking matching engine.
 #[derive(Debug)]
-pub struct Backtrack<'r, 't, 'c> {
+pub struct Backtrack<'a, 'r, 't, 'c> {
     prog: &'r Program,
     input: CharInput<'t>,
     caps: &'c mut CaptureIdxs,
-    m: BackMachine,
+    m: &'a mut BackMachine,
 }
 
 /// Shared cached state between multiple invocations of a backtracking engine
@@ -80,7 +80,7 @@ enum Job {
     SaveRestore { slot: usize, old_pos: Option<usize> },
 }
 
-impl<'r, 't, 'c> Backtrack<'r, 't, 'c> {
+impl<'a, 'r, 't, 'c> Backtrack<'a, 'r, 't, 'c> {
     /// Execute the backtracking matching engine.
     ///
     /// If there's a match, `exec` returns `true` and populates the given
@@ -93,15 +93,14 @@ impl<'r, 't, 'c> Backtrack<'r, 't, 'c> {
     ) -> bool {
         let input = CharInput::new(text);
         let start = input.at(start);
-        let m = prog.backtrack.get();
+        let mut m = prog.backtrack.get();
         let mut b = Backtrack {
             prog: prog,
             input: input,
             caps: caps,
-            m: m,
+            m: &mut m,
         };
         let matched = b.exec_(start);
-        prog.backtrack.put(b.m);
         matched
     }
 
