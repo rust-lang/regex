@@ -599,7 +599,10 @@ impl Regex {
         if rep.no_expand().is_some() {
             // borrow checker pains. `rep` is borrowed mutably in the `else`
             // branch below.
-            let rep = rep.no_expand().unwrap();
+
+            // A replacement for a literal $ will be on this branch if that is
+            // the only replacement, so replace the $$ with a $.
+            let rep = rep.no_expand().unwrap().replace("$$", "$");
             for (i, (s, e)) in self.find_iter(text).enumerate() {
                 if limit > 0 && i >= limit {
                     break
