@@ -599,10 +599,7 @@ impl Regex {
         if rep.no_expand().is_some() {
             // borrow checker pains. `rep` is borrowed mutably in the `else`
             // branch below.
-
-            // A replacement for a literal $ will be on this branch if that is
-            // the only replacement, so replace the $$ with a $.
-            let rep = rep.no_expand().unwrap().replace("$$", "$");
+            let rep = rep.no_expand().unwrap();
             for (i, (s, e)) in self.find_iter(text).enumerate() {
                 if limit > 0 && i >= limit {
                     break
@@ -714,11 +711,10 @@ impl<'t> Replacer for &'t str {
     }
 
     fn no_expand<'a>(&'a mut self) -> Option<Cow<'a, str>> {
-        let re = Regex::new(REPLACE_EXPAND).unwrap();
-        if !re.is_match(self) {
-            Some((*self).into())
-        } else {
-            None
+        // if there is a $ there may be an expansion
+        match self.find('$') {
+            Some(_) => None,
+            None => Some((*self).into()),
         }
     }
 }
@@ -1147,5 +1143,32 @@ fn exec(re: &Regex, caps: &mut CaptureIdxs, text: &str, start: usize) -> bool {
     match *re {
         Regex::Native(ExNative { ref prog, .. }) => (*prog)(caps, text, start),
         Regex::Dynamic(ref prog) => prog.exec(caps, text, start),
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::{NoExpand, Regex};
+
+    #[test]
+    fn test_simple_expand() {
+        let re = Regex::new(r"(\w) (\w)").unwrap();
+        assert_eq!(re.replace_all("a b", "$2 $1"), "b a");
+    }
+
+    #[test]
+    fn test_literal_dollar() {
+        let re = Regex::new(r"(\w+) (\w+)").unwrap();
+        assert_eq!(re.replace_all("a b", "$1"), "a");
+        assert_eq!(re.replace_all("a b", "$$1"), "$1");  // $$ should become a $
+        assert_eq!(re.replace_all("a b", "$2 $$c $1"), "b $c a");
+    }
+
+    #[test]
+    fn test_no_expand() {
+        let re = Regex::new(r"(\w+)").unwrap();
+        assert_eq!(re.replace_all("a", NoExpand("$$1")), "$$1");
+        assert_eq!(re.replace_all("a", NoExpand("$1")), "$1");
+
     }
 }
