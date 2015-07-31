@@ -203,10 +203,6 @@ impl SingleSearch {
                 return Some(i);
             }
             i += self.shift[b as usize];
-            i += match memchr(pat[0], &haystack[i..]) {
-                None => return None,
-                Some(i) => i,
-            };
         }
         None
     }
