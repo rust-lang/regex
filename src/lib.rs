@@ -71,8 +71,17 @@
 //! more optimization work put it into it currently, so it is faster than
 //! the `regex!` macro in most cases.
 //!
-//! To use the `regex!` macro, you must enable the `plugin` feature and import
-//! the `regex_macros` crate as a syntax extension:
+//! To use the `regex!` macro, you must add `regex_macros` to your dependencies
+//! in your project's `Cargo.toml`:
+//!
+//! ```toml
+//! [dependencies]
+//! regex = "0.1.8"
+//! regex_macros = "0.1.8"
+//! ```
+//!
+//! and then enable the `plugin` feature and import the `regex_macros` crate as
+//! a syntax extension:
 //!
 //! ```ignore
 //! #![feature(plugin)]
