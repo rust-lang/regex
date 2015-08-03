@@ -185,6 +185,10 @@ impl Parser {
             return Ok(try!(self.lit(c)));
         }
         match c {
+            '\n' => { self.bump(); Ok(Build::Expr(Expr::Empty)) }
+            '\r' => { self.bump();
+                    if self.bump_if('\n') { Ok(Build::Expr(Expr::Empty)) }
+                    else { Err(self.err(ErrorKind::UnrecognizedEscape(c))) } },
             'a' => { self.bump(); Ok(try!(self.lit('\x07'))) }
             'f' => { self.bump(); Ok(try!(self.lit('\x0C'))) }
             't' => { self.bump(); Ok(try!(self.lit('\t'))) }
@@ -1814,6 +1818,22 @@ mod tests {
     }
 
     #[test]
+    fn escape_newline() {
+        assert_eq!(p(r"a\
+a"), c(&[lit('a'), lit('a')]));
+    }
+
+    #[test]
+    fn escape_newline_linux_osx() {
+        assert_eq!(p("a\\\na"), c(&[lit('a'), lit('a')]));
+    }
+
+    #[test]
+    fn escape_newline_windows() {
+        assert_eq!(p("a\\\r\na"), c(&[lit('a'), lit('a')]));
+    }
+
+    #[test]
     fn escape_octal() {
         assert_eq!(p(r"\123"), lit('S'));
         assert_eq!(p(r"\1234"), c(&[lit('S'), lit('4')]));
@@ -2587,6 +2607,11 @@ mod tests {
     #[test]
     fn error_escape_unrecognized() {
         test_err!(r"\m", 1, ErrorKind::UnrecognizedEscape('m'));
+    }
+
+    #[test]
+    fn error_newline_escape_unrecognized() {
+        test_err!("\\\r", 2, ErrorKind::UnrecognizedEscape('\r'));
     }
 
     #[test]
