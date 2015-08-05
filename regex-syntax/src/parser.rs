@@ -762,20 +762,38 @@ struct Chars<'a> {
     chars: &'a [char],
     cur: usize,
     ignore_space: bool,
-    in_comment: bool,
 }
 
 impl<'a> Iterator for Chars<'a> {
     type Item = char;
     fn next(&mut self) -> Option<char> {
-        self.skip();
-        if self.cur < self.chars.len() {
-            let c = self.chars[self.cur];
-            self.cur = checkadd(self.cur, 1);
-            Some(c)
-        } else {
-            None
+        if !self.ignore_space {
+            let x = self.c();
+            self.advance();
+            return x;
         }
+        while let Some(c) = self.c() {
+            self.advance();
+            match c {
+                '\\' => return match self.c() {
+                            Some('#') => {self.advance(); Some('#')}
+                            _ => Some('\\')
+                        },
+                '#'  => loop {
+                            match self.c() {
+                                Some(c) => {
+                                    self.advance();
+                                    if c == '\n' {
+                                        break;
+                                    }
+                                },
+                                None => return None
+                            }
+                        },
+                _    => if !c.is_whitespace() {return Some(c);}
+            }
+        }
+        None
     }
 }
 
@@ -785,40 +803,15 @@ impl<'a> Chars<'a> {
             chars: chars,
             cur: 0,
             ignore_space: ignore_space,
-            in_comment: false,
         }
     }
 
-    /// Skip line comments and whitespace
-    fn skip(&mut self) {
-        if !self.ignore_space { return; }
-        while self.cur < self.chars.len() {
-            // Handle escaping of `#`, i.e. don't start a comment with `\#`.
-            let next_cur = checkadd(self.cur, 1);
-            if !self.in_comment && self.c() == '\\'
-                && next_cur < self.chars.len()
-                && self.chars[next_cur] == '#'
-            {
-                self.cur = next_cur;
-                break;
-            }
-
-            if !self.in_comment && self.c() == '#' {
-                self.in_comment = true;
-            } else if self.in_comment && self.c() == '\n' {
-                self.in_comment = false;
-            }
-
-            if self.in_comment || self.c().is_whitespace() {
-                self.cur = next_cur;
-            } else {
-                break;
-            }
-        }
+    fn c(&self) -> Option<char> {
+        self.chars.get(self.cur).map(|&c| c)
     }
 
-    fn c(&self) -> char {
-        self.chars[self.cur]
+    fn advance(&mut self) {
+        self.cur = checkadd(self.cur, 1);
     }
 
     fn next_count(&mut self) -> usize {
