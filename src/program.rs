@@ -97,8 +97,7 @@ impl CharRanges {
         // This speeds up the `match_class_unicode` benchmark by checking
         // some common cases quickly without binary search. e.g., Matching
         // a Unicode class on predominantly ASCII text.
-        for i in 0..cmp::min(self.ranges.len(), 4) {
-            let r = self.ranges[i];
+        for (i, r) in self.ranges.iter().take(4).enumerate() {
             if c < r.0 {
                 return None;
             }
