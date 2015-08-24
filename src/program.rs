@@ -93,16 +93,16 @@ impl CharRanges {
 
     /// Tests whether the given input character matches this instruction.
     #[inline(always)] // About ~5-15% more throughput then `#[inline]`
-    pub fn matches(&self, c: Char) -> Option<usize> {
+    pub fn matches(&self, c: Char) -> bool {
         // This speeds up the `match_class_unicode` benchmark by checking
         // some common cases quickly without binary search. e.g., Matching
         // a Unicode class on predominantly ASCII text.
-        for (i, r) in self.ranges.iter().take(4).enumerate() {
+        for r in self.ranges.iter().take(4) {
             if c < r.0 {
-                return None;
+                return false;
             }
             if c <= r.1 {
-                return Some(i);
+                return true;
             }
         }
         self.ranges.binary_search_by(|r| {
@@ -113,7 +113,7 @@ impl CharRanges {
             } else {
                 Ordering::Equal
             }
-        }).ok()
+        }).is_ok()
     }
 }
 

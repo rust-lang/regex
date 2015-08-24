@@ -233,7 +233,7 @@ impl<'r, 't, 'c> Backtrack<'r, 't, 'c> {
                     }
                 }
                 Ranges(ref inst) => {
-                    if inst.matches(at.char()).is_some() {
+                    if inst.matches(at.char()) {
                         pc += 1;
                         at = self.input.at(at.next_pos());
                     } else {
