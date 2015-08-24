@@ -166,7 +166,7 @@ impl<'r, 't> Nfa<'r, 't> {
                 false
             }
             Ranges(ref inst) => {
-                if inst.matches(at.char()).is_some() {
+                if inst.matches(at.char()) {
                     self.add(nlist, thread_caps, pc+1, at_next);
                 }
                 false
