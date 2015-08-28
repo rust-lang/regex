@@ -78,7 +78,7 @@ impl<'r, 't> Nfa<'r, 't> {
     ) -> bool {
         let mut matched = false;
         q.clist.empty(); q.nlist.empty();
-'LOOP:  loop {
+        loop {
             if q.clist.size == 0 {
                 // Three ways to bail out when our current set of threads is
                 // empty.
@@ -90,7 +90,7 @@ impl<'r, 't> Nfa<'r, 't> {
                 //    soon as the last thread dies.
                 if matched
                    || (!at.is_beginning() && self.prog.anchored_begin) {
-                    break;
+                    return true;
                 }
 
                 // 3. If there's a literal prefix for the program, try to
@@ -119,12 +119,12 @@ impl<'r, 't> Nfa<'r, 't> {
                 let pc = q.clist.pc(i);
                 let tcaps = q.clist.caps(i);
                 if self.step(&mut q.nlist, caps, tcaps, pc, at, at_next) {
-                    matched = true;
                     if caps.len() == 0 {
                         // If we only care if a match occurs (not its
                         // position), then we can quit right now.
-                        break 'LOOP;
+                        return true;
                     }
+                    matched = true;
                     // We don't need to check the rest of the threads in this
                     // set because we've matched something ("leftmost-first").
                     // However, we still need to check threads in the next set
@@ -213,8 +213,9 @@ impl<'r, 't> Nfa<'r, 't> {
                 self.add(nlist, thread_caps, y, at);
             }
             Match | Char(_) | Ranges(_) => {
-                let mut t = &mut nlist.thread(ti);
-                for (slot, val) in t.caps.iter_mut().zip(thread_caps.iter()) {
+                for (slot, val) in nlist.caps(ti)
+                                        .iter_mut()
+                                        .zip(thread_caps.iter()) {
                     *slot = *val;
                 }
             }
@@ -234,15 +235,11 @@ pub struct NfaThreads {
 
 #[derive(Debug)]
 struct Threads {
-    dense: Vec<Thread>,
+    pcs: Vec<usize>,
+    cap_bucket_size: usize,
+    caps: Vec<Option<usize>>,
     sparse: Vec<usize>,
     size: usize,
-}
-
-#[derive(Clone, Debug)]
-struct Thread {
-    pc: usize,
-    caps: Vec<Option<usize>>,
 }
 
 impl NfaThreads {
@@ -261,9 +258,11 @@ impl NfaThreads {
 
 impl Threads {
     fn new(num_insts: usize, ncaps: usize) -> Threads {
-        let t = Thread { pc: 0, caps: vec![None; ncaps * 2] };
+        let cap_bucket_size = 2 * ncaps;
         Threads {
-            dense: vec![t; num_insts],
+            pcs: vec![0; num_insts],
+            cap_bucket_size: cap_bucket_size,
+            caps: vec![None; num_insts * cap_bucket_size],
             sparse: vec![0; num_insts],
             size: 0,
         }
@@ -271,19 +270,15 @@ impl Threads {
 
     fn add(&mut self, pc: usize) -> usize {
         let i = self.size;
-        self.dense[i].pc = pc;
+        self.pcs[i] = pc;
         self.sparse[pc] = i;
         self.size += 1;
         i
     }
 
-    fn thread(&mut self, i: usize) -> &mut Thread {
-        &mut self.dense[i]
-    }
-
     fn contains(&self, pc: usize) -> bool {
         let s = self.sparse[pc];
-        s < self.size && self.dense[s].pc == pc
+        s < self.size && self.pcs[s] == pc
     }
 
     fn empty(&mut self) {
@@ -291,10 +286,12 @@ impl Threads {
     }
 
     fn pc(&self, i: usize) -> usize {
-        self.dense[i].pc
+        self.pcs[i]
     }
 
+    #[inline(always)]
     fn caps(&mut self, i: usize) -> &mut [Option<usize>] {
-        &mut self.dense[i].caps
+       let s = self.cap_bucket_size;
+       &mut self.caps[s * i..s * (i + 1)]
     }
 }
