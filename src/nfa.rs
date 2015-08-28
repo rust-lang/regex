@@ -78,7 +78,7 @@ impl<'r, 't> Nfa<'r, 't> {
     ) -> bool {
         let mut matched = false;
         q.clist.empty(); q.nlist.empty();
-'LOOP:  loop {
+        loop {
             if q.clist.size == 0 {
                 // Three ways to bail out when our current set of threads is
                 // empty.
@@ -90,7 +90,7 @@ impl<'r, 't> Nfa<'r, 't> {
                 //    soon as the last thread dies.
                 if matched
                    || (!at.is_beginning() && self.prog.anchored_begin) {
-                    break;
+                    return true;
                 }
 
                 // 3. If there's a literal prefix for the program, try to
@@ -119,12 +119,12 @@ impl<'r, 't> Nfa<'r, 't> {
                 let pc = q.clist.pc(i);
                 let tcaps = q.clist.caps(i);
                 if self.step(&mut q.nlist, caps, tcaps, pc, at, at_next) {
-                    matched = true;
                     if caps.len() == 0 {
                         // If we only care if a match occurs (not its
                         // position), then we can quit right now.
-                        break 'LOOP;
+                        return true;
                     }
+                    matched = true;
                     // We don't need to check the rest of the threads in this
                     // set because we've matched something ("leftmost-first").
                     // However, we still need to check threads in the next set
@@ -288,6 +288,7 @@ impl Threads {
         self.pcs[i]
     }
 
+    #[inline(always)]
     fn caps(&mut self, i: usize) -> &mut [Option<usize>] {
        let s = self.cap_bucket_size;
        &mut self.caps[s * i..s * (i + 1)]
