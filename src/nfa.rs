@@ -213,8 +213,9 @@ impl<'r, 't> Nfa<'r, 't> {
                 self.add(nlist, thread_caps, y, at);
             }
             Match | Char(_) | Ranges(_) => {
-                let mut t = nlist.caps(ti);
-                for (slot, val) in t.iter_mut().zip(thread_caps.iter()) {
+                for (slot, val) in nlist.caps(ti)
+                                        .iter_mut()
+                                        .zip(thread_caps.iter()) {
                     *slot = *val;
                 }
             }

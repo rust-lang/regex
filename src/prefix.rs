@@ -175,8 +175,8 @@ impl SingleSearch {
     fn new(pat: String) -> SingleSearch {
         assert!(pat.len() >= 1);
         let mut shift = vec![pat.len(); 256];
-        for i in 0..(pat.len() - 1) {
-            shift[pat.as_bytes()[i] as usize] = pat.len() - i - 1;
+        for (i, &b) in pat.as_bytes().iter().rev().enumerate() {
+            shift[b as usize] = i;
         }
         SingleSearch {
             pat: pat,
