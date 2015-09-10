@@ -121,6 +121,9 @@ fn main() {
 }
 ```
 
+Notice that we never `unwrap` the result of `regex!`. This is because your
+*program* won't compile if the regex doesn't compile. (Try `regex!("(")`.)
+
 # Usage: a regular expression parser
 
 This repository contains a crate that provides a well tested regular expression
