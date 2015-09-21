@@ -13,13 +13,13 @@ search text. Much of the syntax and implementation is inspired by
 
 ### Documentation
 
-[Module documentation with examples](http://doc.rust-lang.org/regex).
+[Module documentation with examples](https://doc.rust-lang.org/regex).
 The module documentation also include a comprehensive description of the syntax
 supported.
 
 Documentation with examples for the various matching functions and iterators
 can be found on the
-[`Regex` type](http://doc.rust-lang.org/regex/regex/enum.Regex.html).
+[`Regex` type](https://doc.rust-lang.org/regex/regex/enum.Regex.html).
 
 
 ### Usage
@@ -101,7 +101,7 @@ The `regex!` compiler plugin will compile your regexes at compile time. **This
 only works with a nightly compiler.**
 The
 [documentation explains the trade
-offs](http://doc.rust-lang.org/regex/regex/index.html#the-regex!-macro).
+offs](https://doc.rust-lang.org/regex/regex/index.html#the-regex!-macro).
 
 Here is a small example:
 
@@ -133,7 +133,7 @@ otherwise need to do analysis on the syntax of a regular expression. It is
 otherwise not recommended for general use.
 
 [Documentation for `regex-syntax` with
-examples](http://doc.rust-lang.org/regex/regex_syntax/index.html).
+examples](https://doc.rust-lang.org/regex/regex_syntax/index.html).
 
 # License
 
