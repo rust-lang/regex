@@ -7,7 +7,7 @@ in linear time with respect to the size of the regular expression and
 search text. Much of the syntax and implementation is inspired by
 [RE2](https://github.com/google/re2).
 
-[![Build Status](https://travis-ci.org/rust-lang/regex.svg?branch=master)](https://travis-ci.org/rust-lang/regex)
+[![Build Status](https://travis-ci.org/rust-lang-nursery/regex.svg?branch=master)](https://travis-ci.org/rust-lang-nursery/regex)
 [![Build status](https://ci.appveyor.com/api/projects/status/22g48bo866qr4u77?svg=true)](https://ci.appveyor.com/project/alexcrichton/regex)
 [![](http://meritbadge.herokuapp.com/regex)](https://crates.io/crates/regex)
 
