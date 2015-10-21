@@ -68,7 +68,7 @@
 //! invalid regular expression. Moreover, the `regex!` macro compiles the
 //! given expression to native Rust code, which ideally makes it faster.
 //! Unfortunately (or fortunately), the dynamic implementation has had a lot
-//! more optimization work put it into it currently, so it is faster than
+//! more optimization work put into it currently, so it is faster than
 //! the `regex!` macro in most cases.
 //!
 //! To use the `regex!` macro, you must add `regex_macros` to your dependencies
