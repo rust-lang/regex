@@ -507,7 +507,7 @@ fn exec<'t>(
             pats: vec!(P(ast::Pat{
                 id: ast::DUMMY_NODE_ID,
                 span: self.sp,
-                node: ast::PatWild(ast::PatWildSingle),
+                node: ast::PatWild,
             })),
             guard: None,
             body: body,
