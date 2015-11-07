@@ -507,7 +507,7 @@ fn exec<'t>(
             pats: vec!(P(ast::Pat{
                 id: ast::DUMMY_NODE_ID,
                 span: self.sp,
-                node: ast::PatWild(ast::PatWildSingle),
+                node: ast::PatWild,
             })),
             guard: None,
             body: body,
@@ -528,29 +528,34 @@ fn exec<'t>(
 /// Otherwise, logs an error with cx.span_err and returns None.
 fn parse(cx: &mut ExtCtxt, tts: &[ast::TokenTree]) -> Option<String> {
     let mut parser = cx.new_parser_from_tts(tts);
-    let entry = cx.expander().fold_expr(parser.parse_expr());
-    let regex = match entry.node {
-        ast::ExprLit(ref lit) => {
-            match lit.node {
-                ast::LitStr(ref s, _) => s.to_string(),
-                _ => {
-                    cx.span_err(entry.span, &format!(
-                        "expected string literal but got `{}`",
-                        pprust::lit_to_string(&**lit)));
-                    return None
+    if let Ok(expr) = parser.parse_expr_nopanic() {
+        let entry = cx.expander().fold_expr(expr);
+        let regex = match entry.node {
+            ast::ExprLit(ref lit) => {
+                match lit.node {
+                    ast::LitStr(ref s, _) => s.to_string(),
+                    _ => {
+                        cx.span_err(entry.span, &format!(
+                            "expected string literal but got `{}`",
+                            pprust::lit_to_string(&**lit)));
+                        return None
+                    }
                 }
             }
+            _ => {
+                cx.span_err(entry.span, &format!(
+                    "expected string literal but got `{}`",
+                    pprust::expr_to_string(&*entry)));
+                return None
+            }
+        };
+        if !parser.eat(&token::Eof).ok().unwrap() {
+            cx.span_err(parser.span, "only one string literal allowed");
+            return None;
         }
-        _ => {
-            cx.span_err(entry.span, &format!(
-                "expected string literal but got `{}`",
-                pprust::expr_to_string(&*entry)));
-            return None
-        }
-    };
-    if !parser.eat(&token::Eof).ok().unwrap() {
-        cx.span_err(parser.span, "only one string literal allowed");
-        return None;
+        Some(regex)
+    } else {
+        cx.parse_sess().span_diagnostic.handler().err("failure parsing token tree");
+        None
     }
-    Some(regex)
 }
