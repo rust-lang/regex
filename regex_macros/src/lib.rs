@@ -528,7 +528,7 @@ fn exec<'t>(
 /// Otherwise, logs an error with cx.span_err and returns None.
 fn parse(cx: &mut ExtCtxt, tts: &[ast::TokenTree]) -> Option<String> {
     let mut parser = cx.new_parser_from_tts(tts);
-    if let Ok(expr) = parser.parse_expr_nopanic() {
+    if let Ok(expr) = parser.parse_expr() {
         let entry = cx.expander().fold_expr(expr);
         let regex = match entry.node {
             ast::ExprLit(ref lit) => {
