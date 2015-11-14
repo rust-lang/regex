@@ -12,6 +12,7 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::collections::hash_map::Iter;
 use std::fmt;
+use std::ops::Index;
 #[cfg(feature = "pattern")]
 use std::str::pattern::{Pattern, Searcher, SearchStep};
 use std::str::FromStr;
@@ -925,6 +926,40 @@ impl<'t> Captures<'t> {
     pub fn is_empty(&self) -> bool { self.len() == 0 }
 }
 
+/// Get a group by index.
+///
+/// # Panics
+/// If there is no group at the given index.
+impl<'t> Index<usize> for Captures<'t> {
+
+    type Output = str;
+
+    fn index<'a>(&'a self, i: usize) -> &'a str {
+        match self.at(i) {
+            None => panic!("no group at index '{}'", i),
+            Some(s) => s,
+        }
+    }
+
+}
+
+/// Get a group by name.
+///
+/// # Panics
+/// If there is no group named by the given value.
+impl<'t> Index<&'t str> for Captures<'t> {
+
+    type Output = str;
+
+    fn index<'a>(&'a self, name: &str) -> &'a str {
+        match self.name(name) {
+            None => panic!("no group named '{}'", name),
+            Some(ref s) => s,
+        }
+    }
+
+}
+
 /// An iterator over capture groups for a particular match of a regular
 /// expression.
 ///
@@ -1170,5 +1205,30 @@ mod test {
         assert_eq!(re.replace_all("a", NoExpand("$$1")), "$$1");
         assert_eq!(re.replace_all("a", NoExpand("$1")), "$1");
 
+    }
+
+    #[test]
+    fn test_cap_index() {
+        let re = Regex::new(r"^(?P<name>.+)$").unwrap();
+        let cap = re.captures("abc").unwrap();
+        assert_eq!(&cap[0], "abc");
+        assert_eq!(&cap[1], "abc");
+        assert_eq!(&cap["name"], "abc");
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_cap_index_panic_usize() {
+        let re = Regex::new(r"^(?P<name>.+)$").unwrap();
+        let cap = re.captures("abc").unwrap();
+        let _ = cap[2];
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_cap_index_panic_name() {
+        let re = Regex::new(r"^(?P<name>.+)$").unwrap();
+        let cap = re.captures("abc").unwrap();
+        let _ = cap["bad name"];
     }
 }
