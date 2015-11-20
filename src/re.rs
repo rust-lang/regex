@@ -662,7 +662,9 @@ impl Regex {
 ///
 /// `'r` is the lifetime of the compiled expression.
 pub enum CaptureNames<'r> {
+    #[doc(hidden)]
     Native(::std::slice::Iter<'r, Option<&'static str>>),
+    #[doc(hidden)]
     Dynamic(::std::slice::Iter<'r, Option<String>>)
 }
 

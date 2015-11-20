@@ -411,7 +411,7 @@ extern crate regex_syntax as syntax;
 
 pub use re::{
     Regex, Error, Captures, SubCaptures, SubCapturesPos, SubCapturesNamed,
-    FindCaptures, FindMatches,
+    CaptureNames, FindCaptures, FindMatches,
     Replacer, NoExpand, RegexSplits, RegexSplitsN,
     quote, is_match,
 };
