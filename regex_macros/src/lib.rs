@@ -84,7 +84,8 @@ fn native(cx: &mut ExtCtxt, sp: codemap::Span, tts: &[ast::TokenTree])
 
     let mut gen = NfaGen {
         cx: &*cx, sp: sp, prog: prog,
-        names: re.names_iter().collect(), original: re.as_str().to_string(),
+        names: re.capture_names().map(|o| o.map(|s| s.to_owned())).collect(),
+        original: re.as_str().to_string(),
     };
     MacEager::expr(gen.code())
 }

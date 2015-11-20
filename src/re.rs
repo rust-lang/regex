@@ -632,15 +632,16 @@ impl Regex {
         }
     }
 
-    #[doc(hidden)]
-    pub fn names_iter<'a>(&'a self) -> NamesIter<'a> {
+    /// Returns an iterator over the capture names.
+    pub fn capture_names<'r>(&'r self) -> CaptureNames<'r> {
         match *self {
-            Regex::Native(ref n) => NamesIter::Native(n.names.iter()),
-            Regex::Dynamic(ref d) => NamesIter::Dynamic(d.cap_names.iter())
+            Regex::Native(ref n) => CaptureNames::Native(n.names.iter()),
+            Regex::Dynamic(ref d) => CaptureNames::Dynamic(d.cap_names.iter())
         }
     }
 
-    fn names_len(&self) -> usize {
+    /// Returns the number of captures.
+    pub fn captures_len(&self) -> usize {
         match *self {
             Regex::Native(ref n) => n.names.len(),
             Regex::Dynamic(ref d) => d.cap_names.len()
@@ -655,20 +656,32 @@ impl Regex {
     }
 }
 
-pub enum NamesIter<'a> {
-    Native(::std::slice::Iter<'a, Option<&'static str>>),
-    Dynamic(::std::slice::Iter<'a, Option<String>>)
+/// Yields the names of all possible captures.
+/// `None` indicates an unnamed capture; the first element
+/// (capture 0, the whole matched region) is always unnamed.
+///
+/// `'r` is the lifetime of the compiled expression.
+pub enum CaptureNames<'r> {
+    Native(::std::slice::Iter<'r, Option<&'static str>>),
+    Dynamic(::std::slice::Iter<'r, Option<String>>)
 }
 
-impl<'a> Iterator for NamesIter<'a> {
-    type Item=Option<String>;
+impl<'r> Iterator for CaptureNames<'r> {
+    type Item=Option<&'r str>;
 
-    fn next(&mut self) -> Option<Option<String>> {
+    fn next(&mut self) -> Option<Option<&'r str>> {
         match *self {
-            NamesIter::Native(ref mut i) =>
-                i.next().map(|x| x.map(|s| s.to_owned())),
-            NamesIter::Dynamic(ref mut i) =>
-                i.next().map(|x| x.as_ref().map(|s| s.to_owned())),
+            CaptureNames::Native(ref mut i) =>
+                i.next().map(|o| *o),
+            CaptureNames::Dynamic(ref mut i) =>
+                i.next().as_ref().map(|o| o.as_ref().map(|s| s.as_ref())),
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        match *self {
+            CaptureNames::Native(ref i)  => i.size_hint(),
+            CaptureNames::Dynamic(ref i) => i.size_hint(),
         }
     }
 }
@@ -812,13 +825,13 @@ impl<'t> Captures<'t> {
         locs: Vec<Option<usize>>,
     ) -> Captures<'t> {
         let named =
-            if re.names_len() == 0 {
+            if re.captures_len() == 0 {
                 None
             } else {
                 let mut named = HashMap::new();
-                for (i, name) in re.names_iter().enumerate() {
+                for (i, name) in re.capture_names().enumerate() {
                     if let Some(name) = name {
-                        named.insert(name, i);
+                        named.insert(name.to_owned(), i);
                     }
                 }
                 Some(named)
@@ -1169,6 +1182,12 @@ mod test {
         let re = Regex::new(r"(\w+)").unwrap();
         assert_eq!(re.replace_all("a", NoExpand("$$1")), "$$1");
         assert_eq!(re.replace_all("a", NoExpand("$1")), "$1");
+    }
 
+    #[test]
+    fn test_capture_names() {
+        let re = Regex::new(r"(.)(?P<a>.)").unwrap();
+        assert_eq!(re.capture_names().size_hint(), (3, Some(3)));
+        assert_eq!(re.capture_names().collect::<Vec<_>>(), [None, None, Some("a")]);
     }
 }
