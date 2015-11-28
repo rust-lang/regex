@@ -19,7 +19,7 @@
 
 extern crate regex;
 extern crate syntax;
-extern crate rustc;
+extern crate rustc_plugin;
 
 use syntax::ast;
 use syntax::codemap;
@@ -30,7 +30,7 @@ use syntax::print::pprust;
 use syntax::fold::Folder;
 use syntax::ptr::P;
 
-use rustc::plugin::Registry;
+use rustc_plugin::Registry;
 
 use regex::Regex;
 use regex::internal::{
