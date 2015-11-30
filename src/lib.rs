@@ -26,7 +26,7 @@
 //!
 //! ```toml
 //! [dependencies]
-//! regex = "0.1.41"
+//! regex = "0.1"
 //! ```
 //!
 //! and this to your crate root:
