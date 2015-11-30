@@ -12,6 +12,7 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::collections::hash_map::Iter;
 use std::fmt;
+use std::ops::Index;
 #[cfg(feature = "pattern")]
 use std::str::pattern::{Pattern, Searcher, SearchStep};
 use std::str::FromStr;
@@ -377,6 +378,11 @@ impl Regex {
     /// assert_eq!(caps.at(1), Some("Citizen Kane"));
     /// assert_eq!(caps.at(2), Some("1941"));
     /// assert_eq!(caps.at(0), Some("'Citizen Kane' (1941)"));
+    /// // You can also access the groups by index using the Index notation.
+    /// // Note that this will panic on an invalid index.
+    /// assert_eq!(&caps[1], "Citizen Kane");
+    /// assert_eq!(&caps[2], "1941");
+    /// assert_eq!(&caps[0], "'Citizen Kane' (1941)");
     /// # }
     /// ```
     ///
@@ -395,15 +401,21 @@ impl Regex {
     /// assert_eq!(caps.name("title"), Some("Citizen Kane"));
     /// assert_eq!(caps.name("year"), Some("1941"));
     /// assert_eq!(caps.at(0), Some("'Citizen Kane' (1941)"));
+    /// // You can also access the groups by name using the Index notation.
+    /// // Note that this will panic on an invalid group name.
+    /// assert_eq!(&caps["title"], "Citizen Kane");
+    /// assert_eq!(&caps["year"], "1941");
+    /// assert_eq!(&caps[0], "'Citizen Kane' (1941)");
+    ///
     /// # }
     /// ```
     ///
     /// Here we name the capture groups, which we can access with the `name`
-    /// method. Note that the named capture groups are still accessible with
-    /// `at`.
+    /// method or the `Index` notation with a `&str`. Note that the named capture groups
+    /// are still accessible with `at` or the `Index` notation with a `usize`.
     ///
     /// The `0`th capture group is always unnamed, so it must always be
-    /// accessed with `at(0)`.
+    /// accessed with `at(0)` or `[0]`.
     pub fn captures<'t>(&self, text: &'t str) -> Option<Captures<'t>> {
         let mut caps = self.alloc_captures();
         if exec(self, &mut caps, text, 0) {
@@ -940,6 +952,40 @@ impl<'t> Captures<'t> {
     pub fn is_empty(&self) -> bool { self.len() == 0 }
 }
 
+/// Get a group by index.
+///
+/// # Panics
+/// If there is no group at the given index.
+impl<'t> Index<usize> for Captures<'t> {
+
+    type Output = str;
+
+    fn index<'a>(&'a self, i: usize) -> &'a str {
+        match self.at(i) {
+            None => panic!("no group at index '{}'", i),
+            Some(s) => s,
+        }
+    }
+
+}
+
+/// Get a group by name.
+///
+/// # Panics
+/// If there is no group named by the given value.
+impl<'t> Index<&'t str> for Captures<'t> {
+
+    type Output = str;
+
+    fn index<'a>(&'a self, name: &str) -> &'a str {
+        match self.name(name) {
+            None => panic!("no group named '{}'", name),
+            Some(ref s) => s,
+        }
+    }
+
+}
+
 /// An iterator over capture groups for a particular match of a regular
 /// expression.
 ///
@@ -1191,5 +1237,30 @@ mod test {
         let re = Regex::new(r"(.)(?P<a>.)").unwrap();
         assert_eq!(re.capture_names().size_hint(), (3, Some(3)));
         assert_eq!(re.capture_names().collect::<Vec<_>>(), [None, None, Some("a")]);
+    }
+
+    #[test]
+    fn test_cap_index() {
+        let re = Regex::new(r"^(?P<name>.+)$").unwrap();
+        let cap = re.captures("abc").unwrap();
+        assert_eq!(&cap[0], "abc");
+        assert_eq!(&cap[1], "abc");
+        assert_eq!(&cap["name"], "abc");
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_cap_index_panic_usize() {
+        let re = Regex::new(r"^(?P<name>.+)$").unwrap();
+        let cap = re.captures("abc").unwrap();
+        let _ = cap[2];
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_cap_index_panic_name() {
+        let re = Regex::new(r"^(?P<name>.+)$").unwrap();
+        let cap = re.captures("abc").unwrap();
+        let _ = cap["bad name"];
     }
 }
