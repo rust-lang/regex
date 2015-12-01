@@ -1250,6 +1250,7 @@ mod test {
 
     #[test]
     #[should_panic]
+    #[cfg_attr(all(target_env = "msvc", target_pointer_width = "32"), ignore)]
     fn test_cap_index_panic_usize() {
         let re = Regex::new(r"^(?P<name>.+)$").unwrap();
         let cap = re.captures("abc").unwrap();
@@ -1258,6 +1259,7 @@ mod test {
 
     #[test]
     #[should_panic]
+    #[cfg_attr(all(target_env = "msvc", target_pointer_width = "32"), ignore)]
     fn test_cap_index_panic_name() {
         let re = Regex::new(r"^(?P<name>.+)$").unwrap();
         let cap = re.captures("abc").unwrap();
