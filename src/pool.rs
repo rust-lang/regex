@@ -84,11 +84,11 @@ impl<T> Pool<T> {
 
 impl<'a, T> Deref for PoolGuard<'a, T> {
     type Target = T;
-    fn deref<'b>(&'b self) -> &'b T { self.val.as_ref().unwrap() }
+    fn deref(&self) -> &T { self.val.as_ref().unwrap() }
 }
 
 impl<'a, T> DerefMut for PoolGuard<'a, T> {
-    fn deref_mut<'b>(&'b mut self) -> &'b mut T { self.val.as_mut().unwrap() }
+    fn deref_mut(&mut self) -> &mut T { self.val.as_mut().unwrap() }
 }
 
 impl<'a, T> Drop for PoolGuard<'a, T> {

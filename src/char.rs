@@ -45,14 +45,14 @@ impl Char {
     /// If the character is absent, then `0` is returned.
     #[inline]
     pub fn len_utf8(self) -> usize {
-        char::from_u32(self.0).map(|c| c.len_utf8()).unwrap_or(0)
+        char::from_u32(self.0).map_or(0, |c| c.len_utf8())
     }
 
     /// Returns true iff the character is a word character.
     ///
     /// If the character is absent, then false is returned.
     pub fn is_word_char(self) -> bool {
-        char::from_u32(self.0).map(syntax::is_word_char).unwrap_or(false)
+        char::from_u32(self.0).map_or(false, syntax::is_word_char)
     }
 
     /// Converts the character to a real primitive `char`.
@@ -71,7 +71,7 @@ impl From<char> for Char {
 
 impl From<Option<char>> for Char {
     fn from(c: Option<char>) -> Char {
-        c.map(|c| c.into()).unwrap_or(Char(u32::MAX))
+        c.map_or(Char(u32::MAX), |c| c.into())
     }
 }
 

@@ -93,11 +93,11 @@ impl Compiler {
             }
             Expr::Alternate(mut es) => {
                 // TODO: Don't use recursion here. ---AG
-                if es.len() == 0 {
+                if es.is_empty() {
                     return Ok(());
                 }
                 let e1 = es.remove(0);
-                if es.len() == 0 {
+                if es.is_empty() {
                     try!(self.c(e1));
                     return Ok(());
                 }

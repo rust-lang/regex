@@ -62,11 +62,10 @@ impl<'r, 't> Nfa<'r, 't> {
         let mut q = prog.nfa_threads.get();
         let input = CharInput::new(text);
         let at = input.at(start);
-        let matched = Nfa {
+        Nfa {
             prog: prog,
             input: input,
-        }.exec_(&mut q, &mut caps, at);
-        matched
+        }.exec_(&mut q, &mut caps, at)
     }
 
     fn exec_(
