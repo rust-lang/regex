@@ -282,7 +282,7 @@ impl Program {
         // First, look for a standard literal prefix---this includes things
         // like `a+` and `[0-9]+`, but not `a|b`.
         let (ps, complete) = self.literals(self.skip(1));
-        if ps.len() > 0 {
+        if !ps.is_empty() {
             self.prefixes = Prefix::new(ps);
             self.prefixes_complete = complete;
             return;
@@ -300,8 +300,8 @@ impl Program {
         let mut stack = vec![self.skip(1)];
         while let Some(mut pc) = stack.pop() {
             pc = self.skip(pc);
-            match &self.insts[pc] {
-                &Inst::Split(x, y) => { stack.push(y); stack.push(x); }
+            match self.insts[pc] {
+                Inst::Split(x, y) => { stack.push(y); stack.push(x); }
                 _ => {
                     let (alt_prefixes, complete) = self.literals(pc);
                     if alt_prefixes.is_empty() {
@@ -392,7 +392,7 @@ impl Program {
                 _ => { complete = self.leads_to_match(pc); break }
             }
         }
-        if alts[0].len() == 0 {
+        if alts[0].is_empty() {
             (vec![], false)
         } else {
             (alts, complete)
@@ -443,9 +443,8 @@ impl Clone for Program {
 fn num_captures(insts: &[Inst]) -> usize {
     let mut n = 0;
     for inst in insts {
-        match *inst {
-            Inst::Save(c) => n = cmp::max(n, c+1),
-            _ => {}
+        if let Inst::Save(c) = *inst {
+            n = cmp::max(n, c+1)
         }
     }
     // There's exactly 2 Save slots for every capture.

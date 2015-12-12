@@ -637,7 +637,7 @@ impl Regex {
     }
 
     /// Returns the original string of this regex.
-    pub fn as_str<'a>(&'a self) -> &'a str {
+    pub fn as_str(&self) -> &str {
         match *self {
             Regex::Dynamic(Program { ref original, .. }) => original,
             Regex::Native(ExNative { ref original, .. }) => original,
@@ -645,7 +645,7 @@ impl Regex {
     }
 
     /// Returns an iterator over the capture names.
-    pub fn capture_names<'r>(&'r self) -> CaptureNames<'r> {
+    pub fn capture_names(&self) -> CaptureNames {
         match *self {
             Regex::Native(ref n) => CaptureNames::Native(n.names.iter()),
             Regex::Dynamic(ref d) => CaptureNames::Dynamic(d.cap_names.iter())
@@ -686,7 +686,7 @@ impl<'r> Iterator for CaptureNames<'r> {
     fn next(&mut self) -> Option<Option<&'r str>> {
         match *self {
             CaptureNames::Native(ref mut i) =>
-                i.next().map(|o| *o),
+                i.next().cloned(),
             CaptureNames::Dynamic(ref mut i) =>
                 i.next().as_ref().map(|o| o.as_ref().map(|s| s.as_ref())),
         }
@@ -716,18 +716,18 @@ pub trait Replacer {
     ///
     /// The `'a` lifetime refers to the lifetime of a borrowed string when
     /// a new owned string isn't needed (e.g., for `NoExpand`).
-    fn reg_replace<'a>(&'a mut self, caps: &Captures) -> Cow<'a, str>;
+    fn reg_replace(&mut self, caps: &Captures) -> Cow<str>;
 
     /// Returns a possibly owned string that never needs expansion.
-    fn no_expand<'a>(&'a mut self) -> Option<Cow<'a, str>> { None }
+    fn no_expand(&mut self) -> Option<Cow<str>> { None }
 }
 
 impl<'t> Replacer for NoExpand<'t> {
-    fn reg_replace<'a>(&'a mut self, _: &Captures) -> Cow<'a, str> {
+    fn reg_replace(&mut self, _: &Captures) -> Cow<str> {
         self.0.into()
     }
 
-    fn no_expand<'a>(&'a mut self) -> Option<Cow<'a, str>> {
+    fn no_expand(&mut self) -> Option<Cow<str>> {
         Some(self.0.into())
     }
 }
@@ -737,7 +737,7 @@ impl<'t> Replacer for &'t str {
         caps.expand(*self).into()
     }
 
-    fn no_expand<'a>(&'a mut self) -> Option<Cow<'a, str>> {
+    fn no_expand(&mut self) -> Option<Cow<str>> {
         // if there is a $ there may be an expansion
         match self.find('$') {
             Some(_) => None,
@@ -935,8 +935,8 @@ impl<'t> Captures<'t> {
             let before = refs.name("before").unwrap_or("");
             let name = refs.name("name").unwrap_or("");
             format!("{}{}", before, match name.parse::<usize>() {
-                Err(_) => self.name(name).unwrap_or("").to_string(),
-                Ok(i) => self.at(i).unwrap_or("").to_string(),
+                Err(_) => self.name(name).unwrap_or("").to_owned(),
+                Ok(i) => self.at(i).unwrap_or("").to_owned(),
             })
         });
         let re = Regex::new(r"\$\$").unwrap();
@@ -960,11 +960,8 @@ impl<'t> Index<usize> for Captures<'t> {
 
     type Output = str;
 
-    fn index<'a>(&'a self, i: usize) -> &'a str {
-        match self.at(i) {
-            None => panic!("no group at index '{}'", i),
-            Some(s) => s,
-        }
+    fn index(&self, i: usize) -> &str {
+        self.at(i).unwrap_or_else(|| panic!("no group at index '{}'", i))
     }
 
 }
@@ -1045,7 +1042,7 @@ impl<'t> Iterator for SubCapturesNamed<'t> {
     type Item = (&'t str, Option<&'t str>);
 
     fn next(&mut self) -> Option<(&'t str, Option<&'t str>)> {
-        match self.inner.as_mut().map(|it| it.next()).unwrap_or(None) {
+        match self.inner.as_mut().map_or(None, |it| it.next()) {
             Some((name, pos)) => Some((name, self.caps.at(*pos))),
             None => None
         }

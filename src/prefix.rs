@@ -51,7 +51,7 @@ pub enum Prefix {
 impl Prefix {
     /// Create a new prefix matching machine.
     pub fn new(mut pfxs: Vec<String>) -> Prefix {
-        if pfxs.len() == 0 || pfxs[0].len() == 0 {
+        if pfxs.is_empty() || pfxs[0].is_empty() {
             Prefix::Empty
         } else if pfxs.len() == 1 && pfxs[0].len() == 1 {
             Prefix::Byte(pfxs[0].as_bytes()[0])

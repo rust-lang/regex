@@ -100,8 +100,7 @@ impl<'a, 'r, 't, 'c> Backtrack<'a, 'r, 't, 'c> {
             caps: caps,
             m: &mut m,
         };
-        let matched = b.exec_(start);
-        matched
+        b.exec_(start)
     }
 
     /// Returns true iff the given regex and input can be executed by this
