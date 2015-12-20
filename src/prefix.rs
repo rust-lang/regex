@@ -166,7 +166,7 @@ impl Prefix {
 ///
 /// More analysis needs to be done to test this on different search texts.
 #[derive(Clone, Debug)]
-struct SingleSearch {
+pub struct SingleSearch {
     pat: String,
     shift: Vec<usize>,
 }

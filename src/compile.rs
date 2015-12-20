@@ -13,7 +13,7 @@ use syntax::{Expr, Repeater, CharClass, ClassRange};
 use Error;
 use program::{CharRanges, Inst, InstIdx};
 
-type Compiled = (Vec<Inst>, Vec<Option<String>>);
+pub type Compiled = (Vec<Inst>, Vec<Option<String>>);
 
 /// A regex compiler.
 ///

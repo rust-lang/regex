@@ -24,7 +24,7 @@
 // as fast as the full NFA simulation.
 
 use input::{Input, InputAt, CharInput};
-use program::{Inst, InstIdx, Program};
+use program::{InstIdx, Program};
 use re::CaptureIdxs;
 
 type Bits = u32;
