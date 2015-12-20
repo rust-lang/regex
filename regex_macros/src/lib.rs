@@ -556,7 +556,7 @@ fn parse(cx: &mut ExtCtxt, tts: &[ast::TokenTree]) -> Option<String> {
         }
         Some(regex)
     } else {
-        cx.parse_sess().span_diagnostic.handler().err("failure parsing token tree");
+        cx.parse_sess().span_diagnostic.err("failure parsing token tree");
         None
     }
 }
