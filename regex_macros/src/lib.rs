@@ -517,9 +517,11 @@ fn exec<'t>(
 
     // Converts `xs` to a `[x1, x2, .., xN]` expression by calling `to_expr`
     // on each element in `xs`.
-    fn vec_expr<T, It: Iterator<Item=T>>(&self, xs: It,
-                                    to_expr: &mut FnMut(&ExtCtxt, T) -> P<ast::Expr>)
-                  -> P<ast::Expr> {
+    fn vec_expr<T, It: Iterator<Item=T>>(
+        &self,
+        xs: It,
+        to_expr: &mut FnMut(&ExtCtxt, T) -> P<ast::Expr>,
+    ) -> P<ast::Expr> {
         let exprs = xs.map(|x| to_expr(self.cx, x)).collect();
         self.cx.expr_vec(self.sp, exprs)
     }
