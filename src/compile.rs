@@ -8,6 +8,8 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+use std::collections::HashSet;
+
 use syntax::{Expr, Repeater, CharClass, ClassRange};
 
 use Error;
@@ -23,6 +25,7 @@ pub struct Compiler {
     size_limit: usize,
     insts: Vec<Inst>,
     cap_names: Vec<Option<String>>,
+    seen_caps: HashSet<usize>,
 }
 
 impl Compiler {
@@ -33,6 +36,7 @@ impl Compiler {
             size_limit: size_limit,
             insts: vec![],
             cap_names: vec![None],
+            seen_caps: HashSet::new(),
         }
     }
 
@@ -81,7 +85,10 @@ impl Compiler {
             Expr::Group { e, i: None, name: None } => try!(self.c(*e)),
             Expr::Group { e, i, name } => {
                 let i = i.expect("capture index");
-                self.cap_names.push(name);
+                if !self.seen_caps.contains(&i) {
+                    self.cap_names.push(name);
+                    self.seen_caps.insert(i);
+                }
                 self.push(Save(2 * i));
                 try!(self.c(*e));
                 self.push(Save(2 * i + 1));
