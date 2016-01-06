@@ -127,13 +127,14 @@ impl<'a, 'r, 't, 'c> Backtrack<'a, 'r, 't, 'c> {
             (self.prog.insts.len() * (self.input.len() + 1) + BIT_SIZE - 1)
             /
             BIT_SIZE;
+        self.m.visited.truncate(visited_len);
         for v in &mut self.m.visited {
             *v = 0;
         }
-        let cur_visited_cap = self.m.visited.capacity();
-        if visited_len > cur_visited_cap {
-            self.m.visited.reserve_exact(visited_len - cur_visited_cap);
-            for _ in 0..(visited_len - cur_visited_cap) {
+        if visited_len > self.m.visited.len() {
+            let len = self.m.visited.len();
+            self.m.visited.reserve_exact(visited_len - len);
+            for _ in 0..(visited_len - len) {
                 self.m.visited.push(0);
             }
         }
