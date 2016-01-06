@@ -396,7 +396,7 @@
 //! crate have time complexity `O(mn)` (with `m ~ regex` and `n ~ search
 //! text`), which means there's no way to cause exponential blow-up like with
 //! some other regular expression engines. (We pay for this by disallowing
-//! features like arbitrary look-ahead and back-references.)
+//! features like arbitrary look-ahead and backreferences.)
 
 #![deny(missing_docs)]
 #![cfg_attr(test, deny(warnings))]
