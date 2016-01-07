@@ -98,9 +98,9 @@ pub enum Expr {
         /// Whether to match case insensitively.
         casei: bool,
     },
-    /// Match any character, excluding new line.
-    AnyChar,
     /// Match any character.
+    AnyChar,
+    /// Match any character, excluding new line.
     AnyCharNoNL,
     /// A character class.
     Class(CharClass),
