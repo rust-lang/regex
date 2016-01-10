@@ -149,7 +149,7 @@ impl<'r, 't> Nfa<'r, 't> {
         at: InputAt,
         at_next: InputAt,
     ) -> bool {
-        use program::Inst::*;
+        use inst::Inst::*;
         match self.prog.insts[pc] {
             Match => {
                 for (slot, val) in caps.iter_mut().zip(thread_caps.iter()) {
@@ -157,19 +157,19 @@ impl<'r, 't> Nfa<'r, 't> {
                 }
                 true
             }
-            Char(c) => {
-                if c == at.char() {
-                    self.add(nlist, thread_caps, pc+1, at_next);
+            Char(ref inst) => {
+                if inst.c == at.char() {
+                    self.add(nlist, thread_caps, inst.goto, at_next);
                 }
                 false
             }
             Ranges(ref inst) => {
                 if inst.matches(at.char()) {
-                    self.add(nlist, thread_caps, pc+1, at_next);
+                    self.add(nlist, thread_caps, inst.goto, at_next);
                 }
                 false
             }
-            EmptyLook(_) | Save(_) | Jump(_) | Split(_, _) => false,
+            EmptyLook(_) | Save(_) | Split(_) => false,
         }
     }
 
@@ -180,7 +180,7 @@ impl<'r, 't> Nfa<'r, 't> {
         pc: usize,
         at: InputAt,
     ) {
-        use program::Inst::*;
+        use inst::Inst::*;
 
         if nlist.contains(pc) {
             return
@@ -190,25 +190,22 @@ impl<'r, 't> Nfa<'r, 't> {
             EmptyLook(ref inst) => {
                 let prev = self.input.previous_at(at.pos());
                 if inst.matches(prev.char(), at.char()) {
-                    self.add(nlist, thread_caps, pc+1, at);
+                    self.add(nlist, thread_caps, inst.goto, at);
                 }
             }
-            Save(slot) => {
-                if slot >= thread_caps.len() {
-                    self.add(nlist, thread_caps, pc+1, at);
+            Save(ref inst) => {
+                if inst.slot >= thread_caps.len() {
+                    self.add(nlist, thread_caps, inst.goto, at);
                 } else {
-                    let old = thread_caps[slot];
-                    thread_caps[slot] = Some(at.pos());
-                    self.add(nlist, thread_caps, pc+1, at);
-                    thread_caps[slot] = old;
+                    let old = thread_caps[inst.slot];
+                    thread_caps[inst.slot] = Some(at.pos());
+                    self.add(nlist, thread_caps, inst.goto, at);
+                    thread_caps[inst.slot] = old;
                 }
             }
-            Jump(to) => {
-                self.add(nlist, thread_caps, to, at)
-            }
-            Split(x, y) => {
-                self.add(nlist, thread_caps, x, at);
-                self.add(nlist, thread_caps, y, at);
+            Split(ref inst) => {
+                self.add(nlist, thread_caps, inst.goto1, at);
+                self.add(nlist, thread_caps, inst.goto2, at);
             }
             Match | Char(_) | Ranges(_) => {
                 let mut t = &mut nlist.thread(ti);

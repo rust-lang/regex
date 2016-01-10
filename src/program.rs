@@ -8,14 +8,12 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use std::cmp::{self, Ordering};
-
 use syntax;
 
 use Error;
 use backtrack::{Backtrack, BackMachine};
-use char::Char;
 use compile::Compiler;
+use inst::{EmptyLook, Inst};
 use nfa::{Nfa, NfaThreads};
 use pool::Pool;
 use prefix::Prefix;
@@ -23,118 +21,6 @@ use re::CaptureIdxs;
 
 const NUM_PREFIX_LIMIT: usize = 30;
 const PREFIX_LENGTH_LIMIT: usize = 15;
-
-pub type InstIdx = usize;
-
-/// An instruction, the underlying unit of a compiled regular expression
-#[derive(Clone, Debug)]
-pub enum Inst {
-    /// A match has occurred.
-    /// This is always the last instruction and only occurs in a single spot.
-    /// We could special case this in the code, but it is much clearer to
-    /// handle it as a proper instruction.
-    Match,
-    /// Save the current location in the input into the given capture location.
-    Save(usize),
-    /// Jump to the instruction given.
-    Jump(InstIdx),
-    /// Match either instruction, preferring the first.
-    Split(InstIdx, InstIdx),
-    /// A zero-width instruction. When this instruction matches, the input
-    /// is not advanced.
-    EmptyLook(LookInst),
-    /// Match a single possibly case insensitive character.
-    Char(char),
-    /// Match one or more possibly case insensitive character ranges.
-    Ranges(CharRanges),
-}
-
-/// A multi-range character class instruction.
-#[derive(Clone, Debug)]
-pub struct CharRanges {
-    /// Sorted sequence of non-overlapping ranges.
-    pub ranges: Vec<(char, char)>,
-}
-
-/// The set of zero-width match instructions.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum LookInst {
-    /// Start of line or input.
-    StartLine,
-    /// End of line or input.
-    EndLine,
-    /// Start of input.
-    StartText,
-    /// End of input.
-    EndText,
-    /// Word character on one side and non-word character on other.
-    WordBoundary,
-    /// Word character on both sides or non-word character on both sides.
-    NotWordBoundary,
-}
-
-impl CharRanges {
-    /// Emits a range specifically for the `(?s).` expression.
-    pub fn any() -> CharRanges {
-        CharRanges { ranges: vec![('\x00', '\u{10ffff}')] }
-    }
-
-    /// Emits a range specifically for the `.` expression.
-    pub fn any_nonl() -> CharRanges {
-        CharRanges { ranges: vec![('\x00', '\x09'), ('\x0B', '\u{10ffff}')] }
-    }
-
-    /// Emits a range from the AST character class.
-    pub fn from_class(cls: syntax::CharClass) -> CharRanges {
-        CharRanges {
-            ranges: cls.into_iter().map(|r| (r.start, r.end)).collect(),
-        }
-    }
-
-    /// Tests whether the given input character matches this instruction.
-    #[inline(always)] // About ~5-15% more throughput then `#[inline]`
-    pub fn matches(&self, c: Char) -> bool {
-        // This speeds up the `match_class_unicode` benchmark by checking
-        // some common cases quickly without binary search. e.g., Matching
-        // a Unicode class on predominantly ASCII text.
-        for r in self.ranges.iter().take(4) {
-            if c < r.0 {
-                return false;
-            }
-            if c <= r.1 {
-                return true;
-            }
-        }
-        self.ranges.binary_search_by(|r| {
-            if r.1 < c {
-                Ordering::Less
-            } else if r.0 > c {
-                Ordering::Greater
-            } else {
-                Ordering::Equal
-            }
-        }).is_ok()
-    }
-}
-
-impl LookInst {
-    /// Tests whether the pair of characters matches this zero-width
-    /// instruction.
-    pub fn matches(&self, c1: Char, c2: Char) -> bool {
-        use self::LookInst::*;
-        match *self {
-            StartLine => c1.is_none() || c1 == '\n',
-            EndLine => c2.is_none() || c2 == '\n',
-            StartText => c1.is_none(),
-            EndText => c2.is_none(),
-            ref wbty => {
-                let (w1, w2) = (c1.is_word_char(), c2.is_word_char());
-                (*wbty == WordBoundary && w1 ^ w2)
-                || (*wbty == NotWordBoundary && !(w1 ^ w2))
-            }
-        }
-    }
-}
 
 /// The matching engines offered by this regex implementation.
 ///
@@ -193,7 +79,8 @@ impl Program {
         re: &str,
     ) -> Result<Program, Error> {
         let expr = try!(syntax::Expr::parse(re));
-        let (insts, cap_names) = try!(Compiler::new(size_limit).compile(expr));
+        let compiler = Compiler::new(size_limit);
+        let (insts, cap_names) = try!(compiler.compile(&expr));
         let (insts_len, ncaps) = (insts.len(), num_captures(&insts));
         let create_threads = move || NfaThreads::new(insts_len, ncaps);
         let create_backtrack = move || BackMachine::new();
@@ -212,11 +99,11 @@ impl Program {
 
         prog.find_prefixes();
         prog.anchored_begin = match prog.insts[1] {
-            Inst::EmptyLook(LookInst::StartText) => true,
+            Inst::EmptyLook(ref inst) => inst.look == EmptyLook::StartText,
             _ => false,
         };
         prog.anchored_end = match prog.insts[prog.insts.len() - 3] {
-            Inst::EmptyLook(LookInst::EndText) => true,
+            Inst::EmptyLook(ref inst) => inst.look == EmptyLook::EndText,
             _ => false,
         };
         Ok(prog)
@@ -301,7 +188,10 @@ impl Program {
         while let Some(mut pc) = stack.pop() {
             pc = self.skip(pc);
             match self.insts[pc] {
-                Inst::Split(x, y) => { stack.push(y); stack.push(x); }
+                Inst::Split(ref inst) => {
+                    stack.push(inst.goto2);
+                    stack.push(inst.goto1);
+                }
                 _ => {
                     let (alt_prefixes, complete) = self.literals(pc);
                     if alt_prefixes.is_empty() {
@@ -342,11 +232,12 @@ impl Program {
     /// to a match. (This may report false negatives, but being conservative
     /// is OK.)
     fn literals(&self, mut pc: usize) -> (Vec<String>, bool) {
-        use self::Inst::*;
+        #![allow(unused_assignments)]
+        use inst::Inst::*;
 
         let mut complete = true;
         let mut alts = vec![String::new()];
-        while pc < self.insts.len() {
+        loop {
             let inst = &self.insts[pc];
 
             // Each iteration adds one character to every alternate prefix *or*
@@ -358,19 +249,18 @@ impl Program {
                 break;
             }
             match *inst {
-                Save(_) => { pc += 1; continue }
-                Jump(pc2) => pc = pc2,
-                Char(c) => {
+                Save(ref inst) => { pc = inst.goto; continue }
+                Char(ref inst) => {
                     for alt in &mut alts {
-                        alt.push(c);
+                        alt.push(inst.c);
                     }
-                    pc += 1;
+                    pc = inst.goto;
                 }
-                Ranges(CharRanges { ref ranges }) => {
+                Ranges(ref inst) => {
                     // This adds a new literal for *each* character in this
                     // range. This has the potential to use way too much
                     // memory, so we bound it naively for now.
-                    let nchars = num_chars_in_ranges(ranges);
+                    let nchars = num_chars_in_ranges(&inst.ranges);
                     if alts.len() * nchars > NUM_PREFIX_LIMIT {
                         complete = false;
                         break;
@@ -378,7 +268,7 @@ impl Program {
 
                     let orig = alts;
                     alts = Vec::with_capacity(orig.len());
-                    for &(s, e) in ranges {
+                    for &(s, e) in &inst.ranges {
                         for c in (s as u32)..(e as u32 + 1){
                             for alt in &orig {
                                 let mut alt = alt.clone();
@@ -387,7 +277,7 @@ impl Program {
                             }
                         }
                     }
-                    pc += 1;
+                    pc = inst.goto;
                 }
                 _ => { complete = self.leads_to_match(pc); break }
             }
@@ -412,7 +302,6 @@ impl Program {
         loop {
             match self.insts[pc] {
                 Inst::Save(_) => pc += 1,
-                Inst::Jump(pc2) => pc = pc2,
                 _ => return pc,
             }
         }
@@ -443,8 +332,8 @@ impl Clone for Program {
 fn num_captures(insts: &[Inst]) -> usize {
     let mut n = 0;
     for inst in insts {
-        if let Inst::Save(c) = *inst {
-            n = cmp::max(n, c+1)
+        if let Inst::Save(ref inst) = *inst {
+            n = ::std::cmp::max(n, inst.slot + 1)
         }
     }
     // There's exactly 2 Save slots for every capture.
