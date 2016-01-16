@@ -33,9 +33,7 @@ use syntax::ptr::P;
 use rustc_plugin::Registry;
 
 use regex::Regex;
-use regex::internal::{
-    Inst, LookInst, CharRanges, Program, Dynamic, Native,
-};
+use regex::internal::{Inst, EmptyLook, Program, Dynamic, Native};
 
 /// For the `regex!` syntax extension. Do not use.
 #[plugin_registrar]
@@ -115,10 +113,6 @@ impl<'a> NfaGen<'a> {
         );
         let prefix_anchor = self.prog.anchored_begin;
 
-        // let prefix_lit = Rc::new(self.prog.prefix.as_bytes().to_vec());
-        // let prefix_bytes = self.cx.expr_lit(self.sp, ast::LitBinary(prefix_lit));
-
-        // let check_prefix = self.check_prefix();
         let step_insts = self.step_insts();
         let add_insts = self.add_insts();
         let regex = &*self.original;
@@ -325,70 +319,79 @@ fn exec<'t>(
     // zero-width states to the next queue of states to visit.
     fn add_insts(&self) -> P<ast::Expr> {
         let arms = self.prog.insts.iter().enumerate().map(|(pc, inst)| {
-            let nextpc = pc + 1;
             let body = match *inst {
-                Inst::EmptyLook(LookInst::StartLine) => {
-                    quote_expr!(self.cx, {
-                        let prev = self.input.previous_at(at.pos());
-                        if prev.char().is_none() || prev.char() == '\n' {
-                            self.add(nlist, thread_caps, $nextpc, at);
+                Inst::EmptyLook(ref inst) => {
+                    let nextpc = inst.goto;
+                    match inst.look {
+                        EmptyLook::StartLine => {
+                            quote_expr!(self.cx, {
+                                let prev = self.input.previous_at(at.pos());
+                                if prev.char().is_none() || prev.char() == '\n' {
+                                    self.add(nlist, thread_caps, $nextpc, at);
+                                }
+                            })
                         }
-                    })
-                }
-                Inst::EmptyLook(LookInst::EndLine) => {
-                    quote_expr!(self.cx, {
-                        if at.char().is_none() || at.char() == '\n' {
-                            self.add(nlist, thread_caps, $nextpc, at);
+                        EmptyLook::EndLine => {
+                            quote_expr!(self.cx, {
+                                if at.char().is_none() || at.char() == '\n' {
+                                    self.add(nlist, thread_caps, $nextpc, at);
+                                }
+                            })
                         }
-                    })
-                }
-                Inst::EmptyLook(LookInst::StartText) => {
-                    quote_expr!(self.cx, {
-                        let prev = self.input.previous_at(at.pos());
-                        if prev.char().is_none() {
-                            self.add(nlist, thread_caps, $nextpc, at);
+                        EmptyLook::StartText => {
+                            quote_expr!(self.cx, {
+                                let prev = self.input.previous_at(at.pos());
+                                if prev.char().is_none() {
+                                    self.add(nlist, thread_caps, $nextpc, at);
+                                }
+                            })
                         }
-                    })
-                }
-                Inst::EmptyLook(LookInst::EndText) => {
-                    quote_expr!(self.cx, {
-                        if at.char().is_none() {
-                            self.add(nlist, thread_caps, $nextpc, at);
+                        EmptyLook::EndText => {
+                            quote_expr!(self.cx, {
+                                if at.char().is_none() {
+                                    self.add(nlist, thread_caps, $nextpc, at);
+                                }
+                            })
                         }
-                    })
-                }
-                Inst::EmptyLook(ref wbty) => {
-                    let m = if *wbty == LookInst::WordBoundary {
-                        quote_expr!(self.cx, { w1 ^ w2 })
-                    } else {
-                        quote_expr!(self.cx, { !(w1 ^ w2) })
-                    };
-                    quote_expr!(self.cx, {
-                        let prev = self.input.previous_at(at.pos());
-                        let w1 = prev.char().is_word_char();
-                        let w2 = at.char().is_word_char();
-                        if $m {
-                            self.add(nlist, thread_caps, $nextpc, at);
+                        EmptyLook::WordBoundary
+                        | EmptyLook::NotWordBoundary => {
+                            let m = if inst.look == EmptyLook::WordBoundary {
+                                quote_expr!(self.cx, { w1 ^ w2 })
+                            } else {
+                                quote_expr!(self.cx, { !(w1 ^ w2) })
+                            };
+                            quote_expr!(self.cx, {
+                                let prev = self.input.previous_at(at.pos());
+                                let w1 = prev.char().is_word_char();
+                                let w2 = at.char().is_word_char();
+                                if $m {
+                                    self.add(nlist, thread_caps, $nextpc, at);
+                                }
+                            })
                         }
-                    })
-                }
-                Inst::Save(slot) => quote_expr!(self.cx, {
-                    if $slot >= self.ncaps {
-                        self.add(nlist, thread_caps, $nextpc, at);
-                    } else {
-                        let old = thread_caps[$slot];
-                        thread_caps[$slot] = Some(at.pos());
-                        self.add(nlist, thread_caps, $nextpc, at);
-                        thread_caps[$slot] = old;
                     }
-                }),
-                Inst::Jump(to) => quote_expr!(self.cx, {
-                    self.add(nlist, thread_caps, $to, at);
-                }),
-                Inst::Split(x, y) => quote_expr!(self.cx, {
-                    self.add(nlist, thread_caps, $x, at);
-                    self.add(nlist, thread_caps, $y, at);
-                }),
+                }
+                Inst::Save(ref inst) => {
+                    let nextpc = inst.goto;
+                    let slot = inst.slot;
+                    quote_expr!(self.cx, {
+                        if $slot >= self.ncaps {
+                            self.add(nlist, thread_caps, $nextpc, at);
+                        } else {
+                            let old = thread_caps[$slot];
+                            thread_caps[$slot] = Some(at.pos());
+                            self.add(nlist, thread_caps, $nextpc, at);
+                            thread_caps[$slot] = old;
+                        }
+                    })
+                }
+                Inst::Split(ref inst) => {
+                    let (x, y) = (inst.goto1, inst.goto2);
+                    quote_expr!(self.cx, {
+                        self.add(nlist, thread_caps, $x, at);
+                        self.add(nlist, thread_caps, $y, at);
+                    })
+                }
                 // For Match, Char, Ranges
                 _ => quote_expr!(self.cx, {
                     let mut t = &mut nlist.thread(ti);
@@ -406,7 +409,6 @@ fn exec<'t>(
     // in the current queue that consume a single character.
     fn step_insts(&self) -> P<ast::Expr> {
         let arms = self.prog.insts.iter().enumerate().map(|(pc, inst)| {
-            let nextpc = pc + 1;
             let body = match *inst {
                 Inst::Match => quote_expr!(self.cx, {
                     for (slot, val) in caps.iter_mut().zip(thread_caps.iter()) {
@@ -414,14 +416,19 @@ fn exec<'t>(
                     }
                     return true;
                 }),
-                Inst::Char(c) => quote_expr!(self.cx, {
-                    if $c == at.char() {
-                        self.add(nlist, thread_caps, $nextpc, at_next);
-                    }
-                    return false;
-                }),
-                Inst::Ranges(CharRanges { ref ranges }) => {
-                    let match_class = self.match_class(ranges);
+                Inst::Char(ref inst) => {
+                    let nextpc = inst.goto;
+                    let c = inst.c;
+                    quote_expr!(self.cx, {
+                        if $c == at.char() {
+                            self.add(nlist, thread_caps, $nextpc, at_next);
+                        }
+                        return false;
+                    })
+                }
+                Inst::Ranges(ref inst) => {
+                    let match_class = self.match_class(&inst.ranges);
+                    let nextpc = inst.goto;
                     quote_expr!(self.cx, {
                         let mut c = at.char();
                         if let Some(c) = c.as_char() {

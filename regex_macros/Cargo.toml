@@ -25,7 +25,7 @@ bench = true
 
 [dependencies.regex]
 path = ".."
-version = "0.1.0"
+version = "0.1"
 features = ["pattern"]
 
 [dev-dependencies]

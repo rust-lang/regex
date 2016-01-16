@@ -24,7 +24,8 @@
 // as fast as the full NFA simulation.
 
 use input::{Input, InputAt, CharInput};
-use program::{InstIdx, Program};
+use inst::InstIdx;
+use program::Program;
 use re::CaptureIdxs;
 
 type Bits = u32;
@@ -190,7 +191,7 @@ impl<'a, 'r, 't, 'c> Backtrack<'a, 'r, 't, 'c> {
     }
 
     fn step(&mut self, mut pc: InstIdx, mut at: InputAt) -> bool {
-        use program::Inst::*;
+        use inst::Inst::*;
         loop {
             // This loop is an optimization to avoid constantly pushing/popping
             // from the stack. Namely, if we're pushing a job only to run it
@@ -198,34 +199,33 @@ impl<'a, 'r, 't, 'c> Backtrack<'a, 'r, 't, 'c> {
             // in place.
             match self.prog.insts[pc] {
                 Match => return true,
-                Save(slot) => {
-                    if slot < self.caps.len() {
+                Save(ref inst) => {
+                    if inst.slot < self.caps.len() {
                         // If this path doesn't work out, then we save the old
                         // capture index (if one exists) in an alternate
                         // job. If the next path fails, then the alternate
                         // job is popped and the old capture index is restored.
-                        let old_pos = self.caps[slot];
-                        self.push_save_restore(slot, old_pos);
-                        self.caps[slot] = Some(at.pos());
+                        let old_pos = self.caps[inst.slot];
+                        self.push_save_restore(inst.slot, old_pos);
+                        self.caps[inst.slot] = Some(at.pos());
                     }
-                    pc += 1;
+                    pc = inst.goto;
                 }
-                Jump(pc2) => pc = pc2,
-                Split(x, y) => {
-                    self.push(y, at);
-                    pc = x;
+                Split(ref inst) => {
+                    self.push(inst.goto2, at);
+                    pc = inst.goto1;
                 }
                 EmptyLook(ref inst) => {
                     let prev = self.input.previous_at(at.pos());
                     if inst.matches(prev.char(), at.char()) {
-                        pc += 1;
+                        pc = inst.goto;
                     } else {
                         return false;
                     }
                 }
-                Char(c) => {
-                    if c == at.char() {
-                        pc += 1;
+                Char(ref inst) => {
+                    if inst.c == at.char() {
+                        pc = inst.goto;
                         at = self.input.at(at.next_pos());
                     } else {
                         return false;
@@ -233,7 +233,7 @@ impl<'a, 'r, 't, 'c> Backtrack<'a, 'r, 't, 'c> {
                 }
                 Ranges(ref inst) => {
                     if inst.matches(at.char()) {
-                        pc += 1;
+                        pc = inst.goto;
                         at = self.input.at(at.next_pos());
                     } else {
                         return false;

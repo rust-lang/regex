@@ -420,6 +420,7 @@ mod backtrack;
 mod char;
 mod compile;
 mod input;
+mod inst;
 mod pool;
 mod prefix;
 mod program;
@@ -432,7 +433,8 @@ mod re;
 pub mod internal {
     pub use char::Char;
     pub use input::{Input, CharInput, InputAt};
-    pub use program::{Program, MatchEngine, CharRanges, Inst, LookInst};
+    pub use inst::{Inst, EmptyLook, InstRanges};
+    pub use program::{Program, MatchEngine};
     pub use re::ExNative;
     pub use re::Regex::{Dynamic, Native};
 }
