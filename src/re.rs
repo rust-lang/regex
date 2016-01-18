@@ -951,6 +951,15 @@ impl<'t> Captures<'t> {
 
 /// Get a group by index.
 ///
+/// `'t` is the lifetime of the matched text.
+///
+/// The text can't outlive the `Captures` object if this method is
+/// used, because of how `Index` is defined (normally `a[i]` is part
+/// of `a` and can't outlive it); to do that, use [`at()`][]
+/// instead.
+///
+/// [`at()`]: #method.at
+///
 /// # Panics
 /// If there is no group at the given index.
 impl<'t> Index<usize> for Captures<'t> {
@@ -964,6 +973,16 @@ impl<'t> Index<usize> for Captures<'t> {
 }
 
 /// Get a group by name.
+///
+/// `'t` is the lifetime of the matched text and `'i` is the lifetime
+/// of the group name (the index).
+///
+/// The text can't outlive the `Captures` object if this method is
+/// used, because of how `Index` is defined (normally `a[i]` is part
+/// of `a` and can't outlive it); to do that, use [`name()`][]
+/// instead.
+///
+/// [`name()`]: #method.name
 ///
 /// # Panics
 /// If there is no group named by the given value.
