@@ -187,15 +187,14 @@ impl Compiler {
     ) -> CompileResult {
         let split = self.push_split_hole();
         let goto1 = self.insts.len();
-        let hole = try!(self.c(expr));
-        let goto2 = self.insts.len();
+        let hole1 = try!(self.c(expr));
 
-        if greedy {
-            self.fill_split(split, Some(goto1), Some(goto2));
+        let hole2 = if greedy {
+            self.fill_split(split, Some(goto1), None)
         } else {
-            self.fill_split(split, Some(goto2), Some(goto1));
-        }
-        Ok(hole)
+            self.fill_split(split, None, Some(goto1))
+        };
+        Ok(Hole::Many(vec![hole1, hole2]))
     }
 
     fn c_repeat_zero_or_more(
