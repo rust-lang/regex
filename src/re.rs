@@ -1078,7 +1078,7 @@ impl<'r, 't> Iterator for FindCaptures<'r, 't> {
         // i.e., no infinite loops please.
         if e == s {
             self.last_end += self.search[self.last_end..].chars()
-                                 .next().map(|c| c.len_utf8()).unwrap_or(0);
+                                 .next().map(|c| c.len_utf8()).unwrap_or(1);
         } else {
             self.last_end = e;
         }
