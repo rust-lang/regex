@@ -374,7 +374,12 @@ impl CharClass {
     pub fn negate(mut self) -> CharClass {
         fn range(s: char, e: char) -> ClassRange { ClassRange::new(s, e) }
 
-        if self.is_empty() { return self; }
+        if self.is_empty() {
+            // Inverting an empty range yields all of Unicode.
+            return CharClass {
+                ranges: vec![ClassRange { start: '\x00', end: '\u{10ffff}' }],
+            };
+        }
         self = self.canonicalize();
         let mut inv = self.to_empty();
         if self[0].start > '\x00' {

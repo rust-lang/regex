@@ -31,7 +31,9 @@ fn class(ranges: &[(char, char)]) -> CharClass {
 #[test]
 fn negate() {
     fn prop(ranges: Vec<(char, char)>) -> bool {
-        class(&ranges).canonicalize() == class(&ranges).negate().negate()
+        let expected = class(&ranges).canonicalize();
+        let got = class(&ranges).negate().negate();
+        expected == got
     }
     qc(prop as fn(Vec<(char, char)>) -> bool);
 }
