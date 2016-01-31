@@ -350,6 +350,7 @@ impl Regex {
             re: self,
             search: text,
             last_end: 0,
+            skip_next_empty: false
         }
     }
 
@@ -454,6 +455,7 @@ impl Regex {
             re: self,
             search: text,
             last_end: 0,
+            skip_next_empty: false
         }
     }
 
@@ -1058,6 +1060,7 @@ pub struct FindCaptures<'r, 't> {
     re: &'r Regex,
     search: &'t str,
     last_end: usize,
+    skip_next_empty: bool
 }
 
 impl<'r, 't> Iterator for FindCaptures<'r, 't> {
@@ -1079,8 +1082,13 @@ impl<'r, 't> Iterator for FindCaptures<'r, 't> {
         if e == s {
             self.last_end += self.search[self.last_end..].chars()
                                  .next().map(|c| c.len_utf8()).unwrap_or(1);
+            if self.skip_next_empty {
+                self.skip_next_empty = false;
+                return self.next();
+            }
         } else {
             self.last_end = e;
+            self.skip_next_empty = true;
         }
         Some(Captures::new(self.re, self.search, caps))
     }
@@ -1098,6 +1106,7 @@ pub struct FindMatches<'r, 't> {
     re: &'r Regex,
     search: &'t str,
     last_end: usize,
+    skip_next_empty: bool
 }
 
 impl<'r, 't> Iterator for FindMatches<'r, 't> {
@@ -1119,8 +1128,13 @@ impl<'r, 't> Iterator for FindMatches<'r, 't> {
         if e == s {
             self.last_end += self.search[self.last_end..].chars()
                                  .next().map(|c| c.len_utf8()).unwrap_or(1);
+            if self.skip_next_empty {
+                self.skip_next_empty = false;
+                return self.next();
+            }
         } else {
             self.last_end = e;
+            self.skip_next_empty = true;
         }
         Some((s, e))
     }

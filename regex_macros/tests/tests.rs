@@ -46,6 +46,27 @@ fn empty_regex_nonempty_match() {
 }
 
 #[test]
+fn one_zero_length_match() {
+    let re = regex!(r"\d*");
+    let ms = re.find_iter("a1b2").collect::<Vec<_>>();
+    assert_eq!(ms, vec![(0, 0), (1, 2), (3, 4)]);
+}
+
+#[test]
+fn many_zero_length_match() {
+    let re = regex!(r"\d*");
+    let ms = re.find_iter("a1bbb2").collect::<Vec<_>>();
+    assert_eq!(ms, vec![(0, 0), (1, 2), (3, 3), (4, 4), (5, 6)]);
+}
+
+#[test]
+fn many_sequential_zero_length_match() {
+    let re = regex!(r"\d?");
+    let ms = re.find_iter("a12b3c").collect::<Vec<_>>();
+    assert_eq!(ms, vec![(0, 0), (1, 2), (2, 3), (4, 5), (6, 6)]);
+}
+
+#[test]
 fn quoted_bracket_set() {
     let re = regex!(r"([\x{5b}\x{5d}])");
     let ms = re.find_iter("[]").collect::<Vec<_>>();
