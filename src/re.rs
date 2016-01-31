@@ -350,7 +350,7 @@ impl Regex {
             re: self,
             search: text,
             last_end: 0,
-            last_match: None,
+            skip_next_empty: false
         }
     }
 
@@ -454,8 +454,8 @@ impl Regex {
         FindCaptures {
             re: self,
             search: text,
-            last_match: None,
             last_end: 0,
+            skip_next_empty: false
         }
     }
 
@@ -1059,8 +1059,8 @@ impl<'t> Iterator for SubCapturesNamed<'t> {
 pub struct FindCaptures<'r, 't> {
     re: &'r Regex,
     search: &'t str,
-    last_match: Option<usize>,
     last_end: usize,
+    skip_next_empty: bool
 }
 
 impl<'r, 't> Iterator for FindCaptures<'r, 't> {
@@ -1079,16 +1079,17 @@ impl<'r, 't> Iterator for FindCaptures<'r, 't> {
 
         // Don't accept empty matches immediately following a match.
         // i.e., no infinite loops please.
-        if e == s && Some(self.last_end) == self.last_match {
-            if self.last_end >= self.search.len() {
-                return None;
-            }
+        if e == s {
             self.last_end += self.search[self.last_end..].chars()
-                                 .next().unwrap().len_utf8();
-            return self.next()
+                                 .next().map(|c| c.len_utf8()).unwrap_or(1);
+            if self.skip_next_empty {
+                self.skip_next_empty = false;
+                return self.next();
+            }
+        } else {
+            self.last_end = e;
+            self.skip_next_empty = true;
         }
-        self.last_end = e;
-        self.last_match = Some(self.last_end);
         Some(Captures::new(self.re, self.search, caps))
     }
 }
@@ -1104,8 +1105,8 @@ impl<'r, 't> Iterator for FindCaptures<'r, 't> {
 pub struct FindMatches<'r, 't> {
     re: &'r Regex,
     search: &'t str,
-    last_match: Option<usize>,
     last_end: usize,
+    skip_next_empty: bool
 }
 
 impl<'r, 't> Iterator for FindMatches<'r, 't> {
@@ -1124,16 +1125,17 @@ impl<'r, 't> Iterator for FindMatches<'r, 't> {
 
         // Don't accept empty matches immediately following a match.
         // i.e., no infinite loops please.
-        if e == s && Some(self.last_end) == self.last_match {
-            if self.last_end >= self.search.len() {
-                return None;
-            }
+        if e == s {
             self.last_end += self.search[self.last_end..].chars()
-                                 .next().unwrap().len_utf8();
-            return self.next()
+                                 .next().map(|c| c.len_utf8()).unwrap_or(1);
+            if self.skip_next_empty {
+                self.skip_next_empty = false;
+                return self.next();
+            }
+        } else {
+            self.last_end = e;
+            self.skip_next_empty = true;
         }
-        self.last_end = e;
-        self.last_match = Some(self.last_end);
         Some((s, e))
     }
 }
