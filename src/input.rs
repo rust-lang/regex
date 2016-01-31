@@ -11,13 +11,14 @@
 use std::ops;
 
 use char::Char;
-use prefix::Prefix;
+use literals::Literals;
 
 /// Represents a location in the input.
 #[derive(Clone, Copy, Debug)]
 pub struct InputAt {
     pos: usize,
     c: Char,
+    byte: Option<u8>,
     len: usize,
 }
 
@@ -27,12 +28,22 @@ impl InputAt {
         self.pos == 0
     }
 
+    /// Returns true iff this position is past the end of the input.
+    pub fn is_end(&self) -> bool {
+        self.c.is_none() && self.byte.is_none()
+    }
+
     /// Returns the character at this position.
     ///
     /// If this position is just before or after the input, then an absent
     /// character is returned.
     pub fn char(&self) -> Char {
         self.c
+    }
+
+    /// Returns the byte at this position.
+    pub fn byte(&self) -> Option<u8> {
+        self.byte
     }
 
     /// Returns the UTF-8 width of the character at this position.
@@ -55,16 +66,39 @@ impl InputAt {
 pub trait Input {
     /// Return an encoding of the position at byte offset `i`.
     fn at(&self, i: usize) -> InputAt;
-    /// Return an encoding of the char position just prior to byte offset `i`.
-    fn previous_at(&self, i: usize) -> InputAt;
+
+    /// Return the Unicode character occurring next to `at`.
+    ///
+    /// If no such character could be decoded, then `Char` is absent.
+    fn next_char(&self, at: InputAt) -> Char;
+
+    /// Return the Unicode character occurring previous to `at`.
+    ///
+    /// If no such character could be decoded, then `Char` is absent.
+    fn previous_char(&self, at: InputAt) -> Char;
+
     /// Scan the input for a matching prefix.
-    fn prefix_at(&self, prefixes: &Prefix, at: InputAt) -> Option<InputAt>;
+    fn prefix_at(&self, prefixes: &Literals, at: InputAt) -> Option<InputAt>;
+
+    /// The number of bytes in the input.
+    fn len(&self) -> usize;
+
+    fn as_bytes(&self) -> &[u8];
+}
+
+impl<'a, T: Input> Input for &'a T {
+    fn at(&self, i: usize) -> InputAt { (**self).at(i) }
+    fn next_char(&self, at: InputAt) -> Char { (**self).next_char(at) }
+    fn previous_char(&self, at: InputAt) -> Char { (**self).previous_char(at) }
+    fn prefix_at(&self, prefixes: &Literals, at: InputAt) -> Option<InputAt> {
+        (**self).prefix_at(prefixes, at)
+    }
+    fn len(&self) -> usize { (**self).len() }
+    fn as_bytes(&self) -> &[u8] { (**self).as_bytes() }
 }
 
 /// An input reader over characters.
-///
-/// (This is the only implementation of `Input` at the moment.)
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct CharInput<'t>(&'t str);
 
 impl<'t> CharInput<'t> {
@@ -94,21 +128,87 @@ impl<'t> Input for CharInput<'t> {
         InputAt {
             pos: i,
             c: c,
+            byte: None,
             len: c.len_utf8(),
         }
     }
 
-    fn previous_at(&self, i: usize) -> InputAt {
-        let c: Char = self[..i].chars().rev().next().into();
-        let len = c.len_utf8();
+    fn next_char(&self, at: InputAt) -> Char {
+        at.char()
+    }
+
+    fn previous_char(&self, at: InputAt) -> Char {
+        self[..at.pos()].chars().rev().next().into()
+    }
+
+    fn prefix_at(&self, prefixes: &Literals, at: InputAt) -> Option<InputAt> {
+        prefixes
+            .find(&self.as_bytes()[at.pos()..])
+            .map(|(s, _)| self.at(at.pos() + s))
+    }
+
+    fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    fn as_bytes(&self) -> &[u8] {
+        self.0.as_bytes()
+    }
+}
+
+/// An input reader over bytes.
+///
+/// N.B. We represent the reader with a string for now, since that gives us
+/// easy access to necessary Unicode decoding (used for word boundary look
+/// ahead/look behind).
+#[derive(Clone, Copy, Debug)]
+pub struct ByteInput<'t>(&'t str);
+
+impl<'t> ByteInput<'t> {
+    /// Return a new byte-based input reader for the given string.
+    pub fn new(s: &'t str) -> ByteInput<'t> {
+        ByteInput(s)
+    }
+}
+
+impl<'t> ops::Deref for ByteInput<'t> {
+    type Target = str;
+
+    fn deref(&self) -> &str {
+        self.0
+    }
+}
+
+impl<'t> Input for ByteInput<'t> {
+    #[inline(always)]
+    fn at(&self, i: usize) -> InputAt {
         InputAt {
-            pos: i - len,
-            c: c,
-            len: len,
+            pos: i,
+            c: None.into(),
+            byte: self.as_bytes().get(i).map(|&b| b),
+            len: 1,
         }
     }
 
-    fn prefix_at(&self, prefixes: &Prefix, at: InputAt) -> Option<InputAt> {
-        prefixes.find(&self[at.pos()..]).map(|(s, _)| self.at(at.pos() + s))
+    fn next_char(&self, at: InputAt) -> Char {
+        self[at.pos()..].chars().next().into()
+    }
+
+    fn previous_char(&self, at: InputAt) -> Char {
+        self[..at.pos()].chars().rev().next().into()
+    }
+
+    fn prefix_at(&self, prefixes: &Literals, at: InputAt) -> Option<InputAt> {
+        prefixes
+            .find(&self.as_bytes()[at.pos()..])
+            .map(|(s, _)| self.at(at.pos() + s))
+    }
+
+    fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    fn as_bytes(&self) -> &[u8] {
+        self.0.as_bytes()
     }
 }

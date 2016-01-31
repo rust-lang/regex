@@ -17,7 +17,7 @@ use std::ops::Index;
 use std::str::pattern::{Pattern, Searcher, SearchStep};
 use std::str::FromStr;
 
-use program::{Program, MatchEngine};
+use exec::{Executor, MatchEngine};
 use syntax;
 
 const REPLACE_EXPAND: &'static str = r"(?x)
@@ -174,7 +174,7 @@ pub enum Regex {
     // See the comments for the `program` module in `lib.rs` for a more
     // detailed explanation for what `regex!` requires.
     #[doc(hidden)]
-    Dynamic(Program),
+    Dynamic(Executor),
     #[doc(hidden)]
     Native(ExNative),
 }
@@ -249,7 +249,7 @@ impl Regex {
     ///
     /// The default size limit used in `new` is 10MB.
     pub fn with_size_limit(size: usize, re: &str) -> Result<Regex, Error> {
-        Regex::with_engine(None, size, re)
+        Regex::with_engine(re, MatchEngine::Automatic, size, false)
     }
 
     /// Compiles a dynamic regular expression and uses given matching engine.
@@ -267,11 +267,12 @@ impl Regex {
     /// matches and large memory use are all things that could happen.)
     #[doc(hidden)]
     pub fn with_engine(
-        engine: Option<MatchEngine>,
-        size: usize,
         re: &str,
+        match_engine: MatchEngine,
+        size_limit: usize,
+        bytes: bool,
     ) -> Result<Regex, Error> {
-        Program::new(engine, size, re).map(Regex::Dynamic)
+        Executor::new(re, match_engine, size_limit, bytes).map(Regex::Dynamic)
     }
 
 
@@ -350,7 +351,7 @@ impl Regex {
             re: self,
             search: text,
             last_end: 0,
-            skip_next_empty: false
+            skip_next_empty: false,
         }
     }
 
@@ -455,7 +456,7 @@ impl Regex {
             re: self,
             search: text,
             last_end: 0,
-            skip_next_empty: false
+            skip_next_empty: false,
         }
     }
 
@@ -605,13 +606,19 @@ impl Regex {
     /// submatches in the replacement string.
     pub fn replacen<R: Replacer>
                    (&self, text: &str, limit: usize, mut rep: R) -> String {
-        let mut new = String::with_capacity(text.len());
-        let mut last_match = 0;
 
-        if rep.no_expand().is_some() {
-            // borrow checker pains. `rep` is borrowed mutably in the `else`
-            // branch below.
-            let rep = rep.no_expand().unwrap();
+        // If we know that the replacement doesn't have any capture expansions,
+        // then we can fast path. The fast path can make a tremendous
+        // difference:
+        //
+        //   1) We use `find_iter` instead of `captures_iter`. Not asking for
+        //      captures generally makes the regex engines faster.
+        //   2) We don't need to look up all of the capture groups and do
+        //      replacements inside the replacement string. We just push it
+        //      at each match and be done with it.
+        if let Some(rep) = rep.no_expand() {
+            let mut new = String::with_capacity(text.len());
+            let mut last_match = 0;
             for (i, (s, e)) in self.find_iter(text).enumerate() {
                 if limit > 0 && i >= limit {
                     break
@@ -620,17 +627,23 @@ impl Regex {
                 new.push_str(&rep);
                 last_match = e;
             }
-        } else {
-            for (i, cap) in self.captures_iter(text).enumerate() {
-                if limit > 0 && i >= limit {
-                    break
-                }
-                // unwrap on 0 is OK because captures only reports matches
-                let (s, e) = cap.pos(0).unwrap();
-                new.push_str(&text[last_match..s]);
-                new.push_str(&rep.reg_replace(&cap));
-                last_match = e;
+            new.push_str(&text[last_match..]);
+            return new;
+        }
+
+        // The slower path, which we use if the replacement needs access to
+        // capture groups.
+        let mut new = String::with_capacity(text.len());
+        let mut last_match = 0;
+        for (i, cap) in self.captures_iter(text).enumerate() {
+            if limit > 0 && i >= limit {
+                break
             }
+            // unwrap on 0 is OK because captures only reports matches
+            let (s, e) = cap.pos(0).unwrap();
+            new.push_str(&text[last_match..s]);
+            new.push_str(&rep.reg_replace(&cap));
+            last_match = e;
         }
         new.push_str(&text[last_match..]);
         new
@@ -639,7 +652,7 @@ impl Regex {
     /// Returns the original string of this regex.
     pub fn as_str(&self) -> &str {
         match *self {
-            Regex::Dynamic(Program { ref original, .. }) => original,
+            Regex::Dynamic(ref exec) => exec.regex_str(),
             Regex::Native(ExNative { ref original, .. }) => original,
         }
     }
@@ -648,7 +661,9 @@ impl Regex {
     pub fn capture_names(&self) -> CaptureNames {
         match *self {
             Regex::Native(ref n) => CaptureNames::Native(n.names.iter()),
-            Regex::Dynamic(ref d) => CaptureNames::Dynamic(d.cap_names.iter())
+            Regex::Dynamic(ref d) => {
+                CaptureNames::Dynamic(d.capture_names().iter())
+            }
         }
     }
 
@@ -656,7 +671,7 @@ impl Regex {
     pub fn captures_len(&self) -> usize {
         match *self {
             Regex::Native(ref n) => n.names.len(),
-            Regex::Dynamic(ref d) => d.cap_names.len()
+            Regex::Dynamic(ref d) => d.capture_names().len()
         }
     }
 
@@ -1060,7 +1075,7 @@ pub struct FindCaptures<'r, 't> {
     re: &'r Regex,
     search: &'t str,
     last_end: usize,
-    skip_next_empty: bool
+    skip_next_empty: bool,
 }
 
 impl<'r, 't> Iterator for FindCaptures<'r, 't> {
@@ -1106,7 +1121,7 @@ pub struct FindMatches<'r, 't> {
     re: &'r Regex,
     search: &'t str,
     last_end: usize,
-    skip_next_empty: bool
+    skip_next_empty: bool,
 }
 
 impl<'r, 't> Iterator for FindMatches<'r, 't> {

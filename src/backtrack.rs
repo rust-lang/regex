@@ -23,7 +23,7 @@
 // the capture groups. In benchmarks, the backtracking engine is roughly twice
 // as fast as the full NFA simulation.
 
-use input::{Input, InputAt, CharInput};
+use input::{Input, InputAt};
 use inst::InstIdx;
 use program::Program;
 use re::CaptureIdxs;
@@ -32,6 +32,13 @@ type Bits = u32;
 const BIT_SIZE: usize = 32;
 const MAX_PROG_SIZE: usize = 100;
 const MAX_INPUT_SIZE: usize = 256 * (1 << 10);
+
+
+/// Returns true iff the given regex and input can be executed by this
+/// engine with reasonable memory usage.
+pub fn should_exec(num_insts: usize, text_len: usize) -> bool {
+    num_insts <= MAX_PROG_SIZE && text_len <= MAX_INPUT_SIZE
+}
 
 // Total memory usage in bytes is determined by:
 //
@@ -42,30 +49,25 @@ const MAX_INPUT_SIZE: usize = 256 * (1 << 10);
 
 /// A backtracking matching engine.
 #[derive(Debug)]
-pub struct Backtrack<'a, 'r, 't, 'c> {
+pub struct Backtrack<'a, 'r, 'c, I> {
     prog: &'r Program,
-    input: CharInput<'t>,
+    input: I,
     caps: &'c mut CaptureIdxs,
-    m: &'a mut BackMachine,
+    m: &'a mut BacktrackCache,
 }
 
 /// Shared cached state between multiple invocations of a backtracking engine
 /// in the same thread.
-///
-/// It is exported so that it can be cached by `program::Program`.
 #[derive(Debug)]
-pub struct BackMachine {
+pub struct BacktrackCache {
     jobs: Vec<Job>,
     visited: Vec<Bits>,
 }
 
-impl BackMachine {
-    /// Create new empty state for the backtracking engine.
-    pub fn new() -> BackMachine {
-        BackMachine {
-            jobs: vec![],
-            visited: vec![],
-        }
+impl BacktrackCache {
+    /// Create new empty cache for the backtracking engine.
+    pub fn new() -> Self {
+        BacktrackCache { jobs: vec![], visited: vec![] }
     }
 }
 
@@ -81,7 +83,7 @@ enum Job {
     SaveRestore { slot: usize, old_pos: Option<usize> },
 }
 
-impl<'a, 'r, 't, 'c> Backtrack<'a, 'r, 't, 'c> {
+impl<'a, 'r, 'c, I: Input> Backtrack<'a, 'r, 'c, I> {
     /// Execute the backtracking matching engine.
     ///
     /// If there's a match, `exec` returns `true` and populates the given
@@ -89,12 +91,11 @@ impl<'a, 'r, 't, 'c> Backtrack<'a, 'r, 't, 'c> {
     pub fn exec(
         prog: &'r Program,
         mut caps: &mut CaptureIdxs,
-        text: &'t str,
+        input: I,
         start: usize,
     ) -> bool {
-        let input = CharInput::new(text);
         let start = input.at(start);
-        let mut m = prog.backtrack.get();
+        let mut m = prog.cache_backtrack();
         let mut b = Backtrack {
             prog: prog,
             input: input,
@@ -102,12 +103,6 @@ impl<'a, 'r, 't, 'c> Backtrack<'a, 'r, 't, 'c> {
             m: &mut m,
         };
         b.exec_(start)
-    }
-
-    /// Returns true iff the given regex and input can be executed by this
-    /// engine with reasonable memory usage.
-    pub fn should_exec(prog: &'r Program, input: &str) -> bool {
-        prog.insts.len() <= MAX_PROG_SIZE && input.len() <= MAX_INPUT_SIZE
     }
 
     fn clear(&mut self) {
@@ -163,7 +158,7 @@ impl<'a, 'r, 't, 'c> Backtrack<'a, 'r, 't, 'c> {
             if self.backtrack(at) {
                 return true;
             }
-            if at.char().is_none() {
+            if at.is_end() {
                 return false;
             }
             at = self.input.at(at.next_pos());
@@ -216,8 +211,9 @@ impl<'a, 'r, 't, 'c> Backtrack<'a, 'r, 't, 'c> {
                     pc = inst.goto1;
                 }
                 EmptyLook(ref inst) => {
-                    let prev = self.input.previous_at(at.pos());
-                    if inst.matches(prev.char(), at.char()) {
+                    let prev = self.input.previous_char(at);
+                    let next = self.input.next_char(at);
+                    if inst.matches(prev, next) {
                         pc = inst.goto;
                     } else {
                         return false;
@@ -238,6 +234,16 @@ impl<'a, 'r, 't, 'c> Backtrack<'a, 'r, 't, 'c> {
                     } else {
                         return false;
                     }
+                }
+                Bytes(ref inst) => {
+                    if let Some(b) = at.byte() {
+                        if inst.matches(b) {
+                            pc = inst.goto;
+                            at = self.input.at(at.next_pos());
+                            continue;
+                        }
+                    }
+                    return false;
                 }
             }
             if self.has_visited(pc, at) {

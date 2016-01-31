@@ -8,19 +8,25 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
+use std::collections::hash_map::Entry;
 use std::iter;
 
 use syntax::{Expr, Repeater, CharClass, ClassRange};
+use utf8_ranges::{Utf8Sequence, Utf8Sequences};
 
 use Error;
 use inst::{
-    EmptyLook,
-    Inst, InstIdx,
-    InstSave, InstSplit, InstEmptyLook, InstChar, InstRanges,
+    Insts, Inst, InstIdx, EmptyLook,
+    InstSave, InstSplit, InstEmptyLook, InstChar, InstRanges, InstBytes,
 };
 
-pub type Compiled = (Vec<Inst>, Vec<Option<String>>);
+pub struct Compiled {
+    pub insts: Insts,
+    pub cap_names: Vec<Option<String>>,
+}
+
+type InstHoleIdx = InstIdx;
 
 type CompileResult = Result<Hole, Error>;
 
@@ -29,15 +35,27 @@ pub struct Compiler {
     insts: Vec<MaybeInst>,
     cap_names: Vec<Option<String>>,
     seen_caps: HashSet<usize>,
+    bytes: bool,
 }
 
 impl Compiler {
-    pub fn new(size_limit: usize) -> Compiler {
+    /// Create a new regular expression compiler.
+    ///
+    /// The size of the resulting progrom is limited by size_limit. If the
+    /// program exceeds the given size (in bytes), then compilation will return
+    /// an error.
+    ///
+    /// If bytes is true, then the program is compiled as a byte based
+    /// automaton, which incorporates UTF-8 decoding into the machine. If it's
+    /// false, then the automaton is Unicode scalar value based, e.g., an
+    /// engine utilizing such an automaton is resposible for UTF-8 decoding.
+    pub fn new(size_limit: usize, bytes: bool) -> Compiler {
         Compiler {
             size_limit: size_limit,
             insts: vec![],
             cap_names: vec![None],
             seen_caps: HashSet::new(),
+            bytes: bytes,
         }
     }
 
@@ -47,7 +65,10 @@ impl Compiler {
         self.push_compiled(Inst::Match);
 
         let insts = self.insts.into_iter().map(|inst| inst.unwrap()).collect();
-        Ok((insts, self.cap_names))
+        Ok(Compiled {
+            insts: Insts::new(insts, self.bytes),
+            cap_names: self.cap_names,
+        })
     }
 
     fn c(&mut self, expr: &Expr) -> CompileResult {
@@ -58,14 +79,18 @@ impl Compiler {
         match *expr {
             Empty => Ok(Hole::None),
             Literal { ref chars, casei } => self.c_literal(chars, casei),
-            AnyChar => self.c_class(Some(('\x00', '\u{10ffff}'))),
+            AnyChar => self.c_class(&[ClassRange {
+                start: '\x00',
+                end: '\u{10ffff}',
+            }]),
             AnyCharNoNL => {
-                let ranges = &[('\x00', '\x09'), ('\x0b', '\u{10ffff}')];
-                self.c_class(ranges.iter().cloned())
+                self.c_class(&[
+                    ClassRange { start: '\x00', end: '\x09' },
+                    ClassRange { start: '\x0b', end: '\u{10ffff}' },
+                ])
             }
             Class(ref cls) => {
-                let ranges = cls.iter().map(|c| (c.start, c.end));
-                self.c_class(ranges)
+                self.c_class(cls)
             }
             StartLine => self.c_empty_look(inst::EmptyLook::StartLine),
             EndLine => self.c_empty_look(inst::EmptyLook::EndLine),
@@ -92,13 +117,13 @@ impl Compiler {
     }
 
     fn c_capture(&mut self, first_slot: usize, expr: &Expr) -> CompileResult {
-        let hole = self.push_hole(MaybeInst::Save { slot: first_slot });
+        let hole = self.push_hole(InstHole::Save { slot: first_slot });
         self.fill_to_next(hole);
 
         let hole = try!(self.c(expr));
         self.fill_to_next(hole);
 
-        Ok(self.push_hole(MaybeInst::Save { slot: first_slot + 1 }))
+        Ok(self.push_hole(InstHole::Save { slot: first_slot + 1 }))
     }
 
     fn c_literal(&mut self, chars: &[char], casei: bool) -> CompileResult {
@@ -109,32 +134,43 @@ impl Compiler {
                 self.fill_to_next(prev_hole);
                 let class = CharClass::new(vec![
                     ClassRange { start: c, end: c },
-                ]);
-                prev_hole = try!(self.c(&Expr::Class(class.case_fold())));
+                ]).case_fold();
+                prev_hole = try!(self.c_class(&class));
             }
             Ok(prev_hole)
         } else {
             let mut prev_hole = Hole::None;
             for &c in chars {
                 self.fill_to_next(prev_hole);
-                prev_hole = self.push_hole(MaybeInst::Char { c: c });
+                prev_hole = try!(self.c_class(&[ClassRange {
+                    start: c,
+                    end: c,
+                }]));
             }
             Ok(prev_hole)
         }
     }
 
-    fn c_class<I>(&mut self, ranges: I) -> CompileResult
-            where I: IntoIterator<Item=(char, char)> {
-        let ranges: Vec<(char, char)> = ranges.into_iter().collect();
-        Ok(if ranges.len() == 1 && ranges[0].0 == ranges[0].1 {
-            self.push_hole(MaybeInst::Char { c: ranges[0].0 })
+    fn c_class(&mut self, ranges: &[ClassRange]) -> CompileResult {
+        if self.bytes {
+            CompileClass {
+                c: self,
+                ranges: ranges,
+                suffix_cache: HashMap::new(),
+            }.compile()
         } else {
-            self.push_hole(MaybeInst::Ranges { ranges: ranges })
-        })
+            let ranges: Vec<(char, char)> =
+                ranges.iter().map(|r| (r.start, r.end)).collect();
+            Ok(if ranges.len() == 1 && ranges[0].0 == ranges[0].1 {
+                self.push_hole(InstHole::Char { c: ranges[0].0 })
+            } else {
+                self.push_hole(InstHole::Ranges { ranges: ranges })
+            })
+        }
     }
 
     fn c_empty_look(&mut self, look: EmptyLook) -> CompileResult {
-        Ok(self.push_hole(MaybeInst::EmptyLook { look: look }))
+        Ok(self.push_hole(InstHole::EmptyLook { look: look }))
     }
 
     fn c_concat<'a, I>(&mut self, exprs: I) -> CompileResult
@@ -239,12 +275,9 @@ impl Compiler {
         min: u32,
     ) -> CompileResult {
         let min = u32_to_usize(min);
-        if min == 0 {
-            return self.c_repeat_zero_or_more(expr, greedy);
-        }
-        let hole = try!(self.c_concat(iter::repeat(expr).take(min - 1)));
+        let hole = try!(self.c_concat(iter::repeat(expr).take(min)));
         self.fill_to_next(hole);
-        self.c_repeat_one_or_more(expr, greedy)
+        self.c_repeat_zero_or_more(expr, greedy)
     }
 
     fn c_repeat_range(
@@ -305,7 +338,7 @@ impl Compiler {
         match hole {
             Hole::None => {}
             Hole::One(pc) => {
-                self.insts[pc].complete(goto);
+                self.insts[pc].fill(goto);
             }
             Hole::Many(holes) => {
                 for hole in holes {
@@ -331,15 +364,15 @@ impl Compiler {
             Hole::One(pc) => {
                 match (goto1, goto2) {
                     (Some(goto1), Some(goto2)) => {
-                        self.insts[pc].complete_split(goto1, goto2);
+                        self.insts[pc].fill_split(goto1, goto2);
                         Hole::None
                     }
                     (Some(goto1), None) => {
-                        self.insts[pc].complete_split_goto1(goto1);
+                        self.insts[pc].half_fill_split_goto1(goto1);
                         Hole::One(pc)
                     }
                     (None, Some(goto2)) => {
-                        self.insts[pc].complete_split_goto2(goto2);
+                        self.insts[pc].half_fill_split_goto2(goto2);
                         Hole::One(pc)
                     }
                     (None, None) => unreachable!("at least one of the split \
@@ -366,9 +399,9 @@ impl Compiler {
         self.insts.push(MaybeInst::Compiled(inst));
     }
 
-    fn push_hole(&mut self, inst: MaybeInst) -> Hole {
+    fn push_hole(&mut self, inst: InstHole) -> Hole {
         let hole = self.insts.len();
-        self.insts.push(inst);
+        self.insts.push(MaybeInst::Uncompiled(inst));
         Hole::One(hole)
     }
 
@@ -389,8 +422,6 @@ impl Compiler {
     }
 }
 
-/// Hole represents a pointer to zero or more instructions in a regex program
-/// that need to have their goto fields set to the same location.
 #[derive(Debug)]
 enum Hole {
     None,
@@ -398,80 +429,32 @@ enum Hole {
     Many(Vec<Hole>),
 }
 
-/// MaybeInst represents a possibly incomplete instruction in a regex program.
-/// The nature of incompleteness is always determined by whether the
-/// instruction's "goto" field has been set or not.
-///
-/// In the case of Split, since it has two goto fields, it can be "incomplete"
-/// in three different ways: either none of its fields are set, only the first
-/// is set or only the second is set. The reason why the first and second
-/// fields are distinguished is because the order of the branch matters. (i.e.,
-/// it's how "greedy" and "ungreedy" semantics are implemented.)
-///
-/// When the compiler is finished, *all* of its possibly incomplete
-/// instructions must have been fully compiled where all goto fields in all
-/// instructions are set. Violation of this invariant is a bug.
 #[derive(Clone, Debug)]
 enum MaybeInst {
-    /// Compiled represents an instruction that is fully compiled. That is,
-    /// all of its "goto" fields have been filled. When the compiler is done,
-    /// all MaybeInsts must be of the Compiled form.
     Compiled(Inst),
-    /// Split is a branch instruction where neither of its goto fields have
-    /// been set.
+    Uncompiled(InstHole),
     Split,
-    /// Split1 is a branch instruction where only the first goto field has
-    /// been set.
     Split1(InstIdx),
-    /// Split2 is a branch instruction where only the second goto field has
-    /// been set.
     Split2(InstIdx),
-    /// Save is a capture instruction whose goto field has not been set.
-    Save { slot: usize },
-    /// EmptyLook is a zero-width assertion instruction whose goto field has
-    /// not been set.
-    EmptyLook { look: EmptyLook },
-    /// Char is a character-match instruction whose goto field has not been
-    /// set.
-    Char { c: char },
-    /// Ranges is a character-range-match instruction whose goto field has not
-    /// been set.
-    Ranges { ranges: Vec<(char, char)> },
 }
 
 impl MaybeInst {
-    fn complete(&mut self, goto: InstIdx) {
+    fn fill(&mut self, goto: InstIdx) {
         let filled = match *self {
-            MaybeInst::Save { slot } => Inst::Save(InstSave {
-                goto: goto,
-                slot: slot,
-            }),
-            MaybeInst::EmptyLook { look } => Inst::EmptyLook(InstEmptyLook {
-                goto: goto,
-                look: look,
-            }),
-            MaybeInst::Char { c } => Inst::Char(InstChar {
-                goto: goto,
-                c: c,
-            }),
-            MaybeInst::Ranges { ref ranges } => Inst::Ranges(InstRanges {
-                goto: goto,
-                ranges: ranges.clone(),
-            }),
+            MaybeInst::Uncompiled(ref inst) => inst.fill(goto),
             MaybeInst::Split1(goto1) => {
                 Inst::Split(InstSplit { goto1: goto1, goto2: goto })
             }
             MaybeInst::Split2(goto2) => {
                 Inst::Split(InstSplit { goto1: goto, goto2: goto2 })
             }
-            _ => unreachable!("must be called on an uncompiled instruction \
-                               with exactly one missing goto field, \
-                               instead it was called on: {:?}", self),
+            _ => unreachable!("not all instructions were compiled! \
+                               found uncompiled instruction: {:?}", self),
         };
         *self = MaybeInst::Compiled(filled);
     }
 
-    fn complete_split(&mut self, goto1: InstIdx, goto2: InstIdx) {
+    fn fill_split(&mut self, goto1: InstIdx, goto2: InstIdx) {
         let filled = match *self {
             MaybeInst::Split => {
                 Inst::Split(InstSplit { goto1: goto1, goto2: goto2 })
@@ -482,7 +465,7 @@ impl MaybeInst {
         *self = MaybeInst::Compiled(filled);
     }
 
-    fn complete_split_goto1(&mut self, goto1: InstIdx) {
+    fn half_fill_split_goto1(&mut self, goto1: InstIdx) {
         let half_filled = match *self {
             MaybeInst::Split => goto1,
             _ => unreachable!("must be called on Split instruction, \
@@ -491,7 +474,7 @@ impl MaybeInst {
         *self = MaybeInst::Split1(half_filled);
     }
 
-    fn complete_split_goto2(&mut self, goto2: InstIdx) {
+    fn half_fill_split_goto2(&mut self, goto2: InstIdx) {
         let half_filled = match *self {
             MaybeInst::Split => goto2,
             _ => unreachable!("must be called on Split instruction, \
@@ -506,6 +489,157 @@ impl MaybeInst {
             _ => unreachable!("must be called on a compiled instruction, \
                                instead it was called on: {:?}", self),
         }
+    }
+}
+
+#[derive(Clone, Debug)]
+enum InstHole {
+    Save { slot: usize },
+    EmptyLook { look: EmptyLook },
+    Char { c: char },
+    Ranges { ranges: Vec<(char, char)> },
+    Bytes { start: u8, end: u8 },
+}
+
+impl InstHole {
+    fn fill(&self, goto: InstIdx) -> Inst {
+        match *self {
+            InstHole::Save { slot } => Inst::Save(InstSave {
+                goto: goto,
+                slot: slot,
+            }),
+            InstHole::EmptyLook { look } => Inst::EmptyLook(InstEmptyLook {
+                goto: goto,
+                look: look,
+            }),
+            InstHole::Char { c } => Inst::Char(InstChar {
+                goto: goto,
+                c: c,
+            }),
+            InstHole::Ranges { ref ranges } => Inst::Ranges(InstRanges {
+                goto: goto,
+                ranges: ranges.clone(),
+            }),
+            InstHole::Bytes { start, end } => Inst::Bytes(InstBytes {
+                goto: goto,
+                start: start,
+                end: end,
+            }),
+        }
+    }
+}
+
+struct CompileClass<'a, 'b> {
+    c: &'a mut Compiler,
+    ranges: &'b [ClassRange],
+    suffix_cache: HashMap<SuffixCacheKey, InstIdx>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+struct SuffixCacheKey {
+    from_inst: InstIdx,
+    start: u8,
+    end: u8,
+}
+
+impl<'a, 'b> CompileClass<'a, 'b> {
+    fn compile(mut self) -> CompileResult {
+        let mut holes = vec![];
+        let mut it = self
+            .ranges.iter()
+            .flat_map(|r| Utf8Sequences::new(r.start, r.end))
+            .peekable();
+        let mut utf8_seq = it.next().expect("non-empty char class");
+        let mut last_split = Hole::None;
+        while it.peek().is_some() {
+            self.c.fill_to_next(last_split);
+            last_split = self.c.push_split_hole();
+            holes.push(try!(self.c_utf8_sequence(&utf8_seq)));
+            let goto1 = self.c.insts.len().checked_sub(1).unwrap();
+            last_split = self.c.fill_split(last_split, Some(goto1), None);
+
+            utf8_seq = it.next().unwrap();
+        }
+        holes.push(try!(self.c_utf8_sequence(&utf8_seq)));
+        let goto1 = self.c.insts.len().checked_sub(1).unwrap();
+        self.c.fill(last_split, goto1);
+        Ok(Hole::Many(holes))
+    }
+
+    fn c_utf8_sequence(&mut self, seq: &Utf8Sequence) -> CompileResult {
+        // The initial instruction for each UTF-8 sequence should be the same.
+        // Since the 0th instruction is always `Save(0)`, it's safe to use it
+        // as a sentinel here.
+        let mut from_inst = 0;
+        let mut last_hole = Hole::None;
+        for byte_range in seq.into_iter().rev() {
+            let key = SuffixCacheKey {
+                from_inst: from_inst,
+                start: byte_range.start,
+                end: byte_range.end,
+            };
+            match self.suffix_cache.entry(key) {
+                Entry::Occupied(e) => {
+                    from_inst = *e.get();
+                }
+                Entry::Vacant(e) => {
+                    if from_inst == 0 {
+                        last_hole = self.c.push_hole(InstHole::Bytes {
+                            start: byte_range.start,
+                            end: byte_range.end,
+                        });
+                    } else {
+                        self.c.push_compiled(Inst::Bytes(InstBytes {
+                            goto: from_inst,
+                            start: byte_range.start,
+                            end: byte_range.end,
+                        }));
+                    }
+                    from_inst = self.c.insts.len().checked_sub(1).unwrap();
+                    e.insert(from_inst);
+                }
+            }
+        }
+        Ok(last_hole)
+    }
+}
+
+struct CompileClassUncached<'a, 'b> {
+    c: &'a mut Compiler,
+    ranges: &'b [ClassRange],
+}
+
+impl<'a, 'b> CompileClassUncached<'a, 'b> {
+    fn compile(mut self) -> CompileResult {
+        let mut holes = vec![];
+        let mut it = self
+            .ranges.iter()
+            .flat_map(|r| Utf8Sequences::new(r.start, r.end))
+            .peekable();
+        let mut utf8_seq = it.next().expect("non-empty char class");
+        while it.peek().is_some() {
+            let split = self.c.push_split_hole();
+            let goto1 = self.c.insts.len();
+            holes.push(try!(self.c_utf8_sequence(&utf8_seq)));
+            let goto2 = self.c.insts.len();
+            self.c.fill_split(split, Some(goto1), Some(goto2));
+
+            utf8_seq = it.next().unwrap();
+        }
+        holes.push(try!(self.c_utf8_sequence(&utf8_seq)));
+        Ok(Hole::Many(holes))
+    }
+
+    fn c_utf8_sequence(&mut self, seq: &Utf8Sequence) -> CompileResult {
+        let mut prev_hole = Hole::None;
+        for byte_range in seq {
+            self.c.fill_to_next(prev_hole); // no-op on first iteration
+            prev_hole = self.c.push_hole(InstHole::Bytes {
+                start: byte_range.start,
+                end: byte_range.end,
+            });
+        }
+        Ok(prev_hole)
     }
 }
 

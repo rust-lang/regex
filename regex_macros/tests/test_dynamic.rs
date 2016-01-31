@@ -20,9 +20,10 @@ extern crate regex;
 // the normal code path which automatically chooses the engine based on the
 // regex and the input. Other dynamic tests explicitly set the engine to use.
 macro_rules! regex {
-    ($re:expr) => {
-        ::regex::Regex::with_engine(None, 10 * (1 << 20), $re).unwrap()
-    }
+    ($re:expr) => {{
+        let e = ::regex::internal::MatchEngine::Automatic;
+        ::regex::Regex::with_engine($re, e, 10 * (1 << 20), false).unwrap()
+    }}
 }
 
 #[cfg(feature = "pattern")]

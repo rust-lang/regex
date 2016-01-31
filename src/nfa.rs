@@ -37,18 +37,32 @@
 //
 // [1] - http://swtch.com/~rsc/regex/regex3.html
 
-use input::{Input, InputAt, CharInput};
+use input::{Input, InputAt};
 use program::Program;
 use re::CaptureIdxs;
 
 /// An NFA simulation matching engine.
 #[derive(Debug)]
-pub struct Nfa<'r, 't> {
+pub struct Nfa<'r, I> {
     prog: &'r Program,
-    input: CharInput<'t>,
+    input: I,
 }
 
-impl<'r, 't> Nfa<'r, 't> {
+/// A cached allocation that can be reused on each execution.
+#[derive(Debug)]
+pub struct NfaCache {
+    threads: NfaThreads,
+}
+
+impl NfaCache {
+    /// Create a new allocation used by the NFA machine to record execution
+    /// and captures.
+    pub fn new() -> Self {
+        NfaCache { threads: NfaThreads::new() }
+    }
+}
+
+impl<'r, I: Input> Nfa<'r, I> {
     /// Execute the NFA matching engine.
     ///
     /// If there's a match, `exec` returns `true` and populates the given
@@ -56,16 +70,16 @@ impl<'r, 't> Nfa<'r, 't> {
     pub fn exec(
         prog: &'r Program,
         mut caps: &mut CaptureIdxs,
-        text: &'t str,
+        input: I,
         start: usize,
     ) -> bool {
-        let mut q = prog.nfa_threads.get();
-        let input = CharInput::new(text);
+        let mut cache = prog.cache_nfa();
+        cache.threads.resize(prog.insts.len(), prog.num_captures());
         let at = input.at(start);
         Nfa {
             prog: prog,
             input: input,
-        }.exec_(&mut q, &mut caps, at)
+        }.exec_(&mut cache.threads, &mut caps, at)
     }
 
     fn exec_(
@@ -130,7 +144,7 @@ impl<'r, 't> Nfa<'r, 't> {
                     break;
                 }
             }
-            if at.char().is_none() {
+            if at.is_end() {
                 break;
             }
             at = at_next;
@@ -169,6 +183,14 @@ impl<'r, 't> Nfa<'r, 't> {
                 }
                 false
             }
+            Bytes(ref inst) => {
+                if let Some(b) = at.byte() {
+                    if inst.matches(b) {
+                        self.add(nlist, thread_caps, inst.goto, at_next);
+                    }
+                }
+                false
+            }
             EmptyLook(_) | Save(_) | Split(_) => false,
         }
     }
@@ -188,8 +210,9 @@ impl<'r, 't> Nfa<'r, 't> {
         let ti = nlist.add(pc);
         match self.prog.insts[pc] {
             EmptyLook(ref inst) => {
-                let prev = self.input.previous_at(at.pos());
-                if inst.matches(prev.char(), at.char()) {
+                let prev = self.input.previous_char(at);
+                let next = self.input.next_char(at);
+                if inst.matches(prev, next) {
                     self.add(nlist, thread_caps, inst.goto, at);
                 }
             }
@@ -207,7 +230,7 @@ impl<'r, 't> Nfa<'r, 't> {
                 self.add(nlist, thread_caps, inst.goto1, at);
                 self.add(nlist, thread_caps, inst.goto2, at);
             }
-            Match | Char(_) | Ranges(_) => {
+            Match | Char(_) | Ranges(_) | Bytes(_) => {
                 let mut t = &mut nlist.thread(ti);
                 for (slot, val) in t.caps.iter_mut().zip(thread_caps.iter()) {
                     *slot = *val;
@@ -222,7 +245,7 @@ impl<'r, 't> Nfa<'r, 't> {
 ///
 /// It is exported so that it can be cached by `program::Program`.
 #[derive(Debug)]
-pub struct NfaThreads {
+struct NfaThreads {
     clist: Threads,
     nlist: Threads,
 }
@@ -241,12 +264,13 @@ struct Thread {
 }
 
 impl NfaThreads {
-    /// Create new empty state for the NFA engine.
-    pub fn new(num_insts: usize, ncaps: usize) -> NfaThreads {
-        NfaThreads {
-            clist: Threads::new(num_insts, ncaps),
-            nlist: Threads::new(num_insts, ncaps),
-        }
+    fn new() -> NfaThreads {
+        NfaThreads { clist: Threads::new(), nlist: Threads::new(), }
+    }
+
+    fn resize(&mut self, num_insts: usize, ncaps: usize) {
+        self.clist.resize(num_insts, ncaps);
+        self.nlist.resize(num_insts, ncaps);
     }
 
     fn swap(&mut self) {
@@ -255,12 +279,20 @@ impl NfaThreads {
 }
 
 impl Threads {
-    fn new(num_insts: usize, ncaps: usize) -> Threads {
-        let t = Thread { pc: 0, caps: vec![None; ncaps * 2] };
-        Threads {
-            dense: vec![t; num_insts],
-            sparse: vec![0; num_insts],
-            size: 0,
+    fn new() -> Threads {
+        Threads { dense: vec![], sparse: vec![], size: 0 }
+    }
+
+    fn resize(&mut self, num_insts: usize, ncaps: usize) {
+        let old_slots = self.dense.get(0).map_or(0, |t| t.caps.len());
+        let new_slots = ncaps * 2;
+        if num_insts != self.dense.len() || old_slots != new_slots {
+            let t = Thread { pc: 0, caps: vec![None; ncaps * 2] };
+            *self = Threads {
+                dense: vec![t; num_insts],
+                sparse: vec![0; num_insts],
+                size: 0,
+            }
         }
     }
 
