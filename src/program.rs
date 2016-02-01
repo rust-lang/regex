@@ -8,6 +8,8 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+
+
 use syntax;
 
 use backtrack::BacktrackCache;
@@ -39,6 +41,9 @@ pub struct Program {
     /// The sequence of capture group names. There is an entry for each capture
     /// group index and a name exists only if the capture group is named.
     pub cap_names: Vec<Option<String>>,
+    /// The map of named capture groups. The keys are group names and
+    /// the values are group indices.
+    pub named_groups: ::std::collections::HashMap<String, usize>,
     /// If the regular expression requires a literal prefix in order to have a
     /// match, that prefix is stored here as a DFA.
     pub prefixes: Literals,
