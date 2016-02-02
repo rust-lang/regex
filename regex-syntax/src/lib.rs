@@ -84,6 +84,9 @@ use self::Repeater::*;
 
 pub use parser::is_punct;
 
+/// The maximum number of nested expressions allowed.
+const NEST_LIMIT: usize = 200;
+
 /// A regular expression abstract syntax tree.
 ///
 /// An `Expr` represents the abstract syntax of a regular expression.
@@ -226,7 +229,7 @@ pub struct ClassRange {
 impl Expr {
     /// Parses a string in a regular expression syntax tree.
     pub fn parse(s: &str) -> Result<Expr> {
-        parser::Parser::parse(s).map(|e| e.simplify())
+        parser::Parser::parse(s).and_then(|e| e.simplify())
     }
 
     /// Returns true iff the expression can be repeated by a quantifier.
@@ -244,7 +247,7 @@ impl Expr {
         }
     }
 
-    fn simplify(self) -> Expr {
+    fn simplify(self) -> Result<Expr> {
         fn combine_literals(es: &mut Vec<Expr>, e: Expr) {
             match (es.pop(), e) {
                 (None, e) => es.push(e),
@@ -264,35 +267,76 @@ impl Expr {
                 }
             }
         }
-        match self {
-            Repeat { e, r, greedy } => Repeat {
-                e: Box::new(e.simplify()),
-                r: r,
-                greedy: greedy,
-            },
-            Group { e, i, name } => {
-                let e = e.simplify();
-                if i.is_none() && name.is_none() && e.can_repeat() {
-                    e
-                } else {
-                    Group { e: Box::new(e), i: i, name: name }
-                }
+        fn simp(expr: Expr, recurse: usize) -> Result<Expr> {
+            if recurse > NEST_LIMIT {
+                return Err(Error {
+                    pos: 0,
+                    surround: "".to_owned(),
+                    kind: ErrorKind::StackExhausted,
+                });
             }
-            Concat(es) => {
-                let mut new_es = Vec::with_capacity(es.len());
-                for e in es {
-                    combine_literals(&mut new_es, e.simplify());
+            let simplify = |e| simp(e, recurse + 1);
+            Ok(match expr {
+                Repeat { e, r, greedy } => Repeat {
+                    e: Box::new(try!(simplify(*e))),
+                    r: r,
+                    greedy: greedy,
+                },
+                Group { e, i, name } => {
+                    let e = try!(simplify(*e));
+                    if i.is_none() && name.is_none() && e.can_repeat() {
+                        e
+                    } else {
+                        Group { e: Box::new(e), i: i, name: name }
+                    }
                 }
-                if new_es.len() == 1 {
-                    new_es.pop().unwrap()
-                } else {
-                    Concat(new_es)
+                Concat(es) => {
+                    let mut new_es = Vec::with_capacity(es.len());
+                    for e in es {
+                        combine_literals(&mut new_es, try!(simplify(e)));
+                    }
+                    if new_es.len() == 1 {
+                        new_es.pop().unwrap()
+                    } else {
+                        Concat(new_es)
+                    }
                 }
-            }
-            Alternate(es) => Alternate(es.into_iter()
-                                         .map(|e| e.simplify())
-                                         .collect()),
-            e => e,
+                Alternate(es) => {
+                    let mut new_es = Vec::with_capacity(es.len());
+                    for e in es {
+                        new_es.push(try!(simplify(e)));
+                    }
+                    Alternate(new_es)
+                }
+                e => e,
+            })
+        }
+        simp(self, 0)
+    }
+
+    /// Returns true if and only if the expression is required to match from
+    /// the beginning of text.
+    pub fn is_anchored_start(&self) -> bool {
+        match *self {
+            Repeat { ref e, .. } => e.is_anchored_start(),
+            Group { ref e, .. } => e.is_anchored_start(),
+            Concat(ref es) => es[0].is_anchored_start(),
+            Alternate(ref es) => es.iter().all(|e| e.is_anchored_start()),
+            StartText => true,
+            _ => false,
+        }
+    }
+
+    /// Returns true if and only if the expression is required to match at the
+    /// end of the text.
+    pub fn is_anchored_end(&self) -> bool {
+        match *self {
+            Repeat { ref e, .. } => e.is_anchored_end(),
+            Group { ref e, .. } => e.is_anchored_end(),
+            Concat(ref es) => es[es.len() - 1].is_anchored_end(),
+            Alternate(ref es) => es.iter().all(|e| e.is_anchored_end()),
+            EndText => true,
+            _ => false,
         }
     }
 }
@@ -719,6 +763,12 @@ pub enum ErrorKind {
     UnrecognizedFlag(char),
     /// Unrecognized named Unicode class. e.g., `\p{Foo}`.
     UnrecognizedUnicodeClass(String),
+    /// Indicates that the regex uses too much nesting.
+    ///
+    /// (N.B. This error exists because traversing the Expr is recursive and
+    /// an explicit heap allocated stack is not (yet?) used. Regardless, some
+    /// sort of limit must be applied to avoid unbounded memory growth.
+    StackExhausted,
     /// Hints that destructuring should not be exhaustive.
     ///
     /// This enum may grow additional variants, so this makes sure clients
@@ -777,6 +827,7 @@ impl ErrorKind {
             UnrecognizedEscape(_) => "unrecognized escape sequence",
             UnrecognizedFlag(_) => "unrecognized flag",
             UnrecognizedUnicodeClass(_) => "unrecognized Unicode class name",
+            StackExhausted => "stack exhausted, too much nesting",
             __Nonexhaustive => unreachable!(),
         }
     }
@@ -790,8 +841,13 @@ impl ::std::error::Error for Error {
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Error parsing regex near '{}' at character offset {}: {}",
-               self.surround, self.pos, self.kind)
+        if let ErrorKind::StackExhausted = self.kind {
+            write!(f, "Error parsing regex: {}", self.kind)
+        } else {
+            write!(
+                f, "Error parsing regex near '{}' at character offset {}: {}",
+                self.surround, self.pos, self.kind)
+        }
     }
 }
 
@@ -871,6 +927,9 @@ impl fmt::Display for ErrorKind {
                            (Allowed flags: i, s, m, U, x.)", c),
             UnrecognizedUnicodeClass(ref s) =>
                 write!(f, "Unrecognized Unicode class name: '{}'.", s),
+            StackExhausted =>
+                write!(f, "Exhausted space required to parse regex with too \
+                           much nesting."),
             __Nonexhaustive => unreachable!(),
         }
     }
@@ -973,7 +1032,7 @@ mod properties;
 
 #[cfg(test)]
 mod tests {
-    use {CharClass, ClassRange};
+    use {NEST_LIMIT, CharClass, ClassRange, Expr};
 
     fn class(ranges: &[(char, char)]) -> CharClass {
         let ranges = ranges.iter().cloned()
@@ -982,6 +1041,51 @@ mod tests {
     }
 
     fn classi(ranges: &[(char, char)]) -> CharClass { class(ranges) }
+
+    fn e(re: &str) -> Expr { Expr::parse(re).unwrap() }
+
+    #[test]
+    fn stack_exhaustion() {
+        use std::iter::repeat;
+
+        let open: String = repeat('(').take(NEST_LIMIT).collect();
+        let close: String = repeat(')').take(NEST_LIMIT).collect();
+        assert!(Expr::parse(&format!("{}a{}", open, close)).is_ok());
+
+        let open: String = repeat('(').take(NEST_LIMIT + 1).collect();
+        let close: String = repeat(')').take(NEST_LIMIT + 1).collect();
+        assert!(Expr::parse(&format!("{}a{}", open, close)).is_err());
+    }
+
+    #[test]
+    fn anchored_start() {
+        assert!(e("^a").is_anchored_start());
+        assert!(e("(^a)").is_anchored_start());
+        assert!(e("^a|^b").is_anchored_start());
+        assert!(e("(^a)|(^b)").is_anchored_start());
+        assert!(e("(^(a|b))").is_anchored_start());
+        assert!(e("^*").is_anchored_start());
+        assert!(e("(^)*").is_anchored_start());
+        assert!(e("((^)*)*").is_anchored_start());
+
+        assert!(!e("^a|b").is_anchored_start());
+        assert!(!e("a|^b").is_anchored_start());
+    }
+
+    #[test]
+    fn anchored_end() {
+        assert!(e("a$").is_anchored_end());
+        assert!(e("(a$)").is_anchored_end());
+        assert!(e("a$|b$").is_anchored_end());
+        assert!(e("(a$)|(b$)").is_anchored_end());
+        assert!(e("((a|b)$)").is_anchored_end());
+        assert!(e("$*").is_anchored_end());
+        assert!(e("($)*").is_anchored_end());
+        assert!(e("(($)*)*").is_anchored_end());
+
+        assert!(!e("a$|b").is_anchored_end());
+        assert!(!e("a|b$").is_anchored_end());
+    }
 
     #[test]
     fn class_canon_no_change() {
