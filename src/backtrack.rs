@@ -28,12 +28,6 @@ use inst::InstIdx;
 use program::Program;
 use re::CaptureIdxs;
 
-type Bits = u32;
-const BIT_SIZE: usize = 32;
-const MAX_PROG_SIZE: usize = 100;
-const MAX_INPUT_SIZE: usize = 256 * (1 << 10);
-
-
 /// Returns true iff the given regex and input can be executed by this
 /// engine with reasonable memory usage.
 pub fn should_exec(num_insts: usize, text_len: usize) -> bool {
@@ -46,6 +40,11 @@ pub fn should_exec(num_insts: usize, text_len: usize) -> bool {
 //
 // With the above settings, this comes out to ~3.2MB. Mostly these numbers
 // were picked empirically with suspicious benchmarks.
+
+type Bits = u32;
+const BIT_SIZE: usize = 32;
+const MAX_PROG_SIZE: usize = 100;
+const MAX_INPUT_SIZE: usize = 256 * (1 << 10);
 
 /// A backtracking matching engine.
 #[derive(Debug)]

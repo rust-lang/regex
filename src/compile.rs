@@ -31,35 +31,80 @@ type InstHoleIdx = InstIdx;
 type CompileResult = Result<Hole, Error>;
 
 pub struct Compiler {
-    size_limit: usize,
     insts: Vec<MaybeInst>,
     cap_names: Vec<Option<String>>,
     seen_caps: HashSet<usize>,
+    size_limit: usize,
     bytes: bool,
+    dfa: bool,
 }
 
 impl Compiler {
     /// Create a new regular expression compiler.
     ///
-    /// The size of the resulting progrom is limited by size_limit. If the
-    /// program exceeds the given size (in bytes), then compilation will return
-    /// an error.
-    ///
+    /// Various options can be set before calling `compile` on an expression.
+    pub fn new() -> Self {
+        Compiler {
+            insts: vec![],
+            cap_names: vec![None],
+            seen_caps: HashSet::new(),
+            size_limit: 10 * (1 << 20),
+            bytes: false,
+            dfa: false,
+        }
+    }
+
+    /// The size of the resulting program is limited by size_limit. If
+    /// the program approximately exceeds the given size (in bytes), then
+    /// compilation will stop and return an error.
+    pub fn size_limit(mut self, size_limit: usize) -> Self {
+        self.size_limit = size_limit;
+        self
+    }
+
     /// If bytes is true, then the program is compiled as a byte based
     /// automaton, which incorporates UTF-8 decoding into the machine. If it's
     /// false, then the automaton is Unicode scalar value based, e.g., an
     /// engine utilizing such an automaton is resposible for UTF-8 decoding.
-    pub fn new(size_limit: usize, bytes: bool) -> Compiler {
-        Compiler {
-            size_limit: size_limit,
-            insts: vec![],
-            cap_names: vec![None],
-            seen_caps: HashSet::new(),
-            bytes: bytes,
-        }
+    ///
+    /// The specific invariant is that when returning a byte based machine,
+    /// the neither the `Char` nor `Ranges` instructions are produced.
+    /// Conversely, when producing a Unicode scalar value machine, the `Bytes`
+    /// instruction is never produced.
+    ///
+    /// Note that `dfa(true)` implies `bytes(true)`.
+    pub fn bytes(mut self, yes: bool) -> Self {
+        self.bytes = yes;
+        self
     }
 
+    /// When set, the machine returned is suitable for use in the DFA matching
+    /// engine.
+    ///
+    /// In particular, this ensures that if the regex is not anchored in the
+    /// beginning, then a preceding `.*?` is included in the program. (The NFA
+    /// based engines handle the preceding `.*?` explicitly, which is difficult
+    /// or impossible in the DFA engine.)
+    pub fn dfa(mut self, yes: bool) -> Self {
+        self.dfa = yes;
+        self.bytes = yes;
+        self
+    }
+
+    /// Compile a regular expression given its AST.
+    ///
+    /// The compiler is guaranteed to succeed unless the program exceeds the
+    /// specified size limit. If the size limit is exceeded, then compilation
+    /// stops and returns an error.
     pub fn compile(mut self, expr: &Expr) -> Result<Compiled, Error> {
+        if self.dfa && !expr.is_anchored_start() {
+            let hole = try!(self.c(&Expr::Repeat {
+                e: Box::new(Expr::AnyChar),
+                r: Repeater::ZeroOrMore,
+                greedy: false,
+            }));
+            self.fill_to_next(hole);
+        }
         let hole = try!(self.c_capture(0, expr));
         self.fill_to_next(hole);
         self.push_compiled(Inst::Match);

@@ -1,5 +1,8 @@
+use std::ascii::escape_default;
 use std::cmp::Ordering;
+use std::fmt;
 use std::ops::Deref;
+use std::slice;
 
 use char::Char;
 use literals::{BuildPrefixes, Literals};
@@ -8,7 +11,7 @@ use literals::{BuildPrefixes, Literals};
 pub type InstIdx = usize;
 
 /// Insts is a sequence of instructions.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Insts {
     insts: Vec<Inst>,
     bytes: bool,
@@ -89,6 +92,76 @@ impl Deref for Insts {
     fn deref(&self) -> &Self::Target {
         &*self.insts
     }
+}
+
+impl fmt::Debug for Insts {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use self::Inst::*;
+
+        fn with_goto(cur: usize, goto: usize, fmtd: String) -> String {
+            if goto == cur + 1 {
+                fmtd
+            } else {
+                format!("{} (goto: {})", fmtd, goto)
+            }
+        }
+
+        fn visible_byte(b: u8) -> String {
+            let escaped = escape_default(b).collect::<Vec<u8>>();
+            String::from_utf8_lossy(&escaped).into_owned()
+        }
+
+        try!(writeln!(f, "--------------------------------"));
+        for (pc, inst) in self.iter().enumerate() {
+            match *inst {
+                Match => try!(writeln!(f, "{:04} Match", pc)),
+                Save(ref inst) => {
+                    let s = format!("{:04} Save({})", pc, inst.slot);
+                    try!(writeln!(f, "{}", with_goto(pc, inst.goto, s)));
+                }
+                Split(ref inst) => {
+                    try!(writeln!(f, "{:04} Split({}, {})",
+                                  pc, inst.goto1, inst.goto2));
+                }
+                EmptyLook(ref inst) => {
+                    let s = format!("{:?}", inst.look);
+                    try!(writeln!(f, "{:04} {}",
+                                  pc, with_goto(pc, inst.goto, s)));
+                }
+                Char(ref inst) => {
+                    let s = format!("{:?}", inst.c);
+                    try!(writeln!(f, "{:04} {}",
+                                  pc, with_goto(pc, inst.goto, s)));
+                }
+                Ranges(ref inst) => {
+                    let ranges = inst.ranges
+                        .iter()
+                        .map(|r| format!("{:?}-{:?}", r.0, r.1))
+                        .collect::<Vec<String>>()
+                        .join(", ");
+                    let s = format!("{}", ranges);
+                    try!(writeln!(f, "{:04} {}",
+                                  pc, with_goto(pc, inst.goto, s)));
+                }
+                Bytes(ref inst) => {
+                    let s = format!(
+                        "Bytes({}, {})",
+                        visible_byte(inst.start),
+                        visible_byte(inst.end));
+                    try!(writeln!(f, "{:04} {}",
+                                  pc, with_goto(pc, inst.goto, s)));
+                }
+            }
+        }
+        try!(writeln!(f, "--------------------------------"));
+        Ok(())
+    }
+}
+
+impl<'a> IntoIterator for &'a Insts {
+    type Item = &'a Inst;
+    type IntoIter = slice::Iter<'a, Inst>;
+    fn into_iter(self) -> Self::IntoIter { self.iter() }
 }
 
 /// Inst is an instruction code in a Regex program.

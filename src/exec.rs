@@ -9,10 +9,11 @@
 // except according to those terms.
 
 use backtrack::{self, Backtrack};
+use dfa::{self, Dfa};
 use input::{ByteInput, CharInput};
 use literals::Literals;
 use nfa::Nfa;
-use program::Program;
+use program::{Program, ProgramBuilder};
 use re::CaptureIdxs;
 use Error;
 
@@ -47,12 +48,22 @@ impl Executor {
         size_limit: usize,
         bytes: bool,
     ) -> Result<Executor, Error> {
+        let mut bprog = ProgramBuilder::new(re).size_limit(size_limit);
         let prog = if bytes {
-            Prog::Bytes(try!(Program::bytes(re, size_limit)))
+            Prog::Bytes(try!(bprog.bytes(true).compile()))
         } else {
-            // TODO: Check if the program can be executed by a DFA.
-            // If so, compile the bytes program too.
-            Prog::Unicode(try!(Program::unicode(re, size_limit)))
+            let unicode = try!(bprog.compile());
+            if dfa::can_exec(&unicode.insts) {
+                Prog::Both {
+                    unicode: unicode,
+                    bytes: try!(ProgramBuilder::new(re)
+                                               .size_limit(size_limit)
+                                               .dfa(true)
+                                               .compile()),
+                }
+            } else {
+                Prog::Unicode(unicode)
+            }
         };
         Ok(Executor {
             prog: prog,
@@ -102,6 +113,12 @@ impl Executor {
         text: &str,
         start: usize,
     ) -> bool {
+        if caps.len() == 0 {
+            if let Prog::Both { ref unicode, ref bytes } = self.prog {
+                return Dfa::exec(bytes, text.as_bytes(), start).is_some();
+            }
+        }
+
         let prog = self.program();
         if caps.len() <= 2 && prog.is_prefix_match() {
             self.exec_literals(&prog.prefixes, caps, text, start)

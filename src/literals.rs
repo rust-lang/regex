@@ -614,10 +614,10 @@ impl fmt::Debug for Literals {
 
 #[cfg(test)]
 mod tests {
-    use program::Program;
+    use program::ProgramBuilder;
 
     macro_rules! prog {
-        ($re:expr) => { Program::unicode($re, 1 << 30).unwrap() }
+        ($re:expr) => { ProgramBuilder::new($re).compile().unwrap() }
     }
 
     macro_rules! prefixes {

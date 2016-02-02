@@ -18,6 +18,44 @@ fn bench_assert_match(b: &mut Bencher, re: Regex, text: &str) {
     b.iter(|| if !re.is_match(text) { panic!("no match") });
 }
 
+fn bench_assert_match2(b: &mut Bencher, re: &Regex, text: &str) {
+    b.iter(|| if !re.is_match(text) { panic!("no match") });
+}
+
+#[bench]
+fn compile_simple(b: &mut Bencher) {
+    b.iter(|| {
+        regex!("^bc(d|e)*$")
+    });
+}
+
+#[bench]
+fn compile_unicode(b: &mut Bencher) {
+    b.iter(|| {
+        // add word boundary to make sure DFA compilation doesn't happen.
+        regex!(r"\b|\p{L}|\p{N}|\s|.|\d")
+    });
+}
+
+#[bench]
+fn compile_unicode_bytes_nfa(b: &mut Bencher) {
+    use regex::internal::{Executor, MatchEngine};
+    b.iter(|| {
+        // add word boundary to make sure DFA compilation doesn't happen.
+        let re = r"\b|\p{L}|\p{N}|\s|.|\d";
+        Executor::new(re, MatchEngine::Automatic, 10 * (1<<20), true)
+    });
+}
+
+#[bench]
+fn compile_unicode_bytes_dfa(b: &mut Bencher) {
+    use regex::internal::{Executor, MatchEngine};
+    b.iter(|| {
+        let re = r"\p{L}|\p{N}|\s|.|\d";
+        Executor::new(re, MatchEngine::Automatic, 10 * (1<<20), false)
+    });
+}
+
 #[bench]
 fn no_exponential(b: &mut Bencher) {
     let n = 100;
@@ -63,7 +101,7 @@ fn match_class_in_range(b: &mut Bencher) {
 fn match_class_unicode(b: &mut Bencher) {
     let re = regex!(r"\pL");
     let text = format!("{}a", repeat("☃5☃5").take(20).collect::<String>());
-    bench_assert_match(b, re, &text);
+    bench_assert_match2(b, &re, &text);
 }
 
 #[bench]

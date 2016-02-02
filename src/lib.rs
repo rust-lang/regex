@@ -423,6 +423,7 @@ mod backtrack;
 mod char;
 mod char_utf8;
 mod compile;
+mod dfa;
 mod exec;
 mod input;
 mod inst;
@@ -431,16 +432,17 @@ mod pool;
 mod program;
 mod nfa;
 mod re;
+mod sparse;
 
 /// The `internal` module exists to support the `regex!` macro and other
 /// suspicious activity, such as testing different matching engines.
 #[doc(hidden)]
 pub mod internal {
     pub use char::Char;
-    pub use exec::MatchEngine;
+    pub use exec::{Executor, MatchEngine};
     pub use input::{Input, CharInput, InputAt};
     pub use inst::{Inst, EmptyLook, InstRanges};
-    pub use program::Program;
+    pub use program::{Program, ProgramBuilder};
     pub use re::ExNative;
     pub use re::Regex::{Dynamic, Native};
 }

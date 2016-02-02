@@ -46,4 +46,10 @@ rand = "0.3"
 pattern = []
 
 [profile.bench]
-lto = true
+debug = true
+
+[profile.test]
+debug = true
+
+[profile.release]
+debug = true

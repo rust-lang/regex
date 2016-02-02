@@ -12,6 +12,7 @@ use syntax;
 
 use backtrack::BacktrackCache;
 use compile::{Compiled, Compiler};
+use dfa::DfaCache;
 use inst::Insts;
 use nfa::NfaCache;
 use pool::{Pool, PoolGuard};
@@ -44,37 +45,55 @@ pub struct Program {
     pub cache: EngineCache,
 }
 
-impl Program {
-    pub fn bytes(re: &str, size_limit: usize) -> Result<Program, Error> {
-        let expr = try!(syntax::Expr::parse(re));
-        let compiler = Compiler::new(size_limit, true);
-        Ok(Program::new(re, try!(compiler.compile(&expr))))
+pub struct ProgramBuilder {
+    re: String,
+    compiler: Compiler,
+}
+
+impl ProgramBuilder {
+    pub fn new(re: &str) -> Self {
+        ProgramBuilder {
+            re: re.to_owned(),
+            compiler: Compiler::new(),
+        }
     }
 
-    pub fn unicode(re: &str, size_limit: usize) -> Result<Program, Error> {
-        let expr = try!(syntax::Expr::parse(re));
-        let compiler = Compiler::new(size_limit, false);
-        Ok(Program::new(re, try!(compiler.compile(&expr))))
+    pub fn size_limit(mut self, size_limit: usize) -> Self {
+        self.compiler = self.compiler.size_limit(size_limit);
+        self
     }
 
-    fn new(re: &str, compiled: Compiled) -> Program {
-        let Compiled { insts, cap_names } = compiled;
+    pub fn bytes(mut self, yes: bool) -> Self {
+        self.compiler = self.compiler.bytes(yes);
+        self
+    }
+
+    pub fn dfa(mut self, yes: bool) -> Self {
+        self.compiler = self.compiler.dfa(yes);
+        self
+    }
+
+    pub fn compile(mut self) -> Result<Program, Error> {
+        let expr = try!(syntax::Expr::parse(&self.re));
+        let Compiled { insts, cap_names } = try!(self.compiler.compile(&expr));
         let (prefixes, anchored_begin, anchored_end) = (
             insts.prefix_matcher(),
             insts.anchored_begin(),
             insts.anchored_end(),
         );
-        Program {
-            original: re.to_owned(),
+        Ok(Program {
+            original: self.re,
             insts: insts,
             cap_names: cap_names,
             prefixes: prefixes,
             anchored_begin: anchored_begin,
             anchored_end: anchored_end,
             cache: EngineCache::new(),
-        }
+        })
     }
+}
 
+impl Program {
     pub fn is_prefix_match(&self) -> bool {
         self.prefixes.at_match() && self.prefixes.preserves_priority()
     }
@@ -99,6 +118,11 @@ impl Program {
     pub fn cache_backtrack(&self) -> PoolGuard<BacktrackCache> {
         self.cache.backtrack.get()
     }
+
+    /// Retrieve cached state for DFA execution.
+    pub fn cache_dfa(&self) -> PoolGuard<DfaCache> {
+        self.cache.dfa.get()
+    }
 }
 
 /// EngineCache maintains reusable allocations for each matching engine
@@ -110,6 +134,7 @@ impl Program {
 pub struct EngineCache {
     nfa: Pool<NfaCache>,
     backtrack: Pool<BacktrackCache>,
+    dfa: Pool<DfaCache>,
 }
 
 impl EngineCache {
@@ -117,6 +142,7 @@ impl EngineCache {
         EngineCache {
             nfa: Pool::new(Box::new(move || NfaCache::new())),
             backtrack: Pool::new(Box::new(move || BacktrackCache::new())),
+            dfa: Pool::new(Box::new(move || DfaCache::new())),
         }
     }
 }
