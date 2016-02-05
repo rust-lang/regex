@@ -398,7 +398,7 @@
 //! some other regular expression engines. (We pay for this by disallowing
 //! features like arbitrary look-ahead and backreferences.)
 
-#![allow(dead_code, unused_mut, unused_variables)]
+#![allow(dead_code, unused_mut, unused_variables, unused_imports)]
 
 // #![deny(missing_docs)]
 #![cfg_attr(test, deny(warnings))]

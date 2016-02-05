@@ -1,4 +1,3 @@
-use std::ascii::escape_default;
 use std::cmp::Ordering;
 use std::fmt;
 use std::ops::Deref;
@@ -107,6 +106,7 @@ impl fmt::Debug for Insts {
         }
 
         fn visible_byte(b: u8) -> String {
+            use std::ascii::escape_default;
             let escaped = escape_default(b).collect::<Vec<u8>>();
             String::from_utf8_lossy(&escaped).into_owned()
         }
