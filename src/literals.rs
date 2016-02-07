@@ -147,7 +147,7 @@ impl<'a> BuildPrefixes<'a> {
     }
 
     pub fn literals(mut self) -> AlternateLiterals {
-        let mut stack = vec![self.insts.skip(1)];
+        let mut stack = vec![self.insts.skip(0)];
         let mut seen = HashSet::new();
         while let Some(mut pc) = stack.pop() {
             seen.insert(pc);
@@ -444,32 +444,25 @@ impl Literals {
     ///
     /// For debug/testing only! (It allocates.)
     #[allow(dead_code)]
-    pub fn prefixes(&self) -> Vec<String> {
+    fn prefixes(&self) -> Vec<String> {
+        self.byte_prefixes()
+            .into_iter()
+            .map(|p| String::from_utf8(p).unwrap())
+            .collect()
+    }
+
+    #[allow(dead_code)]
+    fn byte_prefixes(&self) -> Vec<Vec<u8>> {
         use self::LiteralMatcher::*;
         match self.matcher {
             Empty => vec![],
-            Byte(b) => vec![format!("{}", b as char)],
+            Byte(b) => vec![vec![b]],
             Bytes { ref chars, .. } => {
-                chars.iter().map(|&b| format!("{}", b as char)).collect()
+                chars.iter().map(|&byte| vec![byte]).collect()
             }
-            Single(ref searcher) => {
-                let pat = String::from_utf8(searcher.pat.clone()).unwrap();
-                vec![pat]
-            }
-            FullAutomaton(ref aut) => {
-                aut
-                .patterns()
-                .iter()
-                .map(|p| String::from_utf8(p.clone()).unwrap())
-                .collect()
-            }
-            Automaton(ref aut) => {
-                aut
-                .patterns()
-                .iter()
-                .map(|p| String::from_utf8(p.clone()).unwrap())
-                .collect()
-            }
+            Single(ref searcher) => vec![searcher.pat.clone()],
+            FullAutomaton(ref aut) => aut.patterns().iter().cloned().collect(),
+            Automaton(ref aut) => aut.patterns().iter().cloned().collect(),
         }
     }
 }
@@ -591,19 +584,18 @@ fn find_singles(sparse: &[bool], haystack: &[u8]) -> Option<(usize, usize)> {
 }
 
 impl fmt::Debug for Literals {
-    #[allow(deprecated)] // connect => join in 1.3
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use self::LiteralMatcher::*;
         try!(write!(f, "complete? {}, matcher: ", self.at_match));
         match self.matcher {
             Empty => write!(f, "Empty"),
-            Byte(b) => write!(f, "{:?}", b as char),
+            Byte(b) => write!(f, "one byte: {:?}", b as char),
             Bytes { ref chars, .. } => {
                 let chars: Vec<String> =
                     chars.iter()
                          .map(|&c| format!("{:?}", c as char))
                          .collect();
-                write!(f, "{}", chars.connect(", "))
+                write!(f, "alternate single bytes: {}", chars.join(", "))
             }
             Single(ref searcher) => write!(f, "{:?}", searcher),
             FullAutomaton(ref aut) => write!(f, "{:?}", aut),
@@ -620,6 +612,12 @@ mod tests {
         ($re:expr) => { ProgramBuilder::new($re).compile().unwrap() }
     }
 
+    macro_rules! byte_prog {
+        ($re:expr) => {
+            ProgramBuilder::new($re).bytes(true).compile().unwrap()
+        }
+    }
+
     macro_rules! prefixes {
         ($re:expr) => {{
             let p = prog!($re);
@@ -632,6 +630,21 @@ mod tests {
             let p = prog!($re);
             assert!(p.prefixes.at_match());
             p.prefixes.prefixes()
+        }}
+    }
+
+    macro_rules! byte_prefixes {
+        ($re:expr) => {{
+            let p = byte_prog!($re);
+            assert!(!p.prefixes.at_match());
+            p.prefixes.byte_prefixes()
+        }}
+    }
+    macro_rules! byte_prefixes_complete {
+        ($re:expr) => {{
+            let p = byte_prog!($re);
+            assert!(p.prefixes.at_match());
+            p.prefixes.byte_prefixes()
         }}
     }
 
@@ -687,6 +700,15 @@ mod tests {
     fn preceding_alt() {
         assert_eq!(prefixes!("(?:a|b).+"), vec!["a", "b"]);
         assert_eq!(prefixes!("(a|b).+"), vec!["a", "b"]);
+
+        assert_eq!(byte_prefixes!("(?:a|b).+"), vec![
+            b"a".to_owned(),
+            b"b".to_owned(),
+        ]);
+        assert_eq!(byte_prefixes!("(a|b).+"), vec![
+            b"a".to_owned(),
+            b"b".to_owned(),
+        ]);
     }
 
     #[test]
@@ -695,5 +717,13 @@ mod tests {
                    vec!["a", "b", "c", "d"]);
         assert_eq!(prefixes_complete!("((a|b)|(c|d))"),
                    vec!["a", "b", "c", "d"]);
+    }
+
+    #[test]
+    fn snowman() {
+        assert_eq!(prefixes_complete!("☃"), vec!["☃"]);
+
+        assert_eq!(byte_prefixes_complete!("☃"),
+                   vec!["☃".to_owned().as_bytes()]);
     }
 }

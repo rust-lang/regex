@@ -272,7 +272,7 @@ impl Regex {
         size_limit: usize,
         bytes: bool,
     ) -> Result<Regex, Error> {
-        Executor::new(re, match_engine, size_limit, bytes).map(Regex::Dynamic)
+        Executor::new(re, match_engine, size_limit, true).map(Regex::Dynamic)
     }
 
 

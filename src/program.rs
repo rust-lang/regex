@@ -41,6 +41,8 @@ pub struct Program {
     pub anchored_begin: bool,
     /// True iff program is anchored at the end.
     pub anchored_end: bool,
+    /// True iff the program is a reverse compilation of a regex.
+    pub reverse: bool,
     /// Cached reusable state for matching engines.
     pub cache: EngineCache,
 }
@@ -48,6 +50,7 @@ pub struct Program {
 pub struct ProgramBuilder {
     re: String,
     compiler: Compiler,
+    reverse: bool,
 }
 
 impl ProgramBuilder {
@@ -55,6 +58,7 @@ impl ProgramBuilder {
         ProgramBuilder {
             re: re.to_owned(),
             compiler: Compiler::new(),
+            reverse: false,
         }
     }
 
@@ -73,6 +77,12 @@ impl ProgramBuilder {
         self
     }
 
+    pub fn reverse(mut self, yes: bool) -> Self {
+        self.compiler = self.compiler.reverse(yes);
+        self.reverse = yes;
+        self
+    }
+
     pub fn compile(mut self) -> Result<Program, Error> {
         let expr = try!(syntax::Expr::parse(&self.re));
         let Compiled { insts, cap_names } = try!(self.compiler.compile(&expr));
@@ -88,6 +98,7 @@ impl ProgramBuilder {
             prefixes: prefixes,
             anchored_begin: anchored_begin,
             anchored_end: anchored_end,
+            reverse: self.reverse,
             cache: EngineCache::new(),
         })
     }

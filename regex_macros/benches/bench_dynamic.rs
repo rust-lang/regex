@@ -12,6 +12,7 @@
 
 extern crate rand;
 extern crate regex;
+extern crate regex_syntax;
 extern crate test;
 
 // Due to macro scoping rules, this definition only applies for the modules

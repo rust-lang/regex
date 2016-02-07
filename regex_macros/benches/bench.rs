@@ -10,9 +10,13 @@
 #![allow(non_snake_case)]
 
 use std::iter::repeat;
-use test::Bencher;
+
 use rand::{Rng, thread_rng};
+use regex_syntax::Expr;
+use test::Bencher;
+
 use regex::{Regex, NoExpand};
+use regex::internal::ProgramBuilder;
 
 fn bench_assert_match(b: &mut Bencher, re: Regex, text: &str) {
     b.iter(|| if !re.is_match(text) { panic!("no match") });
@@ -25,34 +29,72 @@ fn bench_assert_match2(b: &mut Bencher, re: &Regex, text: &str) {
 #[bench]
 fn compile_simple(b: &mut Bencher) {
     b.iter(|| {
-        regex!("^bc(d|e)*$")
+        let re = r"^bc(d|e)*$";
+        ProgramBuilder::new(&re).compile().unwrap()
     });
 }
 
 #[bench]
-fn compile_unicode(b: &mut Bencher) {
+fn compile_simple_bytes(b: &mut Bencher) {
     b.iter(|| {
-        // add word boundary to make sure DFA compilation doesn't happen.
-        regex!(r"\b|\p{L}|\p{N}|\s|.|\d")
+        let re = r"^bc(d|e)*$";
+        ProgramBuilder::new(&re).bytes(true).compile().unwrap()
     });
 }
 
 #[bench]
-fn compile_unicode_bytes_nfa(b: &mut Bencher) {
-    use regex::internal::{Executor, MatchEngine};
-    b.iter(|| {
-        // add word boundary to make sure DFA compilation doesn't happen.
-        let re = r"\b|\p{L}|\p{N}|\s|.|\d";
-        Executor::new(re, MatchEngine::Automatic, 10 * (1<<20), true)
-    });
-}
-
-#[bench]
-fn compile_unicode_bytes_dfa(b: &mut Bencher) {
-    use regex::internal::{Executor, MatchEngine};
+fn compile_small(b: &mut Bencher) {
     b.iter(|| {
         let re = r"\p{L}|\p{N}|\s|.|\d";
-        Executor::new(re, MatchEngine::Automatic, 10 * (1<<20), false)
+        ProgramBuilder::new(&re).compile().unwrap()
+    });
+}
+
+#[bench]
+fn compile_small_bytes(b: &mut Bencher) {
+    b.iter(|| {
+        let re = r"\p{L}|\p{N}|\s|.|\d";
+        ProgramBuilder::new(&re).bytes(true).compile().unwrap()
+    });
+}
+
+#[bench]
+fn compile_huge(b: &mut Bencher) {
+    b.iter(|| {
+        let re = r"\p{L}{100}";
+        ProgramBuilder::new(&re).compile().unwrap()
+    });
+}
+
+#[bench]
+fn compile_huge_bytes(b: &mut Bencher) {
+    b.iter(|| {
+        let re = r"\p{L}{100}";
+        ProgramBuilder::new(&re).bytes(true).compile().unwrap()
+    });
+}
+
+#[bench]
+fn parse_simple(b: &mut Bencher) {
+    b.iter(|| {
+        let re = r"^bc(d|e)*$";
+        Expr::parse(re).unwrap()
+    });
+}
+
+#[bench]
+fn parse_small(b: &mut Bencher) {
+    b.iter(|| {
+        let re = r"\p{L}|\p{N}|\s|.|\d";
+        Expr::parse(re).unwrap()
+    });
+}
+
+#[bench]
+fn parse_huge(b: &mut Bencher) {
+    b.iter(|| {
+        let re = r"\p{L}{100}";
+        Expr::parse(re).unwrap()
     });
 }
 

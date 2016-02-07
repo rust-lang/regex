@@ -24,9 +24,24 @@ use Error;
 /// regular expression.
 #[derive(Clone, Debug)]
 pub struct Executor {
-    /// A compiled program that executes a regex on Unicode codepoints.
-    /// This can be Unicode based, byte based or have both.
-    prog: Prog,
+    /// A compiled program that is used in the NFA simulation and backtracking.
+    /// It can be byte-based or Unicode codepoint based.
+    ///
+    /// N.B. It is not possibly to make this byte-based from the public API.
+    /// It is only used for testing byte based programs in the NFA simulations.
+    prog: Program,
+    /// A compiled byte based program for DFA execution. This is only used
+    /// if a DFA can be executed. (Currently, only word boundary assertions are
+    /// not supported.) Note that this program contains an embedded `.*?`
+    /// preceding the first capture group, unless the regex is anchored at the
+    /// beginning.
+    dfa: Program,
+    /// The same as above, except the program is reversed (and there is no
+    /// preceding `.*?`). This is used by the DFA to find the starting location
+    /// of matches.
+    dfa_reverse: Program,
+    /// Set to true if and only if the DFA can be executed.
+    can_dfa: bool,
     /// A preference for matching engine selection.
     ///
     /// This defaults to Automatic, which means the matching engine is selected
@@ -48,47 +63,42 @@ impl Executor {
         size_limit: usize,
         bytes: bool,
     ) -> Result<Executor, Error> {
-        let mut bprog = ProgramBuilder::new(re).size_limit(size_limit);
-        let prog = if bytes {
-            Prog::Bytes(try!(bprog.bytes(true).compile()))
-        } else {
-            let unicode = try!(bprog.compile());
-            if dfa::can_exec(&unicode.insts) {
-                Prog::Both {
-                    unicode: unicode,
-                    bytes: try!(ProgramBuilder::new(re)
-                                               .size_limit(size_limit)
-                                               .dfa(true)
-                                               .compile()),
-                }
-            } else {
-                Prog::Unicode(unicode)
-            }
-        };
+        let prog = try!(
+            ProgramBuilder::new(re)
+                           .size_limit(size_limit)
+                           .bytes(bytes)
+                           .compile());
+        let dfa = try!(
+            ProgramBuilder::new(re)
+                           .size_limit(size_limit)
+                           .dfa(true)
+                           .compile());
+        let dfa_reverse = try!(
+            ProgramBuilder::new(re)
+                           .size_limit(size_limit)
+                           .dfa(true)
+                           .reverse(true)
+                           .compile());
+        let can_dfa = dfa::can_exec(&prog.insts);
         Ok(Executor {
             prog: prog,
+            dfa: dfa,
+            dfa_reverse: dfa_reverse,
+            can_dfa: can_dfa,
             match_engine: match_engine,
         })
     }
 
-    fn program(&self) -> &Program {
-        match self.prog {
-            Prog::Unicode(ref p) => p,
-            Prog::Bytes(ref p) => p,
-            Prog::Both { ref unicode, .. } => unicode,
-        }
-    }
-
     pub fn regex_str(&self) -> &str {
-        &self.program().original
+        &self.prog.original
     }
 
     pub fn capture_names(&self) -> &[Option<String>] {
-        &self.program().cap_names
+        &self.prog.cap_names
     }
 
     pub fn alloc_captures(&self) -> Vec<Option<usize>> {
-        self.program().alloc_captures()
+        self.prog.alloc_captures()
     }
 
     pub fn exec(
@@ -100,29 +110,44 @@ impl Executor {
         match self.match_engine {
             MatchEngine::Nfa => self.exec_nfa(caps, text, start),
             MatchEngine::Backtrack => self.exec_backtrack(caps, text, start),
-            MatchEngine::Literals => {
-                self.exec_literals(&self.program().prefixes, caps, text, start)
-            }
+            MatchEngine::Literals => self.exec_literals(caps, text, start),
             MatchEngine::Automatic => self.exec_auto(caps, text, start),
         }
     }
 
-    fn exec_auto(
+    pub fn exec_auto(
         &self,
         caps: &mut CaptureIdxs,
         text: &str,
         start: usize,
     ) -> bool {
-        if caps.len() == 0 {
-            if let Prog::Both { ref unicode, ref bytes } = self.prog {
-                return Dfa::exec(bytes, text.as_bytes(), start).is_some();
+        if self.can_dfa && caps.len() <= 2 {
+            let end = match Dfa::exec(&self.dfa, text.as_bytes(), start) {
+                None => return false,
+                Some(end) => end,
+            };
+            match caps.len() {
+                0 => return true,
+                2 => {
+                    if end == start {
+                        caps[0] = Some(end);
+                        caps[1] = Some(end);
+                        return true;
+                    }
+                    assert!(self.dfa_reverse.reverse);
+                    let start = Dfa::exec(
+                        &self.dfa_reverse, text.as_bytes(), end).unwrap();
+                    caps[0] = Some(start);
+                    caps[1] = Some(end);
+                    return true;
+                }
+                n => panic!("invalid capture size: {}", n),
             }
         }
 
-        let prog = self.program();
-        if caps.len() <= 2 && prog.is_prefix_match() {
-            self.exec_literals(&prog.prefixes, caps, text, start)
-        } else if backtrack::should_exec(prog.insts.len(), text.len()) {
+        if caps.len() <= 2 && self.prog.is_prefix_match() {
+            self.exec_literals(caps, text, start)
+        } else if backtrack::should_exec(self.prog.insts.len(), text.len()) {
             self.exec_backtrack(caps, text, start)
         } else {
             self.exec_nfa(caps, text, start)
@@ -135,16 +160,10 @@ impl Executor {
         text: &str,
         start: usize,
     ) -> bool {
-        match self.prog {
-            Prog::Unicode(ref p) => {
-                Nfa::exec(p, caps, CharInput::new(text), start)
-            }
-            Prog::Bytes(ref p) => {
-                Nfa::exec(p, caps, ByteInput::new(text), start)
-            }
-            Prog::Both { ref unicode, .. } => {
-                Nfa::exec(unicode, caps, CharInput::new(text), start)
-            }
+        if self.prog.insts.is_bytes() {
+            Nfa::exec(&self.prog, caps, ByteInput::new(text), start)
+        } else {
+            Nfa::exec(&self.prog, caps, CharInput::new(text), start)
         }
     }
 
@@ -154,27 +173,20 @@ impl Executor {
         text: &str,
         start: usize,
     ) -> bool {
-        match self.prog {
-            Prog::Unicode(ref p) => {
-                Backtrack::exec(p, caps, CharInput::new(text), start)
-            }
-            Prog::Bytes(ref p) => {
-                Backtrack::exec(p, caps, ByteInput::new(text), start)
-            }
-            Prog::Both { ref unicode, .. } => {
-                Backtrack::exec(unicode, caps, CharInput::new(text), start)
-            }
+        if self.prog.insts.is_bytes() {
+            Backtrack::exec(&self.prog, caps, ByteInput::new(text), start)
+        } else {
+            Backtrack::exec(&self.prog, caps, CharInput::new(text), start)
         }
     }
 
     fn exec_literals(
         &self,
-        literals: &Literals,
         caps: &mut CaptureIdxs,
         text: &str,
         start: usize,
     ) -> bool {
-        match literals.find(&text.as_bytes()[start..]) {
+        match self.prog.prefixes.find(&text.as_bytes()[start..]) {
             None => false,
             Some((s, e)) => {
                 if caps.len() == 2 {
@@ -185,13 +197,6 @@ impl Executor {
             }
         }
     }
-}
-
-#[derive(Clone, Debug)]
-enum Prog {
-    Unicode(Program),
-    Bytes(Program),
-    Both { unicode: Program, bytes: Program },
 }
 
 /// The matching engines offered by this regex implementation.
