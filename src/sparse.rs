@@ -18,6 +18,12 @@ impl SparseIndexed for usize {
     }
 }
 
+impl SparseIndexed for u32 {
+    fn index(&self) -> usize {
+        *self as usize
+    }
+}
+
 impl<T: SparseIndexed> SparseSet<T> {
     pub fn new(size: usize) -> SparseSet<T> {
         SparseSet {

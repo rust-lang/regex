@@ -41,8 +41,6 @@ pub struct Program {
     pub anchored_begin: bool,
     /// True iff program is anchored at the end.
     pub anchored_end: bool,
-    /// True iff the program is a reverse compilation of a regex.
-    pub reverse: bool,
     /// Cached reusable state for matching engines.
     pub cache: EngineCache,
 }
@@ -50,7 +48,6 @@ pub struct Program {
 pub struct ProgramBuilder {
     re: String,
     compiler: Compiler,
-    reverse: bool,
 }
 
 impl ProgramBuilder {
@@ -58,7 +55,6 @@ impl ProgramBuilder {
         ProgramBuilder {
             re: re.to_owned(),
             compiler: Compiler::new(),
-            reverse: false,
         }
     }
 
@@ -79,7 +75,6 @@ impl ProgramBuilder {
 
     pub fn reverse(mut self, yes: bool) -> Self {
         self.compiler = self.compiler.reverse(yes);
-        self.reverse = yes;
         self
     }
 
@@ -98,7 +93,6 @@ impl ProgramBuilder {
             prefixes: prefixes,
             anchored_begin: anchored_begin,
             anchored_end: anchored_end,
-            reverse: self.reverse,
             cache: EngineCache::new(),
         })
     }
@@ -107,6 +101,10 @@ impl ProgramBuilder {
 impl Program {
     pub fn is_prefix_match(&self) -> bool {
         self.prefixes.at_match() && self.prefixes.preserves_priority()
+    }
+
+    pub fn is_reversed(&self) -> bool {
+        self.insts.is_reversed()
     }
 
     /// Returns the total number of capture groups in the regular expression.
@@ -131,8 +129,18 @@ impl Program {
     }
 
     /// Retrieve cached state for DFA execution.
-    pub fn cache_dfa(&self) -> PoolGuard<DfaCache> {
+    pub fn cache_dfa(&self) -> PoolGuard<Box<DfaCache>> {
         self.cache.dfa.get()
+    }
+
+    /// Return the approximate heap usage of this Program in bytes.
+    ///
+    /// Note that this does not include cached engine data.
+    pub fn approximate_size(&self) -> usize {
+        // ignore capture names
+        self.original.len()
+        + self.insts.approximate_size()
+        + self.prefixes.approximate_size()
     }
 }
 
@@ -145,7 +153,7 @@ impl Program {
 pub struct EngineCache {
     nfa: Pool<NfaCache>,
     backtrack: Pool<BacktrackCache>,
-    dfa: Pool<DfaCache>,
+    dfa: Pool<Box<DfaCache>>,
 }
 
 impl EngineCache {
@@ -153,7 +161,7 @@ impl EngineCache {
         EngineCache {
             nfa: Pool::new(Box::new(move || NfaCache::new())),
             backtrack: Pool::new(Box::new(move || BacktrackCache::new())),
-            dfa: Pool::new(Box::new(move || DfaCache::new())),
+            dfa: Pool::new(Box::new(move || Box::new(DfaCache::new()))),
         }
     }
 }

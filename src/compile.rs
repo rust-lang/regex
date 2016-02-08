@@ -47,6 +47,7 @@ pub struct Compiler {
     reverse: bool,
     suffix_cache: SuffixCache,
     utf8_seqs: Option<Utf8Sequences>,
+    byte_classes: ByteClassSet,
 }
 
 impl Compiler {
@@ -64,6 +65,7 @@ impl Compiler {
             reverse: false,
             suffix_cache: SuffixCache::new(1000),
             utf8_seqs: Some(Utf8Sequences::new('\x00', '\x00')),
+            byte_classes: ByteClassSet::new(),
         }
     }
 
@@ -129,9 +131,10 @@ impl Compiler {
         self.fill_to_next(patch.hole);
         self.push_compiled(Inst::Match);
 
+        let byte_classes = self.byte_classes.byte_classes();
         let insts = self.insts.into_iter().map(|inst| inst.unwrap()).collect();
         Ok(Compiled {
-            insts: Insts::new(insts, self.bytes),
+            insts: Insts::new(insts, self.bytes, self.reverse, byte_classes),
             cap_names: self.cap_names,
         })
     }
@@ -158,15 +161,19 @@ impl Compiler {
                 self.c_class(cls)
             }
             StartLine if self.reverse => {
+                self.byte_classes.set_range(b'\n', b'\n');
                 self.c_empty_look(inst::EmptyLook::EndLine)
             }
             StartLine => {
+                self.byte_classes.set_range(b'\n', b'\n');
                 self.c_empty_look(inst::EmptyLook::StartLine)
             }
             EndLine if self.reverse => {
+                self.byte_classes.set_range(b'\n', b'\n');
                 self.c_empty_look(inst::EmptyLook::StartLine)
             }
             EndLine => {
+                self.byte_classes.set_range(b'\n', b'\n');
                 self.c_empty_look(inst::EmptyLook::EndLine)
             }
             StartText if self.reverse => {
@@ -720,6 +727,7 @@ impl<'a, 'b> CompileClass<'a, 'b> {
                     continue;
                 }
             }
+            self.c.byte_classes.set_range(byte_range.start, byte_range.end);
             if from_inst == 0 {
                 last_hole = self.c.push_hole(InstHole::Bytes {
                     start: byte_range.start,
@@ -819,9 +827,73 @@ impl SuffixCache {
     }
 }
 
+struct ByteClassSet([bool; 256]);
+
+impl ByteClassSet {
+    fn new() -> Self {
+        ByteClassSet([false; 256])
+    }
+
+    fn set_range(&mut self, start: u8, end: u8) {
+        assert!(start <= end);
+        if start > 0 {
+            self.0[start as usize - 1] = true;
+        }
+        self.0[end as usize] = true;
+    }
+
+    fn byte_classes(&self) -> Vec<usize> {
+        let mut byte_classes = vec![0; 256];
+        let mut class = 0;
+        for i in 0..256 {
+            byte_classes[i] = class;
+            if i > 0 && self.0[i] {
+                class += 1;
+            }
+        }
+        byte_classes
+    }
+}
+
 fn u32_to_usize(n: u32) -> usize {
     if (n as u64) > (::std::usize::MAX as u64) {
         panic!("BUG: {} is too big to be pointer sized", n)
     }
     n as usize
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ByteClassSet;
+
+    #[test]
+    fn byte_classes() {
+        let mut set = ByteClassSet::new();
+        set.set_range(b'a', b'z');
+        let classes = set.byte_classes();
+        assert_eq!(classes[0], 0);
+        assert_eq!(classes[1], 0);
+        assert_eq!(classes[2], 0);
+        assert_eq!(classes[b'a' as usize - 1], 0);
+        assert_eq!(classes[b'a' as usize], 1);
+        assert_eq!(classes[b'm' as usize], 1);
+        assert_eq!(classes[b'z' as usize], 1);
+        assert_eq!(classes[b'z' as usize + 1], 2);
+        assert_eq!(classes[254], 2);
+        assert_eq!(classes[255], 2);
+
+        let mut set = ByteClassSet::new();
+        set.set_range(0, 2);
+        set.set_range(4, 6);
+        let classes = set.byte_classes();
+        assert_eq!(classes[0], 0);
+        assert_eq!(classes[1], 0);
+        assert_eq!(classes[2], 0);
+        assert_eq!(classes[3], 1);
+        assert_eq!(classes[4], 2);
+        assert_eq!(classes[5], 2);
+        assert_eq!(classes[6], 2);
+        assert_eq!(classes[7], 3);
+        assert_eq!(classes[255], 3);
+    }
 }

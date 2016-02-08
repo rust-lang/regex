@@ -9,9 +9,8 @@
 // except according to those terms.
 
 use backtrack::{self, Backtrack};
-use dfa::{self, Dfa};
+use dfa::{self, Dfa, DfaResult};
 use input::{ByteInput, CharInput};
-use literals::Literals;
 use nfa::Nfa;
 use program::{Program, ProgramBuilder};
 use re::CaptureIdxs;
@@ -107,11 +106,13 @@ impl Executor {
         text: &str,
         start: usize,
     ) -> bool {
+        // Why is the DFA or literal engine checked for here? Well, it's only
+        // possible to execute those engines in exec_auto. See comment on
+        // MatchEngine below for more details.
         match self.match_engine {
-            MatchEngine::Nfa => self.exec_nfa(caps, text, start),
-            MatchEngine::Backtrack => self.exec_backtrack(caps, text, start),
-            MatchEngine::Literals => self.exec_literals(caps, text, start),
             MatchEngine::Automatic => self.exec_auto(caps, text, start),
+            MatchEngine::Backtrack => self.exec_backtrack(caps, text, start),
+            MatchEngine::Nfa => self.exec_nfa(caps, text, start),
         }
     }
 
@@ -121,33 +122,81 @@ impl Executor {
         text: &str,
         start: usize,
     ) -> bool {
-        if self.can_dfa && caps.len() <= 2 {
-            let end = match Dfa::exec(&self.dfa, text.as_bytes(), start) {
-                None => return false,
-                Some(end) => end,
-            };
-            match caps.len() {
-                0 => return true,
-                2 => {
-                    if end == start {
-                        caps[0] = Some(end);
-                        caps[1] = Some(end);
-                        return true;
-                    }
-                    assert!(self.dfa_reverse.reverse);
-                    let start = Dfa::exec(
-                        &self.dfa_reverse, text.as_bytes(), end).unwrap();
-                    caps[0] = Some(start);
-                    caps[1] = Some(end);
-                    return true;
-                }
-                n => panic!("invalid capture size: {}", n),
-            }
-        }
-
         if caps.len() <= 2 && self.prog.is_prefix_match() {
             self.exec_literals(caps, text, start)
-        } else if backtrack::should_exec(self.prog.insts.len(), text.len()) {
+        } else if self.can_dfa {
+            self.exec_dfa(caps, text, start)
+        } else {
+            self.exec_auto_nfa(caps, text, start)
+        }
+    }
+
+    fn exec_dfa(
+        &self,
+        caps: &mut CaptureIdxs,
+        text: &str,
+        mut start: usize,
+    ) -> bool {
+        debug_assert!(self.can_dfa);
+        let btext = text.as_bytes();
+        let search = Dfa::exec(&self.dfa, btext, start, caps.is_empty());
+        let match_end = match search {
+            DfaResult::Match(match_end) => match_end,
+            DfaResult::EarlyMatch => return true,
+            DfaResult::NoMatch => return false,
+            DfaResult::Quit => unreachable!(),
+        };
+        // If caller has not requested any captures, then we don't need to
+        // find the start position.
+        if caps.is_empty() {
+            return true;
+        }
+        // invariant: caps.len() >= 2 && caps.len() % 2 == 0
+        // If the reported end of the match is the same as the start, then we
+        // have an empty match and we can quit now.
+        if start == match_end {
+            // Be careful... If the caller wants sub-captures, than we are
+            // obliged to run the NFA to get them.
+            if caps.len() == 2 {
+                // The caller only needs the start/end, so we can avoid the
+                // NFA here.
+                caps[0] = Some(start);
+                caps[1] = Some(start);
+                return true;
+            }
+            return self.exec_auto_nfa(caps, text, start);
+        }
+        // OK, now we find the start of the match by running the DFA backwards
+        // on the text. We *start* the search at the end of the match.
+        let search = Dfa::exec(
+            &self.dfa_reverse, &btext[start..], match_end - start, false);
+        let match_start = match search {
+            DfaResult::Match(match_start) => start + match_start,
+            DfaResult::EarlyMatch => {
+                panic!("BUG: early matches can't happen on reverse search")
+            }
+            DfaResult::NoMatch => {
+                panic!("BUG: forward match implies backward match")
+            }
+            DfaResult::Quit => unreachable!(),
+        };
+        if caps.len() == 2 {
+            caps[0] = Some(match_start);
+            caps[1] = Some(match_end);
+            return true;
+        }
+        self.exec_auto_nfa(caps, text, match_start)
+    }
+
+    /// This is like exec_auto, except it always chooses between either the
+    /// full NFA simulation or the bounded backtracking engine.
+    fn exec_auto_nfa(
+        &self,
+        caps: &mut CaptureIdxs,
+        text: &str,
+        start: usize,
+    ) -> bool {
+        if backtrack::should_exec(self.prog.insts.len(), text.len()) {
             self.exec_backtrack(caps, text, start)
         } else {
             self.exec_nfa(caps, text, start)
@@ -199,9 +248,17 @@ impl Executor {
     }
 }
 
-/// The matching engines offered by this regex implementation.
+/// Some of the matching engines offered by this regex implementation.
 ///
-/// N.B. This is exported for use in testing.
+/// This is exported for use in testing.
+///
+/// Note that only engines that can be used on *every* regex are exposed here.
+/// For example, it is useful for testing purposes to say, "always execute
+/// the backtracking engine" or "always execute the full NFA simulation."
+/// However, we cannot say things like, "always execute the pure literals
+/// engine" or "always execute the DFA" because they only work on a subset of
+/// regexes supported by this crate. Specifically, the only way to run the
+/// DFA or literal engines is to use Automatic.
 #[doc(hidden)]
 #[derive(Clone, Copy, Debug)]
 pub enum MatchEngine {
@@ -213,7 +270,4 @@ pub enum MatchEngine {
     /// A full NFA simulation. Can always be employed but almost always the
     /// slowest choice.
     Nfa,
-    /// If the entire regex is a literal and no capture groups have been
-    /// requested, then we can degrade to a simple substring match.
-    Literals,
 }

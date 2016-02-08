@@ -147,7 +147,7 @@ impl<'a> BuildPrefixes<'a> {
     }
 
     pub fn literals(mut self) -> AlternateLiterals {
-        let mut stack = vec![self.insts.skip(0)];
+        let mut stack = vec![self.insts.skip(self.insts.start())];
         let mut seen = HashSet::new();
         while let Some(mut pc) = stack.pop() {
             seen.insert(pc);
@@ -354,7 +354,7 @@ enum LiteralMatcher {
 
 impl Literals {
     /// Returns a matcher that never matches and never advances the input.
-    fn empty() -> Self {
+    pub fn empty() -> Self {
         Literals { at_match: false, matcher: LiteralMatcher::Empty }
     }
 
@@ -437,6 +437,24 @@ impl Literals {
                 // that for the length.
                 aut.patterns().iter().all(|p| p.len() == aut.pattern(0).len())
             }
+        }
+    }
+
+    /// Return the approximate heap usage of literals in bytes.
+    pub fn approximate_size(&self) -> usize {
+        use self::LiteralMatcher::*;
+        match self.matcher {
+            Empty | Byte(_) => 0,
+            Bytes { ref chars, ref sparse } => {
+                (chars.len() * mem::size_of::<u8>())
+                + (sparse.len() * mem::size_of::<bool>())
+            }
+            Single(ref single) => {
+                (single.pat.len() * mem::size_of::<u8>())
+                + (single.shift.len() * mem::size_of::<usize>())
+            }
+            FullAutomaton(ref aut) => aut.heap_bytes(),
+            Automaton(ref aut) => aut.heap_bytes(),
         }
     }
 

@@ -40,6 +40,7 @@ regex-syntax = { path = "regex-syntax", version = "0.2" }
 utf8-ranges = "0.1"
 
 [dev-dependencies]
+lazy_static = "0.1"
 rand = "0.3"
 
 [features]

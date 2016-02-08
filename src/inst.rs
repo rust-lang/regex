@@ -1,6 +1,7 @@
 use std::cmp::Ordering;
 use std::fmt;
 use std::ops::Deref;
+use std::mem;
 use std::slice;
 
 use char::Char;
@@ -14,6 +15,8 @@ pub type InstIdx = usize;
 pub struct Insts {
     insts: Vec<Inst>,
     bytes: bool,
+    reverse: bool,
+    byte_classes: Vec<usize>,
 }
 
 impl Insts {
@@ -23,14 +26,30 @@ impl Insts {
     /// bytes. Otherwise, it is executed on Unicode codepoints.
     ///
     /// A Vec<Inst> can be created with the compiler.
-    pub fn new(insts: Vec<Inst>, bytes: bool) -> Self {
-        Insts { insts: insts, bytes: bytes }
+    pub fn new(
+        insts: Vec<Inst>,
+        bytes: bool,
+        reverse: bool,
+        byte_classes: Vec<usize>,
+    ) -> Self {
+        assert!(byte_classes.len() == 256);
+        Insts {
+            insts: insts,
+            bytes: bytes,
+            reverse: reverse,
+            byte_classes: byte_classes,
+        }
     }
 
     /// Returns true if and only if this instruction sequence must be executed
     /// on byte strings.
     pub fn is_bytes(&self) -> bool {
         self.bytes
+    }
+
+    /// Returns true if and only if this instruction sequence is reversed.
+    pub fn is_reversed(&self) -> bool {
+        self.reverse
     }
 
     /// If pc is an index to a no-op instruction (like Save), then return the
@@ -42,6 +61,31 @@ impl Insts {
                 _ => return pc,
             }
         }
+    }
+
+    /// Returns a map from input byte to byte class. Each class represents
+    /// a set of bytes that are indistinguishable to the underlying
+    /// instructions.
+    ///
+    /// It is guaranteed to have length 256.
+    pub fn byte_classes(&self) -> &[usize] {
+        &self.byte_classes
+    }
+
+    /// Returns the location of the `Save(0)` instruction, which is present
+    /// in every program and always indicates the logical start of a match.
+    ///
+    /// (DFA programs compile a `.*?` into the program, preceding the `Save(0)`
+    /// instruction, to support unanchored matches. Generally, we want to
+    /// ignore that `.*?` when doing analysis, like extracting prefixes.)
+    pub fn start(&self) -> InstIdx {
+        for (i, inst) in self.iter().enumerate() {
+            match *inst {
+                Inst::Save(ref inst) if inst.slot == 0 => return i,
+                _ => {}
+            }
+        }
+        unreachable!()
     }
 
     /// Return true if and only if an execution engine at instruction `pc` will
@@ -81,7 +125,20 @@ impl Insts {
     /// If there are no prefix literals (or there are too many), then a
     /// matching engine that never matches is returned.
     pub fn prefix_matcher(&self) -> Literals {
-        BuildPrefixes::new(self).literals().into_matcher()
+        if self.is_reversed() {
+            Literals::empty()
+        } else {
+            BuildPrefixes::new(self).literals().into_matcher()
+        }
+    }
+
+    /// Return the approximate heap usage of this instruction sequence in
+    /// bytes.
+    pub fn approximate_size(&self) -> usize {
+        // The only instruction that uses heap space is Ranges (for
+        // Unicode codepoint programs) to store non-overlapping codepoint
+        // ranges. To keep this operation constant time, we ignore them.
+        self.len() * mem::size_of::<Inst>()
     }
 }
 
