@@ -980,6 +980,21 @@ impl<'t> Index<&'t str> for Captures<'t> {
 
 }
 
+impl<'t> fmt::Debug for Captures<'t> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        try!(writeln!(f, "Captures of {}:", self.text));
+        for i in 0..self.locs.len() {
+            try!(writeln!(f, "{}:\t{:?}", i, self.at(i)));
+        }
+        if let Some(ref h) = self.named {
+            for (n, i) in h.iter() {
+                try!(writeln!(f, "{}:\t{:?}", n, self.at(*i)));
+            }
+        }
+        Ok(())
+    }
+}
+
 /// An iterator over capture groups for a particular match of a regular
 /// expression.
 ///
