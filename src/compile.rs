@@ -18,7 +18,7 @@ use utf8_ranges::{Utf8Range, Utf8Sequence, Utf8Sequences};
 
 use Error;
 use inst::{
-    Insts, Inst, InstIdx, EmptyLook,
+    Insts, Inst, InstPtr, EmptyLook,
     InstSave, InstSplit, InstEmptyLook, InstChar, InstRanges, InstBytes,
 };
 
@@ -27,14 +27,14 @@ pub struct Compiled {
     pub cap_names: Vec<Option<String>>,
 }
 
-type InstHoleIdx = InstIdx;
+type InstHoleIdx = InstPtr;
 
 type Result = result::Result<Patch, Error>;
 
 #[derive(Debug)]
 struct Patch {
     hole: Hole,
-    entry: InstIdx,
+    entry: InstPtr,
 }
 
 pub struct Compiler {
@@ -455,7 +455,7 @@ impl Compiler {
         Ok(Patch { hole: Hole::Many(holes), entry: initial_entry })
     }
 
-    fn fill(&mut self, hole: Hole, goto: InstIdx) {
+    fn fill(&mut self, hole: Hole, goto: InstPtr) {
         match hole {
             Hole::None => {}
             Hole::One(pc) => {
@@ -477,8 +477,8 @@ impl Compiler {
     fn fill_split(
         &mut self,
         hole: Hole,
-        goto1: Option<InstIdx>,
-        goto2: Option<InstIdx>,
+        goto1: Option<InstPtr>,
+        goto2: Option<InstPtr>,
     ) -> Hole {
         match hole {
             Hole::None => Hole::None,
@@ -546,7 +546,7 @@ impl Compiler {
 #[derive(Debug)]
 enum Hole {
     None,
-    One(InstIdx),
+    One(InstPtr),
     Many(Vec<Hole>),
 }
 
@@ -555,12 +555,12 @@ enum MaybeInst {
     Compiled(Inst),
     Uncompiled(InstHole),
     Split,
-    Split1(InstIdx),
-    Split2(InstIdx),
+    Split1(InstPtr),
+    Split2(InstPtr),
 }
 
 impl MaybeInst {
-    fn fill(&mut self, goto: InstIdx) {
+    fn fill(&mut self, goto: InstPtr) {
         let filled = match *self {
             MaybeInst::Uncompiled(ref inst) => inst.fill(goto),
             MaybeInst::Split1(goto1) => {
@@ -575,7 +575,7 @@ impl MaybeInst {
         *self = MaybeInst::Compiled(filled);
     }
 
-    fn fill_split(&mut self, goto1: InstIdx, goto2: InstIdx) {
+    fn fill_split(&mut self, goto1: InstPtr, goto2: InstPtr) {
         let filled = match *self {
             MaybeInst::Split => {
                 Inst::Split(InstSplit { goto1: goto1, goto2: goto2 })
@@ -586,7 +586,7 @@ impl MaybeInst {
         *self = MaybeInst::Compiled(filled);
     }
 
-    fn half_fill_split_goto1(&mut self, goto1: InstIdx) {
+    fn half_fill_split_goto1(&mut self, goto1: InstPtr) {
         let half_filled = match *self {
             MaybeInst::Split => goto1,
             _ => unreachable!("must be called on Split instruction, \
@@ -595,7 +595,7 @@ impl MaybeInst {
         *self = MaybeInst::Split1(half_filled);
     }
 
-    fn half_fill_split_goto2(&mut self, goto2: InstIdx) {
+    fn half_fill_split_goto2(&mut self, goto2: InstPtr) {
         let half_filled = match *self {
             MaybeInst::Split => goto2,
             _ => unreachable!("must be called on Split instruction, \
@@ -623,7 +623,7 @@ enum InstHole {
 }
 
 impl InstHole {
-    fn fill(&self, goto: InstIdx) -> Inst {
+    fn fill(&self, goto: InstPtr) -> Inst {
         match *self {
             InstHole::Save { slot } => Inst::Save(InstSave {
                 goto: goto,
@@ -777,13 +777,13 @@ struct SuffixCache {
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
 struct SuffixCacheEntry {
     key: SuffixCacheKey,
-    pc: InstIdx,
+    pc: InstPtr,
     version: usize,
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
 struct SuffixCacheKey {
-    from_inst: InstIdx,
+    from_inst: InstPtr,
     start: u8,
     end: u8,
 }
@@ -796,7 +796,7 @@ impl SuffixCache {
         }
     }
 
-    fn get(&mut self, key: SuffixCacheKey, pc: InstIdx) -> Option<InstIdx> {
+    fn get(&mut self, key: SuffixCacheKey, pc: InstPtr) -> Option<InstPtr> {
         let h = self.hash(&key);
         let e = self.table[h];
         if e.key == key && e.version == self.version {

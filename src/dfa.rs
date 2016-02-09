@@ -142,7 +142,7 @@ pub struct DfaCache {
     /// (This permits us to avoid recursion.)
     ///
     /// The maximum stack size is the number of NFA states.
-    stack: Vec<InstIdx>,
+    stack: Vec<InstPtr>,
     /// qcur and qnext are ordered sets with constant time
     /// addition/membership/clearing-whole-set and linear time iteration. They
     /// are used to manage the sets of NFA states in DFA states when computing
@@ -150,8 +150,8 @@ pub struct DfaCache {
     /// for leftmost-first style matching. Namely, when computing a cached
     /// state, the set of NFA states stops growing as soon as the first Match
     /// instruction is observed.
-    qcur: SparseSet<InstIdx>,
-    qnext: SparseSet<InstIdx>,
+    qcur: SparseSet<InstPtr>,
+    qnext: SparseSet<InstPtr>,
 }
 
 /// Dfa encapsulates the actual execution of the DFA.
@@ -183,7 +183,7 @@ pub struct Dfa<'r, 'c, 's, 'ss, 't> {
     compiled: &'c mut HashMap<StateKey, StatePtr>,
     states: &'s mut Vec<State>,
     start_states: &'ss mut Vec<StatePtr>,
-    stack: &'t mut Vec<InstIdx>,
+    stack: &'t mut Vec<InstPtr>,
 }
 
 /// State is a DFA state. It contains transitions to next states (given an
@@ -217,7 +217,7 @@ struct State {
     /// epsilon transitions are necessarily followed! Namely, epsilon
     /// transitions that correspond to empty assertions are only followed if
     /// the flags set at the current byte satisfy the assertion.
-    insts: Vec<InstIdx>,
+    insts: Vec<InstPtr>,
     /// The set of flags (i.e., assertions) set immediately after the current
     /// byte in the input.
     ///
@@ -247,17 +247,17 @@ struct State {
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 struct StateKey {
     /// An ordered set of NFA states.
-    insts: Vec<InstIdx>,
+    insts: Vec<InstPtr>,
     /// A set of empty flags, which may also contain a match flag.
     given_flags: Flags,
 }
 
-/// InstIdx is a 32 bit pointer into a sequence of opcodes (i.e., it indexes
+/// InstPtr is a 32 bit pointer into a sequence of opcodes (i.e., it indexes
 /// an NFA state).
 ///
 /// Throughout this library, this is usually set to `usize`, but we force a
 /// `u32` here to save on space.
-type InstIdx = u32;
+type InstPtr = u32;
 
 /// StatePtr is a 32 bit pointer into a sequence of states.
 ///
@@ -355,8 +355,8 @@ impl<'r, 'c, 's, 'ss, 't> Dfa<'r, 'c, 's, 'ss, 't> {
 
     fn exec_at(
         &mut self,
-        qcur: &mut SparseSet<InstIdx>,
-        qnext: &mut SparseSet<InstIdx>,
+        qcur: &mut SparseSet<InstPtr>,
+        qnext: &mut SparseSet<InstPtr>,
         text: &[u8],
         mut at: usize,
     ) -> DfaResult {
@@ -409,8 +409,8 @@ impl<'r, 'c, 's, 'ss, 't> Dfa<'r, 'c, 's, 'ss, 't> {
 
     fn exec_at_reverse(
         &mut self,
-        qcur: &mut SparseSet<InstIdx>,
-        qnext: &mut SparseSet<InstIdx>,
+        qcur: &mut SparseSet<InstPtr>,
+        qnext: &mut SparseSet<InstPtr>,
         text: &[u8],
         mut at: usize,
     ) -> DfaResult {
@@ -457,8 +457,8 @@ impl<'r, 'c, 's, 'ss, 't> Dfa<'r, 'c, 's, 'ss, 't> {
 
     fn exec_byte(
         &mut self,
-        qcur: &mut SparseSet<InstIdx>,
-        qnext: &mut SparseSet<InstIdx>,
+        qcur: &mut SparseSet<InstPtr>,
+        qnext: &mut SparseSet<InstPtr>,
         mut si: StatePtr,
         b: Byte,
     ) -> Option<StatePtr> {
@@ -500,7 +500,7 @@ impl<'r, 'c, 's, 'ss, 't> Dfa<'r, 'c, 's, 'ss, 't> {
                 Bytes(ref inst) => {
                     if b.as_byte().map_or(false, |b| inst.matches(b)) {
                         self.follow_epsilon_transitions(
-                            inst.goto as InstIdx, qnext, flags);
+                            inst.goto as InstPtr, qnext, flags);
                     }
                 }
             }
@@ -538,8 +538,8 @@ impl<'r, 'c, 's, 'ss, 't> Dfa<'r, 'c, 's, 'ss, 't> {
     /// be set in this case.
     fn follow_epsilon_transitions(
         &mut self,
-        ip: InstIdx,
-        q: &mut SparseSet<InstIdx>,
+        ip: InstPtr,
+        q: &mut SparseSet<InstPtr>,
         flags: Flags,
     ) {
         use inst::Inst::*;
@@ -558,24 +558,24 @@ impl<'r, 'c, 's, 'ss, 't> Dfa<'r, 'c, 's, 'ss, 't> {
                     match inst.look {
                         WordBoundary | NotWordBoundary => unreachable!(),
                         StartLine if flags.is_start_line() => {
-                            self.stack.push(inst.goto as InstIdx);
+                            self.stack.push(inst.goto as InstPtr);
                         }
                         EndLine if flags.is_end_line() => {
-                            self.stack.push(inst.goto as InstIdx);
+                            self.stack.push(inst.goto as InstPtr);
                         }
                         StartText if flags.is_start() => {
-                            self.stack.push(inst.goto as InstIdx);
+                            self.stack.push(inst.goto as InstPtr);
                         }
                         EndText if flags.is_end() => {
-                            self.stack.push(inst.goto as InstIdx);
+                            self.stack.push(inst.goto as InstPtr);
                         }
                         StartLine | EndLine | StartText | EndText => {}
                     }
                 }
-                Save(ref inst) => self.stack.push(inst.goto as InstIdx),
+                Save(ref inst) => self.stack.push(inst.goto as InstPtr),
                 Split(ref inst) => {
-                    self.stack.push(inst.goto2 as InstIdx);
-                    self.stack.push(inst.goto1 as InstIdx);
+                    self.stack.push(inst.goto2 as InstPtr);
+                    self.stack.push(inst.goto1 as InstPtr);
                 }
             }
         }
@@ -600,7 +600,7 @@ impl<'r, 'c, 's, 'ss, 't> Dfa<'r, 'c, 's, 'ss, 't> {
     /// the cache is cleared, the state's location may change.
     fn cached_state(
         &mut self,
-        q: &SparseSet<InstIdx>,
+        q: &SparseSet<InstPtr>,
         mut given_flags: Flags,
         current_state: Option<&mut StatePtr>,
     ) -> Option<StatePtr> {
@@ -689,7 +689,7 @@ impl<'r, 'c, 's, 'ss, 't> Dfa<'r, 'c, 's, 'ss, 't> {
 
     fn cached_state_key(
         &mut self,
-        q: &SparseSet<InstIdx>,
+        q: &SparseSet<InstPtr>,
         mut given_flags: Flags,
     ) -> Option<(StateKey, Flags)> {
         use inst::Inst::*;
@@ -766,8 +766,8 @@ impl<'r, 'c, 's, 'ss, 't> Dfa<'r, 'c, 's, 'ss, 't> {
 
     fn next_state(
         &mut self,
-        qcur: &mut SparseSet<InstIdx>,
-        qnext: &mut SparseSet<InstIdx>,
+        qcur: &mut SparseSet<InstPtr>,
+        qnext: &mut SparseSet<InstPtr>,
         si: StatePtr,
         b: Byte,
     ) -> Option<StatePtr> {
@@ -781,7 +781,7 @@ impl<'r, 'c, 's, 'ss, 't> Dfa<'r, 'c, 's, 'ss, 't> {
 
     fn start_state(
         &mut self,
-        q: &mut SparseSet<InstIdx>,
+        q: &mut SparseSet<InstPtr>,
         start_flags: Flags,
     ) -> Option<StatePtr> {
         let flagi = start_flags.0 as usize;

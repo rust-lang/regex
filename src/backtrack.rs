@@ -24,7 +24,7 @@
 // as fast as the full NFA simulation.
 
 use input::{Input, InputAt};
-use inst::InstIdx;
+use inst::InstPtr;
 use program::Program;
 use re::CaptureIdxs;
 
@@ -78,7 +78,7 @@ impl BacktrackCache {
 /// stack to do it.
 #[derive(Clone, Copy, Debug)]
 enum Job {
-    Inst { pc: InstIdx, at: InputAt },
+    Inst { pc: InstPtr, at: InputAt },
     SaveRestore { slot: usize, old_pos: Option<usize> },
 }
 
@@ -184,7 +184,7 @@ impl<'a, 'r, 'c, I: Input> Backtrack<'a, 'r, 'c, I> {
         false
     }
 
-    fn step(&mut self, mut pc: InstIdx, mut at: InputAt) -> bool {
+    fn step(&mut self, mut pc: InstPtr, mut at: InputAt) -> bool {
         use inst::Inst::*;
         loop {
             // This loop is an optimization to avoid constantly pushing/popping
@@ -251,7 +251,7 @@ impl<'a, 'r, 'c, I: Input> Backtrack<'a, 'r, 'c, I> {
         }
     }
 
-    fn push(&mut self, pc: InstIdx, at: InputAt) {
+    fn push(&mut self, pc: InstPtr, at: InputAt) {
         self.m.jobs.push(Job::Inst { pc: pc, at: at });
     }
 
@@ -259,7 +259,7 @@ impl<'a, 'r, 'c, I: Input> Backtrack<'a, 'r, 'c, I> {
         self.m.jobs.push(Job::SaveRestore { slot: slot, old_pos: old_pos });
     }
 
-    fn has_visited(&mut self, pc: InstIdx, at: InputAt) -> bool {
+    fn has_visited(&mut self, pc: InstPtr, at: InputAt) -> bool {
         let k = pc * (self.input.len() + 1) + at.pos();
         let k1 = k / BIT_SIZE;
         let k2 = (1 << (k & (BIT_SIZE - 1))) as Bits;

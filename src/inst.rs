@@ -7,8 +7,8 @@ use std::slice;
 use char::Char;
 use literals::{BuildPrefixes, Literals};
 
-/// InstIdx represents the index of an instruction in a regex program.
-pub type InstIdx = usize;
+/// InstPtr represents the index of an instruction in a regex program.
+pub type InstPtr = usize;
 
 /// Insts is a sequence of instructions.
 #[derive(Clone)]
@@ -78,7 +78,7 @@ impl Insts {
     /// (DFA programs compile a `.*?` into the program, preceding the `Save(0)`
     /// instruction, to support unanchored matches. Generally, we want to
     /// ignore that `.*?` when doing analysis, like extracting prefixes.)
-    pub fn start(&self) -> InstIdx {
+    pub fn start(&self) -> InstPtr {
         for (i, inst) in self.iter().enumerate() {
             match *inst {
                 Inst::Save(ref inst) if inst.slot == 0 => return i,
@@ -268,7 +268,7 @@ pub enum Inst {
 #[derive(Clone, Debug)]
 pub struct InstSave {
     /// The next location to execute in the program.
-    pub goto: InstIdx,
+    pub goto: InstPtr,
     /// The capture slot (there are two slots for every capture in a regex,
     /// including the zeroth capture for the entire match).
     pub slot: usize,
@@ -279,10 +279,10 @@ pub struct InstSave {
 pub struct InstSplit {
     /// The first instruction to try. A match resulting from following goto1
     /// has precedence over a match resulting from following goto2.
-    pub goto1: InstIdx,
+    pub goto1: InstPtr,
     /// The second instruction to try. A match resulting from following goto1
     /// has precedence over a match resulting from following goto2.
-    pub goto2: InstIdx,
+    pub goto2: InstPtr,
 }
 
 /// Representation of the EmptyLook instruction.
@@ -290,7 +290,7 @@ pub struct InstSplit {
 pub struct InstEmptyLook {
     /// The next location to execute in the program if this instruction
     /// succeeds.
-    pub goto: InstIdx,
+    pub goto: InstPtr,
     /// The type of zero-width assertion to check.
     pub look: EmptyLook,
 }
@@ -336,7 +336,7 @@ impl InstEmptyLook {
 pub struct InstChar {
     /// The next location to execute in the program if this instruction
     /// succeeds.
-    pub goto: InstIdx,
+    pub goto: InstPtr,
     /// The character to test.
     pub c: char,
 }
@@ -346,7 +346,7 @@ pub struct InstChar {
 pub struct InstRanges {
     /// The next location to execute in the program if this instruction
     /// succeeds.
-    pub goto: InstIdx,
+    pub goto: InstPtr,
     /// The set of Unicode scalar value ranges to test.
     pub ranges: Vec<(char, char)>,
 }
@@ -390,7 +390,7 @@ impl InstRanges {
 pub struct InstBytes {
     /// The next location to execute in the program if this instruction
     /// succeeds.
-    pub goto: InstIdx,
+    pub goto: InstPtr,
     /// The start (inclusive) of this byte range.
     pub start: u8,
     /// The end (inclusive) of this byte range.
