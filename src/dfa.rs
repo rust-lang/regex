@@ -23,7 +23,10 @@ DFA can grow exponentially. To mitigate this space problem, we do two things:
 
 1. We implement an *online* DFA. That is, the DFA is constructed from the NFA
    during a search. When a new state is computed, it is stored in a cache so
-   that it may be reused.
+   that it may be reused. An important consequence of this implementation
+   is that states that are never reached for a particular input are never
+   computed. (This is impossible in an "offline" DFA which needs to compute
+   all possible states up front.)
 2. If the cache gets too big, we wipe it and start again.
 
 In pathological cases, a new state can be created for every byte of input.
