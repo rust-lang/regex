@@ -78,7 +78,7 @@ impl Executor {
                            .dfa(true)
                            .reverse(true)
                            .compile());
-        let can_dfa = dfa::can_exec(&prog.insts);
+        let can_dfa = dfa::can_exec(&dfa.insts);
         Ok(Executor {
             prog: prog,
             dfa: dfa,
@@ -144,7 +144,6 @@ impl Executor {
             DfaResult::Match(match_end) => match_end,
             DfaResult::EarlyMatch => return true,
             DfaResult::NoMatch => return false,
-            DfaResult::Quit => unreachable!(),
         };
         // If caller has not requested any captures, then we don't need to
         // find the start position.
@@ -178,7 +177,6 @@ impl Executor {
             DfaResult::NoMatch => {
                 panic!("BUG: forward match implies backward match")
             }
-            DfaResult::Quit => unreachable!(),
         };
         if caps.len() == 2 {
             caps[0] = Some(match_start);
