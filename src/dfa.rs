@@ -1027,8 +1027,8 @@ mod tests {
         // let re = "(a|b)*a(a|b){10}";
         // let text = "ababbab";
 
-        // let re = ">[^\n]*\n|\n";
-        // let text = "GGCCGGGCGCGGTGGCTCACGCCTGTAATCCCAGCACTTTGGGAGGCCGAGGCGGGCGGA\n";
+        let re = ">[^\n]*\n|\n";
+        let text = "GGCCGGGCGCGGTGGCTCACGCCTGTAATCCCAGCACTTTGGGAGGCCGAGGCGGGCGGA\n";
         // let text = "\
 // >ONE Homo sapiens alu
 // GGCCGGGCGCGGTGGCTCACGCCTGTAATCCCAGCACTTTGGGAGGCCGAGGCGGGCGGA
@@ -1043,30 +1043,27 @@ mod tests {
 // gcacttccgttcatcaaattaaatcctggcttacccgattctccggaagtctgacctaga
 // ";
 
-        let re = r"a+b+c";
-        let text = "aabbabc";
-
         let start = 0;
         let prog = ProgramBuilder::new(re).dfa(true).compile().unwrap();
         let matched = Dfa::exec(&prog, text.as_bytes(), start, false);
         println!("matched? {:?}", matched);
 
-        // println!("-------------------");
-//
-        // if let DfaResult::Match(end) = matched {
-            // let prog = ProgramBuilder::new(re)
-                                      // .dfa(true)
-                                      // .reverse(true)
-                                      // .compile()
-                                      // .unwrap();
-            // let matched = Dfa::exec(
-                // &prog, &text.as_bytes()[start..], end - start, false);
-            // let match_start = match matched {
-                // DfaResult::Match(match_start) => start + match_start,
-                // s => panic!("{:?}", s),
-            // };
-            // println!("reverse matched? {:?}", match_start);
-        // }
+        println!("-------------------");
+
+        if let DfaResult::Match(end) = matched {
+            let prog = ProgramBuilder::new(re)
+                                      .dfa(true)
+                                      .reverse(true)
+                                      .compile()
+                                      .unwrap();
+            let matched = Dfa::exec(
+                &prog, &text.as_bytes()[start..], end - start, false);
+            let match_start = match matched {
+                DfaResult::Match(match_start) => start + match_start,
+                s => panic!("{:?}", s),
+            };
+            println!("reverse matched? {:?}", match_start);
+        }
 
         /*
         println!("####################");
