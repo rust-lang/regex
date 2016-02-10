@@ -165,14 +165,17 @@ pub struct DfaCache {
 /// if the callee doesn't mutate {qcur,qnext}. Therefore, we stick most of
 /// DfaCache into Dfa directly as pointers and pass {qcur,qnext} around as
 /// parameters.
+///
+/// N.B. We only use a single lifetime here since all pointers are taken
+/// from the same cache.
 #[derive(Debug)]
-pub struct Dfa<'r, 'c, 's, 'ss, 't> {
+pub struct Dfa<'a> {
     /// prog contains the NFA instruction opcodes. DFA execution uses either
     /// the `dfa` instructions or the `dfa_reverse` instructions. (It never
     /// uses `prog.prog`, which may have Unicode opcodes that cannot be
     /// executed by this DFA.)
-    prog: &'r Program,
-    /// The state state. We record it here because the pointer may change
+    prog: &'a Program,
+    /// The start state. We record it here because the pointer may change
     /// when the cache is wiped.
     start: StatePtr,
     /// When set, we can stop searching immediately after we enter a match
@@ -180,10 +183,10 @@ pub struct Dfa<'r, 'c, 's, 'ss, 't> {
     /// semantics.)
     quit_on_first_match: bool,
     /// These are all from DfaCache. (Only {qcur,qnext} are missing.)
-    compiled: &'c mut HashMap<StateKey, StatePtr>,
-    states: &'s mut Vec<State>,
-    start_states: &'ss mut Vec<StatePtr>,
-    stack: &'t mut Vec<InstPtr>,
+    compiled: &'a mut HashMap<StateKey, StatePtr>,
+    states: &'a mut Vec<State>,
+    start_states: &'a mut Vec<StatePtr>,
+    stack: &'a mut Vec<InstPtr>,
 }
 
 /// State is a DFA state. It contains transitions to next states (given an
@@ -299,6 +302,11 @@ impl DfaCache {
         }
     }
 
+    /// Resizes ensures that the cache is the right size for the given program.
+    ///
+    /// N.B. This exists because it is inconvenient (i.e., my failing) to tie
+    /// the initial creation of the cache with knowledge about the program, so
+    /// we resize it once.
     fn resize(&mut self, num_insts: usize) {
         if num_insts != self.qcur.capacity() {
             self.qcur = SparseSet::new(num_insts);
@@ -307,13 +315,32 @@ impl DfaCache {
     }
 }
 
-impl<'r, 'c, 's, 'ss, 't> Dfa<'r, 'c, 's, 'ss, 't> {
+impl<'a> Dfa<'a> {
+    /// The main entry point to executing a DFA, which returns the *end* of
+    /// a match if one exists, using Perl's "leftmost-first" semantics.
+    ///
+    /// text can safely be arbitrary bytes, and the location returned is still
+    /// guaranteed to correspond to a valid UTF-8 sequence boundary. (Note
+    /// though that whether arbitrary bytes are actually consumed depends on
+    /// the given program.)
+    ///
+    /// at is the position in text at which to start looking for a match. While
+    /// it may seem like we should omit `at` and just rely on the caller to
+    /// slice `text` appropriately, it is necessary to tell whether `at` is
+    /// at the beginning of `text` or not (i.e., for empty assertions).
+    ///
+    /// quit_on_first_match should be set if the caller doesn't care about
+    /// where the match ends. If a match is found, DfaResult::EarlyMatch is
+    /// returned.
     pub fn exec(
-        prog: &'r Program,
+        prog: &'a Program,
         text: &[u8],
         at: usize,
         quit_on_first_match: bool,
     ) -> DfaResult {
+        // Retrieve our DFA cache from the program.
+        // If another thread tries to execute this DFA *simultaneously*, then a
+        // new independent cache is created.
         let mut _cache = prog.cache_dfa();
         let mut cache = &mut **_cache;
         cache.resize(prog.insts.len());
@@ -327,32 +354,35 @@ impl<'r, 'c, 's, 'ss, 't> Dfa<'r, 'c, 's, 'ss, 't> {
             stack: &mut cache.stack,
             quit_on_first_match: quit_on_first_match,
         };
+        // if !prog.insts.is_reversed() {
+            // println!("############################");
+        // }
+        dfa.start = match dfa.start_state(&mut cache.qcur, text, at) {
+            STATE_DEAD => return DfaResult::NoMatch,
+            si => si,
+        };
         let r = if prog.insts.is_reversed() {
-            let start_flags = dfa.start_flags_reverse(text, at);
-            dfa.start = match dfa.start_state(&mut cache.qcur, start_flags) {
-                None => return DfaResult::NoMatch,
-                Some(si) => si,
-            };
             dfa.exec_at_reverse(&mut cache.qcur, &mut cache.qnext, text, at)
         } else {
-            let start_flags = dfa.start_flags(text, at);
-            dfa.start = match dfa.start_state(&mut cache.qcur, start_flags) {
-                None => return DfaResult::NoMatch,
-                Some(si) => si,
-            };
             dfa.exec_at(&mut cache.qcur, &mut cache.qnext, text, at)
         };
-        // println!("{:?}", prog.insts);
-        // println!("############################");
-        // for (si, state) in dfa.states.iter().enumerate() {
-            // println!("{:04} {:?}", si, state);
+        // if !prog.insts.is_reversed() {
+            // println!("------");
+            // println!("{:?}", prog.insts);
+            // println!("------");
+            // for (si, state) in dfa.states.iter().enumerate() {
+                // println!("{:04} {:?}", si, state);
+            // }
+            // println!("size: {} bytes, states: {}",
+                     // dfa.approximate_size(), dfa.states.len());
+            // println!("############################");
         // }
-        // println!("size: {} bytes, states: {}",
-                 // dfa.approximate_size(), dfa.states.len());
-        // println!("############################");
         r
     }
 
+    /// Executes the DFA on a forward NFA.
+    ///
+    /// {qcur,qnext} are scratch ordered sets which may be non-empty.
     fn exec_at(
         &mut self,
         qcur: &mut SparseSet<InstPtr>,
@@ -360,6 +390,40 @@ impl<'r, 'c, 's, 'ss, 't> Dfa<'r, 'c, 's, 'ss, 't> {
         text: &[u8],
         mut at: usize,
     ) -> DfaResult {
+        // For the most part, the DFA is basically:
+        //
+        //   last_match = null
+        //   si = current_state.next[current_byte]
+        //   if si is match
+        //     last_match = si
+        //   return last_match
+        //
+        // However, we need to deal with a few things:
+        //
+        //   1. This is an *online* DFA, so the current state's next list
+        //      may not point to anywhere yet, so we must go out and compute
+        //      them. (They are then cached into the current state's next list
+        //      to avoid re-computation.)
+        //   2. If we come across a state that is known to be dead (i.e., never
+        //      leads to a match), then we can quit early.
+        //   3. If the caller just wants to know if a match occurs, then we
+        //      can quit as soon as we know we have a match. (Full leftmost
+        //      first semantics require continuing on.)
+        //   4. If we're in the start state, then we can use a pre-computed set
+        //      of prefix literals to skip quickly along the input.
+        //   5. After the input is exhausted, we run the DFA on one symbol
+        //      that stands for EOF. This is useful for handling empty width
+        //      assertions.
+        //   6. We can't actually do state.next[byte]. Instead, we have to do
+        //      state.next[byte_classes[byte]], which permits us to keep the
+        //      'next' list very small.
+        debug_assert!(!self.prog.is_reversed());
+
+        // last_match is the currently known ending match position. It is
+        // reported as an index to the most recent byte that resulted in a
+        // transition to a match state. Its maximum value is `text.len()`,
+        // which can only happen after the special EOF sentinel value is fed
+        // to the DFA.
         let mut last_match = DfaResult::NoMatch;
         if self.states[self.start as usize].is_match() {
             if self.quit_on_first_match {
@@ -369,6 +433,9 @@ impl<'r, 'c, 's, 'ss, 't> Dfa<'r, 'c, 's, 'ss, 't> {
         }
         let (mut si, mut i) = (self.start, at);
         while i < text.len() {
+            // Our set of literal prefixes can itself be a DFA, but it is
+            // offline and can generally be quite a bit faster. (For instance,
+            // memchr is used if possible.)
             if !self.prog.prefixes.is_empty() && si == self.start {
                 i = match self.prefix_at(text, i) {
                     None => return DfaResult::NoMatch,
@@ -378,17 +445,19 @@ impl<'r, 'c, 's, 'ss, 't> Dfa<'r, 'c, 's, 'ss, 't> {
 
             // Inline next_state to avoid an extra branch.
             let cls = self.prog.insts.byte_classes()[text[i] as usize];
-            si = match self.states[si as usize].next[cls] {
-                STATE_UNKNOWN => {
-                    let b = Byte::input_byte(text[i]);
-                    match self.exec_byte(qcur, qnext, si, b) {
-                        Some(nsi) => nsi,
-                        None => return last_match,
-                    }
+            let mut next_si = self.states[si as usize].next[cls];
+            if next_si <= STATE_DEAD {
+                if next_si == STATE_DEAD {
+                    return last_match;
                 }
-                STATE_DEAD => return last_match,
-                nsi => nsi,
-            };
+                // The next state may not have been cached, so re-compute it
+                // (i.e., follow epsilon transitions).
+                next_si = self.exec_byte(qcur, qnext, si, Byte::byte(text[i]));
+                if next_si == STATE_DEAD {
+                    return last_match;
+                }
+            }
+            si = next_si;
             if self.states[si as usize].is_match() {
                 if self.quit_on_first_match {
                     return DfaResult::EarlyMatch;
@@ -397,16 +466,18 @@ impl<'r, 'c, 's, 'ss, 't> Dfa<'r, 'c, 's, 'ss, 't> {
             }
             i += 1;
         }
-        si = match self.next_state(qcur, qnext, si, Byte::eof()) {
-            Some(nsi) => nsi,
-            None => return last_match,
-        };
+        // Run the DFA once more on the special EOF senitnel value.
+        si = self.next_state(qcur, qnext, si, Byte::eof());
+        if si == STATE_DEAD {
+            return last_match;
+        }
         if self.states[si as usize].is_match() {
             last_match = DfaResult::Match(text.len());
         }
         last_match
     }
 
+    /// Executes the DFA on a reverse NFA.
     fn exec_at_reverse(
         &mut self,
         qcur: &mut SparseSet<InstPtr>,
@@ -414,6 +485,13 @@ impl<'r, 'c, 's, 'ss, 't> Dfa<'r, 'c, 's, 'ss, 't> {
         text: &[u8],
         mut at: usize,
     ) -> DfaResult {
+        // The comments in `exec_at` above mostly apply here too. The main
+        // difference is that we move backwards over the input and we look for
+        // the longest possible match instead of the leftmost-first match.
+        //
+        // N.B. The code duplication here is regrettable. Efforts to improve
+        // it without sacrificing performance are welcome. ---AG
+        debug_assert!(self.prog.is_reversed());
         let mut last_match = DfaResult::NoMatch;
         if self.states[self.start as usize].is_match() {
             if self.quit_on_first_match {
@@ -427,17 +505,19 @@ impl<'r, 'c, 's, 'ss, 't> Dfa<'r, 'c, 's, 'ss, 't> {
 
             // Inline next_state to avoid an extra branch.
             let cls = self.prog.insts.byte_classes()[text[i] as usize];
-            si = match self.states[si as usize].next[cls] {
-                STATE_UNKNOWN => {
-                    let b = Byte::input_byte(text[i]);
-                    match self.exec_byte(qcur, qnext, si, b) {
-                        Some(nsi) => nsi,
-                        None => return last_match,
-                    }
+            let mut next_si = self.states[si as usize].next[cls];
+            if next_si <= STATE_DEAD {
+                if next_si == STATE_DEAD {
+                    return last_match;
                 }
-                STATE_DEAD => return last_match,
-                nsi => nsi,
-            };
+                // The next state may not have been cached, so re-compute it
+                // (i.e., follow epsilon transitions).
+                next_si = self.exec_byte(qcur, qnext, si, Byte::byte(text[i]));
+                if next_si == STATE_DEAD {
+                    return last_match;
+                }
+            }
+            si = next_si;
             if self.states[si as usize].is_match() {
                 if self.quit_on_first_match {
                     return DfaResult::EarlyMatch;
@@ -445,56 +525,83 @@ impl<'r, 'c, 's, 'ss, 't> Dfa<'r, 'c, 's, 'ss, 't> {
                 last_match = DfaResult::Match(i+1);
             }
         }
-        si = match self.next_state(qcur, qnext, si, Byte::eof()) {
-            Some(nsi) => nsi,
-            None => return last_match,
-        };
+        si = self.next_state(qcur, qnext, si, Byte::eof());
+        if si == STATE_DEAD {
+            return last_match;
+        }
         if self.states[si as usize].is_match() {
             last_match = DfaResult::Match(0);
         }
         last_match
     }
 
+    /// Computes the next state given the current state and the current input
+    /// byte (which may be EOF).
+    ///
+    /// If None is returned, then there is no valid state transition. This
+    /// implies that no permutation of future input can lead to a match state.
     fn exec_byte(
         &mut self,
         qcur: &mut SparseSet<InstPtr>,
         qnext: &mut SparseSet<InstPtr>,
         mut si: StatePtr,
         b: Byte,
-    ) -> Option<StatePtr> {
+    ) -> StatePtr {
         use inst::Inst::*;
 
-        // println!("STATE: {:?}, BYTE: {:?}", si, vb(b.0 as usize));
+        // if !self.prog.insts.is_reversed() {
+            // println!("STATE: {:?}, BYTE: {:?}, CLASS: {:?}",
+                     // si, vb(b.0 as usize), vb(self.byte_class(b)));
+        // }
+        // If we're already in a bad state, give up.
 
+        // Initialize a queue with the current DFA state's NFA states.
         qcur.clear();
         for &ip in &self.states[si as usize].insts {
             qcur.add(ip);
         }
 
+        // Before inspecting the current byte, we may need to also inspect
+        // whether the position immediately preceding the current byte
+        // satisfies the empty assertions found in the current state.
+        //
+        // We only need to do this step if there are any empty assertions in
+        // the current state.
         if self.states[si as usize].inst_flags.has_non_match_flags() {
+            // Compute the flags immediately preceding the current byte.
+            // This means we only care about the "end" or "end line" flags.
+            // (The "start" flags are computed immediately proceding the
+            // current byte and is handled below.)
             let mut flags = Flags::new();
             if b.is_eof() {
                 flags.set_end(true).set_end_line(true);
             } else if b.as_byte().map_or(false, |b| b == b'\n') {
                 flags.set_end_line(true);
             }
-            if flags.has_non_match_flags() {
-                qnext.clear();
-                for &ip in &*qcur {
-                    self.follow_epsilon_transitions(ip, qnext, flags);
-                }
-                mem::swap(qcur, qnext);
+            // Now follow epsilon transitions from every NFA state, but make
+            // sure we only follow transitions that satisfy our flags.
+            qnext.clear();
+            for &ip in &*qcur {
+                self.follow_epsilon_transitions(ip, qnext, flags);
             }
+            mem::swap(qcur, qnext);
         }
 
+        // Now we set flags for immediately after the current byte.
+        // Since start states are processed separately, and are the only states
+        // that can have the StartText flag set, we therefore only need to
+        // worry about the StartLine flag here.
         let mut flags = Flags::new();
         if b.as_byte().map_or(false, |b| b == b'\n') {
             flags.set_start_line(true);
         }
+        // Now follow all epsilon transitions again, but only after consuming
+        // the current byte.
         qnext.clear();
         for &ip in &*qcur {
             match self.prog.insts[ip as usize] {
                 Char(_) | Ranges(_) => unreachable!(),
+                // These states are handled when following epsilon transitions.
                 Save(_) | Split(_) | EmptyLook(_) => {}
                 Match => { flags.set_match(true); }
                 Bytes(ref inst) => {
@@ -505,12 +612,17 @@ impl<'r, 'c, 's, 'ss, 't> Dfa<'r, 'c, 's, 'ss, 't> {
                 }
             }
         }
+        // We've now built up the set of NFA states that ought to comprise the
+        // next DFA state, so try to find it in the cache, and if it doesn't
+        // exist, cache it.
+        //
+        // N.B. We pass `&mut si` here because the cache may clear itself if
+        // it has gotten too full. When that happens, the location of the
+        // current state may change.
         let next = self.cached_state(qnext, flags, Some(&mut si));
+        // And now store our state in the current state's next list.
         let cls = self.byte_class(b);
-        self.states[si as usize].next[cls] = match next {
-            Some(si) => si,
-            None => STATE_DEAD,
-        };
+        self.states[si as usize].next[cls] = next;
         next
     }
 
@@ -603,13 +715,13 @@ impl<'r, 'c, 's, 'ss, 't> Dfa<'r, 'c, 's, 'ss, 't> {
         q: &SparseSet<InstPtr>,
         mut given_flags: Flags,
         current_state: Option<&mut StatePtr>,
-    ) -> Option<StatePtr> {
+    ) -> StatePtr {
         let (key, inst_flags) = match self.cached_state_key(q, given_flags) {
-            None => return None,
+            None => return STATE_DEAD,
             Some(v) => v,
         };
         if let Some(&si) = self.compiled.get(&key) {
-            return Some(si);
+            return si;
         }
 
         // If the cache has gotten too big, wipe it.
@@ -628,7 +740,7 @@ impl<'r, 'c, 's, 'ss, 't> Dfa<'r, 'c, 's, 'ss, 't> {
         });
         let si = usize_to_u32(self.states.len().checked_sub(1).unwrap());
         self.compiled.insert(key, si);
-        Some(si)
+        si
     }
 
     fn clear_cache(&mut self, current_state: Option<&mut StatePtr>) {
@@ -770,33 +882,36 @@ impl<'r, 'c, 's, 'ss, 't> Dfa<'r, 'c, 's, 'ss, 't> {
         qnext: &mut SparseSet<InstPtr>,
         si: StatePtr,
         b: Byte,
-    ) -> Option<StatePtr> {
+    ) -> StatePtr {
         let cls = self.byte_class(b);
         match self.states[si as usize].next[cls] {
             STATE_UNKNOWN => self.exec_byte(qcur, qnext, si, b),
-            STATE_DEAD => return None,
-            nsi => return Some(nsi),
+            STATE_DEAD => return STATE_DEAD,
+            nsi => return nsi,
         }
     }
 
     fn start_state(
         &mut self,
         q: &mut SparseSet<InstPtr>,
-        start_flags: Flags,
-    ) -> Option<StatePtr> {
+        text: &[u8],
+        at: usize,
+    ) -> StatePtr {
+        let start_flags = if self.prog.insts.is_reversed() {
+            self.start_flags_reverse(text, at)
+        } else {
+            self.start_flags(text, at)
+        };
         let flagi = start_flags.0 as usize;
         match self.start_states[flagi] {
             STATE_UNKNOWN => {}
-            STATE_DEAD => return None,
-            si => return Some(si),
+            STATE_DEAD => return STATE_DEAD,
+            si => return si,
         }
         q.clear();
         self.follow_epsilon_transitions(0, q, start_flags);
         let sp = self.cached_state(q, start_flags, None);
-        self.start_states[flagi] = match sp {
-            Some(si) => si,
-            None => STATE_DEAD,
-        };
+        self.start_states[flagi] = sp;
         sp
     }
 
@@ -951,7 +1066,7 @@ impl Flags {
 }
 
 impl Byte {
-    #[inline] fn input_byte(b: u8) -> Self { Byte(b as u16) }
+    #[inline] fn byte(b: u8) -> Self { Byte(b as u16) }
     #[inline] fn eof() -> Self { Byte(256) }
     #[inline] fn is_eof(&self) -> bool { self.0 == 256 }
 
@@ -1028,42 +1143,46 @@ mod tests {
         // let text = "ababbab";
 
         let re = ">[^\n]*\n|\n";
-        let text = "GGCCGGGCGCGGTGGCTCACGCCTGTAATCCCAGCACTTTGGGAGGCCGAGGCGGGCGGA\n";
-        // let text = "\
-// >ONE Homo sapiens alu
-// GGCCGGGCGCGGTGGCTCACGCCTGTAATCCCAGCACTTTGGGAGGCCGAGGCGGGCGGA
-// TCACCTGAGGTCAGGAGTTCGAGACCAGCCTGGCCAACATGGTGAAACCCCGTCTCTACT
-// >TWO IUB ambiguity codes
-// cttBtatcatatgctaKggNcataaaSatgtaaaDcDRtBggDtctttataattcBgtcg
-// tactDtDagcctatttSVHtHttKtgtHMaSattgWaHKHttttagacatWatgtRgaaa
-// NtactMcSMtYtcMgRtacttctWBacgaaatatagScDtttgaagacacatagtVgYgt
-// >THREE Homo sapiens frequency
-// tgggcggctcaatcttgcctaatttctactattgtcagctgtacgactgtactaagtgta
-// tagccccaaataaaagaagtatcgatgcgtctttatgaccaaaggtcttataattgaagc
-// gcacttccgttcatcaaattaaatcctggcttacccgattctccggaagtctgacctaga
-// ";
+        // let text = "GGCCGGGCGCGGTGGCTCACGCCTGTAATCCCAGCACTTTGGGAGGCCGAGGCGGGCGGA\n";
+        let text = "\
+>ONE Homo sapiens alu
+GGCCGGGCGCGGTGGCTCACGCCTGTAATCCCAGCACTTTGGGAGGCCGAGGCGGGCGGA
+TCACCTGAGGTCAGGAGTTCGAGACCAGCCTGGCCAACATGGTGAAACCCCGTCTCTACT
+>TWO IUB ambiguity codes
+cttBtatcatatgctaKggNcataaaSatgtaaaDcDRtBggDtctttataattcBgtcg
+tactDtDagcctatttSVHtHttKtgtHMaSattgWaHKHttttagacatWatgtRgaaa
+NtactMcSMtYtcMgRtacttctWBacgaaatatagScDtttgaagacacatagtVgYgt
+>THREE Homo sapiens frequency
+tgggcggctcaatcttgcctaatttctactattgtcagctgtacgactgtactaagtgta
+tagccccaaataaaagaagtatcgatgcgtctttatgaccaaaggtcttataattgaagc
+gcacttccgttcatcaaattaaatcctggcttacccgattctccggaagtctgacctaga
+";
 
-        let start = 0;
-        let prog = ProgramBuilder::new(re).dfa(true).compile().unwrap();
-        let matched = Dfa::exec(&prog, text.as_bytes(), start, false);
-        println!("matched? {:?}", matched);
+        // let start = 0;
+        // let prog = ProgramBuilder::new(re).dfa(true).compile().unwrap();
+        // let matched = Dfa::exec(&prog, text.as_bytes(), start, false);
+        // println!("matched? {:?}", matched);
 
-        println!("-------------------");
+        let re = ::Regex::with_engine(
+            re, MatchEngine::Automatic, 10 * (1<<20), false).unwrap();
+        re.replace_all(&text, "");
 
-        if let DfaResult::Match(end) = matched {
-            let prog = ProgramBuilder::new(re)
-                                      .dfa(true)
-                                      .reverse(true)
-                                      .compile()
-                                      .unwrap();
-            let matched = Dfa::exec(
-                &prog, &text.as_bytes()[start..], end - start, false);
-            let match_start = match matched {
-                DfaResult::Match(match_start) => start + match_start,
-                s => panic!("{:?}", s),
-            };
-            println!("reverse matched? {:?}", match_start);
-        }
+        // println!("-------------------");
+//
+        // if let DfaResult::Match(end) = matched {
+            // let prog = ProgramBuilder::new(re)
+                                      // .dfa(true)
+                                      // .reverse(true)
+                                      // .compile()
+                                      // .unwrap();
+            // let matched = Dfa::exec(
+                // &prog, &text.as_bytes()[start..], end - start, false);
+            // let match_start = match matched {
+                // DfaResult::Match(match_start) => start + match_start,
+                // s => panic!("{:?}", s),
+            // };
+            // println!("reverse matched? {:?}", match_start);
+        // }
 
         /*
         println!("####################");
