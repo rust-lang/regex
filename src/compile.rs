@@ -846,6 +846,7 @@ impl ByteClassSet {
         // N.B. If you're debugging the DFA, it's useful to simply return
         // `(0..256).collect()`, which effectively removes the byte classes
         // and makes the transitions easier to read.
+        // return (0..256).collect();
         let mut byte_classes = vec![0; 256];
         let mut class = 0;
         for i in 0..256 {

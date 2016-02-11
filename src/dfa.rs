@@ -13,7 +13,7 @@ The DFA matching engine.
 
 A DFA provides faster matching because the engine is in exactly one state at
 any point in time. In the NFA, there may be multiple active states, and
-considerable CPU cycles is spent shuffling them around. In finite automata
+considerable CPU cycles are spent shuffling them around. In finite automata
 speak, the DFA follows epsilon transitions in the regex far less than the NFA.
 
 A DFA is a classic trade off between time and space. The NFA is slower, but
@@ -27,13 +27,13 @@ DFA can grow exponentially. To mitigate this space problem, we do two things:
    is that states that are never reached for a particular input are never
    computed. (This is impossible in an "offline" DFA which needs to compute
    all possible states up front.)
-2. If the cache gets too big, we wipe it and start again.
+2. If the cache gets too big, we wipe it and continue matching.
 
 In pathological cases, a new state can be created for every byte of input.
 (e.g., The regex `(a|b)*a(a|b){20}` on a long sequence of a's and b's.)
 In this case, performance regresses to slightly slower than the full NFA
-simulation. (We could investigate quitting the DFA and falling back to the
-NFA.)
+simulation, in large part because the cache becomes useless. (We could
+investigate quitting the DFA and falling back to the NFA.)
 
 N.B. While this implementation is heavily commented, Russ Cox's series of
 articles on regexes is strongly recommended: https://swtch.com/~rsc/regexp/
@@ -171,9 +171,9 @@ pub struct DfaCache {
 #[derive(Debug)]
 pub struct Dfa<'a> {
     /// prog contains the NFA instruction opcodes. DFA execution uses either
-    /// the `dfa` instructions or the `dfa_reverse` instructions. (It never
-    /// uses `prog.prog`, which may have Unicode opcodes that cannot be
-    /// executed by this DFA.)
+    /// the `dfa` instructions or the `dfa_reverse` instructions from
+    /// `exec::Executor`. (It never uses `Executor.prog`, which may have
+    /// Unicode opcodes that cannot be executed by this DFA.)
     prog: &'a Program,
     /// The start state. We record it here because the pointer may change
     /// when the cache is wiped.
@@ -214,6 +214,7 @@ struct State {
     ///    ranges `0..ord(a)-1`, `ord(a)-ord(z)` and `ord(z)+1..257` all
     ///    correspond to distinct classes. Therefore, we only need a vec of
     ///    length *3* for that particular regex, which is quite a bit better.
+    ///    (Equivalence classes are computed during compilation.)
     next: Vec<StatePtr>,
     /// The set of NFA states in this DFA state, which are computed by
     /// following epsilon transitions from `insts[0]`. Note that not all
@@ -221,19 +222,8 @@ struct State {
     /// transitions that correspond to empty assertions are only followed if
     /// the flags set at the current byte satisfy the assertion.
     insts: Vec<InstPtr>,
-    /// The set of flags (i.e., assertions) set immediately after the current
-    /// byte in the input.
-    ///
-    /// Note that if inst_flags is empty, then given_flags is also empty (sans
-    /// the match flag). This is because given_flags participate in this
-    /// state's cache key, which influences the number of states created. If
-    /// these flags are never discriminatory (which is the case if there are
-    /// no assertions in this state's NFA states), then there's no sense in
-    /// keeping them around.
-    ///
-    /// given_flags may have the match flag set, which indicates that this
-    /// state is a match state.
-    given_flags: Flags,
+    /// Whether this is a match state or not.
+    is_match: bool,
     /// The set of flags implied by the NFA states in `insts`.
     ///
     /// This never has the match flag set.
@@ -245,14 +235,13 @@ struct State {
 /// a match.
 ///
 /// We capture two bits of information: an ordered set of NFA states for the
-/// DFA state and the set of empty flags set immediately proceding the input
-/// byte at which the corresponding state was created.
+/// DFA state and whether it corresponds to a match state.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 struct StateKey {
     /// An ordered set of NFA states.
     insts: Vec<InstPtr>,
-    /// A set of empty flags, which may also contain a match flag.
-    given_flags: Flags,
+    /// Whether this is a matching state or not.
+    is_match: bool,
 }
 
 /// InstPtr is a 32 bit pointer into a sequence of opcodes (i.e., it indexes
@@ -294,7 +283,7 @@ impl DfaCache {
     pub fn new() -> Self {
         DfaCache {
             compiled: HashMap::new(),
-            states: vec![State::marker(), State::marker()],
+            states: vec![State::empty(), State::empty()],
             start_states: vec![STATE_UNKNOWN; 256],
             stack: vec![],
             qcur: SparseSet::new(0),
@@ -338,9 +327,9 @@ impl<'a> Dfa<'a> {
         at: usize,
         quit_on_first_match: bool,
     ) -> DfaResult {
-        // Retrieve our DFA cache from the program.
-        // If another thread tries to execute this DFA *simultaneously*, then a
-        // new independent cache is created.
+        // Retrieve our DFA cache from the program. If another thread tries to
+        // execute this DFA *simultaneously*, then a new independent cache is
+        // created.
         let mut _cache = prog.cache_dfa();
         let mut cache = &mut **_cache;
         cache.resize(prog.insts.len());
@@ -354,9 +343,6 @@ impl<'a> Dfa<'a> {
             stack: &mut cache.stack,
             quit_on_first_match: quit_on_first_match,
         };
-        // if !prog.insts.is_reversed() {
-            // println!("############################");
-        // }
         dfa.start = match dfa.start_state(&mut cache.qcur, text, at) {
             STATE_DEAD => return DfaResult::NoMatch,
             si => si,
@@ -366,17 +352,15 @@ impl<'a> Dfa<'a> {
         } else {
             dfa.exec_at(&mut cache.qcur, &mut cache.qnext, text, at)
         };
-        // if !prog.insts.is_reversed() {
-            // println!("------");
-            // println!("{:?}", prog.insts);
-            // println!("------");
-            // for (si, state) in dfa.states.iter().enumerate() {
-                // println!("{:04} {:?}", si, state);
-            // }
-            // println!("size: {} bytes, states: {}",
-                     // dfa.approximate_size(), dfa.states.len());
-            // println!("############################");
+        // println!("------");
+        // println!("{:?}", prog.insts);
+        // println!("------");
+        // for (si, state) in dfa.states.iter().enumerate() {
+            // println!("{:04} {:?}", si, state);
         // }
+        // println!("size: {} bytes, states: {}",
+                 // dfa.approximate_size(), dfa.states.len());
+        // println!("------");
         r
     }
 
@@ -393,9 +377,10 @@ impl<'a> Dfa<'a> {
         // For the most part, the DFA is basically:
         //
         //   last_match = null
-        //   si = current_state.next[current_byte]
-        //   if si is match
-        //     last_match = si
+        //   while current_byte != EOF:
+        //     si = current_state.next[current_byte]
+        //     if si is match
+        //       last_match = si
         //   return last_match
         //
         // However, we need to deal with a few things:
@@ -443,7 +428,10 @@ impl<'a> Dfa<'a> {
                 };
             }
 
-            // Inline next_state to avoid an extra branch.
+            // The following logic is essentially what `self.next_state` does,
+            // but we inline it manually here to avoid the extra branch and
+            // also because we know we have a real `u8` (not a `Byte`, which
+            // may be the special EOF sentinel value).
             let cls = self.prog.insts.byte_classes()[text[i] as usize];
             let mut next_si = self.states[si as usize].next[cls];
             if next_si <= STATE_DEAD {
@@ -503,7 +491,6 @@ impl<'a> Dfa<'a> {
         while i > 0 {
             i -= 1;
 
-            // Inline next_state to avoid an extra branch.
             let cls = self.prog.insts.byte_classes()[text[i] as usize];
             let mut next_si = self.states[si as usize].next[cls];
             if next_si <= STATE_DEAD {
@@ -549,11 +536,8 @@ impl<'a> Dfa<'a> {
     ) -> StatePtr {
         use inst::Inst::*;
 
-        // if !self.prog.insts.is_reversed() {
-            // println!("STATE: {:?}, BYTE: {:?}, CLASS: {:?}",
-                     // si, vb(b.0 as usize), vb(self.byte_class(b)));
-        // }
-        // If we're already in a bad state, give up.
+        // println!("STATE: {:?}, BYTE: {:?}, CLASS: {:?}",
+                 // si, vb(b.0 as usize), vb(self.byte_class(b)));
 
         // Initialize a queue with the current DFA state's NFA states.
         qcur.clear();
@@ -587,10 +571,10 @@ impl<'a> Dfa<'a> {
             mem::swap(qcur, qnext);
         }
 
-        // Now we set flags for immediately after the current byte.
-        // Since start states are processed separately, and are the only states
-        // that can have the StartText flag set, we therefore only need to
-        // worry about the StartLine flag here.
+        // Now we set flags for immediately after the current byte. Since start
+        // states are processed separately, and are the only states that can
+        // have the StartText flag set, we therefore only need to worry about
+        // the StartLine flag here.
         let mut flags = Flags::new();
         if b.as_byte().map_or(false, |b| b == b'\n') {
             flags.set_start_line(true);
@@ -600,10 +584,16 @@ impl<'a> Dfa<'a> {
         qnext.clear();
         for &ip in &*qcur {
             match self.prog.insts[ip as usize] {
+                // These states never happen in a byte-based program.
                 Char(_) | Ranges(_) => unreachable!(),
                 // These states are handled when following epsilon transitions.
                 Save(_) | Split(_) | EmptyLook(_) => {}
-                Match => { flags.set_match(true); }
+                Match => {
+                    flags.set_match(true);
+                    if !self.prog.is_reversed() {
+                        break;
+                    }
+                }
                 Bytes(ref inst) => {
                     if b.as_byte().map_or(false, |b| inst.matches(b)) {
                         self.follow_epsilon_transitions(
@@ -619,7 +609,7 @@ impl<'a> Dfa<'a> {
         // N.B. We pass `&mut si` here because the cache may clear itself if
         // it has gotten too full. When that happens, the location of the
         // current state may change.
-        let next = self.cached_state(qnext, flags, Some(&mut si));
+        let next = self.cached_state(qnext, flags.is_match(), Some(&mut si));
         // And now store our state in the current state's next list.
         let cls = self.byte_class(b);
         self.states[si as usize].next[cls] = next;
@@ -657,8 +647,11 @@ impl<'a> Dfa<'a> {
         use inst::Inst::*;
         use inst::EmptyLook::*;
 
+        // We need to traverse the NFA to follow epsilon transitions, so avoid
+        // recursion with an explicit stack.
         self.stack.push(ip);
         while let Some(ip) = self.stack.pop() {
+            // Don't visit states we've already added.
             if q.contains_sparse_index(ip as usize) {
                 continue;
             }
@@ -713,10 +706,10 @@ impl<'a> Dfa<'a> {
     fn cached_state(
         &mut self,
         q: &SparseSet<InstPtr>,
-        mut given_flags: Flags,
+        is_match: bool,
         current_state: Option<&mut StatePtr>,
     ) -> StatePtr {
-        let (key, inst_flags) = match self.cached_state_key(q, given_flags) {
+        let (key, inst_flags) = match self.cached_state_key(q, is_match) {
             None => return STATE_DEAD,
             Some(v) => v,
         };
@@ -735,7 +728,7 @@ impl<'a> Dfa<'a> {
         self.states.push(State {
             next: next,
             insts: key.insts.clone(),
-            given_flags: given_flags,
+            is_match: is_match,
             inst_flags: inst_flags,
         });
         let si = usize_to_u32(self.states.len().checked_sub(1).unwrap());
@@ -743,66 +736,10 @@ impl<'a> Dfa<'a> {
         si
     }
 
-    fn clear_cache(&mut self, current_state: Option<&mut StatePtr>) {
-        if self.states.len() <= 2 {
-            // Why <= 2? Well, the states list always has its first two
-            // positions filled by marker states for STATE_UNKNOWN and
-            // STATE_DEAD. These states aren't actually used, but exist to
-            // make sure no other state lives in those locations. Therefore,
-            // a state vec with length <= 2 is actually "empty."
-            return;
-        }
-        if let Some(si) = current_state {
-            let cur = self.copy_state(*si);
-            let start = self.copy_state(self.start);
-            self.states.clear();
-            self.compiled.clear();
-            for start in self.start_states.iter_mut() {
-                *start = STATE_UNKNOWN;
-            }
-            self.states.push(State::marker());
-            self.states.push(State::marker());
-            self.start = self.restore_state(start);
-            *si = self.restore_state(cur);
-        } else {
-            let start = self.copy_state(self.start);
-            self.states.clear();
-            self.compiled.clear();
-            for start in self.start_states.iter_mut() {
-                *start = STATE_UNKNOWN;
-            }
-            self.states.push(State::marker());
-            self.states.push(State::marker());
-            self.start = self.restore_state(start);
-        }
-    }
-
-    fn copy_state(&self, si: StatePtr) -> State {
-        let mut state = self.states[si as usize].clone();
-        // Make sure to erase any pointers from this state, so that
-        // they are forced to be re-computed.
-        state.next = vec![STATE_UNKNOWN; self.num_byte_classes()];
-        state
-    }
-
-    fn restore_state(&mut self, state: State) -> StatePtr {
-        let key = StateKey {
-            insts: state.insts.clone(),
-            given_flags: state.given_flags,
-        };
-        if let Some(&si) = self.compiled.get(&key) {
-            return si;
-        }
-        let si = usize_to_u32(self.states.len());
-        self.states.push(state);
-        self.compiled.insert(key, si);
-        si
-    }
-
     fn cached_state_key(
         &mut self,
         q: &SparseSet<InstPtr>,
-        mut given_flags: Flags,
+        is_match: bool,
     ) -> Option<(StateKey, Flags)> {
         use inst::Inst::*;
         use inst::EmptyLook::*;
@@ -862,18 +799,68 @@ impl<'a> Dfa<'a> {
                 }
             }
         }
-        if inst_flags.is_empty() {
-            // Wipe out the flags from the search text at the current byte,
-            // except for whether this is a match state. We can do this
-            // because we know the flags will never matter.
-            given_flags = *Flags::new().set_match(given_flags.is_match());
-        }
-        if insts.len() == 0 && given_flags.is_empty() {
+        if insts.len() == 0 && !is_match {
             None
         } else {
-            let key = StateKey { insts: insts, given_flags: given_flags };
+            let key = StateKey { insts: insts, is_match: is_match };
             Some((key, inst_flags))
         }
+    }
+
+    fn clear_cache(&mut self, current_state: Option<&mut StatePtr>) {
+        if self.states.len() <= 2 {
+            // Why <= 2? Well, the states list always has its first two
+            // positions filled by marker states for STATE_UNKNOWN and
+            // STATE_DEAD. These states aren't actually used, but exist to
+            // make sure no other state lives in those locations. Therefore,
+            // a state vec with length <= 2 is actually "empty."
+            return;
+        }
+        if let Some(si) = current_state {
+            let cur = self.copy_state(*si);
+            let start = self.copy_state(self.start);
+            self.states.clear();
+            self.compiled.clear();
+            for start in self.start_states.iter_mut() {
+                *start = STATE_UNKNOWN;
+            }
+            self.states.push(State::empty());
+            self.states.push(State::empty());
+            self.start = self.restore_state(start);
+            *si = self.restore_state(cur);
+        } else {
+            let start = self.copy_state(self.start);
+            self.states.clear();
+            self.compiled.clear();
+            for start in self.start_states.iter_mut() {
+                *start = STATE_UNKNOWN;
+            }
+            self.states.push(State::empty());
+            self.states.push(State::empty());
+            self.start = self.restore_state(start);
+        }
+    }
+
+    fn copy_state(&self, si: StatePtr) -> State {
+        let mut state = self.states[si as usize].clone();
+        // Make sure to erase any pointers from this state, so that
+        // they are forced to be re-computed.
+        state.next = vec![STATE_UNKNOWN; self.num_byte_classes()];
+        state
+    }
+
+    fn restore_state(&mut self, state: State) -> StatePtr {
+        let key = StateKey {
+            insts: state.insts.clone(),
+            is_match: state.is_match,
+        };
+        if let Some(&si) = self.compiled.get(&key) {
+            return si;
+        }
+        let si = usize_to_u32(self.states.len());
+        self.states.push(state);
+        self.compiled.insert(key, si);
+        si
     }
 
     fn next_state(
@@ -910,7 +897,7 @@ impl<'a> Dfa<'a> {
         }
         q.clear();
         self.follow_epsilon_transitions(0, q, start_flags);
-        let sp = self.cached_state(q, start_flags, None);
+        let sp = self.cached_state(q, false, None);
         self.start_states[flagi] = sp;
         sp
     }
@@ -975,17 +962,17 @@ impl<'a> Dfa<'a> {
 }
 
 impl State {
-    fn marker() -> State {
+    fn empty() -> State {
         State {
             next: vec![],
             insts: vec![],
-            given_flags: Flags::new(),
+            is_match: false,
             inst_flags: Flags::new(),
         }
     }
 
     fn is_match(&self) -> bool {
-        self.given_flags.is_match()
+        self.is_match
     }
 }
 
@@ -1091,7 +1078,7 @@ impl fmt::Debug for State {
             }
         }
         f.debug_struct("State")
-         .field("given_flags", &self.given_flags)
+         .field("is_match", &self.is_match)
          .field("insts", &self.insts)
          .field("next", &next)
          .finish()
