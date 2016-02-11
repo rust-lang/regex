@@ -541,9 +541,9 @@ fn parse(cx: &mut ExtCtxt, tts: &[ast::TokenTree]) -> Option<String> {
     if let Ok(expr) = parser.parse_expr() {
         let entry = cx.expander().fold_expr(expr);
         let regex = match entry.node {
-            ast::ExprLit(ref lit) => {
+            ast::ExprKind::Lit(ref lit) => {
                 match lit.node {
-                    ast::LitStr(ref s, _) => s.to_string(),
+                    ast::LitKind::Str(ref s, _) => s.to_string(),
                     _ => {
                         cx.span_err(entry.span, &format!(
                             "expected string literal but got `{}`",
