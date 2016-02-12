@@ -41,6 +41,8 @@ impl<T: SparseIndexed> SparseSet<T> {
         self.dense.len()
     }
 
+    // pub fn resize(&mut self,
+
     pub fn add(&mut self, v: T) -> usize {
         let i = self.size;
         let sparse_index = v.index();

@@ -89,7 +89,7 @@ impl<'r, I: Input> Nfa<'r, I> {
         mut at: InputAt,
     ) -> bool {
         let mut matched = false;
-        q.clist.empty(); q.nlist.empty();
+        q.clist.clear(); q.nlist.clear();
 'LOOP:  loop {
             if q.clist.size == 0 {
                 // Three ways to bail out when our current set of threads is
@@ -149,7 +149,7 @@ impl<'r, I: Input> Nfa<'r, I> {
             }
             at = at_next;
             q.swap();
-            q.nlist.empty();
+            q.nlist.clear();
         }
         matched
     }
@@ -313,7 +313,7 @@ impl Threads {
         s < self.size && self.dense[s].pc == pc
     }
 
-    fn empty(&mut self) {
+    fn clear(&mut self) {
         self.size = 0;
     }
 

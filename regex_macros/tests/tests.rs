@@ -405,6 +405,24 @@ matiter!(match_multi_rep_7, r"(?m)(?:\n?[a-z]{3}$)+", "abc\ndef\nxyz",
          (0, 11));
 matiter!(match_multi_rep_8, r"(?m)(?:\n?[a-z]{3}$)*", "abc\ndef\nxyz",
          (0, 11));
+matiter!(match_multi_rep_9, r"(?m)^*", "\naa\n",
+         (0, 0), (1, 1), (2, 2), (3, 3), (4, 4));
+matiter!(match_multi_rep_10, r"(?m)^+", "\naa\n",
+         (0, 0), (1, 1), (4, 4));
+matiter!(match_multi_rep_11, r"(?m)$*", "\naa\n",
+         (0, 0), (1, 1), (2, 2), (3, 3), (4, 4));
+matiter!(match_multi_rep_12, r"(?m)$+", "\naa\n",
+         (0, 0), (3, 3), (4, 4));
+matiter!(match_multi_rep_13, r"(?m)(?:$\n)+", "\n\naaa\n\n",
+         (0, 2), (5, 7));
+matiter!(match_multi_rep_14, r"(?m)(?:$\n)*", "\n\naaa\n\n",
+         (0, 2), (3, 3), (4, 4), (5, 7));
+matiter!(match_multi_rep_15, r"(?m)(?:$\n^)+", "\n\naaa\n\n",
+         (0, 2), (5, 7));
+matiter!(match_multi_rep_16, r"(?m)(?:^|$)+", "\n\naaa\n\n",
+         (0, 0), (1, 1), (2, 2), (5, 5), (6, 6), (7, 7));
+// matiter!(match_multi_rep_14, r"(?m)(?:$\n)*", "\n\naaa\n\n",
+         // (0, 2), (3, 3), (4, 4), (5, 7));
 
 matiter!(match_start_end_empty, r"^$", "", (0, 0));
 matiter!(match_start_end_empty_many_1, r"^$^$^$", "", (0, 0));
@@ -418,8 +436,6 @@ matiter!(match_start_end_empty_rep_rev, r"(?:$^)*", "a\nb\nc",
 // Some Unicode tests.
 // A couple of these are commented out because something in the guts of macro
 // expansion is creating invalid byte strings.
-// mat!(uni_literal, r"Ⅰ", "Ⅰ", Some((0, 3)))
-// mat!(uni_case_not, r"Δ", "δ", None)
 mat!(uni_one, r"\pN", "Ⅰ", Some((0, 3)));
 mat!(uni_mixed, r"\pN+", "Ⅰ1Ⅱ2", Some((0, 8)));
 mat!(uni_not, r"\PN+", "abⅠ", Some((0, 2)));
