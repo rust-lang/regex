@@ -351,7 +351,7 @@ impl Regex {
             re: self,
             search: text,
             last_end: 0,
-            last_match: None,
+            skip_next_char: false
         }
     }
 
@@ -456,7 +456,7 @@ impl Regex {
             re: self,
             search: text,
             last_end: 0,
-            last_match: None,
+            skip_next_char: false
         }
     }
 
@@ -1075,36 +1075,38 @@ pub struct FindCaptures<'r, 't> {
     re: &'r Regex,
     search: &'t str,
     last_end: usize,
-    last_match: Option<usize>,
+    skip_next_char: bool
 }
 
 impl<'r, 't> Iterator for FindCaptures<'r, 't> {
     type Item = Captures<'t>;
 
     fn next(&mut self) -> Option<Captures<'t>> {
-        if self.last_end > self.search.len() {
+        let mut start = self.last_end;
+        if self.skip_next_char {
+            start += self.search[start..].chars().next()
+                                         .map(|c| c.len_utf8()).unwrap_or(1);
+        }
+        if start > self.search.len() {
             return None
         }
 
         let mut caps = self.re.alloc_captures();
-        if !exec(self.re, &mut caps, self.search, self.last_end) {
+        if !exec(self.re, &mut caps, self.search, start) {
             return None
         }
         let (s, e) = (caps[0].unwrap(), caps[1].unwrap());
 
         // Don't accept empty matches immediately following a match.
         // i.e., no infinite loops please.
-        if e == s && Some(self.last_end) == self.last_match {
-            if self.last_end >= self.search.len() {
-                return None;
-            }
-            self.last_end += self.search[self.last_end..].chars()
-                                 .next().unwrap().len_utf8();
-            return self.next();
+        if e == start && e > 0 && !self.skip_next_char {
+            self.skip_next_char = true;
+            self.next()
+        } else {
+            self.last_end = e;
+            self.skip_next_char = s == e;
+            Some(Captures::new(self.re, self.search, caps))
         }
-        self.last_end = e;
-        self.last_match = Some(self.last_end);
-        Some(Captures::new(self.re, self.search, caps))
     }
 }
 
@@ -1120,36 +1122,38 @@ pub struct FindMatches<'r, 't> {
     re: &'r Regex,
     search: &'t str,
     last_end: usize,
-    last_match: Option<usize>,
+    skip_next_char: bool
 }
 
 impl<'r, 't> Iterator for FindMatches<'r, 't> {
     type Item = (usize, usize);
 
     fn next(&mut self) -> Option<(usize, usize)> {
-        if self.last_end > self.search.len() {
+        let mut start = self.last_end;
+        if self.skip_next_char {
+            start += self.search[start..].chars().next()
+                                         .map(|c| c.len_utf8()).unwrap_or(1);
+        }
+        if start > self.search.len() {
             return None
         }
 
         let mut caps = [None, None];
-        if !exec(self.re, &mut caps, self.search, self.last_end) {
+        if !exec(self.re, &mut caps, self.search, start) {
             return None;
         }
         let (s, e) = (caps[0].unwrap(), caps[1].unwrap());
 
         // Don't accept empty matches immediately following a match.
         // i.e., no infinite loops please.
-        if e == s && Some(self.last_end) == self.last_match {
-            if self.last_end >= self.search.len() {
-                return None;
-            }
-            self.last_end += self.search[self.last_end..].chars()
-                                 .next().unwrap().len_utf8();
-            return self.next();
+        if e == start && e > 0 && !self.skip_next_char {
+            self.skip_next_char = true;
+            self.next()
+        } else {
+            self.last_end = e;
+            self.skip_next_char = s == e;
+            Some((s, e))
         }
-        self.last_end = e;
-        self.last_match = Some(self.last_end);
-        Some((s, e))
     }
 }
 
