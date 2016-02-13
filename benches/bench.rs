@@ -7,245 +7,111 @@
 // <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
+
 #![allow(non_snake_case)]
 
 use std::iter::repeat;
 
 use rand::{Rng, thread_rng};
-use regex_syntax::Expr;
+use regex::{Regex, NoExpand};
 use test::Bencher;
 
-use regex::{Regex, NoExpand};
-use regex::internal::ProgramBuilder;
-
-fn bench_assert_match(b: &mut Bencher, re: Regex, text: &str) {
-    b.iter(|| if !re.is_match(text) { panic!("no match") });
-}
-
-fn bench_assert_match2(b: &mut Bencher, re: &Regex, text: &str) {
-    b.iter(|| if !re.is_match(text) { panic!("no match") });
-}
-
-#[bench]
-fn compile_simple(b: &mut Bencher) {
-    b.iter(|| {
-        let re = r"^bc(d|e)*$";
-        ProgramBuilder::new(&re).compile().unwrap()
-    });
-}
-
-#[bench]
-fn compile_simple_bytes(b: &mut Bencher) {
-    b.iter(|| {
-        let re = r"^bc(d|e)*$";
-        ProgramBuilder::new(&re).bytes(true).compile().unwrap()
-    });
-}
-
-#[bench]
-fn compile_small(b: &mut Bencher) {
-    b.iter(|| {
-        let re = r"\p{L}|\p{N}|\s|.|\d";
-        ProgramBuilder::new(&re).compile().unwrap()
-    });
-}
-
-#[bench]
-fn compile_small_bytes(b: &mut Bencher) {
-    b.iter(|| {
-        let re = r"\p{L}|\p{N}|\s|.|\d";
-        ProgramBuilder::new(&re).bytes(true).compile().unwrap()
-    });
-}
-
-#[bench]
-fn compile_huge(b: &mut Bencher) {
-    b.iter(|| {
-        let re = r"\p{L}{100}";
-        ProgramBuilder::new(&re).compile().unwrap()
-    });
-}
-
-#[bench]
-fn compile_huge_bytes(b: &mut Bencher) {
-    b.iter(|| {
-        let re = r"\p{L}{100}";
-        ProgramBuilder::new(&re).bytes(true).compile().unwrap()
-    });
-}
-
-#[bench]
-fn parse_simple(b: &mut Bencher) {
-    b.iter(|| {
-        let re = r"^bc(d|e)*$";
-        Expr::parse(re).unwrap()
-    });
-}
-
-#[bench]
-fn parse_small(b: &mut Bencher) {
-    b.iter(|| {
-        let re = r"\p{L}|\p{N}|\s|.|\d";
-        Expr::parse(re).unwrap()
-    });
-}
-
-#[bench]
-fn parse_huge(b: &mut Bencher) {
-    b.iter(|| {
-        let re = r"\p{L}{100}";
-        Expr::parse(re).unwrap()
-    });
-}
-
-#[bench]
-fn no_exponential(b: &mut Bencher) {
-    let n = 100;
-    let regex_string = format!(
-        "{}{}",
-        repeat("a?").take(n).collect::<String>(),
-        repeat("a").take(n).collect::<String>());
-    let re = Regex::new(&regex_string).unwrap();
-    let text: String = repeat("a").take(n).collect();
-    bench_assert_match(b, re, &text);
-}
-
-#[bench]
-fn literal(b: &mut Bencher) {
-    let re = regex!("y");
-    let text = format!("{}y", repeat("x").take(50).collect::<String>());
-    bench_assert_match(b, re, &text);
-}
-
-#[bench]
-fn not_literal(b: &mut Bencher) {
-    let re = regex!(".y");
-    let text = format!("{}y", repeat("x").take(50).collect::<String>());
-    bench_assert_match(b, re, &text);
-}
-
-#[bench]
-fn match_class(b: &mut Bencher) {
-    let re = regex!("[abcdw]");
-    let text = format!("{}w", repeat("xxxx").take(20).collect::<String>());
-    bench_assert_match(b, re, &text);
-}
-
-#[bench]
-fn match_class_in_range(b: &mut Bencher) {
-    // 'b' is between 'a' and 'c', so the class range checking doesn't help.
-    let re = regex!("[ac]");
-    let text = format!("{}c", repeat("bbbb").take(20).collect::<String>());
-    bench_assert_match(b, re, &text);
-}
-
-#[bench]
-fn match_class_unicode(b: &mut Bencher) {
-    let re = regex!(r"\pL");
-    let text = format!("{}a", repeat("☃5☃5").take(20).collect::<String>());
-    bench_assert_match2(b, &re, &text);
-}
-
-#[bench]
-fn replace_all(b: &mut Bencher) {
-    let re = regex!("[cjrw]");
-    let text = "abcdefghijklmnopqrstuvwxyz";
-    // FIXME: This isn't using the $name expand stuff.
-    // It's possible RE2/Go is using it, but currently, the expand in this
-    // crate is actually compiling a regex, so it's incredibly slow.
-    b.iter(|| re.replace_all(text, NoExpand("")));
-}
-
-#[bench]
-fn anchored_literal_short_non_match(b: &mut Bencher) {
-    let re = regex!("^zbc(d|e)");
-    let text = "abcdefghijklmnopqrstuvwxyz";
-    b.iter(|| re.is_match(text));
-}
-
-#[bench]
-fn anchored_literal_long_non_match(b: &mut Bencher) {
-    let re = regex!("^zbc(d|e)");
-    let text: String = repeat("abcdefghijklmnopqrstuvwxyz").take(15).collect();
-    b.iter(|| re.is_match(&text));
-}
-
-#[bench]
-fn anchored_literal_short_match(b: &mut Bencher) {
-    let re = regex!("^.bc(d|e)");
-    let text = "abcdefghijklmnopqrstuvwxyz";
-    b.iter(|| re.is_match(text));
-}
-
-#[bench]
-fn anchored_literal_long_match(b: &mut Bencher) {
-    let re = regex!("^.bc(d|e)");
-    let text: String = repeat("abcdefghijklmnopqrstuvwxyz").take(15).collect();
-    b.iter(|| re.is_match(&text));
-}
-
-#[bench]
-fn one_pass_short_a(b: &mut Bencher) {
-    let re = regex!("^.bc(d|e)*$");
-    let text = "abcddddddeeeededd";
-    b.iter(|| re.is_match(text));
-}
-
-#[bench]
-fn one_pass_short_a_not(b: &mut Bencher) {
-    let re = regex!(".bc(d|e)*$");
-    let text = "abcddddddeeeededd";
-    b.iter(|| re.is_match(text));
-}
-
-#[bench]
-fn one_pass_short_b(b: &mut Bencher) {
-    let re = regex!("^.bc(?:d|e)*$");
-    let text = "abcddddddeeeededd";
-    b.iter(|| re.is_match(text));
-}
-
-#[bench]
-fn one_pass_short_b_not(b: &mut Bencher) {
-    let re = regex!(".bc(?:d|e)*$");
-    let text = "abcddddddeeeededd";
-    b.iter(|| re.is_match(text));
-}
-
-#[bench]
-fn one_pass_long_prefix(b: &mut Bencher) {
-    let re = regex!("^abcdefghijklmnopqrstuvwxyz.*$");
-    let text = "abcdefghijklmnopqrstuvwxyz";
-    b.iter(|| re.is_match(text));
-}
-
-#[bench]
-fn one_pass_long_prefix_not(b: &mut Bencher) {
-    let re = regex!("^.bcdefghijklmnopqrstuvwxyz.*$");
-    let text = "abcdefghijklmnopqrstuvwxyz";
-    b.iter(|| re.is_match(text));
-}
-
-macro_rules! throughput(
-    ($name:ident, $regex:expr, $size:expr) => (
+macro_rules! bench_match {
+    ($name:ident, $re:expr, $text:expr) => {
         #[bench]
         fn $name(b: &mut Bencher) {
             lazy_static! {
-                static ref RE: Regex = $regex;
-                static ref TEXT: String = gen_text($size);
+                static ref RE: Regex = $re;
+                static ref TEXT: String = $text;
             };
-            // let re = $regex;
-            // let text = gen_text($size);
-            b.bytes = $size;
-            b.iter(|| if RE.is_match(&TEXT) { panic!("match") });
+            b.bytes = TEXT.len() as u64;
+            b.iter(|| {
+                if !RE.is_match(&TEXT) {
+                    panic!("expected match, got not match");
+                }
+            });
         }
-    );
-);
+    }
+}
 
-fn easy0() -> Regex { regex!("ABCDEFGHIJKLMNOPQRSTUVWXYZ$") }
-fn easy1() -> Regex { regex!("A[AB]B[BC]C[CD]D[DE]E[EF]F[FG]G[GH]H[HI]I[IJ]J$") }
-fn medium() -> Regex { regex!("[XYZ]ABCDEFGHIJKLMNOPQRSTUVWXYZ$") }
-fn hard() -> Regex { regex!("[ -~]*ABCDEFGHIJKLMNOPQRSTUVWXYZ$") }
+macro_rules! bench_nomatch {
+    ($name:ident, $re:expr, $text:expr) => {
+        #[bench]
+        fn $name(b: &mut Bencher) {
+            lazy_static! {
+                static ref RE: Regex = $re;
+                static ref TEXT: String = $text;
+            };
+            b.bytes = TEXT.len() as u64;
+            b.iter(|| {
+                if RE.is_match(&TEXT) {
+                    panic!("match not expected");
+                }
+            });
+        }
+    }
+}
+
+bench_match!(no_exponential, {
+    let re = format!(
+        "{}{}",
+        repeat("a?").take(100).collect::<String>(),
+        repeat("a").take(100).collect::<String>());
+    // We don't use the macro here since we're dynamically building the regex.
+    Regex::new(&re).unwrap()
+}, repeat("a").take(100).collect());
+
+bench_match!(literal, regex!("y"), {
+   format!("{}y", repeat("x").take(50).collect::<String>())
+});
+
+bench_match!(not_literal, regex!(".y"), {
+   format!("{}y", repeat("x").take(50).collect::<String>())
+});
+
+bench_match!(match_class, regex!("[abcdw]"), {
+    format!("{}w", repeat("xxxx").take(20).collect::<String>())
+});
+
+bench_match!(match_class_in_range, regex!("[ac]"), {
+    format!("{}c", repeat("bbbb").take(20).collect::<String>())
+});
+
+bench_match!(match_class_unicode, regex!(r"\pL"), {
+    format!("{}a", repeat("☃5☃5").take(20).collect::<String>())
+});
+
+bench_nomatch!(anchored_literal_short_non_match, regex!("^zbc(d|e)"), {
+    "abcdefghijklmnopqrstuvwxyz".to_owned()
+});
+
+bench_nomatch!(anchored_literal_long_non_match, regex!("^zbc(d|e)"), {
+    repeat("abcdefghijklmnopqrstuvwxyz").take(15).collect::<String>()
+});
+
+bench_match!(anchored_literal_short_match, regex!("^.bc(d|e)"), {
+    "abcdefghijklmnopqrstuvwxyz".to_owned()
+});
+
+bench_match!(anchored_literal_long_match, regex!("^.bc(d|e)"), {
+    repeat("abcdefghijklmnopqrstuvwxyz").take(15).collect::<String>()
+});
+
+bench_match!(one_pass_short, regex!("^.bc(d|e)*$"), {
+    "abcddddddeeeededd".to_owned()
+});
+
+bench_match!(one_pass_short_not, regex!(".bc(d|e)*$"), {
+    "abcddddddeeeededd".to_owned()
+});
+
+bench_match!(one_pass_long_prefix, regex!("^abcdefghijklmnopqrstuvwxyz.*$"), {
+    "abcdefghijklmnopqrstuvwxyz".to_owned()
+});
+
+bench_match!(one_pass_long_prefix_not, regex!("^.bcdefghijklmnopqrstuvwxyz.*$"), {
+    "abcdefghijklmnopqrstuvwxyz".to_owned()
+});
 
 fn gen_text(n: usize) -> String {
     let mut rng = thread_rng();
@@ -259,22 +125,45 @@ fn gen_text(n: usize) -> String {
     String::from_utf8(bytes).unwrap()
 }
 
-throughput!(easy0_32, easy0(), 32);
-throughput!(easy0_1K, easy0(), 1<<10);
-throughput!(easy0_32K, easy0(), 32<<10);
-throughput!(easy0_1MB, easy0(), 1<<20);
+fn easy0() -> Regex {
+    regex!("ABCDEFGHIJKLMNOPQRSTUVWXYZ$")
+}
 
-throughput!(easy1_32, easy1(), 32);
-throughput!(easy1_1K, easy1(), 1<<10);
-throughput!(easy1_32K, easy1(), 32<<10);
-throughput!(easy1_1MB, easy1(), 1<<20);
+bench_nomatch!(easy0_32, easy0(), gen_text(32));
+bench_nomatch!(easy0_1K, easy0(), gen_text(1<<10));
+bench_nomatch!(easy0_32K, easy0(), gen_text(32<<10));
+bench_nomatch!(easy0_1MB, easy0(), gen_text(1<<20));
 
-throughput!(medium_32, medium(), 32);
-throughput!(medium_1K, medium(), 1<<10);
-throughput!(medium_32K,medium(), 32<<10);
-throughput!(medium_1MB, medium(), 1<<20);
+fn easy1() -> Regex {
+    regex!("A[AB]B[BC]C[CD]D[DE]E[EF]F[FG]G[GH]H[HI]I[IJ]J$")
+}
 
-throughput!(hard_32, hard(), 32);
-throughput!(hard_1K, hard(), 1<<10);
-throughput!(hard_32K,hard(), 32<<10);
-throughput!(hard_1MB, hard(), 1<<20);
+bench_nomatch!(easy1_32, easy1(), gen_text(32));
+bench_nomatch!(easy1_1K, easy1(), gen_text(1<<10));
+bench_nomatch!(easy1_32K, easy1(), gen_text(32<<10));
+bench_nomatch!(easy1_1MB, easy1(), gen_text(1<<20));
+
+fn medium() -> Regex {
+    regex!("[XYZ]ABCDEFGHIJKLMNOPQRSTUVWXYZ$")
+}
+
+bench_nomatch!(medium_32, medium(), gen_text(32));
+bench_nomatch!(medium_1K, medium(), gen_text(1<<10));
+bench_nomatch!(medium_32K, medium(), gen_text(32<<10));
+bench_nomatch!(medium_1MB, medium(), gen_text(1<<20));
+
+fn hard() -> Regex {
+    regex!("[ -~]*ABCDEFGHIJKLMNOPQRSTUVWXYZ$")
+}
+
+bench_nomatch!(hard_32, hard(), gen_text(32));
+bench_nomatch!(hard_1K, hard(), gen_text(1<<10));
+bench_nomatch!(hard_32K, hard(), gen_text(32<<10));
+bench_nomatch!(hard_1MB, hard(), gen_text(1<<20));
+
+#[bench]
+fn replace_all(b: &mut Bencher) {
+    let re = regex!("[cjrw]");
+    let text = "abcdefghijklmnopqrstuvwxyz";
+    b.iter(|| re.replace_all(text, NoExpand("")));
+}

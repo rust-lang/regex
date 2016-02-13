@@ -35,7 +35,7 @@
 //! extern crate regex;
 //! ```
 //!
-//! # First example: find a date
+//! # Example: find a date
 //!
 //! General use of regular expressions in this package involves compiling an
 //! expression and then using it to search, split or replace text. For example,
@@ -59,6 +59,40 @@
 //! not process any escape sequences. For example, `"\\d"` is the same
 //! expression as `r"\d"`.
 //!
+//! # Example: Avoid compiling the same regex in a loop
+//!
+//! It is an anti-pattern to compile the same regular expression in a loop
+//! since compilation is typically expensive. (It takes anywhere from a few
+//! microseconds to a few **milliseconds** depending on the size of the
+//! regex.) Not only is compilation itself expensive, but this also prevents
+//! optimizations that reuse allocations internally to the matching engines.
+//!
+//! In Rust, it can sometimes be a pain to pass regular expressions around if
+//! they're used from inside a helper function. Instead, we recommend using the
+//! [`lazy_static`](https://crates.io/crates/lazy_static) crate to ensure that
+//! regular expressions are compiled exactly once.
+//!
+//! For example:
+//!
+//! ```rust
+//! #[macro_use] extern crate lazy_static;
+//! extern crate regex;
+//!
+//! use regex::Regex;
+//!
+//! fn some_helper_function(text: &str) -> bool {
+//!     lazy_static! {
+//!         static ref RE: Regex = Regex::new("...").unwrap();
+//!     }
+//!     RE.is_match(text)
+//! }
+//!
+//! fn main() {}
+//! ```
+//!
+//! Specifically, in this example, the regex will be compiled when it is used for
+//! the first time. On subsequent uses, it will reuse the previous compilation.
+//!
 //! # The `regex!` macro
 //!
 //! Rust's compile-time meta-programming facilities provide a way to write a
@@ -69,7 +103,7 @@
 //! given expression to native Rust code, which ideally makes it faster.
 //! Unfortunately (or fortunately), the dynamic implementation has had a lot
 //! more optimization work put into it currently, so it is faster than
-//! the `regex!` macro in most cases.
+//! the `regex!` macro in almost every case.
 //!
 //! To use the `regex!` macro, you must add `regex_macros` to your dependencies
 //! in your project's `Cargo.toml`:
@@ -107,7 +141,7 @@
 //!
 //! **NOTE**: This is implemented using a compiler plugin, which is not
 //! available on the Rust 1.0 beta/stable channels. Therefore, you'll only
-//! be able to use `regex!` on the nightlies.
+//! be able to use `regex!` on the nightly Rust releases.
 //!
 //! # Example: iterating over capture groups
 //!

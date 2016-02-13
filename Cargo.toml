@@ -73,13 +73,20 @@ path = "tests/test_dynamic_backtrack_bytes.rs"
 name = "dynamic-backtrack-bytes"
 
 # Run the benchmarks on the default behavior of Regex::new.
-# We could add all other permutations like we did for tests, but it's probably
-# not worth it.
 #
 # N.B. These benchmarks were originally taken from Russ Cox.
 [[bench]]
 name = "dynamic"
 path = "benches/bench_dynamic.rs"
+test = false
+bench = true
+
+# Run the benchmarks on the NFA algorithm. We avoid chasing other permutations.
+#
+# N.B. These can take a *loong* time to run.
+[[bench]]
+name = "dynamic-nfa"
+path = "benches/bench_dynamic_nfa.rs"
 test = false
 bench = true
 

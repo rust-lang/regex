@@ -20,7 +20,10 @@ extern crate test;
 // defined below. Effectively, it allows us to use the same tests for both
 // native and dynamic regexes.
 macro_rules! regex(
-    ($re:expr) => {{ ::regex::Regex::new($re).unwrap() }}
+    ($re:expr) => {{
+        use regex::internal::ExecBuilder;
+        ExecBuilder::new($re).nfa().build().unwrap().into_regex()
+    }}
 );
 
 mod bench;

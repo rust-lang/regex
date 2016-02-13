@@ -744,4 +744,14 @@ mod tests {
         assert_eq!(byte_prefixes_complete!("☃"),
                    vec!["☃".to_owned().as_bytes()]);
     }
+
+    // That this test fails suggests that the literal finder needs to be
+    // completely rewritten. Ug. It's not that it is wrong currently, but
+    // it's not as good at finding literals as it should be.
+    /*
+    #[test]
+    fn non_contiguous() {
+        assert_eq!(prefixes_complete!("z(a|c)"), vec!["za", "zc"]);
+    }
+    */
 }
