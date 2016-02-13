@@ -1,29 +1,38 @@
 use std::ops::Deref;
 use std::slice;
 
+/// A sparse set used for representing ordered NFA states.
+///
+/// This supports constant time addition and membership testing. Clearing an
+/// entire set can also be done in constant time. Iteration yields elements
+/// in the order in which they were inserted.
+///
+/// The data structure is based on: http://research.swtch.com/sparse
+/// Note though that we don't actually use unitialized memory. We generally
+/// reuse allocations, so the initial allocation cost is bareable. However,
+/// its other properties listed above are extremely useful.
+///
+/// N.B. The type parameter is misleading. For the most part, this is only
+/// meant to work on instruction pointers. We use a touch of generics to
+/// support 32 bit instruction pointers.
 #[derive(Debug)]
-pub struct SparseSet<T> {
-    dense: Vec<T>,
+pub struct SparseSet {
+    /// Dense contains the instruction pointers in the order in which they
+    /// were inserted. Accessing elements >= self.size is illegal.
+    dense: Vec<usize>,
+    /// Sparse maps instruction pointers to their location in dense.
+    ///
+    /// An instruction pointer is in the set if and only if
+    /// sparse[ip] < size && ip == dense[sparse[ip]].
     sparse: Vec<usize>,
+    /// The number of elements in the set.
     size: usize,
 }
 
-pub trait SparseIndexed: Clone + Copy + Default {
-    fn index(&self) -> usize;
-}
-
-impl SparseIndexed for usize {
-    fn index(&self) -> usize { *self }
-}
-
-impl SparseIndexed for u32 {
-    fn index(&self) -> usize { *self as usize }
-}
-
-impl<T: SparseIndexed> SparseSet<T> {
-    pub fn new(size: usize) -> SparseSet<T> {
+impl SparseSet {
+    pub fn new(size: usize) -> SparseSet {
         SparseSet {
-            dense: vec![T::default(); size],
+            dense: vec![0; size],
             sparse: vec![0; size],
             size: 0,
         }
@@ -41,22 +50,16 @@ impl<T: SparseIndexed> SparseSet<T> {
         self.dense.len()
     }
 
-    pub fn add(&mut self, v: T) -> usize {
+    pub fn add(&mut self, ip: usize) {
         let i = self.size;
-        let sparse_index = v.index();
-        self.dense[i] = v;
-        self.sparse[sparse_index] = i;
+        self.dense[i] = ip;
+        self.sparse[ip] = i;
         self.size += 1;
-        i
     }
 
-    pub fn get(&mut self, i: usize) -> T {
-        self.dense[i]
-    }
-
-    pub fn contains_sparse_index(&self, sparse_index: usize) -> bool {
-        let i = self.sparse[sparse_index];
-        i < self.size && self.dense[i].index() == sparse_index
+    pub fn contains_ip(&self, ip: usize) -> bool {
+        let i = self.sparse[ip];
+        i < self.size && self.dense[i] == ip
     }
 
     pub fn clear(&mut self) {
@@ -64,16 +67,16 @@ impl<T: SparseIndexed> SparseSet<T> {
     }
 }
 
-impl<T> Deref for SparseSet<T> {
-    type Target = [T];
+impl Deref for SparseSet {
+    type Target = [usize];
 
     fn deref(&self) -> &Self::Target {
         &self.dense[0..self.size]
     }
 }
 
-impl<'a, T> IntoIterator for &'a SparseSet<T> {
-    type Item = &'a T;
-    type IntoIter = slice::Iter<'a, T>;
+impl<'a> IntoIterator for &'a SparseSet {
+    type Item = &'a usize;
+    type IntoIter = slice::Iter<'a, usize>;
     fn into_iter(self) -> Self::IntoIter { self.iter() }
 }

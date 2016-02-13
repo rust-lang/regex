@@ -238,9 +238,6 @@ impl<'a> IntoIterator for &'a Insts {
 /// variant.) Given that byte based machines are typically much bigger than
 /// their Unicode analogues (because they can decode UTF-8 directly), this ends
 /// up being a pretty significant savings.
-///
-/// We should revisit the polymorphic idea after the DFA is in good shape,
-/// since that is likely the last matching engine we'll add.
 #[derive(Clone, Debug)]
 pub enum Inst {
     /// Match indicates that the program has reached a match state.
@@ -260,7 +257,9 @@ pub enum Inst {
     /// Ranges requires the regex program to match the character at the current
     /// position in the input with one of the ranges specified in InstRanges.
     Ranges(InstRanges),
-    /// Bytes is like Ranges, except it expresses a single byte range.
+    /// Bytes is like Ranges, except it expresses a single byte range. It is
+    /// used in conjunction with Split instructions to implement multi-byte
+    /// character classes.
     Bytes(InstBytes),
 }
 
@@ -398,6 +397,7 @@ pub struct InstBytes {
 }
 
 impl InstBytes {
+    /// Returns true if and only if the given byte is in this range.
     pub fn matches(&self, byte: u8) -> bool {
         self.start <= byte && byte <= self.end
     }

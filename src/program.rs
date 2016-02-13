@@ -25,6 +25,11 @@ use Error;
 /// (Well, almost. In fact, the matching engines cache state that can be
 /// reused on subsequent searches. But this is interior mutability that
 /// shouldn't be observable by the caller.)
+///
+/// A compiled regular expression contains quite a bit more than justs its
+/// opcodes. It also contains capture group names, literal prefixes, the
+/// original regular expression string and some facts about the expression
+/// (like whether it is anchored to the beginning or end of the search text).
 #[derive(Clone, Debug)]
 pub struct Program {
     /// The original regular expression string.
@@ -119,12 +124,12 @@ impl Program {
     }
 
     /// Retrieve cached state for NFA execution.
-    pub fn cache_nfa(&self) -> PoolGuard<NfaCache> {
+    pub fn cache_nfa(&self) -> PoolGuard<Box<NfaCache>> {
         self.cache.nfa.get()
     }
 
     /// Retrieve cached state for backtracking execution.
-    pub fn cache_backtrack(&self) -> PoolGuard<BacktrackCache> {
+    pub fn cache_backtrack(&self) -> PoolGuard<Box<BacktrackCache>> {
         self.cache.backtrack.get()
     }
 
@@ -149,19 +154,24 @@ impl Program {
 ///
 /// The allocations are created lazily, so we don't pay for caches that
 /// aren't used.
+///
+/// N.B. These are all behind a pointer because it's fewer bytes to memcpy.
+/// These caches are pushed/popped from the pool a lot, and a smaller
+/// footprint can have an impact on matching small inputs. See, for example,
+/// the hard_32 benchmark.
 #[derive(Debug)]
 pub struct EngineCache {
-    nfa: Pool<NfaCache>,
-    backtrack: Pool<BacktrackCache>,
+    nfa: Pool<Box<NfaCache>>,
+    backtrack: Pool<Box<BacktrackCache>>,
     dfa: Pool<Box<DfaCache>>,
 }
 
 impl EngineCache {
     fn new() -> Self {
         EngineCache {
-            nfa: Pool::new(Box::new(move || NfaCache::new())),
-            backtrack: Pool::new(Box::new(move || BacktrackCache::new())),
-            dfa: Pool::new(Box::new(move || Box::new(DfaCache::new()))),
+            nfa: Pool::new(Box::new(|| Box::new(NfaCache::new()))),
+            backtrack: Pool::new(Box::new(|| Box::new(BacktrackCache::new()))),
+            dfa: Pool::new(Box::new(|| Box::new(DfaCache::new()))),
         }
     }
 }

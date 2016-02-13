@@ -150,8 +150,8 @@ pub struct DfaCache {
     /// for leftmost-first style matching. Namely, when computing a cached
     /// state, the set of NFA states stops growing as soon as the first Match
     /// instruction is observed.
-    qcur: SparseSet<InstPtr>,
-    qnext: SparseSet<InstPtr>,
+    qcur: SparseSet,
+    qnext: SparseSet,
 }
 
 /// Dfa encapsulates the actual execution of the DFA.
@@ -361,8 +361,8 @@ impl<'a> Dfa<'a> {
     /// {qcur,qnext} are scratch ordered sets which may be non-empty.
     fn exec_at(
         &mut self,
-        qcur: &mut SparseSet<InstPtr>,
-        qnext: &mut SparseSet<InstPtr>,
+        qcur: &mut SparseSet,
+        qnext: &mut SparseSet,
         text: &[u8],
         mut at: usize,
     ) -> DfaResult {
@@ -456,8 +456,8 @@ impl<'a> Dfa<'a> {
     /// Executes the DFA on a reverse NFA.
     fn exec_at_reverse(
         &mut self,
-        qcur: &mut SparseSet<InstPtr>,
-        qnext: &mut SparseSet<InstPtr>,
+        qcur: &mut SparseSet,
+        qnext: &mut SparseSet,
         text: &[u8],
         mut at: usize,
     ) -> DfaResult {
@@ -516,8 +516,8 @@ impl<'a> Dfa<'a> {
     /// STATE_UNKNOWN can never be returned.
     fn exec_byte(
         &mut self,
-        qcur: &mut SparseSet<InstPtr>,
-        qnext: &mut SparseSet<InstPtr>,
+        qcur: &mut SparseSet,
+        qnext: &mut SparseSet,
         mut si: StatePtr,
         b: Byte,
     ) -> StatePtr {
@@ -526,7 +526,7 @@ impl<'a> Dfa<'a> {
         // Initialize a queue with the current DFA state's NFA states.
         qcur.clear();
         for &ip in &self.states[si as usize].insts {
-            qcur.add(ip);
+            qcur.add(ip as usize);
         }
 
         // Before inspecting the current byte, we may need to also inspect
@@ -550,7 +550,7 @@ impl<'a> Dfa<'a> {
             // sure we only follow transitions that satisfy our flags.
             qnext.clear();
             for &ip in &*qcur {
-                self.follow_epsilons(ip, qnext, flags);
+                self.follow_epsilons(usize_to_u32(ip), qnext, flags);
             }
             mem::swap(qcur, qnext);
         }
@@ -633,7 +633,7 @@ impl<'a> Dfa<'a> {
     fn follow_epsilons(
         &mut self,
         ip: InstPtr,
-        q: &mut SparseSet<InstPtr>,
+        q: &mut SparseSet,
         flags: Flags,
     ) {
         use inst::Inst::*;
@@ -644,10 +644,10 @@ impl<'a> Dfa<'a> {
         self.stack.push(ip);
         while let Some(ip) = self.stack.pop() {
             // Don't visit states we've already added.
-            if q.contains_sparse_index(ip as usize) {
+            if q.contains_ip(ip as usize) {
                 continue;
             }
-            q.add(ip);
+            q.add(ip as usize);
             match self.prog.insts[ip as usize] {
                 Char(_) | Ranges(_) => unreachable!(),
                 Match | Bytes(_) => {}
@@ -701,7 +701,7 @@ impl<'a> Dfa<'a> {
     /// location may change.
     fn cached_state(
         &mut self,
-        q: &SparseSet<InstPtr>,
+        q: &SparseSet,
         is_match: bool,
         current_state: Option<&mut StatePtr>,
     ) -> StatePtr {
@@ -752,7 +752,7 @@ impl<'a> Dfa<'a> {
     /// state.
     fn cached_state_key(
         &mut self,
-        q: &SparseSet<InstPtr>,
+        q: &SparseSet,
         is_match: bool,
     ) -> Option<(StateKey, Flags)> {
         use inst::Inst::*;
@@ -769,6 +769,7 @@ impl<'a> Dfa<'a> {
         let mut inst_flags = Flags::new();
         let mut insts = vec![];
         for &ip in q {
+            let ip = usize_to_u32(ip);
             match self.prog.insts[ip as usize] {
                 Char(_) | Ranges(_) => unreachable!(),
                 Save(_) => {}
@@ -892,8 +893,8 @@ impl<'a> Dfa<'a> {
     /// STATE_UNKNOWN cannot be returned.
     fn next_state(
         &mut self,
-        qcur: &mut SparseSet<InstPtr>,
-        qnext: &mut SparseSet<InstPtr>,
+        qcur: &mut SparseSet,
+        qnext: &mut SparseSet,
         si: StatePtr,
         b: Byte,
     ) -> StatePtr {
@@ -913,7 +914,7 @@ impl<'a> Dfa<'a> {
     /// This may return STATE_DEAD but never STATE_UNKNOWN.
     fn start_state(
         &mut self,
-        q: &mut SparseSet<InstPtr>,
+        q: &mut SparseSet,
         text: &[u8],
         at: usize,
     ) -> StatePtr {

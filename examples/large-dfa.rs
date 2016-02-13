@@ -7,10 +7,8 @@ use rand::{Rng, thread_rng};
 
 macro_rules! regex {
     ($re:expr) => {{
-        use regex::internal::MatchEngine;
-        ::regex::Regex::with_engine(
-            $re, MatchEngine::Automatic, 10 * (1<<20), false).unwrap()
-        // ::regex::Regex::new($re).unwrap()
+        use regex::internal::ExecBuilder;
+        ExecBuilder::new($re).build().unwrap().into_regex()
     }}
 }
 

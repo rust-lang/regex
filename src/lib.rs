@@ -428,9 +428,9 @@ mod exec;
 mod input;
 mod inst;
 mod literals;
+mod nfa;
 mod pool;
 mod program;
-mod nfa;
 mod re;
 mod sparse;
 
@@ -439,7 +439,7 @@ mod sparse;
 #[doc(hidden)]
 pub mod internal {
     pub use char::Char;
-    pub use exec::{Executor, MatchEngine};
+    pub use exec::{Exec, ExecBuilder};
     pub use input::{Input, CharInput, InputAt};
     pub use inst::{Inst, EmptyLook, InstRanges};
     pub use program::{Program, ProgramBuilder};

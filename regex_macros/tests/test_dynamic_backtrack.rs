@@ -14,8 +14,9 @@ extern crate regex;
 
 macro_rules! regex {
     ($re:expr) => {{
-        let e = ::regex::internal::MatchEngine::Backtrack;
-        ::regex::Regex::with_engine($re, e, 10 * (1 << 20), false).unwrap()
+        use regex::internal::ExecBuilder;
+        ExecBuilder::new($re).bounded_backtracking()
+                    .build().unwrap().into_regex()
     }}
 }
 

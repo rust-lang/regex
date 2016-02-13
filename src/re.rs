@@ -17,7 +17,7 @@ use std::ops::Index;
 use std::str::pattern::{Pattern, Searcher, SearchStep};
 use std::str::FromStr;
 
-use exec::{Executor, MatchEngine};
+use exec::{Exec, ExecBuilder};
 use syntax;
 
 const REPLACE_EXPAND: &'static str = r"(?x)
@@ -174,7 +174,7 @@ pub enum Regex {
     // See the comments for the `program` module in `lib.rs` for a more
     // detailed explanation for what `regex!` requires.
     #[doc(hidden)]
-    Dynamic(Executor),
+    Dynamic(Exec),
     #[doc(hidden)]
     Native(ExNative),
 }
@@ -249,30 +249,7 @@ impl Regex {
     ///
     /// The default size limit used in `new` is 10MB.
     pub fn with_size_limit(size: usize, re: &str) -> Result<Regex, Error> {
-        Regex::with_engine(re, MatchEngine::Automatic, size, false)
-    }
-
-    /// Compiles a dynamic regular expression and uses given matching engine.
-    ///
-    /// This is exposed for use in testing and shouldn't be used by clients.
-    /// Instead, the regex program should choose the correct matching engine
-    /// to use automatically. (Based on the regex, the size of the input and
-    /// the type of search.)
-    ///
-    /// A value of `None` means that the engine is automatically selected,
-    /// which is the default behavior.
-    ///
-    /// **WARNING**: Passing an unsuitable engine for the given regex/input
-    /// could lead to bad things. (Not unsafe things, but panics, incorrect
-    /// matches and large memory use are all things that could happen.)
-    #[doc(hidden)]
-    pub fn with_engine(
-        re: &str,
-        match_engine: MatchEngine,
-        size_limit: usize,
-        bytes: bool,
-    ) -> Result<Regex, Error> {
-        Executor::new(re, match_engine, size_limit, bytes).map(Regex::Dynamic)
+        ExecBuilder::new(re).size_limit(size).build().map(Regex::Dynamic)
     }
 
 

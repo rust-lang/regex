@@ -8,34 +8,22 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// FIXME: Currently, the VM simulates an NFA. It would be nice to have another
-// VM that simulates a DFA.
+// This module implements the "NFA algorithm." That is, it guarantees linear
+// time search of a regex on any text with memory use proportional to the size
+// of the regex.
 //
-// According to Russ Cox[1], a DFA performs better than an NFA, principally
-// because it reuses states previously computed by the machine *and* doesn't
-// keep track of capture groups. The drawback of a DFA (aside from its
-// complexity) is that it can't accurately return the locations of submatches.
-// The NFA *can* do that. (This is my understanding anyway.)
+// It is equal in power to the backtracking engine in this crate, except the
+// backtracking engine is typically faster on small regexes/texts at the
+// expense of a bigger memory footprint.
 //
-// Cox suggests that a DFA ought to be used to answer "does this match" and
-// "where does it match" questions. (In the latter, the starting position of
-// the match is computed by executing the regex backwards.) Cox also suggests
-// that a DFA should be run when asking "where are the submatches", which can
-// 1) quickly answer "no" is there's no match and 2) discover the substring
-// that matches, which means running the NFA on smaller input.
+// It can do more than the DFA can (specifically, record capture locations
+// and execute word boundary assertions), but at a slower speed. Specifically,
+// the NFA algorithm exectues a DFA implicitly by repeatedly expanding
+// epsilon transitions. That is, the NFA engine can be in multiple states at
+// once where as the DFA is only ever in one state at a time.
 //
-// Currently, the NFA simulation implemented below does some dirty tricks to
-// avoid tracking capture groups when they aren't needed (which only works
-// for 'is_match', not 'find'). This is a half-measure, but does provide some
-// perf improvement.
-//
-// AFAIK, the DFA/NFA approach is implemented in RE2/C++ but *not* in RE2/Go.
-//
-// UPDATE: We now have a backtracking matching engine and a DFA for prefix
-// matching. The prefix DFA is used in both the NFA simulation below and the
-// backtracking engine to skip along the input quickly.
-//
-// [1] - http://swtch.com/~rsc/regex/regex3.html
+// Therefore, the NFA algorithm is generally treated as the fallback when the
+// other matching engines either aren't feasible to run or are insufficient.
 
 use std::mem;
 
@@ -73,7 +61,7 @@ pub struct NfaCache {
 #[derive(Debug)]
 struct Threads {
     /// An ordered set of opcodes (each opcode is an NFA state).
-    set: SparseSet<InstPtr>,
+    set: SparseSet,
     /// Captures for every NFA state.
     ///
     /// It is stored in row-major order, where the columns are the capture
@@ -118,7 +106,7 @@ impl<'r, I: Input> Nfa<'r, I> {
         start: usize,
     ) -> bool {
         let mut _cache = prog.cache_nfa();
-        let mut cache = &mut *_cache;
+        let mut cache = &mut **_cache;
         cache.clist.resize(prog.insts.len(), prog.num_captures());
         cache.nlist.resize(prog.insts.len(), prog.num_captures());
         let at = input.at(start);
@@ -178,7 +166,7 @@ impl<'r, I: Input> Nfa<'r, I> {
             // input.
             let at_next = self.input.at(at.next_pos());
             for i in 0..clist.set.len() {
-                let ip = clist.set.get(i);
+                let ip = clist.set[i];
                 let tcaps = clist.caps(ip);
                 if self.step(&mut nlist, caps, tcaps, ip, at, at_next) {
                     matched = true;
@@ -298,7 +286,7 @@ impl<'r, I: Input> Nfa<'r, I> {
         use inst::Inst::*;
         loop {
             // Don't visit states we've already added.
-            if nlist.set.contains_sparse_index(ip) {
+            if nlist.set.contains_ip(ip) {
                 return;
             }
             nlist.set.add(ip);

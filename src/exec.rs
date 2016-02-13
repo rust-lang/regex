@@ -14,15 +14,16 @@ use input::{ByteInput, CharInput};
 use nfa::Nfa;
 use program::{Program, ProgramBuilder};
 use re::CaptureIdxs;
-use Error;
 
-/// Executor manages the execution of a regular expression.
+use {Regex, Error};
+
+/// Exec manages the execution of a regular expression.
 ///
 /// In particular, this manages the various compiled forms of a single regular
 /// expression and the choice of which matching engine to use to execute a
 /// regular expression.
 #[derive(Clone, Debug)]
-pub struct Executor {
+pub struct Exec {
     /// A compiled program that is used in the NFA simulation and backtracking.
     /// It can be byte-based or Unicode codepoint based.
     ///
@@ -50,64 +51,152 @@ pub struct Executor {
     /// If either Nfa or Backtrack is set, then it is always used because
     /// either is capable of executing every compiled program on any input
     /// size.
-    ///
-    /// If anything else is set, behaviour may be incorrect.
     match_engine: MatchEngine,
 }
 
-impl Executor {
-    pub fn new(
-        re: &str,
-        match_engine: MatchEngine,
-        size_limit: usize,
-        bytes: bool,
-    ) -> Result<Executor, Error> {
+/// Facilitates the construction of an executor by exposing various knobs
+/// to control how a regex is executed and what kinds of resources it's
+/// permitted to use.
+pub struct ExecBuilder<'r> {
+    re: &'r str,
+    match_engine: MatchEngine,
+    size_limit: usize,
+    bytes: bool,
+}
+
+impl<'r> ExecBuilder<'r> {
+    /// Create a regex execution builder.
+    ///
+    /// This uses default settings for everything except the regex itself,
+    /// which must be provided. Further knobs can be set by calling methods,
+    /// and then finally, `build` to actually create the executor.
+    pub fn new(re: &'r str) -> Self {
+        ExecBuilder {
+            re: re,
+            match_engine: MatchEngine::Automatic,
+            size_limit: 10 * (1 << 20),
+            bytes: false,
+        }
+    }
+
+    /// Set the matching engine to be automatically determined.
+    ///
+    /// This is the default state and will apply whatever optimizations are
+    /// possible, such as running a DFA.
+    ///
+    /// This overrides whatever was previously set via the `nfa` or
+    /// `bounded_backtracking` methods.
+    pub fn automatic(mut self) -> Self {
+        self.match_engine = MatchEngine::Automatic;
+        self
+    }
+
+    /// Sets the matching engine to use the NFA algorithm no matter what
+    /// optimizations are possible.
+    ///
+    /// This overrides whatever was previously set via the `automatic` or
+    /// `bounded_backtracking` methods.
+    pub fn nfa(mut self) -> Self {
+        self.match_engine = MatchEngine::Nfa;
+        self
+    }
+
+    /// Sets the matching engine to use a bounded backtracking engine no
+    /// matter what optimizations are possible.
+    ///
+    /// One must use this with care, since the bounded backtracking engine
+    /// uses memory proportion to `len(regex) * len(text)`.
+    ///
+    /// This overrides whatever was previously set via the `automatic` or
+    /// `nfa` methods.
+    pub fn bounded_backtracking(mut self) -> Self {
+        self.match_engine = MatchEngine::Backtrack;
+        self
+    }
+
+    /// Sets the size limit on a single compiled regular expression program.
+    ///
+    /// The default is ~10MB.
+    ///
+    /// N.B. Typically, multiple programs are compiled for every regular
+    /// expression and this limit applies to *each* of them.
+    pub fn size_limit(mut self, bytes: usize) -> Self {
+        self.size_limit = bytes;
+        self
+    }
+
+    /// Compiles byte based programs for use with the NFA matching engines.
+    ///
+    /// By default, the NFA engines match on Unicode scalar values. They can
+    /// be made to use byte based programs instead. In general, the byte based
+    /// programs are slower because of a less efficient encoding of character
+    /// classes. However, it may be useful (some day) for matching on raw
+    /// bytes that may not be UTF-8.
+    ///
+    /// Note that this does not impact DFA matching engines, which always
+    /// execute on bytes.
+    pub fn bytes(mut self, yes: bool) -> Self {
+        self.bytes = yes;
+        self
+    }
+
+    /// Build an executor that can run a regular expression.
+    pub fn build(self) -> Result<Exec, Error> {
         let prog = try!(
-            ProgramBuilder::new(re)
-                           .size_limit(size_limit)
-                           .bytes(bytes)
+            ProgramBuilder::new(self.re)
+                           .size_limit(self.size_limit)
+                           .bytes(self.bytes)
                            .compile());
         let dfa = try!(
-            ProgramBuilder::new(re)
-                           .size_limit(size_limit)
+            ProgramBuilder::new(self.re)
+                           .size_limit(self.size_limit)
                            .dfa(true)
                            .compile());
         let dfa_reverse = try!(
-            ProgramBuilder::new(re)
-                           .size_limit(size_limit)
+            ProgramBuilder::new(self.re)
+                           .size_limit(self.size_limit)
                            .dfa(true)
                            .reverse(true)
                            .compile());
         let can_dfa = dfa::can_exec(&dfa.insts);
-        Ok(Executor {
+        Ok(Exec {
             prog: prog,
             dfa: dfa,
             dfa_reverse: dfa_reverse,
             can_dfa: can_dfa,
-            match_engine: match_engine,
+            match_engine: self.match_engine,
         })
     }
+}
 
-    pub fn regex_str(&self) -> &str {
-        &self.prog.original
-    }
-
-    pub fn capture_names(&self) -> &[Option<String>] {
-        &self.prog.cap_names
-    }
-
-    pub fn alloc_captures(&self) -> Vec<Option<usize>> {
-        self.prog.alloc_captures()
-    }
-
+impl Exec {
+    /// The main entry point for execution of a regular expression on text.
+    ///
+    /// caps represents the capture locations that the caller wants. Generally,
+    /// there are three varieties: no captures requested (e.g., `is_match`),
+    /// one capture requested (e.g., `find` or `find_iter`) or multiple
+    /// captures requested (e.g., `captures` or `captures_iter` along with
+    /// at least one capturing group in the regex). Each of these three cases
+    /// provokes different behavior from the matching engines, where fewer
+    /// captures generally means faster matching.
+    ///
+    /// text should be the search text and start should be the position in
+    /// the text to start searching. Note that passing a simple slice here
+    /// isn't sufficient, since look-behind assertions sometimes need to
+    /// inspect the character immediately preceding the start location.
+    ///
+    /// Note that this method takes self.match_engine into account when
+    /// choosing the engine to use. If self.match_engine is Nfa or Backtrack,
+    /// then that engine is always used. Otherwise, one is selected
+    /// automatically.
     pub fn exec(
         &self,
         caps: &mut CaptureIdxs,
         text: &str,
         start: usize,
     ) -> bool {
-        // Why is the DFA or literal engine checked for here? Well, it's only
-        // possible to execute those engines in exec_auto. See comment on
+        // Why isn't the DFA or literal engine checked for here? Well, it's
+        // only possible to execute those engines in exec_auto. See comment on
         // MatchEngine below for more details.
         match self.match_engine {
             MatchEngine::Automatic => self.exec_auto(caps, text, start),
@@ -116,6 +205,7 @@ impl Executor {
         }
     }
 
+    /// Like exec, but always selects the engine automatically.
     pub fn exec_auto(
         &self,
         caps: &mut CaptureIdxs,
@@ -123,6 +213,10 @@ impl Executor {
         start: usize,
     ) -> bool {
         if caps.len() <= 2 && self.prog.is_prefix_match() {
+            // We should be able to execute the literal engine even if there
+            // are more captures by falling back to the NFA engine after a
+            // match. However, that's effectively what the NFA engine does
+            // already (since it will use the literal engine if it exists).
             self.exec_literals(caps, text, start)
         } else if self.can_dfa {
             self.exec_dfa(caps, text, start)
@@ -131,6 +225,9 @@ impl Executor {
         }
     }
 
+    /// Like exec, but always tries to execute the lazy DFA.
+    ///
+    /// Note that self.can_dfa must be true. This will panic otherwise.
     fn exec_dfa(
         &self,
         caps: &mut CaptureIdxs,
@@ -179,6 +276,8 @@ impl Executor {
             }
         };
         if caps.len() == 2 {
+            // If the caller doesn't care about capture locations, then we can
+            // avoid running the NFA to fill them in.
             caps[0] = Some(match_start);
             caps[1] = Some(match_end);
             return true;
@@ -201,6 +300,7 @@ impl Executor {
         }
     }
 
+    /// Always run the NFA algorithm.
     fn exec_nfa(
         &self,
         caps: &mut CaptureIdxs,
@@ -214,6 +314,7 @@ impl Executor {
         }
     }
 
+    /// Always runs the NFA using bounded backtracking.
     fn exec_backtrack(
         &self,
         caps: &mut CaptureIdxs,
@@ -227,12 +328,20 @@ impl Executor {
         }
     }
 
+    /// Executes the special literal matching engine.
+    ///
+    /// When a regular expression is small and can be expanded to a finite set
+    /// of literals that all result in matches, then we can avoid all of the
+    /// regex machinery and use specialized DFAs.
+    ///
+    /// This panics if the set of literals do not correspond to matches.
     fn exec_literals(
         &self,
         caps: &mut CaptureIdxs,
         text: &str,
         start: usize,
     ) -> bool {
+        debug_assert!(self.prog.is_prefix_match());
         match self.prog.prefixes.find(&text.as_bytes()[start..]) {
             None => false,
             Some((s, e)) => {
@@ -243,6 +352,22 @@ impl Executor {
                 true
             }
         }
+    }
+
+    pub fn into_regex(self) -> Regex {
+        Regex::Dynamic(self)
+    }
+
+    pub fn regex_str(&self) -> &str {
+        &self.prog.original
+    }
+
+    pub fn capture_names(&self) -> &[Option<String>] {
+        &self.prog.cap_names
+    }
+
+    pub fn alloc_captures(&self) -> Vec<Option<usize>> {
+        self.prog.alloc_captures()
     }
 }
 
@@ -259,7 +384,7 @@ impl Executor {
 /// DFA or literal engines is to use Automatic.
 #[doc(hidden)]
 #[derive(Clone, Copy, Debug)]
-pub enum MatchEngine {
+enum MatchEngine {
     /// Automatically choose the best matching engine based on heuristics.
     Automatic,
     /// A bounded backtracking implementation. About twice as fast as the

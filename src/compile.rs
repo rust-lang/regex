@@ -431,13 +431,8 @@ impl Compiler {
         //     8: MATCH
         //
         // This is *incredibly* inefficient because the splits end
-        // up forming a chain. Given a much larger number than `5`,
-        // it is easy cause perverse behavior in the matching engines
-        // like stack overflows. We could fix the matching engine,
-        // but instead, we should just make the program smarter.
-        // Thus, we do a custom job here and instead of chaining the
-        // splits together, we simply point them to the MATCH
-        // instruction directly (for example).
+        // up forming a chain, which has to be resolved everything a
+        // transition is followed.
         let mut holes = vec![];
         let mut prev_hole = patch_concat.hole;
         for _ in min..max {
