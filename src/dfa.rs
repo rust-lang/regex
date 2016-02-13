@@ -297,10 +297,11 @@ impl DfaCache {
     /// the initial creation of the cache with knowledge about the program, so
     /// we resize it once.
     fn resize(&mut self, num_insts: usize) {
-        if num_insts != self.qcur.capacity() {
-            self.qcur = SparseSet::new(num_insts);
-            self.qnext = SparseSet::new(num_insts);
+        if num_insts == self.qcur.capacity() {
+            return;
         }
+        self.qcur = SparseSet::new(num_insts);
+        self.qnext = SparseSet::new(num_insts);
     }
 }
 
@@ -549,7 +550,7 @@ impl<'a> Dfa<'a> {
             // sure we only follow transitions that satisfy our flags.
             qnext.clear();
             for &ip in &*qcur {
-                self.follow_epsilon_transitions(ip, qnext, flags);
+                self.follow_epsilons(ip, qnext, flags);
             }
             mem::swap(qcur, qnext);
         }
@@ -585,7 +586,7 @@ impl<'a> Dfa<'a> {
                 }
                 Bytes(ref inst) => {
                     if b.as_byte().map_or(false, |b| inst.matches(b)) {
-                        self.follow_epsilon_transitions(
+                        self.follow_epsilons(
                             inst.goto as InstPtr, qnext, flags);
                     }
                 }
@@ -629,7 +630,7 @@ impl<'a> Dfa<'a> {
     /// line should be set if the preceding byte is `\n`. End line should never
     /// be set in this case. (Even if the proceding byte is a `\n`, it will
     /// be handled in a subsequent DFA state.)
-    fn follow_epsilon_transitions(
+    fn follow_epsilons(
         &mut self,
         ip: InstPtr,
         q: &mut SparseSet<InstPtr>,
@@ -928,7 +929,7 @@ impl<'a> Dfa<'a> {
             si => return si,
         }
         q.clear();
-        self.follow_epsilon_transitions(0, q, start_flags);
+        self.follow_epsilons(0, q, start_flags);
         // Start states can never be match states because we delay every match
         // by one byte. Given an empty string and an empty match, the match
         // won't actually occur until the DFA processes the special EOF

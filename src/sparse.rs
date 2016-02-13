@@ -8,20 +8,16 @@ pub struct SparseSet<T> {
     size: usize,
 }
 
-pub trait SparseIndexed: Clone + Default {
+pub trait SparseIndexed: Clone + Copy + Default {
     fn index(&self) -> usize;
 }
 
 impl SparseIndexed for usize {
-    fn index(&self) -> usize {
-        *self
-    }
+    fn index(&self) -> usize { *self }
 }
 
 impl SparseIndexed for u32 {
-    fn index(&self) -> usize {
-        *self as usize
-    }
+    fn index(&self) -> usize { *self as usize }
 }
 
 impl<T: SparseIndexed> SparseSet<T> {
@@ -37,11 +33,13 @@ impl<T: SparseIndexed> SparseSet<T> {
         self.size
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.size == 0
+    }
+
     pub fn capacity(&self) -> usize {
         self.dense.len()
     }
-
-    // pub fn resize(&mut self,
 
     pub fn add(&mut self, v: T) -> usize {
         let i = self.size;
@@ -50,6 +48,10 @@ impl<T: SparseIndexed> SparseSet<T> {
         self.sparse[sparse_index] = i;
         self.size += 1;
         i
+    }
+
+    pub fn get(&mut self, i: usize) -> T {
+        self.dense[i]
     }
 
     pub fn contains_sparse_index(&self, sparse_index: usize) -> bool {

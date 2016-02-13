@@ -230,10 +230,12 @@ macro_rules! throughput(
     ($name:ident, $regex:expr, $size:expr) => (
         #[bench]
         fn $name(b: &mut Bencher) {
-            let text = gen_text($size);
+            lazy_static! {
+                static ref RE: Regex = $regex;
+                static ref TEXT: String = gen_text($size);
+            };
             b.bytes = $size;
-            let re = $regex;
-            b.iter(|| if re.is_match(&text) { panic!("match") });
+            b.iter(|| if RE.is_match(&TEXT) { panic!("match") });
         }
     );
 );
