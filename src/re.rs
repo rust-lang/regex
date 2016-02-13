@@ -1082,31 +1082,29 @@ impl<'r, 't> Iterator for FindCaptures<'r, 't> {
     type Item = Captures<'t>;
 
     fn next(&mut self) -> Option<Captures<'t>> {
-        let mut start = self.last_end;
         if self.skip_next_char {
-            start += self.search[start..].chars().next()
-                                         .map(|c| c.len_utf8()).unwrap_or(1);
+            let c = self.search[self.last_end..].chars().next();
+            self.last_end += c.map(|c| c.len_utf8()).unwrap_or(1);
         }
-        if start > self.search.len() {
+        if self.last_end > self.search.len() {
             return None
         }
 
         let mut caps = self.re.alloc_captures();
-        if !exec(self.re, &mut caps, self.search, start) {
+        if !exec(self.re, &mut caps, self.search, self.last_end) {
             return None
         }
         let (s, e) = (caps[0].unwrap(), caps[1].unwrap());
 
         // Don't accept empty matches immediately following a match.
         // i.e., no infinite loops please.
-        if e == start && e > 0 && !self.skip_next_char {
+        if e == self.last_end && e > 0 && !self.skip_next_char {
             self.skip_next_char = true;
-            self.next()
-        } else {
-            self.last_end = e;
-            self.skip_next_char = s == e;
-            Some(Captures::new(self.re, self.search, caps))
+            return self.next()
         }
+        self.last_end = e;
+        self.skip_next_char = s == e;
+        Some(Captures::new(self.re, self.search, caps))
     }
 }
 
@@ -1129,31 +1127,29 @@ impl<'r, 't> Iterator for FindMatches<'r, 't> {
     type Item = (usize, usize);
 
     fn next(&mut self) -> Option<(usize, usize)> {
-        let mut start = self.last_end;
         if self.skip_next_char {
-            start += self.search[start..].chars().next()
-                                         .map(|c| c.len_utf8()).unwrap_or(1);
+            let c = self.search[self.last_end..].chars().next();
+            self.last_end += c.map(|c| c.len_utf8()).unwrap_or(1);
         }
-        if start > self.search.len() {
+        if self.last_end > self.search.len() {
             return None
         }
 
         let mut caps = [None, None];
-        if !exec(self.re, &mut caps, self.search, start) {
-            return None;
+        if !exec(self.re, &mut caps, self.search, self.last_end) {
+            return None
         }
         let (s, e) = (caps[0].unwrap(), caps[1].unwrap());
 
         // Don't accept empty matches immediately following a match.
         // i.e., no infinite loops please.
-        if e == start && e > 0 && !self.skip_next_char {
+        if e == self.last_end && e > 0 && !self.skip_next_char {
             self.skip_next_char = true;
-            self.next()
-        } else {
-            self.last_end = e;
-            self.skip_next_char = s == e;
-            Some((s, e))
+            return self.next()
         }
+        self.last_end = e;
+        self.skip_next_char = s == e;
+        Some((s, e))
     }
 }
 
