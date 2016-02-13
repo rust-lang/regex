@@ -489,8 +489,7 @@ impl Regex {
                          -> RegexSplitsN<'r, 't> {
         RegexSplitsN {
             splits: self.split(text),
-            cur: 0,
-            limit: limit,
+            n: limit,
         }
     }
 
@@ -785,24 +784,22 @@ impl<'r, 't> Iterator for RegexSplits<'r, 't> {
 /// of the string being split.
 pub struct RegexSplitsN<'r, 't> {
     splits: RegexSplits<'r, 't>,
-    cur: usize,
-    limit: usize,
+    n: usize,
 }
 
 impl<'r, 't> Iterator for RegexSplitsN<'r, 't> {
     type Item = &'t str;
 
     fn next(&mut self) -> Option<&'t str> {
-        let text = self.splits.finder.search;
-        if self.cur >= self.limit {
-            None
+        if self.n == 0 {
+            return None
+        }
+        self.n -= 1;
+        if self.n == 0 {
+            let text = self.splits.finder.search;
+            Some(&text[self.splits.last..])
         } else {
-            self.cur += 1;
-            if self.cur >= self.limit {
-                Some(&text[self.splits.last..])
-            } else {
-                self.splits.next()
-            }
+            self.splits.next()
         }
     }
 }
