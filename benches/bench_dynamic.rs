@@ -10,13 +10,11 @@
 
 #![feature(test)]
 
+#[macro_use] extern crate lazy_static;
 extern crate rand;
 extern crate regex;
 extern crate regex_syntax;
 extern crate test;
-
-#[macro_use] extern crate lazy_static;
-
 
 // Due to macro scoping rules, this definition only applies for the modules
 // defined below. Effectively, it allows us to use the same tests for both

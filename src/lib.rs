@@ -444,5 +444,4 @@ pub mod internal {
     pub use inst::{Inst, EmptyLook, InstRanges};
     pub use program::{Program, ProgramBuilder};
     pub use re::ExNative;
-    pub use re::Regex::{Dynamic, Native};
 }

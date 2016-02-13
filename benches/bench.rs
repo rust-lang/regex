@@ -234,6 +234,8 @@ macro_rules! throughput(
                 static ref RE: Regex = $regex;
                 static ref TEXT: String = gen_text($size);
             };
+            // let re = $regex;
+            // let text = gen_text($size);
             b.bytes = $size;
             b.iter(|| if RE.is_match(&TEXT) { panic!("match") });
         }

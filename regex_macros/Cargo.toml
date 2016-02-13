@@ -7,21 +7,15 @@ repository = "https://github.com/rust-lang/regex"
 homepage = "https://github.com/rust-lang/regex"
 description = """
 An implementation of statically compiled regular expressions for Rust.
+
+Unless you specifically need compile time regular expressions or a matching
+engine that is guaranteed not to allocate, you should temporarily prefer using
+the plain regex crate (since it is almost always faster).
 """
 
 [lib]
 name = "regex_macros"
 plugin = true
-
-[[test]]
-path = "tests/test_native.rs"
-name = "all"
-
-[[bench]]
-name = "all"
-path = "benches/bench_native.rs"
-test = false
-bench = true
 
 [dependencies.regex]
 path = ".."
@@ -29,4 +23,16 @@ version = "0.1"
 features = ["pattern"]
 
 [dev-dependencies]
+lazy_static = "0.1"
 rand = "0.3"
+regex-syntax = { path = "../regex-syntax", version = "0.2" }
+
+[[test]]
+path = "../tests/test_native.rs"
+name = "all"
+
+[[bench]]
+name = "all"
+path = "../benches/bench_native.rs"
+test = false
+bench = true
