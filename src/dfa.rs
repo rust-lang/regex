@@ -364,7 +364,7 @@ impl<'a> Dfa<'a> {
         qcur: &mut SparseSet,
         qnext: &mut SparseSet,
         text: &[u8],
-        mut at: usize,
+        at: usize,
     ) -> DfaResult {
         // For the most part, the DFA is basically:
         //
@@ -459,7 +459,7 @@ impl<'a> Dfa<'a> {
         qcur: &mut SparseSet,
         qnext: &mut SparseSet,
         text: &[u8],
-        mut at: usize,
+        at: usize,
     ) -> DfaResult {
         // The comments in `exec_at` above mostly apply here too. The main
         // difference is that we move backwards over the input and we look for
@@ -1040,18 +1040,8 @@ impl Flags {
     }
 
     #[inline]
-    fn is_empty(&self) -> bool {
-        self.0 == 0
-    }
-
-    #[inline]
     fn has_non_match_flags(&self) -> bool {
         self.0 & 0b0_1111111 > 0
-    }
-
-    #[inline]
-    fn clear(&mut self) {
-        self.0 = 0;
     }
 
     #[inline]

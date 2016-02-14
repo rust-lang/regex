@@ -232,7 +232,7 @@ impl Exec {
         &self,
         caps: &mut CaptureIdxs,
         text: &str,
-        mut start: usize,
+        start: usize,
     ) -> bool {
         debug_assert!(self.can_dfa);
         let btext = text.as_bytes();
@@ -354,18 +354,25 @@ impl Exec {
         }
     }
 
+    /// Build a dynamic Regex from this executor.
     pub fn into_regex(self) -> Regex {
         Regex::Dynamic(self)
     }
 
+    /// Return the original regular expression string.
     pub fn regex_str(&self) -> &str {
         &self.prog.original
     }
 
+    /// Return a slice of capture names.
+    ///
+    /// Any capture that isn't named is None.
     pub fn capture_names(&self) -> &[Option<String>] {
         &self.prog.cap_names
     }
 
+    /// Return a fresh allocation for storing all possible captures in the
+    /// underlying regular expression.
     pub fn alloc_captures(&self) -> Vec<Option<usize>> {
         self.prog.alloc_captures()
     }

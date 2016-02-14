@@ -50,12 +50,17 @@ pub struct Program {
     pub cache: EngineCache,
 }
 
+/// A builder for compiling a regular expression program.
 pub struct ProgramBuilder {
     re: String,
     compiler: Compiler,
 }
 
 impl ProgramBuilder {
+    /// Create a new program builder for the given regular expression.
+    ///
+    /// Afer new is called, it is legal to call compile immediately. Default
+    /// values for other knobs are set automatically.
     pub fn new(re: &str) -> Self {
         ProgramBuilder {
             re: re.to_owned(),
@@ -63,27 +68,46 @@ impl ProgramBuilder {
         }
     }
 
+    /// Set a size limit that the compiler uses to limit the total number of
+    /// bytes occupied by the opcodes for this regex.
     pub fn size_limit(mut self, size_limit: usize) -> Self {
         self.compiler = self.compiler.size_limit(size_limit);
         self
     }
 
+    /// Enable compilation of a byte based program.
+    ///
+    /// By default, programs operate on Unicode codepoints.
     pub fn bytes(mut self, yes: bool) -> Self {
         self.compiler = self.compiler.bytes(yes);
         self
     }
 
+    /// Enable compilation of a byte based DFA program.
+    ///
+    /// This does instruct the compiler to compile a byte based program, but
+    /// it also does other things that are specifically required by the lazy
+    /// DFA, such as adding a `.*?` before the first capture save for
+    /// unanchored regular expressions.
     pub fn dfa(mut self, yes: bool) -> Self {
         self.compiler = self.compiler.dfa(yes);
         self
     }
 
+    /// Compile the regular expression in reverse.
+    ///
+    /// This is generally only used by the lazy DFA to find the start location
+    /// of a match.
     pub fn reverse(mut self, yes: bool) -> Self {
         self.compiler = self.compiler.reverse(yes);
         self
     }
 
-    pub fn compile(mut self) -> Result<Program, Error> {
+    /// Compile the given regular expression under the given configuration.
+    ///
+    /// If the regular expression could not be compiled (e.g., it is too big),
+    /// then return an error.
+    pub fn compile(self) -> Result<Program, Error> {
         let expr = try!(syntax::Expr::parse(&self.re));
         let Compiled { insts, cap_names } = try!(self.compiler.compile(&expr));
         let (prefixes, anchored_begin, anchored_end) = (
@@ -104,10 +128,16 @@ impl ProgramBuilder {
 }
 
 impl Program {
+    /// Returns true if the set of literal prefixes implies a match and
+    /// preserves leftmost first matching semantics.
+    ///
+    /// If this returns true, then it is possible to avoid running any of the
+    /// NFA or DFA based matching engines entirely.
     pub fn is_prefix_match(&self) -> bool {
         self.prefixes.at_match() && self.prefixes.preserves_priority()
     }
 
+    /// Returns true if the underlying program is reversed.
     pub fn is_reversed(&self) -> bool {
         self.insts.is_reversed()
     }

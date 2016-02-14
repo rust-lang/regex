@@ -902,7 +902,10 @@ impl<'t> Captures<'t> {
     /// name and the value. The iterator returns these values in arbitrary
     /// order.
     pub fn iter_named(&'t self) -> SubCapturesNamed<'t> {
-        SubCapturesNamed { caps: self, inner: self.named.as_ref().map(|n| n.iter()) }
+        SubCapturesNamed {
+            caps: self,
+            inner: self.named.as_ref().map(|n| n.iter()),
+        }
     }
 
     /// Expands all instances of `$name` in `text` to the corresponding capture

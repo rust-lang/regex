@@ -83,6 +83,7 @@ pub trait Input {
     /// The number of bytes in the input.
     fn len(&self) -> usize;
 
+    /// Return the given input as a sequence of bytes.
     fn as_bytes(&self) -> &[u8];
 }
 

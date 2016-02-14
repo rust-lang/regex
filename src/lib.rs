@@ -110,8 +110,8 @@
 //!
 //! ```toml
 //! [dependencies]
-//! regex = "0.1.8"
-//! regex_macros = "0.1.8"
+//! regex = "0.1"
+//! regex_macros = "0.1"
 //! ```
 //!
 //! and then enable the `plugin` feature and import the `regex_macros` crate as
@@ -230,18 +230,17 @@
 //!
 //! # Unicode
 //!
-//! This implementation executes regular expressions **only** on sequences of
-//! Unicode scalar values while exposing match locations as byte indices into
-//! the search string.
+//! This implementation executes regular expressions **only** on valid UTF-8
+//! while exposing match locations as byte indices into the search string.
 //!
 //! Currently, only simple case folding is supported. Namely, when matching
 //! case-insensitively, the characters are first mapped using the
 //! [simple case folding](ftp://ftp.unicode.org/Public/UNIDATA/CaseFolding.txt)
 //! mapping.
 //!
-//! Regular expressions themselves are also **only** interpreted as a sequence
-//! of Unicode scalar values. This means you can use Unicode characters
-//! directly in your expression:
+//! Regular expressions themselves are **only** interpreted as a sequence of
+//! Unicode scalar values. This means you can use Unicode characters directly
+//! in your expression:
 //!
 //! ```rust
 //! # extern crate regex; use regex::Regex;
@@ -269,8 +268,7 @@
 //! with the syntax supported by RE2. It is documented below.
 //!
 //! Note that the regular expression parser and abstract syntax are exposed in
-//! a separate crate,
-//! [`regex-syntax`](../regex_syntax/index.html).
+//! a separate crate, [`regex-syntax`](../regex_syntax/index.html).
 //!
 //! ## Matching one character
 //!
@@ -431,10 +429,16 @@
 //! text`), which means there's no way to cause exponential blow-up like with
 //! some other regular expression engines. (We pay for this by disallowing
 //! features like arbitrary look-ahead and backreferences.)
+//!
+//! When a DFA is used, pathological cases with exponential state blow up are
+//! avoided by constructing the DFA lazily or in an "online" manner. Therefore,
+//! at most one new state can be created for each byte of input. This satisfies
+//! our time complexity guarantees, but can lead to unbounded memory growth
+//! proportional to the size of the input. As a stopgap, the DFA is only
+//! allowed to store a fixed number of states. (When the limit is reached, its
+//! states are wiped and continues on, possibly duplicating previous work.)
 
-#![allow(dead_code, unused_mut, unused_variables, unused_imports)]
-
-// #![deny(missing_docs)]
+#![deny(missing_docs)]
 #![cfg_attr(test, deny(warnings))]
 #![cfg_attr(feature = "pattern", feature(pattern))]
 #![doc(html_logo_url = "https://www.rust-lang.org/logos/rust-logo-128x128-blk-v2.png",
@@ -446,6 +450,7 @@ extern crate memchr;
 extern crate regex_syntax as syntax;
 extern crate utf8_ranges;
 
+// The re module is essentially our public interface.
 pub use re::{
     Regex, Error, Captures, SubCaptures, SubCapturesPos, SubCapturesNamed,
     CaptureNames, FindCaptures, FindMatches,

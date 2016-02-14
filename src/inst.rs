@@ -376,6 +376,8 @@ impl InstRanges {
         }).is_ok()
     }
 
+    /// Return the number of distinct characters represented by all of the
+    /// ranges.
     pub fn num_chars(&self) -> usize {
         self.ranges.iter()
             .map(|&(s, e)| 1 + (e as u32) - (s as u32))
