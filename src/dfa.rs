@@ -63,7 +63,7 @@ use sparse::SparseSet;
 ///
 /// TODO(burntsushi): This feels like a knob that a caller ought to be able to
 /// configure.
-const CACHE_LIMIT: usize = 2 * (1<<50);
+const CACHE_LIMIT: usize = 2 * (1<<20);
 
 /// Return true if and only if the given program can be executed by a DFA.
 ///
