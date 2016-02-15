@@ -35,7 +35,7 @@
 //! extern crate regex;
 //! ```
 //!
-//! # First example: find a date
+//! # Example: find a date
 //!
 //! General use of regular expressions in this package involves compiling an
 //! expression and then using it to search, split or replace text. For example,
@@ -59,6 +59,40 @@
 //! not process any escape sequences. For example, `"\\d"` is the same
 //! expression as `r"\d"`.
 //!
+//! # Example: Avoid compiling the same regex in a loop
+//!
+//! It is an anti-pattern to compile the same regular expression in a loop
+//! since compilation is typically expensive. (It takes anywhere from a few
+//! microseconds to a few **milliseconds** depending on the size of the
+//! regex.) Not only is compilation itself expensive, but this also prevents
+//! optimizations that reuse allocations internally to the matching engines.
+//!
+//! In Rust, it can sometimes be a pain to pass regular expressions around if
+//! they're used from inside a helper function. Instead, we recommend using the
+//! [`lazy_static`](https://crates.io/crates/lazy_static) crate to ensure that
+//! regular expressions are compiled exactly once.
+//!
+//! For example:
+//!
+//! ```rust
+//! #[macro_use] extern crate lazy_static;
+//! extern crate regex;
+//!
+//! use regex::Regex;
+//!
+//! fn some_helper_function(text: &str) -> bool {
+//!     lazy_static! {
+//!         static ref RE: Regex = Regex::new("...").unwrap();
+//!     }
+//!     RE.is_match(text)
+//! }
+//!
+//! fn main() {}
+//! ```
+//!
+//! Specifically, in this example, the regex will be compiled when it is used for
+//! the first time. On subsequent uses, it will reuse the previous compilation.
+//!
 //! # The `regex!` macro
 //!
 //! Rust's compile-time meta-programming facilities provide a way to write a
@@ -69,15 +103,15 @@
 //! given expression to native Rust code, which ideally makes it faster.
 //! Unfortunately (or fortunately), the dynamic implementation has had a lot
 //! more optimization work put into it currently, so it is faster than
-//! the `regex!` macro in most cases.
+//! the `regex!` macro in almost every case.
 //!
 //! To use the `regex!` macro, you must add `regex_macros` to your dependencies
 //! in your project's `Cargo.toml`:
 //!
 //! ```toml
 //! [dependencies]
-//! regex = "0.1.8"
-//! regex_macros = "0.1.8"
+//! regex = "0.1"
+//! regex_macros = "0.1"
 //! ```
 //!
 //! and then enable the `plugin` feature and import the `regex_macros` crate as
@@ -107,7 +141,7 @@
 //!
 //! **NOTE**: This is implemented using a compiler plugin, which is not
 //! available on the Rust 1.0 beta/stable channels. Therefore, you'll only
-//! be able to use `regex!` on the nightlies.
+//! be able to use `regex!` on the nightly Rust releases.
 //!
 //! # Example: iterating over capture groups
 //!
@@ -196,18 +230,17 @@
 //!
 //! # Unicode
 //!
-//! This implementation executes regular expressions **only** on sequences of
-//! Unicode scalar values while exposing match locations as byte indices into
-//! the search string.
+//! This implementation executes regular expressions **only** on valid UTF-8
+//! while exposing match locations as byte indices into the search string.
 //!
 //! Currently, only simple case folding is supported. Namely, when matching
 //! case-insensitively, the characters are first mapped using the
 //! [simple case folding](ftp://ftp.unicode.org/Public/UNIDATA/CaseFolding.txt)
 //! mapping.
 //!
-//! Regular expressions themselves are also **only** interpreted as a sequence
-//! of Unicode scalar values. This means you can use Unicode characters
-//! directly in your expression:
+//! Regular expressions themselves are **only** interpreted as a sequence of
+//! Unicode scalar values. This means you can use Unicode characters directly
+//! in your expression:
 //!
 //! ```rust
 //! # extern crate regex; use regex::Regex;
@@ -235,8 +268,7 @@
 //! with the syntax supported by RE2. It is documented below.
 //!
 //! Note that the regular expression parser and abstract syntax are exposed in
-//! a separate crate,
-//! [`regex-syntax`](../regex_syntax/index.html).
+//! a separate crate, [`regex-syntax`](../regex_syntax/index.html).
 //!
 //! ## Matching one character
 //!
@@ -397,6 +429,14 @@
 //! text`), which means there's no way to cause exponential blow-up like with
 //! some other regular expression engines. (We pay for this by disallowing
 //! features like arbitrary look-ahead and backreferences.)
+//!
+//! When a DFA is used, pathological cases with exponential state blow up are
+//! avoided by constructing the DFA lazily or in an "online" manner. Therefore,
+//! at most one new state can be created for each byte of input. This satisfies
+//! our time complexity guarantees, but can lead to unbounded memory growth
+//! proportional to the size of the input. As a stopgap, the DFA is only
+//! allowed to store a fixed number of states. (When the limit is reached, its
+//! states are wiped and continues on, possibly duplicating previous work.)
 
 #![deny(missing_docs)]
 #![cfg_attr(test, deny(warnings))]
@@ -408,7 +448,9 @@
 extern crate aho_corasick;
 extern crate memchr;
 extern crate regex_syntax as syntax;
+extern crate utf8_ranges;
 
+// The re module is essentially our public interface.
 pub use re::{
     Regex, Error, Captures, SubCaptures, SubCapturesPos, SubCapturesNamed,
     CaptureNames, FindCaptures, FindMatches,
@@ -418,23 +460,27 @@ pub use re::{
 
 mod backtrack;
 mod char;
+mod char_utf8;
 mod compile;
+mod dfa;
+mod exec;
 mod input;
 mod inst;
-mod pool;
-mod prefix;
-mod program;
+mod literals;
 mod nfa;
+mod pool;
+mod program;
 mod re;
+mod sparse;
 
 /// The `internal` module exists to support the `regex!` macro and other
 /// suspicious activity, such as testing different matching engines.
 #[doc(hidden)]
 pub mod internal {
     pub use char::Char;
+    pub use exec::{Exec, ExecBuilder};
     pub use input::{Input, CharInput, InputAt};
     pub use inst::{Inst, EmptyLook, InstRanges};
-    pub use program::{Program, MatchEngine};
+    pub use program::{Program, ProgramBuilder};
     pub use re::ExNative;
-    pub use re::Regex::{Dynamic, Native};
 }

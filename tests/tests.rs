@@ -276,6 +276,37 @@ noparse!(fail_range_end_no_begin, r"[a-\A]");
 noparse!(fail_range_end_no_end, r"[a-\z]");
 noparse!(fail_range_end_no_boundary, r"[a-\b]");
 
+macro_rules! matiter(
+    ($name:ident, $re:expr, $text:expr) => (
+        #[test]
+        fn $name() {
+            let text = $text;
+            let expected: Vec<(usize, usize)> = vec![];
+            let r = regex!($re);
+            let got: Vec<_> = r.find_iter(text).collect();
+            if expected != got {
+                panic!("For RE '{}' against '{:?}', \
+                        expected '{:?}' but got '{:?}'",
+                       $re, text, expected, got);
+            }
+        }
+    );
+    ($name:ident, $re:expr, $text:expr, $($loc:tt)+) => (
+        #[test]
+        fn $name() {
+            let text = $text;
+            let expected: Vec<_> = vec!($($loc)+);
+            let r = regex!($re);
+            let got: Vec<_> = r.find_iter(text).collect();
+            if expected != got {
+                panic!("For RE '{}' against '{:?}', \
+                        expected '{:?}' but got '{:?}'",
+                       $re, text, expected, got);
+            }
+        }
+    );
+);
+
 macro_rules! mat(
     ($name:ident, $re:expr, $text:expr, $($loc:tt)+) => (
         #[test]
@@ -342,11 +373,69 @@ mat!(match_flag_ungreedy, "(?U)a+", "aa", Some((0, 1)));
 mat!(match_flag_ungreedy_greedy, "(?U)a+?", "aa", Some((0, 2)));
 mat!(match_flag_ungreedy_noop, "(?U)(?-U)a+", "aa", Some((0, 2)));
 
+// More exercising of multi-line flag.
+matiter!(match_multi_1, r"(?m)^[a-z]+$", "abc\ndef\nxyz",
+         (0, 3), (4, 7), (8, 11));
+matiter!(match_multi_2, r"(?m)^$", "abc\ndef\nxyz");
+matiter!(match_multi_3, r"(?m)^", "abc\ndef\nxyz",
+         (0, 0), (4, 4), (8, 8));
+matiter!(match_multi_4, r"(?m)$", "abc\ndef\nxyz",
+         (3, 3), (7, 7), (11, 11));
+matiter!(match_multi_5, r"(?m)^[a-z]", "abc\ndef\nxyz",
+         (0, 1), (4, 5), (8, 9));
+matiter!(match_multi_6, r"(?m)[a-z]^", "abc\ndef\nxyz");
+matiter!(match_multi_7, r"(?m)[a-z]$", "abc\ndef\nxyz",
+         (2, 3), (6, 7), (10, 11));
+matiter!(match_multi_8, r"(?m)$[a-z]", "abc\ndef\nxyz");
+matiter!(match_multi_9, r"(?m)^$", "", (0, 0));
+
+matiter!(match_multi_rep_1, r"(?m)(?:^$)*", "a\nb\nc",
+         (0, 0), (1, 1), (2, 2), (3, 3), (4, 4), (5, 5));
+matiter!(match_multi_rep_2, r"(?m)(?:^|a)+", "a\naaa\n",
+         (0, 0), (2, 2), (3, 5), (6, 6));
+matiter!(match_multi_rep_3, r"(?m)(?:^|a)*", "a\naaa\n",
+         (0, 1), (2, 5), (6, 6));
+matiter!(match_multi_rep_4, r"(?m)(?:^[a-z])+", "abc\ndef\nxyz",
+         (0, 1), (4, 5), (8, 9));
+matiter!(match_multi_rep_5, r"(?m)(?:^[a-z]{3}\n?)+", "abc\ndef\nxyz",
+         (0, 11));
+matiter!(match_multi_rep_6, r"(?m)(?:^[a-z]{3}\n?)*", "abc\ndef\nxyz",
+         (0, 11));
+matiter!(match_multi_rep_7, r"(?m)(?:\n?[a-z]{3}$)+", "abc\ndef\nxyz",
+         (0, 11));
+matiter!(match_multi_rep_8, r"(?m)(?:\n?[a-z]{3}$)*", "abc\ndef\nxyz",
+         (0, 11));
+matiter!(match_multi_rep_9, r"(?m)^*", "\naa\n",
+         (0, 0), (1, 1), (2, 2), (3, 3), (4, 4));
+matiter!(match_multi_rep_10, r"(?m)^+", "\naa\n",
+         (0, 0), (1, 1), (4, 4));
+matiter!(match_multi_rep_11, r"(?m)$*", "\naa\n",
+         (0, 0), (1, 1), (2, 2), (3, 3), (4, 4));
+matiter!(match_multi_rep_12, r"(?m)$+", "\naa\n",
+         (0, 0), (3, 3), (4, 4));
+matiter!(match_multi_rep_13, r"(?m)(?:$\n)+", "\n\naaa\n\n",
+         (0, 2), (5, 7));
+matiter!(match_multi_rep_14, r"(?m)(?:$\n)*", "\n\naaa\n\n",
+         (0, 2), (3, 3), (4, 4), (5, 7));
+matiter!(match_multi_rep_15, r"(?m)(?:$\n^)+", "\n\naaa\n\n",
+         (0, 2), (5, 7));
+matiter!(match_multi_rep_16, r"(?m)(?:^|$)+", "\n\naaa\n\n",
+         (0, 0), (1, 1), (2, 2), (5, 5), (6, 6), (7, 7));
+// matiter!(match_multi_rep_14, r"(?m)(?:$\n)*", "\n\naaa\n\n",
+         // (0, 2), (3, 3), (4, 4), (5, 7));
+
+matiter!(match_start_end_empty, r"^$", "", (0, 0));
+matiter!(match_start_end_empty_many_1, r"^$^$^$", "", (0, 0));
+matiter!(match_start_end_empty_many_2, r"^^^$$$", "", (0, 0));
+matiter!(match_start_end_empty_rev, r"$^", "", (0, 0));
+matiter!(match_start_end_empty_rep, r"(?:^$)*", "a\nb\nc",
+         (0, 0), (1, 1), (2, 2), (3, 3), (4, 4), (5, 5));
+matiter!(match_start_end_empty_rep_rev, r"(?:$^)*", "a\nb\nc",
+         (0, 0), (1, 1), (2, 2), (3, 3), (4, 4), (5, 5));
+
 // Some Unicode tests.
 // A couple of these are commented out because something in the guts of macro
 // expansion is creating invalid byte strings.
-// mat!(uni_literal, r"Ⅰ", "Ⅰ", Some((0, 3)))
-// mat!(uni_case_not, r"Δ", "δ", None)
 mat!(uni_one, r"\pN", "Ⅰ", Some((0, 3)));
 mat!(uni_mixed, r"\pN+", "Ⅰ1Ⅱ2", Some((0, 8)));
 mat!(uni_not, r"\PN+", "abⅠ", Some((0, 2)));
@@ -408,6 +497,8 @@ fn regression_captures_rep() {
 // Regression test for https://github.com/rust-lang-nursery/regex/issues/153
 mat!(regression_alt_in_alt1, r"ab?|$", "az", Some((0, 1)));
 mat!(regression_alt_in_alt2, r"^(.*?)(\n|\r\n?|$)", "ab\rcd", Some((0, 3)));
+
+mat!(one_unicode, r"☃", "☃", Some((0, 3)));
 
 // A whole mess of tests from Glenn Fowler's regex test suite.
 // Generated by the 'src/etc/regex-match-tests' program.

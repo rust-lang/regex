@@ -13,18 +13,12 @@ script:
   - cargo test --verbose --manifest-path=regex-syntax/Cargo.toml
   - cargo doc --verbose --manifest-path=regex-syntax/Cargo.toml
   - if [ "$TRAVIS_RUST_VERSION" = "nightly" ]; then
-      cargo test --verbose --features pattern;
-      cargo bench --verbose;
+      travis_wait cargo test --verbose --features pattern;
+      travis_wait cargo bench --verbose --bench dynamic;
+      travis_wait cargo bench --manifest-path=regex-pcre-benchmark/Cargo.toml --verbose
       travis_wait cargo test --verbose --manifest-path=regex_macros/Cargo.toml;
-      travis_wait cargo bench --verbose --manifest-path=regex_macros/Cargo.toml;
+      travis_wait cargo bench --manifest-path=regex_macros/Cargo.toml --verbose --bench native bench::;
     fi
-  # - |
-    # [ $TRAVIS_RUST_VERSION != nightly ] || (
-      # cargo test --verbose --features pattern &&
-      # cargo bench --verbose &&
-      # travis_wait cargo test --verbose --manifest-path=regex_macros/Cargo.toml &&
-      # travis_wait cargo bench --verbose --manifest-path=regex_macros/Cargo.toml
-    # )
 after_success: |
   [ $TRAVIS_BRANCH = master ] &&
   [ $TRAVIS_PULL_REQUEST = false ] &&

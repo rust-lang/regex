@@ -10,20 +10,20 @@
 
 #![feature(test)]
 
+#[macro_use] extern crate lazy_static;
 extern crate rand;
 extern crate regex;
+extern crate regex_syntax;
 extern crate test;
 
 // Due to macro scoping rules, this definition only applies for the modules
 // defined below. Effectively, it allows us to use the same tests for both
 // native and dynamic regexes.
 macro_rules! regex(
-    ($re:expr) => (
-        match ::regex::Regex::new($re) {
-            Ok(re) => re,
-            Err(err) => panic!("{}", err),
-        }
-    );
+    ($re:expr) => {{ ::regex::Regex::new($re).unwrap() }}
 );
 
 mod bench;
+mod bench_dynamic_compile;
+mod bench_dynamic_parse;
+mod bench_sherlock;

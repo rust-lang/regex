@@ -128,7 +128,8 @@ fn parser_never_panics() {
 
 impl Arbitrary for Expr {
     fn arbitrary<G: Gen>(g: &mut G) -> Expr {
-        fix_capture_indices(gen_expr(g, 0, ExprType::Anything)).simplify()
+        let e = fix_capture_indices(gen_expr(g, 0, ExprType::Anything));
+        e.simplify().unwrap()
     }
 
     fn shrink(&self) -> Box<Iterator<Item=Expr>> {
@@ -192,7 +193,7 @@ impl Arbitrary for Expr {
                            }))
             }
         };
-        Box::new(es.map(|e| fix_capture_indices(e).simplify()))
+        Box::new(es.map(|e| fix_capture_indices(e).simplify().unwrap()))
     }
 }
 

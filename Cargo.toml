@@ -8,41 +8,86 @@ repository = "https://github.com/rust-lang/regex"
 documentation = "https://doc.rust-lang.org/regex"
 homepage = "https://github.com/rust-lang/regex"
 description = """
-An implementation of regular expressions for Rust.
+An implementation of regular expressions for Rust. This implementation uses
+finite automata and guarantees linear time matching on all inputs.
 """
 
+[dependencies]
+# For very fast prefix literal matching.
+aho-corasick = "0.5"
+# For skipping along search text quickly when a leading byte is known.
+memchr = "0.1"
+# For parsing regular expressions.
+regex-syntax = { path = "regex-syntax", version = "0.2" }
+# For compiling UTF-8 decoding into automata.
+utf8-ranges = "0.1"
+
+[dev-dependencies]
+# To prevent the benchmarking harness from running setup code more than once.
+# Why? Because it takes too long.
+lazy_static = "0.1"
+# For generating random text to test/benchmark with.
+rand = "0.3"
+
+[features]
+# Enable to use the unstable pattern traits defined in std.
+pattern = []
+
+# Runs unit tests defined inside the regex package.
+# Generally these tests specific pieces of the regex implementation.
 [[test]]
 path = "src/lib.rs"
 name = "regex"
 
+# Run the test suite on the default behavior of Regex::new.
+# This includes a mish mash of NFAs and DFAs, which are chosen automatically
+# based on the regex. We test both of the NFA implementations by forcing their
+# usage with the test definitions below. (We can't test the DFA implementations
+# in the same way since they can't be used for every regex tested.)
 [[test]]
-path = "regex_macros/tests/test_dynamic.rs"
+path = "tests/test_dynamic.rs"
 name = "dynamic"
 
+# Run the test suite on the NFA algorithm over Unicode codepoints.
 [[test]]
-path = "regex_macros/tests/test_dynamic_nfa.rs"
-name = "dynamic_nfa"
+path = "tests/test_dynamic_nfa.rs"
+name = "dynamic-nfa"
 
+# Run the test suite on the NFA algorithm over bytes.
 [[test]]
-path = "regex_macros/tests/test_dynamic_backtrack.rs"
-name = "dynamic_backtrack"
+path = "tests/test_dynamic_nfa_bytes.rs"
+name = "dynamic-nfa-bytes"
 
+# Run the test suite on the backtracking engine over Unicode codepoints.
+[[test]]
+path = "tests/test_dynamic_backtrack.rs"
+name = "dynamic-backtrack"
+
+# Run the test suite on the backtracking engine over bytes.
+[[test]]
+path = "tests/test_dynamic_backtrack_bytes.rs"
+name = "dynamic-backtrack-bytes"
+
+# Run the benchmarks on the default behavior of Regex::new.
+#
+# N.B. These benchmarks were originally taken from Russ Cox.
 [[bench]]
-name = "all"
-path = "regex_macros/benches/bench_dynamic.rs"
+name = "dynamic"
+path = "benches/bench_dynamic.rs"
 test = false
 bench = true
 
-[dependencies]
-aho-corasick = "0.4"
-memchr = "0.1"
-regex-syntax = { path = "regex-syntax", version = "0.2" }
-
-[dev-dependencies]
-rand = "0.3"
-
-[features]
-pattern = []
+# Run the benchmarks on the NFA algorithm. We avoid chasing other permutations.
+#
+# N.B. These can take a *loong* time to run.
+[[bench]]
+name = "dynamic-nfa"
+path = "benches/bench_dynamic_nfa.rs"
+test = false
+bench = true
 
 [profile.bench]
-lto = true
+debug = true
+
+[profile.test]
+debug = true
