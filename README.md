@@ -4,8 +4,9 @@ regex
 A Rust library for parsing, compiling, and executing regular expressions.
 This particular implementation of regular expressions guarantees execution
 in linear time with respect to the size of the regular expression and
-search text. Much of the syntax and implementation is inspired by
-[RE2](https://github.com/google/re2).
+search text by using finite automata. In particular, it makes use of both
+NFAs and DFAs when matching. Much of the syntax and implementation is inspired
+by [RE2](https://github.com/google/re2).
 
 [![Build Status](https://travis-ci.org/rust-lang-nursery/regex.svg?branch=master)](https://travis-ci.org/rust-lang-nursery/regex)
 [![Build status](https://ci.appveyor.com/api/projects/status/22g48bo866qr4u77?svg=true)](https://ci.appveyor.com/project/alexcrichton/regex)
@@ -95,6 +96,38 @@ year: 2010, month: 03, day: 14
 year: 2014, month: 10, day: 14
 ```
 
+### Usage: Avoid compiling the same regex in a loop
+
+It is an anti-pattern to compile the same regular expression in a loop since
+compilation is typically expensive. (It takes anywhere from a few microseconds
+to a few **milliseconds** depending on the size of the regex.) Not only is
+compilation itself expensive, but this also prevents optimizations that reuse
+allocations internally to the matching engines.
+
+In Rust, it can sometimes be a pain to pass regular expressions around if
+they're used from inside a helper function. Instead, we recommend using the
+[`lazy_static`](https://crates.io/crates/lazy_static) crate to ensure that
+regular expressions are compiled exactly once.
+
+For example:
+
+```rust
+#[macro_use] extern crate lazy_static;
+extern crate regex;
+
+use regex::Regex;
+
+fn some_helper_function(text: &str) -> bool {
+    lazy_static! {
+        static ref RE: Regex = Regex::new("...").unwrap();
+    }
+    RE.is_match(text)
+}
+```
+
+Specifically, in this example, the regex will be compiled when it is used for
+the first time. On subsequent uses, it will reuse the previous compilation.
+
 ### Usage: `regex!` compiler plugin
 
 The `regex!` compiler plugin will compile your regexes at compile time. **This
@@ -123,6 +156,11 @@ fn main() {
 
 Notice that we never `unwrap` the result of `regex!`. This is because your
 *program* won't compile if the regex doesn't compile. (Try `regex!("(")`.)
+
+Due to recent optimizations in the `regex` crate, the normal "dynamic" regex
+created via `Regex::new(...)` is faster in almost all cases than `regex!(...)`.
+In theory, this should be temporary, but the path to fixing it isn't quite
+clear yet.
 
 ### Usage: a regular expression parser
 

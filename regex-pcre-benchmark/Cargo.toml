@@ -1,0 +1,31 @@
+[package]
+publish = false
+name = "regex-pcre-benchmark"
+version = "0.1.0"
+authors = ["The Rust Project Developers"]
+license = "MIT/Apache-2.0"
+repository = "https://github.com/rust-lang/regex"
+documentation = "http://doc.rust-lang.org/regex/regex_syntax/index.html"
+homepage = "https://github.com/rust-lang/regex"
+description = "Regex benchmarks for PCRE."
+
+[dependencies]
+enum-set = "0.0.6"
+lazy_static = "0.1"
+pcre = "0.2"
+rand = "0.3"
+regex = { version = "0.1", path = ".." }
+
+# Run the benchmarks on PCRE.
+[[bench]]
+name = "pcre"
+path = "../benches/bench_pcre.rs"
+test = false
+bench = true
+
+[profile.bench]
+debug = true
+
+[profile.test]
+debug = true
+codegen-units = 1

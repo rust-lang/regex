@@ -5,16 +5,9 @@
 // contributed by TeXitoi
 // contributed by BurntSushi
 
-// This technically solves the problem posed in the `regex-dna` benchmark, but
-// it cheats by combining all of the replacements into a single regex and
-// replacing them with a single linear scan. i.e., it re-implements
-// `replace_all`. As a result, this is around 25% faster. ---AG
-
 extern crate regex;
 
 use std::io::{self, Read};
-use std::sync::Arc;
-use std::thread;
 
 macro_rules! regex { ($re:expr) => { ::regex::Regex::new($re).unwrap() } }
 
@@ -25,7 +18,6 @@ fn main() {
 
     seq = regex!(">[^\n]*\n|\n").replace_all(&seq, "");
     let clen = seq.len();
-    let seq_arc = Arc::new(seq.clone());
 
     let variants = vec![
         regex!("agggtaaa|tttaccct"),
@@ -38,12 +30,8 @@ fn main() {
         regex!("agggta[cgt]a|t[acg]taccct"),
         regex!("agggtaa[cgt]|[acg]ttaccct"),
     ];
-    let mut counts = vec![];
-    for variant in variants {
-        let seq = seq_arc.clone();
-        let restr = variant.to_string();
-        let future = thread::spawn(move || variant.find_iter(&seq).count());
-        counts.push((restr, future));
+    for re in variants {
+        println!("{} {}", re.to_string(), re.find_iter(&seq).count());
     }
 
     let substs = vec![
@@ -61,9 +49,6 @@ fn main() {
     ]; // combined into one regex in `replace_all`
     let seq = replace_all(&seq, substs);
 
-    for (variant, count) in counts {
-        println!("{} {}", variant, count.join().unwrap());
-    }
     println!("\n{}\n{}\n{}", ilen, clen, seq.len());
 }
 

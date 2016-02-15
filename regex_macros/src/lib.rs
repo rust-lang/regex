@@ -32,8 +32,7 @@ use syntax::ptr::P;
 
 use rustc_plugin::Registry;
 
-use regex::Regex;
-use regex::internal::{Inst, EmptyLook, Program, Dynamic, Native};
+use regex::internal::{Inst, EmptyLook, Program, ProgramBuilder};
 
 /// For the `regex!` syntax extension. Do not use.
 #[plugin_registrar]
@@ -68,22 +67,21 @@ fn native(cx: &mut ExtCtxt, sp: codemap::Span, tts: &[ast::TokenTree])
     };
     // We use the largest possible size limit because this is happening at
     // compile time. We trust the programmer.
-    let re = match Regex::with_size_limit(::std::usize::MAX, &regex) {
+    let bprog = ProgramBuilder::new(&regex).size_limit(::std::usize::MAX);
+    let prog = match bprog.compile() {
         Ok(re) => re,
         Err(err) => {
             cx.span_err(sp, &err.to_string());
             return DummyResult::any(sp)
         }
     };
-    let prog = match re {
-        Dynamic(ref prog) => prog.clone(),
-        Native(_) => unreachable!(),
-    };
-
+    let names = prog.cap_names.iter().cloned().collect();
     let mut gen = NfaGen {
-        cx: &*cx, sp: sp, prog: prog,
-        names: re.capture_names().map(|o| o.map(|s| s.to_owned())).collect(),
-        original: re.as_str().to_string(),
+        cx: &*cx,
+        sp: sp,
+        prog: prog,
+        names: names,
+        original: regex,
     };
     MacEager::expr(gen.code())
 }
@@ -307,7 +305,7 @@ fn exec<'t>(
     }
 }
 
-::regex::internal::Native(::regex::internal::ExNative {
+::regex::Regex::Native(::regex::internal::ExNative {
     original: $regex,
     names: &CAP_NAMES,
     prog: exec,
@@ -325,8 +323,8 @@ fn exec<'t>(
                     match inst.look {
                         EmptyLook::StartLine => {
                             quote_expr!(self.cx, {
-                                let prev = self.input.previous_at(at.pos());
-                                if prev.char().is_none() || prev.char() == '\n' {
+                                let prev = self.input.previous_char(at);
+                                if prev.is_none() || prev == '\n' {
                                     self.add(nlist, thread_caps, $nextpc, at);
                                 }
                             })
@@ -340,8 +338,8 @@ fn exec<'t>(
                         }
                         EmptyLook::StartText => {
                             quote_expr!(self.cx, {
-                                let prev = self.input.previous_at(at.pos());
-                                if prev.char().is_none() {
+                                let prev = self.input.previous_char(at);
+                                if prev.is_none() {
                                     self.add(nlist, thread_caps, $nextpc, at);
                                 }
                             })
@@ -361,8 +359,8 @@ fn exec<'t>(
                                 quote_expr!(self.cx, { !(w1 ^ w2) })
                             };
                             quote_expr!(self.cx, {
-                                let prev = self.input.previous_at(at.pos());
-                                let w1 = prev.char().is_word_char();
+                                let prev = self.input.previous_char(at);
+                                let w1 = prev.is_word_char();
                                 let w2 = at.char().is_word_char();
                                 if $m {
                                     self.add(nlist, thread_caps, $nextpc, at);
