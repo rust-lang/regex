@@ -452,7 +452,7 @@ fn exec<'t>(
     fn match_class(&self, ranges: &[(char, char)]) -> P<ast::Expr> {
         let mut arms = ranges.iter().map(|&(start, end)| {
             let pat = self.cx.pat(
-                self.sp, ast::PatRange(
+                self.sp, ast::PatKind::Range(
                     quote_expr!(self.cx, $start), quote_expr!(self.cx, $end)));
             self.cx.arm(self.sp, vec!(pat), quote_expr!(self.cx, true))
         }).collect::<Vec<ast::Arm>>();
@@ -513,7 +513,7 @@ fn exec<'t>(
             pats: vec!(P(ast::Pat{
                 id: ast::DUMMY_NODE_ID,
                 span: self.sp,
-                node: ast::PatWild,
+                node: ast::PatKind::Wild,
             })),
             guard: None,
             body: body,
