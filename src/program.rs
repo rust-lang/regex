@@ -8,7 +8,8 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-
+use std::collections::HashMap;
+use std::sync::Arc;
 
 use syntax;
 
@@ -43,7 +44,7 @@ pub struct Program {
     pub cap_names: Vec<Option<String>>,
     /// The map of named capture groups. The keys are group names and
     /// the values are group indices.
-    pub named_groups: ::std::collections::HashMap<String, usize>,
+    pub named_groups: Arc<HashMap<String, usize>>,
     /// If the regular expression requires a literal prefix in order to have a
     /// match, that prefix is stored here as a DFA.
     pub prefixes: Literals,
@@ -120,10 +121,17 @@ impl ProgramBuilder {
             insts.anchored_begin(),
             insts.anchored_end(),
         );
+        let mut named_groups = HashMap::new();
+        for (i, name) in cap_names.iter().enumerate() {
+            if let Some(ref name) = *name {
+                named_groups.insert(name.to_owned(), i);
+            }
+        }
         Ok(Program {
             original: self.re,
             insts: insts,
             cap_names: cap_names,
+            named_groups: Arc::new(named_groups),
             prefixes: prefixes,
             anchored_begin: anchored_begin,
             anchored_end: anchored_end,
