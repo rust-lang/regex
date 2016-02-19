@@ -811,6 +811,7 @@ impl<'r, 't> Iterator for RegexSplitsN<'r, 't> {
 }
 
 enum NamedGroups {
+    Empty,
     Native(&'static [(&'static str, usize)]),
     Dynamic(Arc<HashMap<String, usize>>),
 }
@@ -821,12 +822,17 @@ impl NamedGroups {
             Regex::Native(ExNative { ref groups, .. }) =>
                 NamedGroups::Native(groups),
             Regex::Dynamic(ref exec) =>
-                NamedGroups::Dynamic(exec.named_groups().clone())
+                if exec.named_groups().is_empty() {
+                    NamedGroups::Empty
+                } else {
+                    NamedGroups::Dynamic(exec.named_groups().clone())
+                }
         }
     }
 
     fn pos(&self, name: &str) -> Option<usize> {
         match *self {
+            NamedGroups::Empty => None,
             NamedGroups::Native(groups) => {
                 groups.binary_search_by(|&(n, _)| n.cmp(name))
                       .ok().map(|i| groups[i].1)
@@ -839,6 +845,7 @@ impl NamedGroups {
 
     fn iter<'n>(&'n self) -> NamedGroupsIter<'n> {
         match *self {
+            NamedGroups::Empty => NamedGroupsIter::Empty,
             NamedGroups::Native(g) => NamedGroupsIter::Native(g.iter()),
             NamedGroups::Dynamic(ref g) => NamedGroupsIter::Dynamic(g.iter()),
         }
@@ -846,6 +853,7 @@ impl NamedGroups {
 }
 
 enum NamedGroupsIter<'n> {
+    Empty,
     Native(::std::slice::Iter<'static, (&'static str, usize)>),
     Dynamic(::std::collections::hash_map::Iter<'n, String, usize>),
 }
@@ -855,6 +863,8 @@ impl<'n> Iterator for NamedGroupsIter<'n> {
 
     fn next(&mut self) -> Option<Self::Item> {
         match *self {
+            NamedGroupsIter::Empty =>
+                None,
             NamedGroupsIter::Native(ref mut it) =>
                 it.next().map(|&v| v),
             NamedGroupsIter::Dynamic(ref mut it) =>
