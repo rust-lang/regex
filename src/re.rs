@@ -821,12 +821,14 @@ impl NamedGroups {
         match *regex {
             Regex::Native(ExNative { ref groups, .. }) =>
                 NamedGroups::Native(groups),
-            Regex::Dynamic(ref exec) =>
-                if exec.named_groups().is_empty() {
+            Regex::Dynamic(ref exec) => {
+                let groups = exec.named_groups();
+                if groups.is_empty() {
                     NamedGroups::Empty
                 } else {
-                    NamedGroups::Dynamic(exec.named_groups().clone())
+                    NamedGroups::Dynamic(groups.clone())
                 }
+            }
         }
     }
 
@@ -924,21 +926,21 @@ impl<'t> Captures<'t> {
 
     /// Creates an iterator of all the capture groups in order of appearance
     /// in the regular expression.
-    pub fn iter<'c>(&'c self) -> SubCaptures<'c, 't> {
+    pub fn iter(&'t self) -> SubCaptures<'t> {
         SubCaptures { idx: 0, caps: self, }
     }
 
     /// Creates an iterator of all the capture group positions in order of
     /// appearance in the regular expression. Positions are byte indices
     /// in terms of the original string matched.
-    pub fn iter_pos<'c>(&'c self) -> SubCapturesPos<'c> {
+    pub fn iter_pos(&'t self) -> SubCapturesPos<'t> {
         SubCapturesPos { idx: 0, locs: &self.locs }
     }
 
     /// Creates an iterator of all named groups as an tuple with the group
     /// name and the value. The iterator returns these values in arbitrary
     /// order.
-    pub fn iter_named<'c: 't>(&'c self) -> SubCapturesNamed<'c, 't> {
+    pub fn iter_named(&'t self) -> SubCapturesNamed<'t> {
         SubCapturesNamed {
             caps: self,
             names: self.named_groups.iter()
@@ -1015,17 +1017,16 @@ impl<'t> Index<&'t str> for Captures<'t> {
 /// An iterator over capture groups for a particular match of a regular
 /// expression.
 ///
-/// `'t` is the lifetime of the matched text.
 /// `'c` is the lifetime of the captures.
-pub struct SubCaptures<'c, 't: 'c> {
+pub struct SubCaptures<'c> {
     idx: usize,
-    caps: &'c Captures<'t>,
+    caps: &'c Captures<'c>,
 }
 
-impl<'c, 't> Iterator for SubCaptures<'c, 't> {
-    type Item = Option<&'t str>;
+impl<'c> Iterator for SubCaptures<'c> {
+    type Item = Option<&'c str>;
 
-    fn next(&mut self) -> Option<Option<&'t str>> {
+    fn next(&mut self) -> Option<Option<&'c str>> {
         if self.idx < self.caps.len() {
             self.idx += 1;
             Some(self.caps.at(self.idx - 1))
@@ -1066,17 +1067,16 @@ impl<'c> Iterator for SubCapturesPos<'c> {
 /// An Iterator over named capture groups as a tuple with the group
 /// name and the value.
 ///
-/// `'t` is the lifetime of the matched text.
 /// `'c` is the lifetime of the captures.
-pub struct SubCapturesNamed<'c, 't: 'c> {
-    caps: &'c Captures<'t>,
+pub struct SubCapturesNamed<'c> {
+    caps: &'c Captures<'c>,
     names: NamedGroupsIter<'c>,
 }
 
-impl<'c, 't: 'c> Iterator for SubCapturesNamed<'c, 't> {
-    type Item = (&'c str, Option<&'t str>);
+impl<'c> Iterator for SubCapturesNamed<'c> {
+    type Item = (&'c str, Option<&'c str>);
 
-    fn next(&mut self) -> Option<(&'c str, Option<&'t str>)> {
+    fn next(&mut self) -> Option<(&'c str, Option<&'c str>)> {
         self.names.next().map(|(name, pos)| (name, self.caps.at(pos)))
     }
 }
