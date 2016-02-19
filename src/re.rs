@@ -9,12 +9,12 @@
 // except according to those terms.
 
 use std::borrow::Cow;
+use std::collections::HashMap;
 use std::fmt;
 use std::ops::Index;
 #[cfg(feature = "pattern")]
 use std::str::pattern::{Pattern, Searcher, SearchStep};
 use std::str::FromStr;
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use exec::{Exec, ExecBuilder};
@@ -837,16 +837,28 @@ impl NamedGroups {
         }
     }
 
-    fn iter<'n>(&'n self) -> Box<Iterator<Item=(&'n str, usize)> + 'n> {
+    fn iter<'n>(&'n self) -> NamedGroupsIter<'n> {
         match *self {
-            NamedGroups::Native(groups) => {
-                Box::new(groups.iter().map(|&v| v))
-                    as Box<Iterator<Item=(&'n str, usize)> + 'n>
-            },
-            NamedGroups::Dynamic(ref groups) => {
-                Box::new(groups.iter().map(|(s, i)| (&s[..], *i)))
-                    as Box<Iterator<Item=(&'n str, usize)> + 'n>
-            },
+            NamedGroups::Native(g) => NamedGroupsIter::Native(g.iter()),
+            NamedGroups::Dynamic(ref g) => NamedGroupsIter::Dynamic(g.iter()),
+        }
+    }
+}
+
+enum NamedGroupsIter<'n> {
+    Native(::std::slice::Iter<'static, (&'static str, usize)>),
+    Dynamic(::std::collections::hash_map::Iter<'n, String, usize>),
+}
+
+impl<'n> Iterator for NamedGroupsIter<'n> {
+    type Item = (&'n str, usize);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match *self {
+            NamedGroupsIter::Native(ref mut it) =>
+                it.next().map(|&v| v),
+            NamedGroupsIter::Dynamic(ref mut it) =>
+                it.next().map(|(s, i)| (s.as_ref(), *i))
         }
     }
 }
@@ -994,6 +1006,7 @@ impl<'t> Index<&'t str> for Captures<'t> {
 /// expression.
 ///
 /// `'t` is the lifetime of the matched text.
+/// `'c` is the lifetime of the captures.
 pub struct SubCaptures<'c, 't: 'c> {
     idx: usize,
     caps: &'c Captures<'t>,
@@ -1017,7 +1030,7 @@ impl<'c, 't> Iterator for SubCaptures<'c, 't> {
 ///
 /// Positions are byte indices in terms of the original string matched.
 ///
-/// `'t` is the lifetime of the matched text.
+/// `'c` is the lifetime of the captures.
 pub struct SubCapturesPos<'c> {
     idx: usize,
     locs: &'c [Option<usize>]
@@ -1044,9 +1057,10 @@ impl<'c> Iterator for SubCapturesPos<'c> {
 /// name and the value.
 ///
 /// `'t` is the lifetime of the matched text.
+/// `'c` is the lifetime of the captures.
 pub struct SubCapturesNamed<'c, 't: 'c> {
     caps: &'c Captures<'t>,
-    names: Box<Iterator<Item=(&'c str, usize)> + 'c>,
+    names: NamedGroupsIter<'c>,
 }
 
 impl<'c, 't: 'c> Iterator for SubCapturesNamed<'c, 't> {
