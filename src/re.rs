@@ -10,12 +10,12 @@
 
 use std::borrow::Cow;
 use std::collections::HashMap;
-use std::collections::hash_map::Iter;
 use std::fmt;
 use std::ops::Index;
 #[cfg(feature = "pattern")]
 use std::str::pattern::{Pattern, Searcher, SearchStep};
 use std::str::FromStr;
+use std::sync::Arc;
 
 use exec::{Exec, ExecBuilder};
 use syntax;
@@ -185,6 +185,8 @@ pub struct ExNative {
     pub original: &'static str,
     #[doc(hidden)]
     pub names: &'static &'static [Option<&'static str>],
+    #[doc(hidden)]
+    pub groups: &'static &'static [(&'static str, usize)],
     #[doc(hidden)]
     pub prog: fn(&mut CaptureIdxs, &str, usize) -> bool,
 }
@@ -395,9 +397,13 @@ impl Regex {
     /// The `0`th capture group is always unnamed, so it must always be
     /// accessed with `at(0)` or `[0]`.
     pub fn captures<'t>(&self, text: &'t str) -> Option<Captures<'t>> {
-        let mut caps = self.alloc_captures();
-        if exec(self, &mut caps, text, 0) {
-            Some(Captures::new(self, text, caps))
+        let mut locs = self.alloc_captures();
+        if exec(self, &mut locs, text, 0) {
+            Some(Captures {
+                text: text,
+                locs: locs,
+                named_groups: NamedGroups::from_regex(self)
+            })
         } else {
             None
         }
@@ -804,6 +810,71 @@ impl<'r, 't> Iterator for RegexSplitsN<'r, 't> {
     }
 }
 
+enum NamedGroups {
+    Empty,
+    Native(&'static [(&'static str, usize)]),
+    Dynamic(Arc<HashMap<String, usize>>),
+}
+
+impl NamedGroups {
+    fn from_regex(regex: &Regex) -> NamedGroups {
+        match *regex {
+            Regex::Native(ExNative { ref groups, .. }) =>
+                NamedGroups::Native(groups),
+            Regex::Dynamic(ref exec) => {
+                let groups = exec.named_groups();
+                if groups.is_empty() {
+                    NamedGroups::Empty
+                } else {
+                    NamedGroups::Dynamic(groups.clone())
+                }
+            }
+        }
+    }
+
+    fn pos(&self, name: &str) -> Option<usize> {
+        match *self {
+            NamedGroups::Empty => None,
+            NamedGroups::Native(groups) => {
+                groups.binary_search_by(|&(n, _)| n.cmp(name))
+                      .ok().map(|i| groups[i].1)
+            },
+            NamedGroups::Dynamic(ref groups) => {
+                groups.get(name).map(|i| *i)
+            },
+        }
+    }
+
+    fn iter<'n>(&'n self) -> NamedGroupsIter<'n> {
+        match *self {
+            NamedGroups::Empty => NamedGroupsIter::Empty,
+            NamedGroups::Native(g) => NamedGroupsIter::Native(g.iter()),
+            NamedGroups::Dynamic(ref g) => NamedGroupsIter::Dynamic(g.iter()),
+        }
+    }
+}
+
+enum NamedGroupsIter<'n> {
+    Empty,
+    Native(::std::slice::Iter<'static, (&'static str, usize)>),
+    Dynamic(::std::collections::hash_map::Iter<'n, String, usize>),
+}
+
+impl<'n> Iterator for NamedGroupsIter<'n> {
+    type Item = (&'n str, usize);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match *self {
+            NamedGroupsIter::Empty =>
+                None,
+            NamedGroupsIter::Native(ref mut it) =>
+                it.next().map(|&v| v),
+            NamedGroupsIter::Dynamic(ref mut it) =>
+                it.next().map(|(s, i)| (s.as_ref(), *i))
+        }
+    }
+}
+
 /// Captures represents a group of captured strings for a single match.
 ///
 /// The 0th capture always corresponds to the entire match. Each subsequent
@@ -818,34 +889,10 @@ impl<'r, 't> Iterator for RegexSplitsN<'r, 't> {
 pub struct Captures<'t> {
     text: &'t str,
     locs: Vec<Option<usize>>,
-    named: Option<HashMap<String, usize>>,
+    named_groups: NamedGroups,
 }
 
 impl<'t> Captures<'t> {
-    fn new(
-        re: &Regex,
-        search: &'t str,
-        locs: Vec<Option<usize>>,
-    ) -> Captures<'t> {
-        let named =
-            if re.captures_len() == 0 {
-                None
-            } else {
-                let mut named = HashMap::new();
-                for (i, name) in re.capture_names().enumerate() {
-                    if let Some(name) = name {
-                        named.insert(name.to_owned(), i);
-                    }
-                }
-                Some(named)
-            };
-        Captures {
-            text: search,
-            locs: locs,
-            named: named,
-        }
-    }
-
     /// Returns the start and end positions of the Nth capture group.
     /// Returns `None` if `i` is not a valid capture group or if the capture
     /// group did not match anything.
@@ -874,15 +921,7 @@ impl<'t> Captures<'t> {
     /// `name` isn't a valid capture group or didn't match anything, then
     /// `None` is returned.
     pub fn name(&self, name: &str) -> Option<&'t str> {
-        match self.named {
-            None => None,
-            Some(ref h) => {
-                match h.get(name) {
-                    None => None,
-                    Some(i) => self.at(*i),
-                }
-            }
-        }
+        self.named_groups.pos(name).and_then(|i| self.at(i))
     }
 
     /// Creates an iterator of all the capture groups in order of appearance
@@ -895,7 +934,7 @@ impl<'t> Captures<'t> {
     /// appearance in the regular expression. Positions are byte indices
     /// in terms of the original string matched.
     pub fn iter_pos(&'t self) -> SubCapturesPos<'t> {
-        SubCapturesPos { idx: 0, caps: self, }
+        SubCapturesPos { idx: 0, locs: &self.locs }
     }
 
     /// Creates an iterator of all named groups as an tuple with the group
@@ -904,7 +943,7 @@ impl<'t> Captures<'t> {
     pub fn iter_named(&'t self) -> SubCapturesNamed<'t> {
         SubCapturesNamed {
             caps: self,
-            inner: self.named.as_ref().map(|n| n.iter()),
+            names: self.named_groups.iter()
         }
     }
 
@@ -978,16 +1017,16 @@ impl<'t> Index<&'t str> for Captures<'t> {
 /// An iterator over capture groups for a particular match of a regular
 /// expression.
 ///
-/// `'t` is the lifetime of the matched text.
-pub struct SubCaptures<'t> {
+/// `'c` is the lifetime of the captures.
+pub struct SubCaptures<'c> {
     idx: usize,
-    caps: &'t Captures<'t>,
+    caps: &'c Captures<'c>,
 }
 
-impl<'t> Iterator for SubCaptures<'t> {
-    type Item = Option<&'t str>;
+impl<'c> Iterator for SubCaptures<'c> {
+    type Item = Option<&'c str>;
 
-    fn next(&mut self) -> Option<Option<&'t str>> {
+    fn next(&mut self) -> Option<Option<&'c str>> {
         if self.idx < self.caps.len() {
             self.idx += 1;
             Some(self.caps.at(self.idx - 1))
@@ -1002,42 +1041,43 @@ impl<'t> Iterator for SubCaptures<'t> {
 ///
 /// Positions are byte indices in terms of the original string matched.
 ///
-/// `'t` is the lifetime of the matched text.
-pub struct SubCapturesPos<'t> {
+/// `'c` is the lifetime of the captures.
+pub struct SubCapturesPos<'c> {
     idx: usize,
-    caps: &'t Captures<'t>,
+    locs: &'c [Option<usize>]
 }
 
-impl<'t> Iterator for SubCapturesPos<'t> {
+impl<'c> Iterator for SubCapturesPos<'c> {
     type Item = Option<(usize, usize)>;
 
     fn next(&mut self) -> Option<Option<(usize, usize)>> {
-        if self.idx < self.caps.len() {
-            self.idx += 1;
-            Some(self.caps.pos(self.idx - 1))
-        } else {
-            None
+        if self.idx >= self.locs.len() {
+            return None
         }
+        let r = match (self.locs[self.idx], self.locs[self.idx + 1]) {
+            (Some(s), Some(e)) => Some((s, e)),
+            (None, None) => None,
+            _ => unreachable!()
+        };
+        self.idx += 2;
+        Some(r)
     }
 }
 
 /// An Iterator over named capture groups as a tuple with the group
 /// name and the value.
 ///
-/// `'t` is the lifetime of the matched text.
-pub struct SubCapturesNamed<'t>{
-    caps: &'t Captures<'t>,
-    inner: Option<Iter<'t, String, usize>>,
+/// `'c` is the lifetime of the captures.
+pub struct SubCapturesNamed<'c> {
+    caps: &'c Captures<'c>,
+    names: NamedGroupsIter<'c>,
 }
 
-impl<'t> Iterator for SubCapturesNamed<'t> {
-    type Item = (&'t str, Option<&'t str>);
+impl<'c> Iterator for SubCapturesNamed<'c> {
+    type Item = (&'c str, Option<&'c str>);
 
-    fn next(&mut self) -> Option<(&'t str, Option<&'t str>)> {
-        match self.inner.as_mut().map_or(None, |it| it.next()) {
-            Some((name, pos)) => Some((name, self.caps.at(*pos))),
-            None => None
-        }
+    fn next(&mut self) -> Option<(&'c str, Option<&'c str>)> {
+        self.names.next().map(|(name, pos)| (name, self.caps.at(pos)))
     }
 }
 
@@ -1081,7 +1121,11 @@ impl<'r, 't> Iterator for FindCaptures<'r, 't> {
         }
         self.last_end = e;
         self.last_match = Some(self.last_end);
-        Some(Captures::new(self.re, self.search, caps))
+        Some(Captures {
+            text: self.search,
+            locs: caps,
+            named_groups: NamedGroups::from_regex(self.re),
+        })
     }
 }
 

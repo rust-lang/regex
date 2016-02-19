@@ -8,6 +8,9 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+use std::collections::HashMap;
+use std::sync::Arc;
+
 use backtrack::{self, Backtrack};
 use dfa::{self, Dfa, DfaResult};
 use input::{ByteInput, CharInput};
@@ -373,6 +376,12 @@ impl Exec {
     /// Any capture that isn't named is None.
     pub fn capture_names(&self) -> &[Option<String>] {
         &self.prog.cap_names
+    }
+
+    /// Return a reference to named groups mapping (from group name to
+    /// group position).
+    pub fn named_groups(&self) -> &Arc<HashMap<String, usize>> {
+        &self.prog.named_groups
     }
 
     /// Return a fresh allocation for storing all possible captures in the
