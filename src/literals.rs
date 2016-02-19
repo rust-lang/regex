@@ -19,6 +19,7 @@ use memchr::{memchr, memchr2, memchr3};
 use char_utf8::encode_utf8;
 use inst::{Insts, Inst, InstBytes, InstRanges};
 
+#[derive(Clone, Eq, PartialEq)]
 pub struct AlternateLiterals {
     at_match: bool,
     literals: Vec<Vec<u8>>,
@@ -29,10 +30,11 @@ impl AlternateLiterals {
         if self.literals.is_empty() {
             Literals::empty()
         } else {
-            let at_match = self.at_match;
+            let alts = self.unambiguous();
+            let at_match = alts.at_match;
             Literals {
                 at_match: at_match,
-                matcher: LiteralMatcher::new(self),
+                matcher: LiteralMatcher::new(alts),
             }
         }
     }
@@ -51,6 +53,13 @@ impl AlternateLiterals {
 
     fn all_single_bytes(&self) -> bool {
         self.literals.len() >= 1 && self.literals.iter().all(|s| s.len() == 1)
+    }
+
+    fn all_same_length(&self) -> bool {
+        if self.literals.is_empty() {
+            return true;
+        }
+        self.literals.iter().all(|s| s.len() == self.literals[0].len())
     }
 
     fn is_one_literal(&self) -> bool {
@@ -122,6 +131,71 @@ impl AlternateLiterals {
                 self.literals.push(alt);
             }
         }
+    }
+
+    /// Returns a new set of alternate literals that are guaranteed to be
+    /// unambiguous.
+    ///
+    /// State differently, the set of literals returned is guaranteed to never
+    /// result in any overlapping matches.
+    ///
+    /// Duplicate literals are dropped. Literals that are otherwise distinct
+    /// will be possibly truncated.
+    fn unambiguous(&self) -> AlternateLiterals {
+        fn position(needle: &[u8], mut haystack: &[u8]) -> Option<usize> {
+            let mut i = 0;
+            while haystack.len() >= needle.len() {
+                if needle == &haystack[..needle.len()] {
+                    return Some(i);
+                }
+                i += 1;
+                haystack = &haystack[1..];
+            }
+            None
+        }
+
+        // This function is a bit gratuitous and allocation heavy, but in
+        // general, we limit the number of alternates to be pretty small.
+
+        if self.all_same_length() {
+            return self.clone();
+        }
+        let mut new = AlternateLiterals {
+            at_match: self.at_match,
+            literals: Vec::with_capacity(self.literals.len()),
+        };
+'OUTER:
+        for lit1 in &self.literals {
+            if new.literals.is_empty() {
+                new.literals.push(lit1.clone());
+                continue;
+            }
+            let mut candidate = lit1.clone();
+            for lit2 in &mut new.literals {
+                if &candidate == lit2 {
+                    // If the literal is already in the set, then we can
+                    // just drop it.
+                    continue 'OUTER;
+                }
+                if lit1.len() <= lit2.len() {
+                    if let Some(i) = position(&candidate, lit2) {
+                        new.at_match = false;
+                        lit2.truncate(i);
+                    }
+                } else {
+                    if let Some(i) = position(lit2, &candidate) {
+                        new.at_match = false;
+                        candidate.truncate(i);
+                    }
+                }
+            }
+            new.literals.push(candidate);
+        }
+        new.literals.retain(|lit| !lit.is_empty());
+        // This is OK only because the alternates are unambiguous.
+        new.literals.sort();
+        new.literals.dedup();
+        new
     }
 }
 
@@ -324,150 +398,14 @@ enum LiteralMatcher {
     /// A single byte prefix.
     Byte(u8),
     /// A set of two or more single byte prefixes.
-    /// This could be reduced to a bitset, which would use only 8 bytes,
-    /// but I don't think we care.
     Bytes {
         chars: Vec<u8>,
         sparse: Vec<bool>,
     },
+    /// A single substring. (Likely using Boyer-Moore with memchr.)
     Single(SingleSearch),
-    /// A full Aho-Corasick DFA. A "full" DFA in this case means that all of
-    /// the failure transitions have been expanded and the entire DFA is
-    /// represented by a memory inefficient sparse matrix. This makes matching
-    /// extremely fast. We only use this "full" DFA when the number of bytes
-    /// in our literals does not exceed 250. This generally leads to a DFA that
-    /// consumes 250KB of memory.
-    FullAutomaton(FullAcAutomaton<Vec<u8>>),
-}
-
-impl Literals {
-    /// Returns a matcher that never matches and never advances the input.
-    pub fn empty() -> Self {
-        Literals { at_match: false, matcher: LiteralMatcher::Empty }
-    }
-
-    /// Returns true if and only if a literal match corresponds to a match
-    /// in the regex from which the literal was extracted.
-    pub fn at_match(&self) -> bool {
-        self.at_match && self.len() > 0
-    }
-
-    /// Find the position of a prefix in `haystack` if it exists.
-    ///
-    /// In the matching engines, we only actually need the starting index
-    /// because the prefix is used to only skip ahead---the matching engine
-    /// still needs to run over the prefix input. However, we return the ending
-    /// location as well in case the prefix corresponds to the entire regex,
-    /// in which case, you need the end of the match.
-    pub fn find(&self, haystack: &[u8]) -> Option<(usize, usize)> {
-        use self::LiteralMatcher::*;
-        match self.matcher {
-            Empty => Some((0, 0)),
-            Byte(b) => memchr(b, haystack).map(|i| (i, i+1)),
-            Bytes { ref sparse, ref chars } => {
-                if chars.len() == 2 {
-                    memchr2(chars[0], chars[1], haystack).map(|i| (i, i+1))
-                } else if chars.len() == 3 {
-                    let (b0, b1, b2) = (chars[0], chars[1], chars[2]);
-                    memchr3(b0, b1, b2, haystack).map(|i| (i, i+1))
-                } else {
-                    find_singles(sparse, haystack)
-                }
-            }
-            Single(ref searcher) => {
-                searcher.find(haystack).map(|i| (i, i + searcher.pat.len()))
-            }
-            FullAutomaton(ref aut) => {
-                aut.find(haystack).next().map(|m| (m.start, m.end))
-            }
-        }
-    }
-
-    /// Returns true iff this prefix is empty.
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
-
-    /// Returns the number of prefixes in this machine.
-    pub fn len(&self) -> usize {
-        use self::LiteralMatcher::*;
-        match self.matcher {
-            Empty => 0,
-            Byte(_) => 1,
-            Bytes { ref chars, .. } => chars.len(),
-            Single(_) => 1,
-            FullAutomaton(ref aut) => aut.len(),
-        }
-    }
-
-    /// Returns true iff the prefix match preserves priority.
-    ///
-    /// For example, given the alternation `ab|a` and the target string `ab`,
-    /// does the prefix machine guarantee that `ab` will match? (A full
-    /// Aho-Corasick automaton does not!)
-    pub fn preserves_priority(&self) -> bool {
-        use self::LiteralMatcher::*;
-        match self.matcher {
-            Empty => true,
-            Byte(_) => true,
-            Bytes{..} => true,
-            Single(_) => true,
-            FullAutomaton(ref aut) => {
-                // Okay, so the automaton can respect priority in one
-                // particular case: when every pattern is of the same length.
-                // The trick is that the automaton will report the leftmost
-                // match, which in this case, corresponds to the correct
-                // match for the regex engine. If any other alternate matches
-                // at the same position, then they must be exactly equivalent.
-
-                // Guaranteed at least one prefix by construction, so use
-                // that for the length.
-                aut.patterns().iter().all(|p| p.len() == aut.pattern(0).len())
-            }
-        }
-    }
-
-    /// Return the approximate heap usage of literals in bytes.
-    pub fn approximate_size(&self) -> usize {
-        use self::LiteralMatcher::*;
-        match self.matcher {
-            Empty | Byte(_) => 0,
-            Bytes { ref chars, ref sparse } => {
-                (chars.len() * mem::size_of::<u8>())
-                + (sparse.len() * mem::size_of::<bool>())
-            }
-            Single(ref single) => {
-                (single.pat.len() * mem::size_of::<u8>())
-                + (single.shift.len() * mem::size_of::<usize>())
-            }
-            FullAutomaton(ref aut) => aut.heap_bytes(),
-        }
-    }
-
-    /// Returns all of the prefixes participating in this machine.
-    ///
-    /// For debug/testing only! (It allocates.)
-    #[allow(dead_code)]
-    fn prefixes(&self) -> Vec<String> {
-        self.byte_prefixes()
-            .into_iter()
-            .map(|p| String::from_utf8(p).unwrap())
-            .collect()
-    }
-
-    #[allow(dead_code)]
-    fn byte_prefixes(&self) -> Vec<Vec<u8>> {
-        use self::LiteralMatcher::*;
-        match self.matcher {
-            Empty => vec![],
-            Byte(b) => vec![vec![b]],
-            Bytes { ref chars, .. } => {
-                chars.iter().map(|&byte| vec![byte]).collect()
-            }
-            Single(ref searcher) => vec![searcher.pat.clone()],
-            FullAutomaton(ref aut) => aut.patterns().iter().cloned().collect(),
-        }
-    }
+    /// An Aho-Corasick automaton.
+    AC(FullAcAutomaton<Vec<u8>>),
 }
 
 impl LiteralMatcher {
@@ -510,7 +448,110 @@ impl LiteralMatcher {
         } else if alts.is_one_literal() {
             Single(SingleSearch::new(alts.literals.pop().unwrap()))
         } else {
-            FullAutomaton(AcAutomaton::new(alts.literals).into_full())
+            AC(AcAutomaton::new(alts.literals).into_full())
+        }
+    }
+}
+
+impl Literals {
+    /// Returns a matcher that never matches and never advances the input.
+    pub fn empty() -> Self {
+        Literals { at_match: false, matcher: LiteralMatcher::Empty }
+    }
+
+    /// Returns true if and only if a literal match corresponds to a match
+    /// in the regex from which the literal was extracted.
+    pub fn at_match(&self) -> bool {
+        self.at_match && self.len() > 0
+    }
+
+    /// Find the position of a prefix in `haystack` if it exists.
+    ///
+    /// In the matching engines, we only actually need the starting index
+    /// because the prefix is used to only skip ahead---the matching engine
+    /// still needs to run over the prefix input. However, we return the ending
+    /// location as well in case the prefix corresponds to the entire regex,
+    /// in which case, you need the end of the match.
+    pub fn find(&self, haystack: &[u8]) -> Option<(usize, usize)> {
+        use self::LiteralMatcher::*;
+        match self.matcher {
+            Empty => Some((0, 0)),
+            Byte(b) => memchr(b, haystack).map(|i| (i, i+1)),
+            Bytes { ref sparse, ref chars } => {
+                if chars.len() == 2 {
+                    memchr2(chars[0], chars[1], haystack).map(|i| (i, i+1))
+                } else if chars.len() == 3 {
+                    let (b0, b1, b2) = (chars[0], chars[1], chars[2]);
+                    memchr3(b0, b1, b2, haystack).map(|i| (i, i+1))
+                } else {
+                    find_singles(sparse, haystack)
+                }
+            }
+            Single(ref searcher) => {
+                searcher.find(haystack).map(|i| (i, i + searcher.pat.len()))
+            }
+            AC(ref aut) => {
+                aut.find(haystack).next().map(|m| (m.start, m.end))
+            }
+        }
+    }
+
+    /// Returns true iff this prefix is empty.
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    /// Returns the number of prefixes in this machine.
+    pub fn len(&self) -> usize {
+        use self::LiteralMatcher::*;
+        match self.matcher {
+            Empty => 0,
+            Byte(_) => 1,
+            Bytes { ref chars, .. } => chars.len(),
+            Single(_) => 1,
+            AC(ref aut) => aut.len(),
+        }
+    }
+
+    /// Return the approximate heap usage of literals in bytes.
+    pub fn approximate_size(&self) -> usize {
+        use self::LiteralMatcher::*;
+        match self.matcher {
+            Empty | Byte(_) => 0,
+            Bytes { ref chars, ref sparse } => {
+                (chars.len() * mem::size_of::<u8>())
+                + (sparse.len() * mem::size_of::<bool>())
+            }
+            Single(ref single) => {
+                (single.pat.len() * mem::size_of::<u8>())
+                + (single.shift.len() * mem::size_of::<usize>())
+            }
+            AC(ref aut) => aut.heap_bytes(),
+        }
+    }
+
+    /// Returns all of the prefixes participating in this machine.
+    ///
+    /// For debug/testing only! (It allocates.)
+    #[allow(dead_code)]
+    fn prefixes(&self) -> Vec<String> {
+        self.byte_prefixes()
+            .into_iter()
+            .map(|p| String::from_utf8(p).unwrap())
+            .collect()
+    }
+
+    #[allow(dead_code)]
+    fn byte_prefixes(&self) -> Vec<Vec<u8>> {
+        use self::LiteralMatcher::*;
+        match self.matcher {
+            Empty => vec![],
+            Byte(b) => vec![vec![b]],
+            Bytes { ref chars, .. } => {
+                chars.iter().map(|&byte| vec![byte]).collect()
+            }
+            Single(ref searcher) => vec![searcher.pat.clone()],
+            AC(ref aut) => aut.patterns().iter().cloned().collect(),
         }
     }
 }
@@ -586,6 +627,19 @@ fn find_singles(
     None
 }
 
+impl fmt::Debug for AlternateLiterals {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let mut strings = vec![];
+        for lit in &self.literals {
+            strings.push(String::from_utf8_lossy(lit).into_owned());
+        }
+        f.debug_struct("AlternateLiterals")
+         .field("at_match", &self.at_match)
+         .field("literals", &strings)
+         .finish()
+    }
+}
+
 impl fmt::Debug for Literals {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use self::LiteralMatcher::*;
@@ -601,7 +655,7 @@ impl fmt::Debug for Literals {
                 write!(f, "alternate single bytes: {}", chars.join(", "))
             }
             Single(ref searcher) => write!(f, "{:?}", searcher),
-            FullAutomaton(ref aut) => write!(f, "{:?}", aut),
+            AC(ref aut) => write!(f, "{:?}", aut),
         }
     }
 }
@@ -609,6 +663,7 @@ impl fmt::Debug for Literals {
 #[cfg(test)]
 mod tests {
     use program::ProgramBuilder;
+    use super::AlternateLiterals;
 
     macro_rules! prog {
         ($re:expr) => { ProgramBuilder::new($re).compile().unwrap() }
@@ -700,6 +755,46 @@ mod tests {
     #[test]
     fn snowman() {
         assert_eq!(prefixes_complete!("☃"), vec!["☃"]);
+    }
+
+    macro_rules! alts {
+        ($($s:expr),*) => {{
+            AlternateLiterals {
+                at_match: false,
+                literals: vec![$($s.as_bytes().to_owned()),*],
+            }
+        }}
+    }
+
+    #[test]
+    fn unambiguous() {
+        let given = alts!("z", "azb");
+        let expected = alts!("a", "z");
+        assert_eq!(expected, given.unambiguous());
+
+        let given = alts!("zaaaaaaaaaa", "aa");
+        let expected = alts!("aa", "z");
+        assert_eq!(expected, given.unambiguous());
+
+        let given = alts!("Sherlock", "Watson");
+        let expected = alts!("Sherlock", "Watson");
+        assert_eq!(expected, given.unambiguous());
+
+        let given = alts!("abc", "bc");
+        let expected = alts!("a", "bc");
+        assert_eq!(expected, given.unambiguous());
+
+        let given = alts!("bc", "abc");
+        let expected = alts!("a", "bc");
+        assert_eq!(expected, given.unambiguous());
+
+        let given = alts!("a", "aa");
+        let expected = alts!("a");
+        assert_eq!(expected, given.unambiguous());
+
+        let given = alts!("ab", "a");
+        let expected = alts!("a");
+        assert_eq!(expected, given.unambiguous());
     }
 
     // That this test fails suggests that the literal finder needs to be

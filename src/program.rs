@@ -134,7 +134,7 @@ impl Program {
     /// If this returns true, then it is possible to avoid running any of the
     /// NFA or DFA based matching engines entirely.
     pub fn is_prefix_match(&self) -> bool {
-        self.prefixes.at_match() && self.prefixes.preserves_priority()
+        self.prefixes.at_match()
     }
 
     /// Returns true if the underlying program is reversed.
