@@ -74,7 +74,7 @@ regex library.
 
 The compiler is in src/compile.rs. The input to the compiler is some abstract
 syntax for a regular expression and the output is a sequence of opcodes that
-matching engines use to execute a search. (One can think of matching engines at
+matching engines use to execute a search. (One can think of matching engines as
 mini virtual machines.) The sequence of opcodes is a particular encoding of a
 non-deterministic finite automaton. In particular, the opcodes explicitly rely
 on epsilon transitions.
