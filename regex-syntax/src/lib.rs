@@ -194,12 +194,9 @@ pub enum Repeater {
 /// sequence of non-overlapping ranges. This makes it possible to test whether
 /// a character is matched by a class with a binary search.
 ///
-/// Additionally, a character class may be marked *case insensitive*. If it's
-/// case insensitive, then:
-///
-/// 1. Simple case folding has been applied to all ranges.
-/// 2. Simple case folding must be applied to a character before testing
-///    whether it matches the character class.
+/// If the case insensitive flag was set when parsing a character class, then
+/// simple case folding is done automatically. For example, `(?i)[a-c]` is
+/// automatically translated to `[a-cA-C]`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CharClass {
     ranges: Vec<ClassRange>,
@@ -375,8 +372,6 @@ impl CharClass {
     }
 
     /// Create a new empty class from this one.
-    ///
-    /// Namely, its capacity and case insensitive setting will be the same.
     fn to_empty(&self) -> CharClass {
         CharClass { ranges: Vec::with_capacity(self.len()) }
     }
