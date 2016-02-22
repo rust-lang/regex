@@ -1,0 +1,315 @@
+// Copyright 2014-2015 The Rust Project Developers. See the COPYRIGHT
+// file at the top-level directory of this distribution and at
+// http://rust-lang.org/COPYRIGHT.
+//
+// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
+// http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+// <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
+// option. This file may not be copied, modified, or distributed
+// except according to those terms.
+
+use std::fmt;
+use std::iter;
+use std::slice;
+use std::vec;
+
+use syntax::Expr;
+
+use exec::{Exec, ExecBuilder, Search};
+use Error;
+
+/// Match multiple (possibly overlapping) regular expressions in a single scan.
+///
+/// A regex set corresponds to the union of two or more regular expressions.
+/// That is, a regex set will match text where at least one of its
+/// constituent regular expressions matches. A regex set as its formulated here
+/// provides a touch more power: it will also report *which* regular
+/// expressions in the set match. Indeed, this is the key difference between
+/// regex sets and a single `Regex` with many alternates, since only one
+/// alternate can match at a time.
+///
+/// For example, consider regular expressions to match email addresses and
+/// domains: `[a-z]+@[a-z]+\.(com|org|net)` and `[a-z]+\.(com|org|net)`. If a
+/// regex set is constructed from those regexes, then searching the text
+/// `foo@example.com` will report both regexes as matching. Of course, one
+/// could accomplish this by compiling each regex on its own and doing two
+/// searches over the text. The key advantage of using a regex set is that it
+/// will report the matching regexes using a *single pass through the text*.
+/// If one has hundreds or thousands of regexes to match repeatedly (like a URL
+/// router for a complex web application or a user agent matcher), then a regex
+/// set can realize huge performance gains.
+///
+/// # Example
+///
+/// This shows how the above two regexes (for matching email addresses and
+/// domains) might work:
+///
+/// ```rust
+/// use regex::RegexSet;
+///
+/// let set = RegexSet::new(&[
+///     r"[a-z]+@[a-z]+\.(com|org|net)",
+///     r"[a-z]+\.(com|org|net)",
+/// ]).unwrap();
+///
+/// // Ask whether any regexes in the set match.
+/// assert!(set.is_match("foo@example.com"));
+///
+/// // Identify which regexes in the set match.
+/// let matches: Vec<_> = set.matches("foo@example.com").into_iter().collect();
+/// assert_eq!(vec![0, 1], matches);
+///
+/// // Try again, but with text that only matches one of the regexes.
+/// let matches: Vec<_> = set.matches("example.com").into_iter().collect();
+/// assert_eq!(vec![1], matches);
+///
+/// // Try again, but with text that doesn't match any regex in the set.
+/// let matches: Vec<_> = set.matches("example").into_iter().collect();
+/// assert!(matches.is_empty());
+/// ```
+///
+/// Note that it would be possible to adapt the above example to using `Regex`
+/// with an expression like:
+///
+/// ```ignore
+/// (?P<email>[a-z]+@(?P<email_domain>[a-z]+[.](com|org|net)))|(?P<domain>[a-z]+[.](com|org|net))
+/// ```
+///
+/// After a match, one could then inspect the capture groups to figure out
+/// which alternates matched. The problem is that it is hard to make this
+/// approach scale when there are many regexes since the overlap between each
+/// alternate isn't always obvious to reason about.
+///
+/// # Limitations
+///
+/// Regex sets are limited to answering the following two questions:
+///
+/// 1. Does any regex in the set match?
+/// 2. If so, which regexes in the set match?
+///
+/// As with the main `Regex` type, it is cheaper to ask (1) instead of (2)
+/// since the matching engines can stop after the first match is found.
+///
+/// Other features like finding the location of successive matches or their
+/// sub-captures aren't supported. If you need this functionality, the
+/// recommended approach is to compile each regex in the set independently and
+/// selectively match them based on which regexes in the set matched.
+///
+/// # Performance
+///
+/// A `RegexSet` has the same performance characteristics as `Regex`. Namely,
+/// search takes `O(mn)` time, where `m` is proportional to the size of the
+/// regex set and `n` is proportional to the length of the search text.
+#[derive(Clone)]
+pub struct RegexSet(Exec);
+
+impl RegexSet {
+    /// Create a new regex set with the given regular expressions.
+    ///
+    /// This takes an iterator of `S`, where `S` is something that can produce
+    /// a `&str`. If any of the strings in the iterator are not valid regular
+    /// expressions, then an error is returned.
+    ///
+    /// # Example
+    ///
+    /// Create a new regex set from an iterator of strings:
+    ///
+    /// ```rust
+    /// use regex::RegexSet;
+    ///
+    /// let set = RegexSet::new(&[r"\w+", r"\d+"]).unwrap();
+    /// assert!(set.is_match("foo"));
+    /// ```
+    pub fn new<I, S>(exprs: I) -> Result<RegexSet, Error>
+            where S: AsRef<str>, I: IntoIterator<Item=S> {
+        let exec = try!(ExecBuilder::new_many(exprs).build());
+        if exec.regex_strings().len() < 2 {
+            return Err(Error::InvalidSet);
+        }
+        Ok(RegexSet(exec))
+    }
+
+    /// Returns true if and only if one of the regexes in this set matches
+    /// the text given.
+    ///
+    /// This method should be preferred if you only need to test whether any
+    /// of the regexes in the set should match, but don't care about *which*
+    /// regexes matched. This is because the underlying matching engine will
+    /// quit immediately after seeing the first match instead of continuing to
+    /// find all matches.
+    ///
+    /// Note that as with searches using `Regex`, the expression is unanchored
+    /// by default. That is, if the regex does not start with `^` or `\A`, or
+    /// end with `$` or `\z`, then it is permitted to match anywhere in the
+    /// text.
+    ///
+    /// # Example
+    ///
+    /// Tests whether a set matches some text:
+    ///
+    /// ```rust
+    /// use regex::RegexSet;
+    ///
+    /// let set = RegexSet::new(&[r"\w+", r"\d+"]).unwrap();
+    /// assert!(set.is_match("foo"));
+    /// assert!(!set.is_match("☃"));
+    /// ```
+    pub fn is_match(&self, text: &str) -> bool {
+        let mut search = Search { captures: &mut [], matches: &mut [] };
+        self.0.exec(&mut search, text, 0)
+    }
+
+    /// Returns the set of regular expressions that match in the given text.
+    ///
+    /// The set returned contains the index of each regular expression that
+    /// matches in the given text. The index is in correspondence with the
+    /// order of regular expressions given to `RegexSet`'s constructor.
+    ///
+    /// The set can also be used to iterate over the matched indices.
+    ///
+    /// Note that as with searches using `Regex`, the expression is unanchored
+    /// by default. That is, if the regex does not start with `^` or `\A`, or
+    /// end with `$` or `\z`, then it is permitted to match anywhere in the
+    /// text.
+    ///
+    /// # Example
+    ///
+    /// Tests which regular expressions match the given text:
+    ///
+    /// ```rust
+    /// use regex::RegexSet;
+    ///
+    /// let set = RegexSet::new(&[
+    ///     r"\w+",
+    ///     r"\d+",
+    ///     r"\pL+",
+    ///     r"foo",
+    ///     r"bar",
+    ///     r"barfoo",
+    ///     r"foobar",
+    /// ]).unwrap();
+    /// let matches: Vec<_> = set.matches("foobar").into_iter().collect();
+    /// assert_eq!(matches, vec![0, 2, 3, 4, 6]);
+    ///
+    /// // You can also test whether a particular regex matched:
+    /// let matches = set.matches("foobar");
+    /// assert!(!matches.matched(5));
+    /// assert!(matches.matched(6));
+    /// ```
+    pub fn matches(&self, text: &str) -> SetMatches {
+        let mut matches = vec![false; self.0.matches().len()];
+        let matched_any = {
+            let mut search = Search {
+                captures: &mut [],
+                matches: &mut matches
+            };
+            self.0.exec(&mut search, text, 0)
+        };
+        SetMatches {
+            matched_any: matched_any,
+            matches: matches,
+        }
+    }
+
+    /// Returns the total number of regular expressions in this set.
+    pub fn len(&self) -> usize {
+        self.0.regex_strings().len()
+    }
+}
+
+impl fmt::Debug for RegexSet {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "RegexSet({:?})", self.0.regex_strings())
+    }
+}
+
+/// A set of matches returned by a regex set.
+#[derive(Clone, Debug)]
+pub struct SetMatches {
+    matched_any: bool,
+    matches: Vec<bool>,
+}
+
+impl SetMatches {
+    /// Whether this set contains any matches.
+    pub fn matched_any(&self) -> bool {
+        self.matched_any
+    }
+
+    /// Whether the regex at the given index matched.
+    ///
+    /// The index for a regex is determined by its insertion order upon the
+    /// initial construction of a `RegexSet`, starting at `0`.
+    ///
+    /// # Panics
+    ///
+    /// If `regex_index` is greater than or equal to `self.len()`.
+    pub fn matched(&self, regex_index: usize) -> bool {
+        self.matches[regex_index]
+    }
+
+    /// The total number of regexes in the set that created these matches.
+    pub fn len(&self) -> usize {
+        self.matches.len()
+    }
+
+    /// Returns an iterator over indexes in the regex that matched.
+    pub fn iter(&self) -> SetMatchesIter {
+        SetMatchesIter((&*self.matches).into_iter().enumerate())
+    }
+}
+
+impl IntoIterator for SetMatches {
+    type IntoIter = SetMatchesIntoIter;
+    type Item = usize;
+
+    fn into_iter(self) -> Self::IntoIter {
+        SetMatchesIntoIter(self.matches.into_iter().enumerate())
+    }
+}
+
+impl<'a> IntoIterator for &'a SetMatches {
+    type IntoIter = SetMatchesIter<'a>;
+    type Item = usize;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+
+/// An owned iterator over the set of matches from a regex set.
+pub struct SetMatchesIntoIter(iter::Enumerate<vec::IntoIter<bool>>);
+
+impl Iterator for SetMatchesIntoIter {
+    type Item = usize;
+
+    fn next(&mut self) -> Option<usize> {
+        loop {
+            match self.0.next() {
+                None => return None,
+                Some((_, false)) => {}
+                Some((i, true)) => return Some(i),
+            }
+        }
+    }
+}
+
+/// A borrowed iterator over the set of matches from a regex set.
+///
+/// The lifetime `'a` refers to the lifetime of a `SetMatches` value.
+#[derive(Clone)]
+pub struct SetMatchesIter<'a>(iter::Enumerate<slice::Iter<'a, bool>>);
+
+impl<'a> Iterator for SetMatchesIter<'a> {
+    type Item = usize;
+
+    fn next(&mut self) -> Option<usize> {
+        loop {
+            match self.0.next() {
+                None => return None,
+                Some((_, &false)) => {}
+                Some((i, &true)) => return Some(i),
+            }
+        }
+    }
+}

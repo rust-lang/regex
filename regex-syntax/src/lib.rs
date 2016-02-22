@@ -177,6 +177,19 @@ pub enum Repeater {
     },
 }
 
+impl Repeater {
+    /// Returns true if and only if this repetition can match the empty string.
+    fn matches_empty(&self) -> bool {
+        use self::Repeater::*;
+        match *self {
+            ZeroOrOne => true,
+            ZeroOrMore => true,
+            OneOrMore => false,
+            Range { min, .. } => min == 0,
+        }
+    }
+}
+
 /// A character class.
 ///
 /// A character class has a canonical format that the parser guarantees. Its
@@ -315,7 +328,9 @@ impl Expr {
     /// the beginning of text.
     pub fn is_anchored_start(&self) -> bool {
         match *self {
-            Repeat { ref e, .. } => e.is_anchored_start(),
+            Repeat { ref e, r, .. } => {
+                !r.matches_empty() && e.is_anchored_start()
+            }
             Group { ref e, .. } => e.is_anchored_start(),
             Concat(ref es) => es[0].is_anchored_start(),
             Alternate(ref es) => es.iter().all(|e| e.is_anchored_start()),
@@ -328,7 +343,9 @@ impl Expr {
     /// end of the text.
     pub fn is_anchored_end(&self) -> bool {
         match *self {
-            Repeat { ref e, .. } => e.is_anchored_end(),
+            Repeat { ref e, r, .. } => {
+                !r.matches_empty() && e.is_anchored_end()
+            }
             Group { ref e, .. } => e.is_anchored_end(),
             Concat(ref es) => es[es.len() - 1].is_anchored_end(),
             Alternate(ref es) => es.iter().all(|e| e.is_anchored_end()),
@@ -1059,9 +1076,6 @@ mod tests {
         assert!(e("^a|^b").is_anchored_start());
         assert!(e("(^a)|(^b)").is_anchored_start());
         assert!(e("(^(a|b))").is_anchored_start());
-        assert!(e("^*").is_anchored_start());
-        assert!(e("(^)*").is_anchored_start());
-        assert!(e("((^)*)*").is_anchored_start());
 
         assert!(!e("^a|b").is_anchored_start());
         assert!(!e("a|^b").is_anchored_start());
@@ -1074,9 +1088,6 @@ mod tests {
         assert!(e("a$|b$").is_anchored_end());
         assert!(e("(a$)|(b$)").is_anchored_end());
         assert!(e("((a|b)$)").is_anchored_end());
-        assert!(e("$*").is_anchored_end());
-        assert!(e("($)*").is_anchored_end());
-        assert!(e("(($)*)*").is_anchored_end());
 
         assert!(!e("a$|b").is_anchored_end());
         assert!(!e("a|b$").is_anchored_end());

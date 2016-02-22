@@ -12,13 +12,73 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use backtrack::{self, Backtrack};
-use dfa::{self, Dfa, DfaResult};
+use compile::Compiler;
+use dfa::{self, Dfa};
 use input::{ByteInput, CharInput};
+use literals::BuildPrefixes;
 use nfa::Nfa;
-use program::{Program, ProgramBuilder};
-use re::CaptureIdxs;
+use prog::{Program, InstPtr};
+use syntax;
 
 use {Regex, Error};
+
+pub type CaptureSlots<'a> = &'a mut [CaptureSlot];
+
+pub type CaptureSlot = Option<usize>;
+
+/// The parameters to running one of the four match engines.
+#[derive(Debug)]
+pub struct Search<'caps, 'matches> {
+    /// The matching engine writes capture locations to this slice.
+    ///
+    /// Note that some matching engines, like the DFA, have limited support
+    /// for this. The DFA can only fill in one capture location (the end
+    /// location of the match).
+    pub captures: CaptureSlots<'caps>,
+    /// The matching engine indicates which match instructions were executed
+    /// when searching stopped.
+    ///
+    /// In standard searches, there is exactly one value in this slice and it
+    /// should be initialized to `false`. When executing sets of regexes,
+    /// there should be a location for each regex.
+    pub matches: &'matches mut [bool],
+}
+
+impl<'caps, 'matches> Search<'caps, 'matches> {
+    pub fn quit_after_first_match(&self) -> bool {
+        self.captures.is_empty() && self.matches.len() == 1
+    }
+
+    pub fn all_matched(&self) -> bool {
+        self.matches.iter().all(|m| *m)
+    }
+
+    pub fn copy_captures_from(&mut self, caps: &[Option<usize>]) {
+        for (slot, val) in self.captures.iter_mut().zip(caps.iter()) {
+            *slot = *val;
+        }
+    }
+
+    pub fn set_match(&mut self, match_slot: usize) {
+        if let Some(old) = self.matches.get_mut(match_slot) {
+            *old = true;
+        }
+    }
+
+    pub fn set_start(&mut self, pos: Option<usize>) {
+        self.set_capture(0, pos);
+    }
+
+    pub fn set_end(&mut self, pos: Option<usize>) {
+        self.set_capture(1, pos);
+    }
+
+    fn set_capture(&mut self, i: usize, pos: Option<usize>) {
+        if let Some(old_pos) = self.captures.get_mut(i) {
+            *old_pos = pos;
+        }
+    }
+}
 
 /// Exec manages the execution of a regular expression.
 ///
@@ -27,6 +87,8 @@ use {Regex, Error};
 /// regular expression.
 #[derive(Clone, Debug)]
 pub struct Exec {
+    /// The original regular expressions given by the caller to compile.
+    res: Vec<String>,
     /// A compiled program that is used in the NFA simulation and backtracking.
     /// It can be byte-based or Unicode codepoint based.
     ///
@@ -60,22 +122,32 @@ pub struct Exec {
 /// Facilitates the construction of an executor by exposing various knobs
 /// to control how a regex is executed and what kinds of resources it's
 /// permitted to use.
-pub struct ExecBuilder<'r> {
-    re: &'r str,
+pub struct ExecBuilder {
+    res: Vec<String>,
     match_engine: MatchEngine,
     size_limit: usize,
     bytes: bool,
 }
 
-impl<'r> ExecBuilder<'r> {
+impl ExecBuilder {
     /// Create a regex execution builder.
     ///
     /// This uses default settings for everything except the regex itself,
     /// which must be provided. Further knobs can be set by calling methods,
     /// and then finally, `build` to actually create the executor.
-    pub fn new(re: &'r str) -> Self {
+    pub fn new(re: &str) -> Self {
+        Self::new_many(&[re])
+    }
+
+    /// Like new, but compiles the union of the given regular expressions.
+    ///
+    /// Note that when compiling 2 or more regular expressions, capture groups
+    /// are completely unsupported. (This means both `find` and `captures`
+    /// wont work.)
+    pub fn new_many<I, S>(res: I) -> Self
+            where S: AsRef<str>, I: IntoIterator<Item=S> {
         ExecBuilder {
-            re: re,
+            res: res.into_iter().map(|s| s.as_ref().to_owned()).collect(),
             match_engine: MatchEngine::Automatic,
             size_limit: 10 * (1 << 20),
             bytes: false,
@@ -145,28 +217,40 @@ impl<'r> ExecBuilder<'r> {
 
     /// Build an executor that can run a regular expression.
     pub fn build(self) -> Result<Exec, Error> {
-        let prog = try!(
-            ProgramBuilder::new(self.re)
-                           .size_limit(self.size_limit)
-                           .bytes(self.bytes)
-                           .compile());
+        if self.res.is_empty() {
+            return Err(Error::InvalidSet);
+        }
+        let mut exprs = vec![];
+        for re in &self.res {
+            exprs.push(try!(syntax::Expr::parse(re)));
+        }
+        let mut prog = try!(
+            Compiler::new()
+                     .size_limit(self.size_limit)
+                     .bytes(self.bytes)
+                     .compile(&exprs));
         let mut dfa = try!(
-            ProgramBuilder::new(self.re)
-                           .size_limit(self.size_limit)
-                           .dfa(true)
-                           .compile());
-        // Because the literal finder on byte-based programs is sub-optimal.
-        // We can use the literals found from a Unicode-based program just
-        // fine for now.
-        dfa.prefixes = prog.prefixes.clone();
+            Compiler::new()
+                     .size_limit(self.size_limit)
+                     .dfa(true)
+                     .compile(&exprs));
         let dfa_reverse = try!(
-            ProgramBuilder::new(self.re)
-                           .size_limit(self.size_limit)
-                           .dfa(true)
-                           .reverse(true)
-                           .compile());
-        let can_dfa = dfa::can_exec(&dfa.insts);
+            Compiler::new()
+                     .size_limit(self.size_limit)
+                     .dfa(true)
+                     .reverse(true)
+                     .compile(&exprs));
+
+        // Compute literal prefixes for only `prog`, which is likely a Unicode
+        // based program. Literal prefix extract currently works better on
+        // Unicode programs.
+        prog.prefixes = BuildPrefixes::new(&prog).literals().into_matcher();
+        // And give it to the DFA too, which can use Unicode prefixes even
+        // though the program itself is byte based.
+        dfa.prefixes = prog.prefixes.clone();
+        let can_dfa = dfa::can_exec(&dfa);
         Ok(Exec {
+            res: self.res,
             prog: prog,
             dfa: dfa,
             dfa_reverse: dfa_reverse,
@@ -196,9 +280,9 @@ impl Exec {
     /// choosing the engine to use. If self.match_engine is Nfa or Backtrack,
     /// then that engine is always used. Otherwise, one is selected
     /// automatically.
-    pub fn exec(
+    pub fn exec<'c, 'm>(
         &self,
-        caps: &mut CaptureIdxs,
+        search: &mut Search<'c, 'm>,
         text: &str,
         start: usize,
     ) -> bool {
@@ -206,132 +290,129 @@ impl Exec {
         // only possible to execute those engines in exec_auto. See comment on
         // MatchEngine below for more details.
         match self.match_engine {
-            MatchEngine::Automatic => self.exec_auto(caps, text, start),
-            MatchEngine::Backtrack => self.exec_backtrack(caps, text, start),
-            MatchEngine::Nfa => self.exec_nfa(caps, text, start),
+            MatchEngine::Automatic => self.exec_auto(search, text, start),
+            MatchEngine::Backtrack => self.exec_backtrack(search, text, start),
+            MatchEngine::Nfa => self.exec_nfa(search, text, start),
         }
     }
 
     /// Like exec, but always selects the engine automatically.
-    pub fn exec_auto(
+    fn exec_auto<'c, 'm>(
         &self,
-        caps: &mut CaptureIdxs,
+        search: &mut Search<'c, 'm>,
         text: &str,
         start: usize,
     ) -> bool {
-        if caps.len() <= 2 && self.prog.is_prefix_match() {
+        if search.captures.len() <= 2 && self.prog.prefixes.at_match() {
             // We should be able to execute the literal engine even if there
             // are more captures by falling back to the NFA engine after a
             // match. However, that's effectively what the NFA engine does
             // already (since it will use the literal engine if it exists).
-            self.exec_literals(caps, text, start)
+            self.exec_literals(search, text, start)
         } else if self.can_dfa {
-            self.exec_dfa(caps, text, start)
+            self.exec_dfa(search, text, start)
         } else {
-            self.exec_auto_nfa(caps, text, start)
+            self.exec_auto_nfa(search, text, start)
         }
     }
 
     /// Like exec, but always tries to execute the lazy DFA.
     ///
     /// Note that self.can_dfa must be true. This will panic otherwise.
-    fn exec_dfa(
+    fn exec_dfa<'a, 'c, 'm>(
         &self,
-        caps: &mut CaptureIdxs,
+        search: &'a mut Search<'c, 'm>,
         text: &str,
         start: usize,
     ) -> bool {
         debug_assert!(self.can_dfa);
         let btext = text.as_bytes();
-        let search = Dfa::exec(&self.dfa, btext, start, caps.is_empty());
-        let match_end = match search {
-            DfaResult::Match(match_end) => match_end,
-            DfaResult::EarlyMatch => return true,
-            DfaResult::NoMatch => return false,
-        };
-        // If caller has not requested any captures, then we don't need to
-        // find the start position.
-        if caps.is_empty() {
-            return true;
+        if !Dfa::exec(&self.dfa, search, btext, start) {
+            return false;
         }
+        let match_end = match search.captures.get(1) {
+            Some(&Some(i)) => i,
+            // The DFA returned true for a match, but did not set any capture
+            // location because the caller didn't ask for them. Therefore, we
+            // can quit immediately.
+            _ => return true,
+        };
         // invariant: caps.len() >= 2 && caps.len() % 2 == 0
         // If the reported end of the match is the same as the start, then we
         // have an empty match and we can quit now.
         if start == match_end {
             // Be careful... If the caller wants sub-captures, than we are
             // obliged to run the NFA to get them.
-            if caps.len() == 2 {
+            if search.captures.len() == 2 {
                 // The caller only needs the start/end, so we can avoid the
                 // NFA here.
-                caps[0] = Some(start);
-                caps[1] = Some(start);
+                search.captures[0] = Some(start);
+                search.captures[1] = Some(start);
                 return true;
             }
-            return self.exec_auto_nfa(caps, text, start);
+            return self.exec_auto_nfa(search, text, start);
         }
         // OK, now we find the start of the match by running the DFA backwards
         // on the text. We *start* the search at the end of the match.
-        let search = Dfa::exec(
-            &self.dfa_reverse, &btext[start..], match_end - start, false);
-        let match_start = match search {
-            DfaResult::Match(match_start) => start + match_start,
-            DfaResult::EarlyMatch => {
-                panic!("BUG: early matches can't happen on reverse search")
-            }
-            DfaResult::NoMatch => {
-                panic!("BUG: forward match implies backward match")
-            }
+        let matched = Dfa::exec(
+            &self.dfa_reverse, search, &btext[start..], match_end - start);
+        if !matched {
+            panic!("BUG: forward match implies backward match");
+        }
+        let match_start = match search.captures.get(0) {
+            Some(&Some(i)) => start + i,
+            _ => panic!("BUG: early match can't happen on reverse search"),
         };
-        if caps.len() == 2 {
+        if search.captures.len() == 2 {
             // If the caller doesn't care about capture locations, then we can
             // avoid running the NFA to fill them in.
-            caps[0] = Some(match_start);
-            caps[1] = Some(match_end);
+            search.captures[0] = Some(match_start);
+            search.captures[1] = Some(match_end);
             return true;
         }
-        self.exec_auto_nfa(caps, text, match_start)
+        self.exec_auto_nfa(search, text, match_start)
     }
 
     /// This is like exec_auto, except it always chooses between either the
     /// full NFA simulation or the bounded backtracking engine.
-    fn exec_auto_nfa(
+    fn exec_auto_nfa<'c, 'm>(
         &self,
-        caps: &mut CaptureIdxs,
+        search: &mut Search<'c, 'm>,
         text: &str,
         start: usize,
     ) -> bool {
-        if backtrack::should_exec(self.prog.insts.len(), text.len()) {
-            self.exec_backtrack(caps, text, start)
+        if backtrack::should_exec(self.prog.len(), text.len()) {
+            self.exec_backtrack(search, text, start)
         } else {
-            self.exec_nfa(caps, text, start)
+            self.exec_nfa(search, text, start)
         }
     }
 
     /// Always run the NFA algorithm.
-    fn exec_nfa(
+    fn exec_nfa<'c, 'm>(
         &self,
-        caps: &mut CaptureIdxs,
+        search: &mut Search<'c, 'm>,
         text: &str,
         start: usize,
     ) -> bool {
-        if self.prog.insts.is_bytes() {
-            Nfa::exec(&self.prog, caps, ByteInput::new(text), start)
+        if self.prog.is_bytes {
+            Nfa::exec(&self.prog, search, ByteInput::new(text), start)
         } else {
-            Nfa::exec(&self.prog, caps, CharInput::new(text), start)
+            Nfa::exec(&self.prog, search, CharInput::new(text), start)
         }
     }
 
     /// Always runs the NFA using bounded backtracking.
-    fn exec_backtrack(
+    fn exec_backtrack<'c, 'm>(
         &self,
-        caps: &mut CaptureIdxs,
+        search: &mut Search<'c, 'm>,
         text: &str,
         start: usize,
     ) -> bool {
-        if self.prog.insts.is_bytes() {
-            Backtrack::exec(&self.prog, caps, ByteInput::new(text), start)
+        if self.prog.is_bytes {
+            Backtrack::exec(&self.prog, search, ByteInput::new(text), start)
         } else {
-            Backtrack::exec(&self.prog, caps, CharInput::new(text), start)
+            Backtrack::exec(&self.prog, search, CharInput::new(text), start)
         }
     }
 
@@ -342,19 +423,19 @@ impl Exec {
     /// regex machinery and use specialized DFAs.
     ///
     /// This panics if the set of literals do not correspond to matches.
-    fn exec_literals(
+    fn exec_literals<'c, 'm>(
         &self,
-        caps: &mut CaptureIdxs,
+        search: &mut Search<'c, 'm>,
         text: &str,
         start: usize,
     ) -> bool {
-        debug_assert!(self.prog.is_prefix_match());
+        debug_assert!(self.prog.prefixes.at_match());
         match self.prog.prefixes.find(&text.as_bytes()[start..]) {
             None => false,
             Some((s, e)) => {
-                if caps.len() == 2 {
-                    caps[0] = Some(start + s);
-                    caps[1] = Some(start + e);
+                if search.captures.len() == 2 {
+                    search.captures[0] = Some(start + s);
+                    search.captures[1] = Some(start + e);
                 }
                 true
             }
@@ -366,28 +447,30 @@ impl Exec {
         Regex::Dynamic(self)
     }
 
-    /// Return the original regular expression string.
-    pub fn regex_str(&self) -> &str {
-        &self.prog.original
+    /// The original regular expressions given by the caller that were
+    /// compiled.
+    pub fn regex_strings(&self) -> &[String] {
+        &self.res
+    }
+
+    /// Return a slice of instruction pointers to match slots.
+    ///
+    /// There is a match slot for every regular expression in this executor.
+    pub fn matches(&self) -> &[InstPtr] {
+        &self.prog.matches
     }
 
     /// Return a slice of capture names.
     ///
     /// Any capture that isn't named is None.
-    pub fn capture_names(&self) -> &[Option<String>] {
-        &self.prog.cap_names
+    pub fn captures(&self) -> &[Option<String>] {
+        &self.prog.captures
     }
 
     /// Return a reference to named groups mapping (from group name to
     /// group position).
-    pub fn named_groups(&self) -> &Arc<HashMap<String, usize>> {
-        &self.prog.named_groups
-    }
-
-    /// Return a fresh allocation for storing all possible captures in the
-    /// underlying regular expression.
-    pub fn alloc_captures(&self) -> Vec<Option<usize>> {
-        self.prog.alloc_captures()
+    pub fn capture_name_idx(&self) -> &Arc<HashMap<String, usize>> {
+        &self.prog.capture_name_idx
     }
 }
 

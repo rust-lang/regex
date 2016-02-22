@@ -24,7 +24,7 @@ pub struct InputAt {
 
 impl InputAt {
     /// Returns true iff this position is at the beginning of the input.
-    pub fn is_beginning(&self) -> bool {
+    pub fn is_start(&self) -> bool {
         self.pos == 0
     }
 

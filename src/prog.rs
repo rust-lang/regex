@@ -1,55 +1,59 @@
+use std::collections::HashMap;
 use std::cmp::Ordering;
 use std::fmt;
 use std::ops::Deref;
 use std::mem;
 use std::slice;
+use std::sync::Arc;
 
+use backtrack::BacktrackCache;
 use char::Char;
-use literals::{BuildPrefixes, Literals};
+use dfa::DfaCache;
+use literals::Literals;
+use nfa::NfaCache;
+use pool::{Pool, PoolGuard};
 
 /// InstPtr represents the index of an instruction in a regex program.
 pub type InstPtr = usize;
 
-/// Insts is a sequence of instructions.
+/// Program is a sequence of instructions and various facts about thos
+/// instructions.
 #[derive(Clone)]
-pub struct Insts {
-    insts: Vec<Inst>,
-    bytes: bool,
-    reverse: bool,
-    byte_classes: Vec<u8>,
+pub struct Program {
+    pub insts: Vec<Inst>,
+    pub matches: Vec<InstPtr>,
+    pub captures: Vec<Option<String>>,
+    pub capture_name_idx: Arc<HashMap<String, usize>>,
+    pub start: InstPtr,
+    pub byte_classes: Vec<u8>,
+    pub is_bytes: bool,
+    pub is_dfa: bool,
+    pub is_reverse: bool,
+    pub is_anchored_start: bool,
+    pub is_anchored_end: bool,
+    pub prefixes: Literals,
+    pub cache: EngineCache,
 }
 
-impl Insts {
-    /// Create a new instruction sequence.
-    ///
-    /// If `bytes` is true, then this instruction sequence must run on raw
-    /// bytes. Otherwise, it is executed on Unicode codepoints.
-    ///
-    /// A Vec<Inst> can be created with the compiler.
-    pub fn new(
-        insts: Vec<Inst>,
-        bytes: bool,
-        reverse: bool,
-        byte_classes: Vec<u8>,
-    ) -> Self {
-        assert!(byte_classes.len() == 256);
-        Insts {
-            insts: insts,
-            bytes: bytes,
-            reverse: reverse,
-            byte_classes: byte_classes,
+impl Program {
+    /// Creates an empty instruction sequence. Fields are given default
+    /// values.
+    pub fn new() -> Self {
+        Program {
+            insts: vec![],
+            matches: vec![],
+            captures: vec![],
+            capture_name_idx: Arc::new(HashMap::new()),
+            start: 0,
+            byte_classes: vec![],
+            is_bytes: false,
+            is_dfa: false,
+            is_reverse: false,
+            is_anchored_start: false,
+            is_anchored_end: false,
+            prefixes: Literals::empty(),
+            cache: EngineCache::new(),
         }
-    }
-
-    /// Returns true if and only if this instruction sequence must be executed
-    /// on byte strings.
-    pub fn is_bytes(&self) -> bool {
-        self.bytes
-    }
-
-    /// Returns true if and only if this instruction sequence is reversed.
-    pub fn is_reversed(&self) -> bool {
-        self.reverse
     }
 
     /// If pc is an index to a no-op instruction (like Save), then return the
@@ -63,73 +67,40 @@ impl Insts {
         }
     }
 
-    /// Returns a map from input byte to byte class. Each class represents
-    /// a set of bytes that are indistinguishable to the underlying
-    /// instructions.
-    ///
-    /// It is guaranteed to have length 256.
-    pub fn byte_classes(&self) -> &[u8] {
-        &self.byte_classes
-    }
-
-    /// Returns the location of the `Save(0)` instruction, which is present
-    /// in every program and always indicates the logical start of a match.
-    ///
-    /// (DFA programs compile a `.*?` into the program, preceding the `Save(0)`
-    /// instruction, to support unanchored matches. Generally, we want to
-    /// ignore that `.*?` when doing analysis, like extracting prefixes.)
-    pub fn start(&self) -> InstPtr {
-        for (i, inst) in self.iter().enumerate() {
-            match *inst {
-                Inst::Save(ref inst) if inst.slot == 0 => return i,
-                _ => {}
-            }
-        }
-        unreachable!()
-    }
-
     /// Return true if and only if an execution engine at instruction `pc` will
     /// always lead to a match.
     pub fn leads_to_match(&self, pc: usize) -> bool {
+        if self.matches.len() > 1 {
+            // If we have a regex set, then we have more than one ending
+            // state, so leading to one of those states is generally
+            // meaningless.
+            return false;
+        }
         match self[self.skip(pc)] {
-            Inst::Match => true,
+            Inst::Match(_) => true,
             _ => false,
         }
     }
 
-    /// Return true if and only if the regex is anchored at the start of
-    /// search text.
-    pub fn anchored_begin(&self) -> bool {
-        match self.get(1) {
-            Some(&Inst::EmptyLook(ref inst)) => {
-                inst.look == EmptyLook::StartText
-            }
-            _ => false,
-        }
+    /// Returns true if the current configuration demands that an implicit
+    /// `.*?` be prepended to the instruction sequence.
+    pub fn needs_dotstar(&self) -> bool {
+        self.is_dfa && !self.is_reverse && !self.is_anchored_start
     }
 
-    /// Return true if and only if the regex is anchored at the end of
-    /// search text.
-    pub fn anchored_end(&self) -> bool {
-        match self.get(self.len() - 3) {
-            Some(&Inst::EmptyLook(ref inst)) => {
-                inst.look == EmptyLook::EndText
-            }
-            _ => false,
-        }
+    /// Retrieve cached state for NFA execution.
+    pub fn cache_nfa(&self) -> PoolGuard<Box<NfaCache>> {
+        self.cache.nfa.get()
     }
 
-    /// Build a matching engine for all prefix literals in this instruction
-    /// sequence.
-    ///
-    /// If there are no prefix literals (or there are too many), then a
-    /// matching engine that never matches is returned.
-    pub fn prefix_matcher(&self) -> Literals {
-        if self.is_bytes() || self.is_reversed() {
-            Literals::empty()
-        } else {
-            BuildPrefixes::new(self).literals().into_matcher()
-        }
+    /// Retrieve cached state for backtracking execution.
+    pub fn cache_backtrack(&self) -> PoolGuard<Box<BacktrackCache>> {
+        self.cache.backtrack.get()
+    }
+
+    /// Retrieve cached state for DFA execution.
+    pub fn cache_dfa(&self) -> PoolGuard<Box<DfaCache>> {
+        self.cache.dfa.get()
     }
 
     /// Return the approximate heap usage of this instruction sequence in
@@ -142,7 +113,7 @@ impl Insts {
     }
 }
 
-impl Deref for Insts {
+impl Deref for Program {
     type Target = [Inst];
 
     fn deref(&self) -> &Self::Target {
@@ -150,7 +121,7 @@ impl Deref for Insts {
     }
 }
 
-impl fmt::Debug for Insts {
+impl fmt::Debug for Program {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use self::Inst::*;
 
@@ -171,7 +142,9 @@ impl fmt::Debug for Insts {
         try!(writeln!(f, "--------------------------------"));
         for (pc, inst) in self.iter().enumerate() {
             match *inst {
-                Match => try!(writeln!(f, "{:04} Match", pc)),
+                Match(slot) => {
+                    try!(writeln!(f, "{:04} Match({:?})", pc, slot))
+                }
                 Save(ref inst) => {
                     let s = format!("{:04} Save({})", pc, inst.slot);
                     try!(writeln!(f, "{}", with_goto(pc, inst.goto, s)));
@@ -215,10 +188,43 @@ impl fmt::Debug for Insts {
     }
 }
 
-impl<'a> IntoIterator for &'a Insts {
+impl<'a> IntoIterator for &'a Program {
     type Item = &'a Inst;
     type IntoIter = slice::Iter<'a, Inst>;
     fn into_iter(self) -> Self::IntoIter { self.iter() }
+}
+
+/// EngineCache maintains reusable allocations for each matching engine
+/// available to a particular program.
+///
+/// The allocations are created lazily, so we don't pay for caches that
+/// aren't used.
+///
+/// N.B. These are all behind a pointer because it's fewer bytes to memcpy.
+/// These caches are pushed/popped from the pool a lot, and a smaller
+/// footprint can have an impact on matching small inputs. See, for example,
+/// the hard_32 benchmark.
+#[derive(Debug)]
+pub struct EngineCache {
+    nfa: Pool<Box<NfaCache>>,
+    backtrack: Pool<Box<BacktrackCache>>,
+    dfa: Pool<Box<DfaCache>>,
+}
+
+impl EngineCache {
+    fn new() -> Self {
+        EngineCache {
+            nfa: Pool::new(Box::new(|| Box::new(NfaCache::new()))),
+            backtrack: Pool::new(Box::new(|| Box::new(BacktrackCache::new()))),
+            dfa: Pool::new(Box::new(|| Box::new(DfaCache::new()))),
+        }
+    }
+}
+
+impl Clone for EngineCache {
+    fn clone(&self) -> EngineCache {
+        EngineCache::new()
+    }
 }
 
 /// Inst is an instruction code in a Regex program.
@@ -241,7 +247,13 @@ impl<'a> IntoIterator for &'a Insts {
 #[derive(Clone, Debug)]
 pub enum Inst {
     /// Match indicates that the program has reached a match state.
-    Match,
+    ///
+    /// The number in the match corresponds to the Nth logical regular
+    /// expression in this program. This index is always 0 for normal regex
+    /// programs. Values greater than 0 appear when compiling regex sets, and
+    /// each match instruction gets its own unique value. The value corresponds
+    /// to the Nth regex in the set.
+    Match(usize),
     /// Save causes the program to save the current location of the input in
     /// the slot indicated by InstSave.
     Save(InstSave),

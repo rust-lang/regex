@@ -17,7 +17,7 @@ use aho_corasick::{Automaton, AcAutomaton, FullAcAutomaton};
 use memchr::{memchr, memchr2, memchr3};
 
 use char_utf8::encode_utf8;
-use inst::{Insts, Inst, InstBytes, InstRanges};
+use prog::{Program, Inst, InstBytes, InstRanges};
 
 #[derive(Clone, Eq, PartialEq)]
 pub struct AlternateLiterals {
@@ -200,13 +200,13 @@ impl AlternateLiterals {
 }
 
 pub struct BuildPrefixes<'a> {
-    insts: &'a Insts,
+    insts: &'a Program,
     limit: usize,
     alts: AlternateLiterals,
 }
 
 impl<'a> BuildPrefixes<'a> {
-    pub fn new(insts: &'a Insts) -> Self {
+    pub fn new(insts: &'a Program) -> Self {
         BuildPrefixes {
             insts: insts,
             limit: 250,
@@ -215,7 +215,7 @@ impl<'a> BuildPrefixes<'a> {
     }
 
     pub fn literals(mut self) -> AlternateLiterals {
-        let mut stack = vec![self.insts.skip(self.insts.start())];
+        let mut stack = vec![self.insts.skip(self.insts.start)];
         let mut seen = HashSet::new();
         while let Some(mut pc) = stack.pop() {
             seen.insert(pc);
@@ -272,13 +272,13 @@ impl<'a> BuildPrefixes<'a> {
 }
 
 pub struct BuildRequiredLiterals<'a> {
-    insts: &'a Insts,
+    insts: &'a Program,
     limit: usize,
     alts: AlternateLiterals,
 }
 
 impl<'a> BuildRequiredLiterals<'a> {
-    pub fn new(insts: &'a Insts) -> Self {
+    pub fn new(insts: &'a Program) -> Self {
         BuildRequiredLiterals {
             insts: insts,
             limit: 250,
@@ -292,7 +292,7 @@ impl<'a> BuildRequiredLiterals<'a> {
     }
 
     fn literals(mut self, mut pc: usize) -> AlternateLiterals {
-        use inst::Inst::*;
+        use prog::Inst::*;
         loop {
             let inst = &self.insts[pc];
             match *inst {
@@ -318,7 +318,7 @@ impl<'a> BuildRequiredLiterals<'a> {
                     }
                     pc = inst.goto;
                 }
-                Split(_) | EmptyLook(_) | Match => {
+                Split(_) | EmptyLook(_) | Match(_) => {
                     self.alts.at_match = self.insts.leads_to_match(pc);
                     break;
                 }
@@ -662,31 +662,32 @@ impl fmt::Debug for Literals {
 
 #[cfg(test)]
 mod tests {
-    use program::ProgramBuilder;
-    use super::AlternateLiterals;
+    use compile::Compiler;
+    use super::{AlternateLiterals, BuildPrefixes};
+    use syntax::Expr;
 
     macro_rules! prog {
-        ($re:expr) => { ProgramBuilder::new($re).compile().unwrap() }
-    }
-
-    macro_rules! byte_prog {
-        ($re:expr) => {
-            ProgramBuilder::new($re).bytes(true).compile().unwrap()
-        }
+        ($re:expr) => {{
+            let expr = Expr::parse($re).unwrap();
+            let prog = Compiler::new().compile(&[expr]).unwrap();
+            prog
+        }}
     }
 
     macro_rules! prefixes {
         ($re:expr) => {{
             let p = prog!($re);
-            assert!(!p.prefixes.at_match());
-            p.prefixes.prefixes()
+            let prefixes = BuildPrefixes::new(&p).literals().into_matcher();
+            assert!(!prefixes.at_match());
+            prefixes.prefixes()
         }}
     }
     macro_rules! prefixes_complete {
         ($re:expr) => {{
             let p = prog!($re);
-            assert!(p.prefixes.at_match());
-            p.prefixes.prefixes()
+            let prefixes = BuildPrefixes::new(&p).literals().into_matcher();
+            assert!(prefixes.at_match());
+            prefixes.prefixes()
         }}
     }
 

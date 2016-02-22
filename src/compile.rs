@@ -8,23 +8,20 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use std::collections::HashSet;
+use std::collections::HashMap;
 use std::iter;
 use std::result;
+use std::sync::Arc;
 
 use syntax::{Expr, Repeater, CharClass, ClassRange};
 use utf8_ranges::{Utf8Range, Utf8Sequence, Utf8Sequences};
 
-use Error;
-use inst::{
-    Insts, Inst, InstPtr, EmptyLook,
+use prog::{
+    Program, Inst, InstPtr, EmptyLook,
     InstSave, InstSplit, InstEmptyLook, InstChar, InstRanges, InstBytes,
 };
 
-pub struct Compiled {
-    pub insts: Insts,
-    pub cap_names: Vec<Option<String>>,
-}
+use Error;
 
 type InstHoleIdx = InstPtr;
 
@@ -38,12 +35,10 @@ struct Patch {
 
 pub struct Compiler {
     insts: Vec<MaybeInst>,
-    cap_names: Vec<Option<String>>,
-    seen_caps: HashSet<usize>,
+    compiled: Program,
+    capture_name_idx: HashMap<String, usize>,
+    num_exprs: usize,
     size_limit: usize,
-    bytes: bool,
-    dfa: bool,
-    reverse: bool,
     suffix_cache: SuffixCache,
     utf8_seqs: Option<Utf8Sequences>,
     byte_classes: ByteClassSet,
@@ -56,12 +51,10 @@ impl Compiler {
     pub fn new() -> Self {
         Compiler {
             insts: vec![],
-            cap_names: vec![None],
-            seen_caps: HashSet::new(),
+            compiled: Program::new(),
+            capture_name_idx: HashMap::new(),
+            num_exprs: 0,
             size_limit: 10 * (1 << 20),
-            bytes: false,
-            dfa: false,
-            reverse: false,
             suffix_cache: SuffixCache::new(1000),
             utf8_seqs: Some(Utf8Sequences::new('\x00', '\x00')),
             byte_classes: ByteClassSet::new(),
@@ -88,7 +81,7 @@ impl Compiler {
     ///
     /// Note that `dfa(true)` implies `bytes(true)`.
     pub fn bytes(mut self, yes: bool) -> Self {
-        self.bytes = yes;
+        self.compiled.is_bytes = yes;
         self
     }
 
@@ -100,15 +93,15 @@ impl Compiler {
     /// based engines handle the preceding `.*?` explicitly, which is difficult
     /// or impossible in the DFA engine.)
     pub fn dfa(mut self, yes: bool) -> Self {
-        self.dfa = yes;
-        self.bytes = yes;
+        self.compiled.is_dfa = yes;
+        self.compiled.is_bytes = yes;
         self
     }
 
     /// When set, the machine returned is suitable for matching text in
     /// reverse. In particular, all concatenations are flipped.
     pub fn reverse(mut self, yes: bool) -> Self {
-        self.reverse = yes;
+        self.compiled.is_reverse = yes;
         self
     }
 
@@ -117,8 +110,27 @@ impl Compiler {
     /// The compiler is guaranteed to succeed unless the program exceeds the
     /// specified size limit. If the size limit is exceeded, then compilation
     /// stops and returns an error.
-    pub fn compile(mut self, expr: &Expr) -> result::Result<Compiled, Error> {
-        if self.dfa && !self.reverse && !expr.is_anchored_start() {
+    pub fn compile(
+        mut self,
+        exprs: &[Expr],
+    ) -> result::Result<Program, Error> {
+        debug_assert!(exprs.len() >= 1);
+        self.num_exprs = exprs.len();
+        if exprs.len() == 1 {
+            self.compile_one(&exprs[0])
+        } else {
+            self.compile_many(exprs)
+        }
+    }
+
+    fn compile_one(mut self, expr: &Expr) -> result::Result<Program, Error> {
+        // If we're compiling a forward DFA and we aren't anchored, then
+        // add a `.*?` before the first capture group.
+        // Other matching engines handle this by baking the logic into the
+        // matching engine itself.
+        self.compiled.is_anchored_start = expr.is_anchored_start();
+        self.compiled.is_anchored_end = expr.is_anchored_end();
+        if self.compiled.needs_dotstar() {
             let patch = try!(self.c(&Expr::Repeat {
                 e: Box::new(Expr::AnyChar),
                 r: Repeater::ZeroOrMore,
@@ -126,20 +138,64 @@ impl Compiler {
             }));
             self.fill_to_next(patch.hole);
         }
+        self.compiled.captures = vec![None];
+        self.compiled.start = self.insts.len();
         let patch = try!(self.c_capture(0, expr));
         self.fill_to_next(patch.hole);
-        self.push_compiled(Inst::Match);
+        self.compiled.matches = vec![self.insts.len()];
+        self.push_compiled(Inst::Match(0));
+        self.compile_finish()
+    }
 
-        let byte_classes = self.byte_classes.byte_classes();
-        let insts = self.insts.into_iter().map(|inst| inst.unwrap()).collect();
-        Ok(Compiled {
-            insts: Insts::new(insts, self.bytes, self.reverse, byte_classes),
-            cap_names: self.cap_names,
-        })
+    fn compile_many(
+        mut self,
+        exprs: &[Expr],
+    ) -> result::Result<Program, Error> {
+        debug_assert!(exprs.len() > 1);
+
+        self.compiled.is_anchored_start =
+            exprs.iter().all(|e| e.is_anchored_start());
+        self.compiled.is_anchored_end =
+            exprs.iter().all(|e| e.is_anchored_end());
+        if self.compiled.needs_dotstar() {
+            let patch = try!(self.c(&Expr::Repeat {
+                e: Box::new(Expr::AnyChar),
+                r: Repeater::ZeroOrMore,
+                greedy: false,
+            }));
+            self.fill_to_next(patch.hole);
+        }
+
+        self.compiled.start = self.insts.len();
+        for (i, expr) in exprs[0..exprs.len() - 1].iter().enumerate() {
+            let split = self.push_split_hole();
+            let Patch { hole, entry } = try!(self.c_capture(0, expr));
+            self.fill_to_next(hole);
+            self.compiled.matches.push(self.insts.len());
+            self.push_compiled(Inst::Match(i));
+
+            let next = self.insts.len();
+            self.fill_split(split, Some(entry), Some(next));
+        }
+        let i = exprs.len() - 1;
+        let Patch { hole, .. } = try!(self.c_capture(0, &exprs[i]));
+        self.fill_to_next(hole);
+        self.compiled.matches.push(self.insts.len());
+        self.push_compiled(Inst::Match(i));
+
+        self.compile_finish()
+    }
+
+    fn compile_finish(mut self) -> result::Result<Program, Error> {
+        self.compiled.insts =
+            self.insts.into_iter().map(|inst| inst.unwrap()).collect();
+        self.compiled.byte_classes = self.byte_classes.byte_classes();
+        self.compiled.capture_name_idx = Arc::new(self.capture_name_idx);
+        Ok(self.compiled)
     }
 
     fn c(&mut self, expr: &Expr) -> Result {
-        use inst;
+        use prog;
         use syntax::Expr::*;
 
         try!(self.check_size());
@@ -159,50 +215,52 @@ impl Compiler {
             Class(ref cls) => {
                 self.c_class(cls)
             }
-            StartLine if self.reverse => {
+            StartLine if self.compiled.is_reverse => {
                 self.byte_classes.set_range(b'\n', b'\n');
-                self.c_empty_look(inst::EmptyLook::EndLine)
+                self.c_empty_look(prog::EmptyLook::EndLine)
             }
             StartLine => {
                 self.byte_classes.set_range(b'\n', b'\n');
-                self.c_empty_look(inst::EmptyLook::StartLine)
+                self.c_empty_look(prog::EmptyLook::StartLine)
             }
-            EndLine if self.reverse => {
+            EndLine if self.compiled.is_reverse => {
                 self.byte_classes.set_range(b'\n', b'\n');
-                self.c_empty_look(inst::EmptyLook::StartLine)
+                self.c_empty_look(prog::EmptyLook::StartLine)
             }
             EndLine => {
                 self.byte_classes.set_range(b'\n', b'\n');
-                self.c_empty_look(inst::EmptyLook::EndLine)
+                self.c_empty_look(prog::EmptyLook::EndLine)
             }
-            StartText if self.reverse => {
-                self.c_empty_look(inst::EmptyLook::EndText)
+            StartText if self.compiled.is_reverse => {
+                self.c_empty_look(prog::EmptyLook::EndText)
             }
             StartText => {
-                self.c_empty_look(inst::EmptyLook::StartText)
+                self.c_empty_look(prog::EmptyLook::StartText)
             }
-            EndText if self.reverse => {
-                self.c_empty_look(inst::EmptyLook::StartText)
+            EndText if self.compiled.is_reverse => {
+                self.c_empty_look(prog::EmptyLook::StartText)
             }
             EndText => {
-                self.c_empty_look(inst::EmptyLook::EndText)
+                self.c_empty_look(prog::EmptyLook::EndText)
             }
-            WordBoundary => self.c_empty_look(inst::EmptyLook::WordBoundary),
+            WordBoundary => self.c_empty_look(prog::EmptyLook::WordBoundary),
             NotWordBoundary => {
-                self.c_empty_look(inst::EmptyLook::NotWordBoundary)
+                self.c_empty_look(prog::EmptyLook::NotWordBoundary)
             }
             Group { ref e, i: None, name: None } => self.c(e),
             Group { ref e, i, ref name } => {
                 // it's impossible to have a named capture without an index
                 let i = i.expect("capture index");
-                if !self.seen_caps.contains(&i) {
-                    self.cap_names.push(name.clone());
-                    self.seen_caps.insert(i);
+                if i >= self.compiled.captures.len() {
+                    self.compiled.captures.push(name.clone());
+                    if let Some(ref name) = *name {
+                        self.capture_name_idx.insert(name.to_owned(), i);
+                    }
                 }
                 self.c_capture(2 * i, e)
             }
             Concat(ref es) => {
-                if self.reverse {
+                if self.compiled.is_reverse {
                     self.c_concat(es.iter().rev())
                 } else {
                     self.c_concat(es)
@@ -214,22 +272,30 @@ impl Compiler {
     }
 
     fn c_capture(&mut self, first_slot: usize, expr: &Expr) -> Result {
-        let entry = self.insts.len();
-        let hole = self.push_hole(InstHole::Save { slot: first_slot });
-        let patch = try!(self.c(expr));
-        self.fill(hole, patch.entry);
-        self.fill_to_next(patch.hole);
-        let hole = self.push_hole(InstHole::Save { slot: first_slot + 1 });
-        Ok(Patch { hole: hole, entry: entry })
+        if self.num_exprs > 1 || self.compiled.is_dfa {
+            // Don't ever compile Save instructions for regex sets because
+            // they are never used. They are also never used in DFA programs
+            // because DFAs can't handle captures.
+            self.c(expr)
+        } else {
+            let entry = self.insts.len();
+            let hole = self.push_hole(InstHole::Save { slot: first_slot });
+            let patch = try!(self.c(expr));
+            self.fill(hole, patch.entry);
+            self.fill_to_next(patch.hole);
+            let hole = self.push_hole(InstHole::Save { slot: first_slot + 1 });
+            Ok(Patch { hole: hole, entry: entry })
+        }
     }
 
     fn c_literal(&mut self, chars: &[char], casei: bool) -> Result {
         assert!(!chars.is_empty());
-        let mut chars: Box<Iterator<Item=&char>> = if self.reverse {
-            Box::new(chars.iter().rev())
-        } else {
-            Box::new(chars.iter())
-        };
+        let mut chars: Box<Iterator<Item=&char>> =
+            if self.compiled.is_reverse {
+                Box::new(chars.iter().rev())
+            } else {
+                Box::new(chars.iter())
+            };
         let first = *chars.next().expect("non-empty literal");
         let Patch { mut hole, entry } = try!(self.c_char(first, casei));
         for &c in chars {
@@ -251,7 +317,7 @@ impl Compiler {
     }
 
     fn c_class(&mut self, ranges: &[ClassRange]) -> Result {
-        if self.bytes {
+        if self.compiled.is_bytes {
             CompileClass {
                 c: self,
                 ranges: ranges,
@@ -694,7 +760,7 @@ impl<'a, 'b> CompileClass<'a, 'b> {
     }
 
     fn c_utf8_seq(&mut self, seq: &Utf8Sequence) -> Result {
-        if self.c.reverse {
+        if self.c.compiled.is_reverse {
             self.c_utf8_seq_(seq)
         } else {
             self.c_utf8_seq_(seq.into_iter().rev())
@@ -704,9 +770,7 @@ impl<'a, 'b> CompileClass<'a, 'b> {
     fn c_utf8_seq_<'r, I>(&mut self, seq: I) -> Result
             where I: IntoIterator<Item=&'r Utf8Range> {
         // The initial instruction for each UTF-8 sequence should be the same.
-        // Since the 0th instruction has always been created by this point,
-        // it's safe to use it as a sentinel here.
-        let mut from_inst = 0;
+        let mut from_inst = ::std::usize::MAX;
         let mut last_hole = Hole::None;
         for byte_range in seq {
             let key = SuffixCacheKey {
@@ -722,7 +786,7 @@ impl<'a, 'b> CompileClass<'a, 'b> {
                 }
             }
             self.c.byte_classes.set_range(byte_range.start, byte_range.end);
-            if from_inst == 0 {
+            if from_inst == ::std::usize::MAX {
                 last_hole = self.c.push_hole(InstHole::Bytes {
                     start: byte_range.start,
                     end: byte_range.end,
@@ -735,8 +799,9 @@ impl<'a, 'b> CompileClass<'a, 'b> {
                 }));
             }
             from_inst = self.c.insts.len().checked_sub(1).unwrap();
+            assert!(from_inst < ::std::usize::MAX);
         }
-        assert!(from_inst > 0);
+        assert!(from_inst < ::std::usize::MAX);
         Ok(Patch { hole: last_hole, entry: from_inst })
     }
 }
