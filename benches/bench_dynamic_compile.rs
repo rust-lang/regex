@@ -8,54 +8,55 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+use regex_syntax::Expr;
 use test::Bencher;
 
-use regex::internal::ProgramBuilder;
+use regex::internal::Compiler;
 
 #[bench]
 fn compile_simple(b: &mut Bencher) {
     b.iter(|| {
-        let re = r"^bc(d|e)*$";
-        ProgramBuilder::new(&re).compile().unwrap()
+        let re = Expr::parse(r"^bc(d|e)*$").unwrap();
+        Compiler::new().compile(&[re]).unwrap()
     });
 }
 
 #[bench]
 fn compile_simple_bytes(b: &mut Bencher) {
     b.iter(|| {
-        let re = r"^bc(d|e)*$";
-        ProgramBuilder::new(&re).bytes(true).compile().unwrap()
+        let re = Expr::parse(r"^bc(d|e)*$").unwrap();
+        Compiler::new().bytes(true).compile(&[re]).unwrap()
     });
 }
 
 #[bench]
 fn compile_small(b: &mut Bencher) {
     b.iter(|| {
-        let re = r"\p{L}|\p{N}|\s|.|\d";
-        ProgramBuilder::new(&re).compile().unwrap()
+        let re = Expr::parse(r"\p{L}|\p{N}|\s|.|\d").unwrap();
+        Compiler::new().compile(&[re]).unwrap()
     });
 }
 
 #[bench]
 fn compile_small_bytes(b: &mut Bencher) {
     b.iter(|| {
-        let re = r"\p{L}|\p{N}|\s|.|\d";
-        ProgramBuilder::new(&re).bytes(true).compile().unwrap()
+        let re = Expr::parse(r"\p{L}|\p{N}|\s|.|\d").unwrap();
+        Compiler::new().bytes(true).compile(&[re]).unwrap()
     });
 }
 
 #[bench]
 fn compile_huge(b: &mut Bencher) {
     b.iter(|| {
-        let re = r"\p{L}{100}";
-        ProgramBuilder::new(&re).compile().unwrap()
+        let re = Expr::parse(r"\p{L}{100}").unwrap();
+        Compiler::new().compile(&[re]).unwrap()
     });
 }
 
 #[bench]
 fn compile_huge_bytes(b: &mut Bencher) {
     b.iter(|| {
-        let re = r"\p{L}{100}";
-        ProgramBuilder::new(&re).bytes(true).compile().unwrap()
+        let re = Expr::parse(r"\p{L}{100}").unwrap();
+        Compiler::new().bytes(true).compile(&[re]).unwrap()
     });
 }

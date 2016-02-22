@@ -210,6 +210,34 @@
 //! # }
 //! ```
 //!
+//! # Example: match multiple regular expressions simultaneously
+//!
+//! This demonstrates how to use a `RegexSet` to match multiple (possibly
+//! overlapping) regular expressions in a single scan of the search text:
+//!
+//! ```rust
+//! use regex::RegexSet;
+//!
+//! let set = RegexSet::new(&[
+//!     r"\w+",
+//!     r"\d+",
+//!     r"\pL+",
+//!     r"foo",
+//!     r"bar",
+//!     r"barfoo",
+//!     r"foobar",
+//! ]).unwrap();
+//!
+//! // Iterate over and collect all of the matches.
+//! let matches: Vec<_> = set.matches("foobar").into_iter().collect();
+//! assert_eq!(matches, vec![0, 2, 3, 4, 6]);
+//!
+//! // You can also test whether a particular regex matched:
+//! let matches = set.matches("foobar");
+//! assert!(!matches.matched(5));
+//! assert!(matches.matched(6));
+//! ```
+//!
 //! # Pay for what you use
 //!
 //! With respect to searching text with a regular expression, there are three
@@ -438,7 +466,9 @@
 //! allowed to store a fixed number of states. (When the limit is reached, its
 //! states are wiped and continues on, possibly duplicating previous work.)
 
-#![deny(missing_docs)]
+#![allow(dead_code, unused_imports, unused_variables)]
+
+// #![deny(missing_docs)]
 #![cfg_attr(test, deny(warnings))]
 #![cfg_attr(feature = "pattern", feature(pattern))]
 #![doc(html_logo_url = "https://www.rust-lang.org/logos/rust-logo-128x128-blk-v2.png",
@@ -457,6 +487,7 @@ pub use re::{
     Replacer, NoExpand, RegexSplits, RegexSplitsN,
     quote, is_match,
 };
+pub use set::{RegexSet, SetMatches, SetMatchesIntoIter, SetMatchesIter};
 
 mod backtrack;
 mod char;
@@ -465,12 +496,12 @@ mod compile;
 mod dfa;
 mod exec;
 mod input;
-mod inst;
 mod literals;
 mod nfa;
 mod pool;
-mod program;
+mod prog;
 mod re;
+mod set;
 mod sparse;
 
 /// The `internal` module exists to support the `regex!` macro and other
@@ -478,9 +509,10 @@ mod sparse;
 #[doc(hidden)]
 pub mod internal {
     pub use char::Char;
+    pub use compile::Compiler;
     pub use exec::{Exec, ExecBuilder};
     pub use input::{Input, CharInput, InputAt};
-    pub use inst::{Inst, EmptyLook, InstRanges};
-    pub use program::{Program, ProgramBuilder};
+    pub use literals::{BuildPrefixes, Literals};
+    pub use prog::{Program, Inst, EmptyLook, InstRanges};
     pub use re::ExNative;
 }

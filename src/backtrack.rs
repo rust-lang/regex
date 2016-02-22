@@ -26,10 +26,9 @@
 // the bitset has to be zeroed on each execution, which becomes quite expensive
 // on large bitsets.
 
+use exec::Search;
 use input::{Input, InputAt};
-use inst::InstPtr;
-use program::Program;
-use re::CaptureIdxs;
+use prog::{Program, InstPtr};
 
 /// Returns true iff the given regex and input should be executed by this
 /// engine with reasonable memory usage.
@@ -51,10 +50,10 @@ const MAX_INPUT_SIZE: usize = 128 * (1 << 10);
 
 /// A backtracking matching engine.
 #[derive(Debug)]
-pub struct Backtrack<'a, 'r, 'c, I> {
+pub struct Backtrack<'a, 'b, 'c: 'b, 'm: 'b, 'r, I> {
     prog: &'r Program,
     input: I,
-    caps: &'c mut CaptureIdxs,
+    search: &'b mut Search<'m, 'c>,
     m: &'a mut BacktrackCache,
 }
 
@@ -85,14 +84,14 @@ enum Job {
     SaveRestore { slot: usize, old_pos: Option<usize> },
 }
 
-impl<'a, 'r, 'c, I: Input> Backtrack<'a, 'r, 'c, I> {
+impl<'a, 'b, 'c, 'm, 'r, I: Input> Backtrack<'a, 'b, 'c, 'r, 'm, I> {
     /// Execute the backtracking matching engine.
     ///
     /// If there's a match, `exec` returns `true` and populates the given
     /// captures accordingly.
     pub fn exec(
         prog: &'r Program,
-        mut caps: &mut CaptureIdxs,
+        search: &'b mut Search<'c, 'm>,
         input: I,
         start: usize,
     ) -> bool {
@@ -101,7 +100,7 @@ impl<'a, 'r, 'c, I: Input> Backtrack<'a, 'r, 'c, I> {
         let mut b = Backtrack {
             prog: prog,
             input: input,
-            caps: caps,
+            search: search,
             m: &mut m,
         };
         b.exec_(start)
@@ -124,7 +123,7 @@ impl<'a, 'r, 'c, I: Input> Backtrack<'a, 'r, 'c, I> {
         // (Probably because backtracking is limited to such small
         // inputs/regexes in the first place.)
         let visited_len =
-            (self.prog.insts.len() * (self.input.len() + 1) + BIT_SIZE - 1)
+            (self.prog.len() * (self.input.len() + 1) + BIT_SIZE - 1)
             /
             BIT_SIZE;
         self.m.visited.truncate(visited_len);
@@ -146,8 +145,8 @@ impl<'a, 'r, 'c, I: Input> Backtrack<'a, 'r, 'c, I> {
         self.clear();
         // If this is an anchored regex at the beginning of the input, then
         // we're either already done or we only need to try backtracking once.
-        if self.prog.anchored_begin {
-            return if !at.is_beginning() {
+        if self.prog.is_anchored_start {
+            return if !at.is_start() {
                 false
             } else {
                 self.backtrack(at)
@@ -184,11 +183,16 @@ impl<'a, 'r, 'c, I: Input> Backtrack<'a, 'r, 'c, I> {
             match job {
                 Job::Inst { ip, at } => {
                     if self.step(ip, at) {
-                        return true;
+                        // Only quit if we're matching one regex.
+                        // If we're matching a regex set, then mush on and
+                        // try to find other matches.
+                        if self.search.matches.len() <= 1 {
+                            return true;
+                        }
                     }
                 }
                 Job::SaveRestore { slot, old_pos } => {
-                    self.caps[slot] = old_pos;
+                    self.search.captures[slot] = old_pos;
                 }
             }
         }
@@ -196,26 +200,29 @@ impl<'a, 'r, 'c, I: Input> Backtrack<'a, 'r, 'c, I> {
     }
 
     fn step(&mut self, mut ip: InstPtr, mut at: InputAt) -> bool {
-        use inst::Inst::*;
+        use prog::Inst::*;
         loop {
             // This loop is an optimization to avoid constantly pushing/popping
             // from the stack. Namely, if we're pushing a job only to run it
             // next, avoid the push and just mutate `ip` (and possibly `at`)
             // in place.
-            match self.prog.insts[ip] {
-                Match => return true,
+            match self.prog[ip] {
+                Match(slot) => {
+                    self.search.set_match(slot);
+                    return true;
+                }
                 Save(ref inst) => {
-                    if inst.slot < self.caps.len() {
+                    if inst.slot < self.search.captures.len() {
                         // If this path doesn't work out, then we save the old
                         // capture index (if one exists) in an alternate
                         // job. If the next path fails, then the alternate
                         // job is popped and the old capture index is restored.
-                        let old_pos = self.caps[inst.slot];
+                        let old_pos = self.search.captures[inst.slot];
                         self.m.jobs.push(Job::SaveRestore {
                             slot: inst.slot,
                             old_pos: old_pos,
                         });
-                        self.caps[inst.slot] = Some(at.pos());
+                        self.search.captures[inst.slot] = Some(at.pos());
                     }
                     ip = inst.goto;
                 }

@@ -21,8 +21,15 @@ extern crate regex;
 // regex and the input. Other dynamic tests explicitly set the engine to use.
 macro_rules! regex {
     ($re:expr) => {{
-        use regex::internal::ExecBuilder;
-        ExecBuilder::new($re).build().unwrap().into_regex()
+        use regex::Regex;
+        Regex::new($re).unwrap()
+    }}
+}
+
+macro_rules! regex_set {
+    ($res:expr) => {{
+        use regex::RegexSet;
+        RegexSet::new($res).unwrap()
     }}
 }
 
@@ -32,6 +39,7 @@ macro_rules! searcher_expr { ($e:expr) => ($e) }
 macro_rules! searcher_expr { ($e:expr) => ({}) }
 
 mod tests;
+mod tests_set;
 
 // Regression test for https://github.com/rust-lang/regex/issues/98
 //
@@ -41,4 +49,24 @@ mod tests;
 fn regression_many_repeat_stack_overflow() {
     let re = regex!("^.{1,2500}");
     assert_eq!(re.find("a"), Some((0, 1)));
+}
+
+#[test]
+fn set_empty() {
+    use regex::{Error, RegexSet};
+    let err = RegexSet::new::<&[String], &String>(&[]).unwrap_err();
+    match err {
+        Error::InvalidSet => {}
+        err => panic!("expected Error::InvalidSet but got {:?}", err),
+    }
+}
+
+#[test]
+fn set_one() {
+    use regex::{Error, RegexSet};
+    let err = RegexSet::new(&["foo"]).unwrap_err();
+    match err {
+        Error::InvalidSet => {}
+        err => panic!("expected Error::InvalidSet but got {:?}", err),
+    }
 }

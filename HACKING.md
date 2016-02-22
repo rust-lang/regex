@@ -112,7 +112,7 @@ the NFA algorithm, because it was one fewer epsilon transition that it had to
 follow.
 
 There exist more instructions and they are defined and documented in
-src/inst.rs.
+src/prog.rs.
 
 Compilation has several knobs and a few unfortunately complicated invariants.
 Namely, the output of compilation can be one of two types of programs: a
@@ -163,7 +163,7 @@ engine (or engines) to use.
 
 The logic for choosing which engine to execute is in src/exec.rs and is
 documented on the Exec type. Exec values collection regular expression
-Programs (defined in src/program.rs), which contain all the necessary tidbits
+Programs (defined in src/prog.rs), which contain all the necessary tidbits
 for actually executing a regular expression on search text.
 
 For the most part, the execution logic is straight-forward and follows the

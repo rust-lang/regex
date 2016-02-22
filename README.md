@@ -128,6 +128,34 @@ fn some_helper_function(text: &str) -> bool {
 Specifically, in this example, the regex will be compiled when it is used for
 the first time. On subsequent uses, it will reuse the previous compilation.
 
+### Usage: match multiple regular expressions simultaneously
+
+This demonstrates how to use a `RegexSet` to match multiple (possibly
+overlapping) regular expressions in a single scan of the search text:
+
+```rust
+use regex::RegexSet;
+
+let set = RegexSet::new(&[
+    r"\w+",
+    r"\d+",
+    r"\pL+",
+    r"foo",
+    r"bar",
+    r"barfoo",
+    r"foobar",
+]).unwrap();
+
+// Iterate over and collect all of the matches.
+let matches: Vec<_> = set.matches("foobar").into_iter().collect();
+assert_eq!(matches, vec![0, 2, 3, 4, 6]);
+
+// You can also test whether a particular regex matched:
+let matches = set.matches("foobar");
+assert!(!matches.matched(5));
+assert!(matches.matched(6));
+```
+
 ### Usage: `regex!` compiler plugin
 
 The `regex!` compiler plugin will compile your regexes at compile time. **This

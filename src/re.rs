@@ -17,7 +17,7 @@ use std::str::pattern::{Pattern, Searcher, SearchStep};
 use std::str::FromStr;
 use std::sync::Arc;
 
-use exec::{Exec, ExecBuilder};
+use exec::{CaptureSlots, Exec, ExecBuilder, Search};
 use syntax;
 
 const REPLACE_EXPAND: &'static str = r"(?x)
@@ -29,9 +29,6 @@ const REPLACE_EXPAND: &'static str = r"(?x)
     [_a-zA-Z][_0-9a-zA-Z]* # A name for named captures.
   )
 ";
-
-/// Type alias for representing capture indices.
-pub type CaptureIdxs = [Option<usize>];
 
 /// Escapes all regular expression meta characters in `text`.
 ///
@@ -67,6 +64,8 @@ pub enum Error {
     /// The compiled program exceeded the set size limit.
     /// The argument is the size limit imposed.
     CompiledTooBig(usize),
+    /// An invalid set is a regex set with fewer than 2 regular expressions.
+    InvalidSet,
     /// Hints that destructuring should not be exhaustive.
     ///
     /// This enum may grow additional variants, so this makes sure clients
@@ -81,6 +80,9 @@ impl ::std::error::Error for Error {
         match *self {
             Error::Syntax(ref err) => err.description(),
             Error::CompiledTooBig(_) => "compiled program too big",
+            Error::InvalidSet => {
+                "sets must contain 2 or more regular expressions"
+            }
             Error::__Nonexhaustive => unreachable!(),
         }
     }
@@ -100,6 +102,9 @@ impl fmt::Display for Error {
             Error::CompiledTooBig(limit) => {
                 write!(f, "Compiled regex exceeds size limit of {} bytes.",
                        limit)
+            }
+            Error::InvalidSet => {
+                write!(f, "Sets must contain 2 or more regular expressions.")
             }
             Error::__Nonexhaustive => unreachable!(),
         }
@@ -188,7 +193,7 @@ pub struct ExNative {
     #[doc(hidden)]
     pub groups: &'static &'static [(&'static str, usize)],
     #[doc(hidden)]
-    pub prog: fn(&mut CaptureIdxs, &str, usize) -> bool,
+    pub prog: fn(CaptureSlots, &str, usize) -> bool,
 }
 
 impl Copy for ExNative {}
@@ -634,7 +639,7 @@ impl Regex {
     /// Returns the original string of this regex.
     pub fn as_str(&self) -> &str {
         match *self {
-            Regex::Dynamic(ref exec) => exec.regex_str(),
+            Regex::Dynamic(ref exec) => &exec.regex_strings()[0],
             Regex::Native(ExNative { ref original, .. }) => original,
         }
     }
@@ -644,7 +649,7 @@ impl Regex {
         match *self {
             Regex::Native(ref n) => CaptureNames::Native(n.names.iter()),
             Regex::Dynamic(ref d) => {
-                CaptureNames::Dynamic(d.capture_names().iter())
+                CaptureNames::Dynamic(d.captures().iter())
             }
         }
     }
@@ -653,14 +658,14 @@ impl Regex {
     pub fn captures_len(&self) -> usize {
         match *self {
             Regex::Native(ref n) => n.names.len(),
-            Regex::Dynamic(ref d) => d.capture_names().len()
+            Regex::Dynamic(ref d) => d.captures().len()
         }
     }
 
     fn alloc_captures(&self) -> Vec<Option<usize>> {
         match *self {
             Regex::Native(ref n) => vec![None; 2 * n.names.len()],
-            Regex::Dynamic(ref d) => d.alloc_captures(),
+            Regex::Dynamic(ref d) => vec![None; 2 * d.captures().len()],
         }
     }
 }
@@ -811,7 +816,6 @@ impl<'r, 't> Iterator for RegexSplitsN<'r, 't> {
 }
 
 enum NamedGroups {
-    Empty,
     Native(&'static [(&'static str, usize)]),
     Dynamic(Arc<HashMap<String, usize>>),
 }
@@ -819,22 +823,17 @@ enum NamedGroups {
 impl NamedGroups {
     fn from_regex(regex: &Regex) -> NamedGroups {
         match *regex {
-            Regex::Native(ExNative { ref groups, .. }) =>
-                NamedGroups::Native(groups),
+            Regex::Native(ExNative { ref groups, .. }) => {
+                NamedGroups::Native(groups)
+            }
             Regex::Dynamic(ref exec) => {
-                let groups = exec.named_groups();
-                if groups.is_empty() {
-                    NamedGroups::Empty
-                } else {
-                    NamedGroups::Dynamic(groups.clone())
-                }
+                NamedGroups::Dynamic(exec.capture_name_idx().clone())
             }
         }
     }
 
     fn pos(&self, name: &str) -> Option<usize> {
         match *self {
-            NamedGroups::Empty => None,
             NamedGroups::Native(groups) => {
                 groups.binary_search_by(|&(n, _)| n.cmp(name))
                       .ok().map(|i| groups[i].1)
@@ -847,7 +846,6 @@ impl NamedGroups {
 
     fn iter<'n>(&'n self) -> NamedGroupsIter<'n> {
         match *self {
-            NamedGroups::Empty => NamedGroupsIter::Empty,
             NamedGroups::Native(g) => NamedGroupsIter::Native(g.iter()),
             NamedGroups::Dynamic(ref g) => NamedGroupsIter::Dynamic(g.iter()),
         }
@@ -1233,10 +1231,16 @@ unsafe impl<'r, 't> Searcher<'t> for RegexSearcher<'r, 't> {
     }
 }
 
-fn exec(re: &Regex, caps: &mut CaptureIdxs, text: &str, start: usize) -> bool {
+fn exec(re: &Regex, caps: CaptureSlots, text: &str, start: usize) -> bool {
     match *re {
         Regex::Native(ExNative { ref prog, .. }) => (*prog)(caps, text, start),
-        Regex::Dynamic(ref prog) => prog.exec(caps, text, start),
+        Regex::Dynamic(ref prog) => {
+            let mut search = Search {
+                captures: caps,
+                matches: &mut [false],
+            };
+            prog.exec(&mut search, text, start)
+        }
     }
 }
 
