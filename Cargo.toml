@@ -18,7 +18,7 @@ aho-corasick = "0.5"
 # For skipping along search text quickly when a leading byte is known.
 memchr = "0.1"
 # For parsing regular expressions.
-regex-syntax = { path = "regex-syntax", version = "0.2" }
+regex-syntax = { path = "regex-syntax", version = "0.2.4" }
 # For compiling UTF-8 decoding into automata.
 utf8-ranges = "0.1"
 
