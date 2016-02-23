@@ -33,7 +33,22 @@ pub struct Parser {
     flags: Flags,
 }
 
-/// An empheral type for representing the expression stack.
+/// Flag state used in the parser.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Flags {
+    /// i
+    pub casei: bool,
+    /// m
+    pub multi: bool,
+    /// s
+    pub dotnl: bool,
+    /// U
+    pub swap_greed: bool,
+    /// x
+    pub ignore_space: bool,
+}
+
+/// An ephemeral type for representing the expression stack.
 ///
 /// Everything on the stack is either a regular expression or a marker
 /// indicating the opening of a group (possibly non-capturing). The opening
@@ -50,32 +65,16 @@ enum Build {
     },
 }
 
-/// Flag state.
-#[derive(Clone, Copy, Debug)]
-struct Flags {
-    casei: bool,
-    multi: bool,
-    dotnl: bool,
-    swap_greed: bool,
-    ignore_space: bool,
-}
-
 // Primary expression parsing routines.
 impl Parser {
-    pub fn parse(s: &str) -> Result<Expr> {
+    pub fn parse(s: &str, flags: Flags) -> Result<Expr> {
         Parser {
             chars: s.chars().collect(),
             chari: 0,
             stack: vec![],
             caps: 0,
             names: vec![],
-            flags: Flags {
-                casei: false,
-                multi: false,
-                dotnl: false,
-                swap_greed: false,
-                ignore_space: false,
-            },
+            flags: flags,
         }.parse_expr()
     }
 
@@ -1048,7 +1047,6 @@ fn is_valid_capture_char(c: char) -> bool {
 }
 
 /// Returns true if the give character has significance in a regex.
-#[doc(hidden)]
 pub fn is_punct(c: char) -> bool {
     match c {
         '\\' | '.' | '+' | '*' | '?' | '(' | ')' | '|' |
@@ -1134,14 +1132,14 @@ const XDIGIT: Class = &[('0', '9'), ('A', 'F'), ('a', 'f')];
 mod tests {
     use { CharClass, ClassRange, Expr, Repeater, ErrorKind };
     use unicode::regex::{PERLD, PERLS, PERLW};
-    use super::Parser;
-    use super::{LOWER, UPPER};
+    use super::{LOWER, UPPER, Flags, Parser};
 
     static YI: &'static [(char, char)] = &[
         ('\u{a000}', '\u{a48c}'), ('\u{a490}', '\u{a4c6}'),
     ];
 
-    fn p(s: &str) -> Expr { Parser::parse(s).unwrap() }
+    fn p(s: &str) -> Expr { Parser::parse(s, Flags::default()).unwrap() }
+    fn pf(s: &str, flags: Flags) -> Expr { Parser::parse(s, flags).unwrap() }
     fn lit(c: char) -> Expr { Expr::Literal { chars: vec![c], casei: false } }
     fn liti(c: char) -> Expr { Expr::Literal { chars: vec![c], casei: true } }
     fn b<T>(v: T) -> Box<T> { Box::new(v) }
@@ -1540,6 +1538,40 @@ mod tests {
     }
 
     #[test]
+    fn flags_default_casei() {
+        let flags = Flags { casei: true, .. Flags::default() };
+        assert_eq!(pf("a", flags), liti('a'));
+    }
+
+    #[test]
+    fn flags_default_multi() {
+        let flags = Flags { multi: true, .. Flags::default() };
+        assert_eq!(pf("^", flags), Expr::StartLine);
+    }
+
+    #[test]
+    fn flags_default_dotnl() {
+        let flags = Flags { dotnl: true, .. Flags::default() };
+        assert_eq!(pf(".", flags), Expr::AnyChar);
+    }
+
+    #[test]
+    fn flags_default_swap_greed() {
+        let flags = Flags { swap_greed: true, .. Flags::default() };
+        assert_eq!(pf("a+", flags), Expr::Repeat {
+            e: b(lit('a')),
+            r: Repeater::OneOrMore,
+            greedy: false,
+        });
+    }
+
+    #[test]
+    fn flags_default_ignore_space() {
+        let flags = Flags { ignore_space: true, .. Flags::default() };
+        assert_eq!(pf(" a ", flags), lit('a'));
+    }
+
+    #[test]
     fn escape_simple() {
         assert_eq!(p(r"\a\f\t\n\r\v"), c(&[
             lit('\x07'), lit('\x0C'), lit('\t'),
@@ -1908,6 +1940,11 @@ mod tests {
     }
 
     #[test]
+    fn ignore_space_empty() {
+        assert_eq!(p("(?x) "), Expr::Empty);
+    }
+
+    #[test]
     fn ignore_space_literal() {
         assert_eq!(p("(?x) a b c"), Expr::Concat(vec![
             lit('a'), lit('b'), lit('c'),
@@ -1992,7 +2029,7 @@ mod tests {
 
     macro_rules! test_err {
         ($re:expr, $pos:expr, $kind:expr) => {{
-            let err = Parser::parse($re).unwrap_err();
+            let err = Parser::parse($re, Flags::default()).unwrap_err();
             assert_eq!($pos, err.pos);
             assert_eq!($kind, err.kind);
             assert!($re.contains(&err.surround));

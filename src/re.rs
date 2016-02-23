@@ -35,14 +35,7 @@ const REPLACE_EXPAND: &'static str = r"(?x)
 /// The string returned may be safely used as a literal in a regular
 /// expression.
 pub fn quote(text: &str) -> String {
-    let mut quoted = String::with_capacity(text.len());
-    for c in text.chars() {
-        if syntax::is_punct(c) {
-            quoted.push('\\')
-        }
-        quoted.push(c);
-    }
-    quoted
+    syntax::quote(text)
 }
 
 /// Tests if the given regular expression matches somewhere in the text given.
