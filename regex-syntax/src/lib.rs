@@ -82,10 +82,7 @@ use unicode::case_folding;
 use self::Expr::*;
 use self::Repeater::*;
 
-pub use parser::is_punct;
-
-/// The maximum number of nested expressions allowed.
-const NEST_LIMIT: usize = 200;
+use parser::{Flags, Parser};
 
 /// A regular expression abstract syntax tree.
 ///
@@ -236,10 +233,86 @@ pub struct ClassRange {
     pub end: char,
 }
 
+/// A builder for configuring regular expression parsing.
+///
+/// This allows setting the default values of flags and other options, such
+/// as the maximum nesting depth.
+#[derive(Clone, Debug)]
+pub struct ExprBuilder {
+    flags: Flags,
+    nest_limit: usize,
+}
+
+impl ExprBuilder {
+    /// Create a new builder for configuring expression parsing.
+    ///
+    /// Note that all flags are disabled by default.
+    pub fn new() -> ExprBuilder {
+        ExprBuilder {
+            flags: Flags {
+                casei: false,
+                multi: false,
+                dotnl: false,
+                swap_greed: false,
+                ignore_space: false,
+            },
+            nest_limit: 200,
+        }
+    }
+
+    /// Set the default value for the case insensitive (`i`) flag.
+    pub fn case_insensitive(mut self, yes: bool) -> ExprBuilder {
+        self.flags.casei = yes;
+        self
+    }
+
+    /// Set the default value for the multi-line matching (`m`) flag.
+    pub fn multi_line(mut self, yes: bool) -> ExprBuilder {
+        self.flags.multi = yes;
+        self
+    }
+
+    /// Set the default value for the any character (`s`) flag.
+    pub fn dot_matches_new_line(mut self, yes: bool) -> ExprBuilder {
+        self.flags.dotnl = yes;
+        self
+    }
+
+    /// Set the default value for the greedy swap (`U`) flag.
+    pub fn swap_greed(mut self, yes: bool) -> ExprBuilder {
+        self.flags.swap_greed = yes;
+        self
+    }
+
+    /// Set the default value for the ignore whitespace (`x`) flag.
+    pub fn ignore_whitespace(mut self, yes: bool) -> ExprBuilder {
+        self.flags.ignore_space = yes;
+        self
+    }
+
+    /// Set the nesting limit for regular expression parsing.
+    ///
+    /// Regular expressions that nest more than this limit will result in a
+    /// `StackExhausted` error.
+    pub fn nest_limit(mut self, limit: usize) -> ExprBuilder {
+        self.nest_limit = limit;
+        self
+    }
+
+    /// Parse a string as a regular expression using the current configuraiton.
+    pub fn parse(self, s: &str) -> Result<Expr> {
+        Parser::parse(s, self.flags).and_then(|e| e.simplify(self.nest_limit))
+    }
+}
+
 impl Expr {
     /// Parses a string in a regular expression syntax tree.
+    ///
+    /// This is a convenience method for parsing an expression using the
+    /// default configuration. To tweak parsing options (such as which flags
+    /// are enabled by default), use the `ExprBuilder` type.
     pub fn parse(s: &str) -> Result<Expr> {
-        parser::Parser::parse(s).and_then(|e| e.simplify())
+        ExprBuilder::new().parse(s)
     }
 
     /// Returns true iff the expression can be repeated by a quantifier.
@@ -257,7 +330,7 @@ impl Expr {
         }
     }
 
-    fn simplify(self) -> Result<Expr> {
+    fn simplify(self, nest_limit: usize) -> Result<Expr> {
         fn combine_literals(es: &mut Vec<Expr>, e: Expr) {
             match (es.pop(), e) {
                 (None, e) => es.push(e),
@@ -277,15 +350,15 @@ impl Expr {
                 }
             }
         }
-        fn simp(expr: Expr, recurse: usize) -> Result<Expr> {
-            if recurse > NEST_LIMIT {
+        fn simp(expr: Expr, recurse: usize, limit: usize) -> Result<Expr> {
+            if recurse > limit {
                 return Err(Error {
                     pos: 0,
                     surround: "".to_owned(),
                     kind: ErrorKind::StackExhausted,
                 });
             }
-            let simplify = |e| simp(e, recurse + 1);
+            let simplify = |e| simp(e, recurse + 1, limit);
             Ok(match expr {
                 Repeat { e, r, greedy } => Repeat {
                     e: Box::new(try!(simplify(*e))),
@@ -321,7 +394,7 @@ impl Expr {
                 e => e,
             })
         }
-        simp(self, 0)
+        simp(self, 0, nest_limit)
     }
 
     /// Returns true if and only if the expression is required to match from
@@ -1044,7 +1117,7 @@ mod properties;
 
 #[cfg(test)]
 mod tests {
-    use {NEST_LIMIT, CharClass, ClassRange, Expr};
+    use {CharClass, ClassRange, Expr};
 
     fn class(ranges: &[(char, char)]) -> CharClass {
         let ranges = ranges.iter().cloned()
@@ -1060,12 +1133,12 @@ mod tests {
     fn stack_exhaustion() {
         use std::iter::repeat;
 
-        let open: String = repeat('(').take(NEST_LIMIT).collect();
-        let close: String = repeat(')').take(NEST_LIMIT).collect();
+        let open: String = repeat('(').take(200).collect();
+        let close: String = repeat(')').take(200).collect();
         assert!(Expr::parse(&format!("{}a{}", open, close)).is_ok());
 
-        let open: String = repeat('(').take(NEST_LIMIT + 1).collect();
-        let close: String = repeat(')').take(NEST_LIMIT + 1).collect();
+        let open: String = repeat('(').take(200 + 1).collect();
+        let close: String = repeat(')').take(200 + 1).collect();
         assert!(Expr::parse(&format!("{}a{}", open, close)).is_err());
     }
 
