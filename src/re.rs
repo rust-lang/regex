@@ -980,10 +980,7 @@ impl<'t> Captures<'t> {
 ///
 /// The text can't outlive the `Captures` object if this method is
 /// used, because of how `Index` is defined (normally `a[i]` is part
-/// of `a` and can't outlive it); to do that, use [`at()`][]
-/// instead.
-///
-/// [`at()`]: #method.at
+/// of `a` and can't outlive it); to do that, use `at()` instead.
 ///
 /// # Panics
 /// If there is no group at the given index.
@@ -1004,10 +1001,7 @@ impl<'t> Index<usize> for Captures<'t> {
 ///
 /// The text can't outlive the `Captures` object if this method is
 /// used, because of how `Index` is defined (normally `a[i]` is part
-/// of `a` and can't outlive it); to do that, use [`name()`][]
-/// instead.
-///
-/// [`name()`]: #method.name
+/// of `a` and can't outlive it); to do that, use `name` instead.
 ///
 /// # Panics
 /// If there is no group named by the given value.
