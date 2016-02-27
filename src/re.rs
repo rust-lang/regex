@@ -976,6 +976,12 @@ impl<'t> Captures<'t> {
 
 /// Get a group by index.
 ///
+/// `'t` is the lifetime of the matched text.
+///
+/// The text can't outlive the `Captures` object if this method is
+/// used, because of how `Index` is defined (normally `a[i]` is part
+/// of `a` and can't outlive it); to do that, use `at()` instead.
+///
 /// # Panics
 /// If there is no group at the given index.
 impl<'t> Index<usize> for Captures<'t> {
@@ -990,13 +996,20 @@ impl<'t> Index<usize> for Captures<'t> {
 
 /// Get a group by name.
 ///
+/// `'t` is the lifetime of the matched text and `'i` is the lifetime
+/// of the group name (the index).
+///
+/// The text can't outlive the `Captures` object if this method is
+/// used, because of how `Index` is defined (normally `a[i]` is part
+/// of `a` and can't outlive it); to do that, use `name` instead.
+///
 /// # Panics
 /// If there is no group named by the given value.
-impl<'t> Index<&'t str> for Captures<'t> {
+impl<'t, 'i> Index<&'i str> for Captures<'t> {
 
     type Output = str;
 
-    fn index<'a>(&'a self, name: &str) -> &'a str {
+    fn index<'a>(&'a self, name: &'i str) -> &'a str {
         match self.name(name) {
             None => panic!("no group named '{}'", name),
             Some(ref s) => s,
@@ -1294,5 +1307,17 @@ mod test {
         let re = Regex::new(r"^(?P<name>.+)$").unwrap();
         let cap = re.captures("abc").unwrap();
         let _ = cap["bad name"];
+    }
+
+    #[test]
+    fn test_cap_index_lifetime() {
+        // This is a test of whether the types on `caps["..."]` are general
+        // enough.  If not, this will fail to typecheck.
+        fn inner(s: &str) -> usize {
+            let re = Regex::new(r"(?P<number>\d+)").unwrap();
+            let caps = re.captures(s).unwrap();
+            caps["number"].len()
+        }
+        assert_eq!(inner("123"), 3);
     }
 }
