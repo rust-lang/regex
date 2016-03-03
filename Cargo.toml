@@ -33,6 +33,10 @@ rand = "0.3"
 # Enable to use the unstable pattern traits defined in std.
 pattern = []
 
+[lib]
+# There are no benchmarks in the library code itself
+bench = false
+
 # Runs unit tests defined inside the regex package.
 # Generally these tests specific pieces of the regex implementation.
 [[test]]
