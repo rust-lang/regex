@@ -434,7 +434,7 @@ fn exec<'t>(
     fn step_insts(&self) -> P<ast::Expr> {
         let arms = self.prog.iter().enumerate().map(|(pc, inst)| {
             let body = match *inst {
-                Inst::Match => quote_expr!(self.cx, {
+                Inst::Match(_) => quote_expr!(self.cx, {
                     for (slot, val) in caps.iter_mut().zip(thread_caps.iter()) {
                         *slot = *val;
                     }
