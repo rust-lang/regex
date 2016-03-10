@@ -1,0 +1,46 @@
+#!/bin/bash
+
+if [ $# = 0 ] || [ $1 = '-h' ]; then
+  echo "Usage: $(basename $0) [rust | rust-bytes | rust-plugin | pcre | onig]" >&2
+  exit 1
+fi
+
+which="$1"
+shift
+case $which in
+  rust)
+    exec cargo bench \
+      --manifest-path benches/Cargo.toml \
+      --bench rust \
+      --features re-rust \
+      "$@"
+    ;;
+  rust-bytes)
+    exec cargo bench \
+      --manifest-path benches/Cargo.toml \
+      --bench rust-bytes \
+      --features re-rust-bytes \
+      "$@"
+    ;;
+  rust-plugin)
+    exec cargo bench \
+      --manifest-path benches/Cargo.toml \
+      --bench rust-plugin \
+      --features re-rust-plugin \
+      "$@"
+    ;;
+  pcre)
+    exec cargo bench \
+      --manifest-path benches/Cargo.toml \
+      --bench pcre \
+      --features re-pcre \
+      "$@"
+    ;;
+  onig|oniguruma)
+    exec cargo bench \
+      --manifest-path benches/Cargo.toml \
+      --bench onig \
+      --features re-onig \
+      "$@"
+    ;;
+esac

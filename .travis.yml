@@ -14,10 +14,12 @@ script:
   - cargo doc --verbose --manifest-path=regex-syntax/Cargo.toml
   - if [ "$TRAVIS_RUST_VERSION" = "nightly" ]; then
       travis_wait cargo test --verbose --features pattern;
-      travis_wait cargo bench --verbose --bench dynamic;
-      travis_wait cargo bench --manifest-path=regex-pcre-benchmark/Cargo.toml --verbose
+      travis_wait ./run-bench rust;
+      travis_wait ./run-bench rust-bytes --no-run;
+      travis_wait ./run-bench rust-plugin --no-run;
+      travis_wait ./run-bench pcre --no-run;
+      travis_wait ./run-bench onig --no-run;
       travis_wait cargo test --verbose --manifest-path=regex_macros/Cargo.toml;
-      travis_wait cargo bench --manifest-path=regex_macros/Cargo.toml --verbose --bench native bench::;
     fi
 after_success: |
   [ $TRAVIS_BRANCH = master ] &&

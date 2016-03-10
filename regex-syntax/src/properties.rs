@@ -11,7 +11,10 @@
 use quickcheck::{Arbitrary, Gen, Testable, QuickCheck, StdGen};
 use rand::Rng;
 
-use {Expr, CharClass, ClassRange, Repeater, dec_char};
+use {
+    Expr, ExprBuilder,
+    CharClass, ClassRange, ByteClass, ByteRange, Repeater, dec_char,
+};
 
 fn qc<T: Testable>(t: T) {
     QuickCheck::new()
@@ -137,9 +140,10 @@ impl Arbitrary for Expr {
 
         let nada = || Box::new(None.into_iter());
         let es: Box<Iterator<Item=Expr>> = match *self {
-            Empty | AnyChar | AnyCharNoNL
+            Empty | AnyChar | AnyCharNoNL | AnyByte | AnyByteNoNL
             | StartLine | EndLine | StartText | EndText
-            | WordBoundary | NotWordBoundary => nada(),
+            | WordBoundary | NotWordBoundary
+            | WordBoundaryAscii | NotWordBoundaryAscii => nada(),
             Literal { ref chars, .. } if chars.len() == 1 => nada(),
             Literal { ref chars, casei } => {
                 Box::new((chars.clone(), casei)
@@ -149,7 +153,17 @@ impl Arbitrary for Expr {
                              Literal { chars: chars, casei: casei }
                          }))
             }
+            LiteralBytes { ref bytes, .. } if bytes.len() == 1 => nada(),
+            LiteralBytes { ref bytes, casei } => {
+                Box::new((bytes.clone(), casei)
+                         .shrink()
+                         .filter(|&(ref bytes, _)| bytes.len() > 0)
+                         .map(|(bytes, casei)| {
+                             LiteralBytes { bytes: bytes, casei: casei }
+                         }))
+            }
             Class(ref cls) => Box::new(cls.shrink().map(Class)),
+            ClassBytes(ref cls) => Box::new(cls.shrink().map(ClassBytes)),
             Group { ref e, ref i, ref name } => {
                 let (i, name) = (i.clone(), name.clone());
                 Box::new(e.clone().shrink()
@@ -205,9 +219,9 @@ enum ExprType {
 fn gen_expr<G: Gen>(g: &mut G, depth: u32, ty: ExprType) -> Expr {
     use Expr::*;
     let ub = match (depth as usize >= g.size(), ty) {
-        (true, _) => 11,
-        (false, ExprType::NoSequences) => 13,
-        (false, ExprType::Anything) => 15,
+        (true, _) => 16,
+        (false, ExprType::NoSequences) => 18,
+        (false, ExprType::Anything) => 20,
     };
     match g.gen_range(1, ub) {
         0 => Empty,
@@ -215,22 +229,30 @@ fn gen_expr<G: Gen>(g: &mut G, depth: u32, ty: ExprType) -> Expr {
             chars: SmallAscii::arbitrary(g).0.chars().collect(),
             casei: g.gen(),
         },
-        2 => AnyChar,
-        3 => AnyCharNoNL,
-        4 => Class(CharClass::arbitrary(g)),
-        5 => StartLine,
-        6 => EndLine,
-        7 => StartText,
-        8 => EndText,
-        9 => WordBoundary,
-        10 => NotWordBoundary,
-        11 => gen_group_expr(g, depth + 1),
-        12 => Repeat {
+        2 => LiteralBytes {
+            bytes: SmallAscii::arbitrary(g).0.as_bytes().to_owned(),
+            casei: g.gen(),
+        },
+        3 => AnyChar,
+        4 => AnyCharNoNL,
+        5 => AnyByte,
+        6 => AnyByteNoNL,
+        7 => Class(CharClass::arbitrary(g)),
+        8 => StartLine,
+        9 => EndLine,
+        10 => StartText,
+        11 => EndText,
+        12 => WordBoundary,
+        13 => NotWordBoundary,
+        14 => WordBoundaryAscii,
+        15 => NotWordBoundaryAscii,
+        16 => gen_group_expr(g, depth + 1),
+        17 => Repeat {
             e: Box::new(gen_repeatable_expr(g, depth + 1)),
             r: Repeater::arbitrary(g),
             greedy: bool::arbitrary(g),
         },
-        13 => {
+        18 => {
             let size = { let s = g.size(); g.gen_range(2, s) };
             Concat((0..size)
                    .map(|_| {
@@ -238,7 +260,7 @@ fn gen_expr<G: Gen>(g: &mut G, depth: u32, ty: ExprType) -> Expr {
                     })
                    .collect())
         }
-        14 => {
+        19 => {
             let size = { let s = g.size(); g.gen_range(2, s) };
             Alternate((0..size)
                       .map(|_| {
@@ -252,16 +274,23 @@ fn gen_expr<G: Gen>(g: &mut G, depth: u32, ty: ExprType) -> Expr {
 
 fn gen_repeatable_expr<G: Gen>(g: &mut G, depth: u32) -> Expr {
     use Expr::*;
-    match g.gen_range(1, 6) {
+    match g.gen_range(1, 10) {
         0 => Empty,
         1 => Literal {
             chars: vec![Arbitrary::arbitrary(g)],
             casei: g.gen(),
         },
-        2 => AnyChar,
-        3 => AnyCharNoNL,
-        4 => Class(CharClass::arbitrary(g)),
-        5 => gen_group_expr(g, depth + 1),
+        2 => LiteralBytes {
+            bytes: vec![Arbitrary::arbitrary(g)],
+            casei: g.gen(),
+        },
+        3 => AnyChar,
+        4 => AnyCharNoNL,
+        5 => AnyByte,
+        6 => AnyByteNoNL,
+        7 => Class(CharClass::arbitrary(g)),
+        8 => ClassBytes(ByteClass::arbitrary(g)),
+        9 => gen_group_expr(g, depth + 1),
         _ => unreachable!(),
     }
 }
@@ -384,6 +413,35 @@ impl Arbitrary for ClassRange {
     }
 }
 
+impl Arbitrary for ByteClass {
+    fn arbitrary<G: Gen>(g: &mut G) -> ByteClass {
+        let mut ranges: Vec<ByteRange> = Arbitrary::arbitrary(g);
+        if ranges.is_empty() {
+            ranges.push(Arbitrary::arbitrary(g));
+        }
+        let cls = ByteClass { ranges: ranges }.canonicalize();
+        if g.gen() { cls.case_fold() } else { cls }
+    }
+
+    fn shrink(&self) -> Box<Iterator<Item=ByteClass>> {
+        Box::new(self.ranges.clone()
+                 .shrink()
+                 .filter(|ranges| ranges.len() > 0)
+                 .map(|ranges| ByteClass { ranges: ranges }.canonicalize()))
+    }
+}
+
+impl Arbitrary for ByteRange {
+    fn arbitrary<G: Gen>(g: &mut G) -> ByteRange {
+        ByteRange::new(g.gen_range(97, 123), g.gen_range(97, 123))
+    }
+
+    fn shrink(&self) -> Box<Iterator<Item=ByteRange>> {
+        Box::new((self.start, self.end)
+                 .shrink().map(|(s, e)| ByteRange::new(s, e)))
+    }
+}
+
 #[test]
 fn display_regex_roundtrips() {
     // Given an AST, if we print it as a regex and then re-parse it, do we
@@ -391,7 +449,8 @@ fn display_regex_roundtrips() {
     // A lot of this relies crucially on regex simplification. So this is
     // testing `Expr::simplify` as much as it is testing the `Display` impl.
     fn prop(e: Expr) -> bool {
-        e == Expr::parse(&e.to_string()).unwrap()
+        let parser = ExprBuilder::new().allow_bytes(true);
+        e == parser.parse(&e.to_string()).unwrap()
     }
     QuickCheck::new()
         .tests(10_000)

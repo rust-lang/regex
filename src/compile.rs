@@ -13,7 +13,7 @@ use std::iter;
 use std::result;
 use std::sync::Arc;
 
-use syntax::{Expr, Repeater, CharClass, ClassRange};
+use syntax::{Expr, Repeater, CharClass, ClassRange, ByteClass, ByteRange};
 use utf8_ranges::{Utf8Range, Utf8Sequence, Utf8Sequences};
 
 use prog::{
@@ -33,6 +33,8 @@ struct Patch {
     entry: InstPtr,
 }
 
+/// A compiler translates a regular expression AST to a sequence of
+/// instructions. The sequence of instructions represents an NFA.
 pub struct Compiler {
     insts: Vec<MaybeInst>,
     compiled: Program,
@@ -85,6 +87,15 @@ impl Compiler {
         self
     }
 
+    /// When disabled, the program compiled may match arbitrary bytes.
+    ///
+    /// When enabled (the default), all compiled programs exclusively match
+    /// valid UTF-8 bytes.
+    pub fn only_utf8(mut self, yes: bool) -> Self {
+        self.compiled.only_utf8 = yes;
+        self
+    }
+
     /// When set, the machine returned is suitable for use in the DFA matching
     /// engine.
     ///
@@ -94,7 +105,6 @@ impl Compiler {
     /// or impossible in the DFA engine.)
     pub fn dfa(mut self, yes: bool) -> Self {
         self.compiled.is_dfa = yes;
-        self.compiled.is_bytes = yes;
         self
     }
 
@@ -131,12 +141,7 @@ impl Compiler {
         self.compiled.is_anchored_start = expr.is_anchored_start();
         self.compiled.is_anchored_end = expr.is_anchored_end();
         if self.compiled.needs_dotstar() {
-            let patch = try!(self.c(&Expr::Repeat {
-                e: Box::new(Expr::AnyChar),
-                r: Repeater::ZeroOrMore,
-                greedy: false,
-            }));
-            self.fill_to_next(patch.hole);
+            try!(self.c_dotstar());
         }
         self.compiled.captures = vec![None];
         self.compiled.start = self.insts.len();
@@ -158,12 +163,7 @@ impl Compiler {
         self.compiled.is_anchored_end =
             exprs.iter().all(|e| e.is_anchored_end());
         if self.compiled.needs_dotstar() {
-            let patch = try!(self.c(&Expr::Repeat {
-                e: Box::new(Expr::AnyChar),
-                r: Repeater::ZeroOrMore,
-                greedy: false,
-            }));
-            self.fill_to_next(patch.hole);
+            try!(self.c_dotstar());
         }
 
         self.compiled.start = self.insts.len();
@@ -202,6 +202,7 @@ impl Compiler {
         match *expr {
             Empty => Ok(Patch { hole: Hole::None, entry: self.insts.len() }),
             Literal { ref chars, casei } => self.c_literal(chars, casei),
+            LiteralBytes { ref bytes, casei } => self.c_bytes(bytes, casei),
             AnyChar => self.c_class(&[ClassRange {
                 start: '\x00',
                 end: '\u{10ffff}',
@@ -212,8 +213,22 @@ impl Compiler {
                     ClassRange { start: '\x0b', end: '\u{10ffff}' },
                 ])
             }
+            AnyByte => {
+                assert!(!self.compiled.only_utf8());
+                self.c_class_bytes(&[ByteRange { start: 0, end: 0xFF }])
+            }
+            AnyByteNoNL => {
+                assert!(!self.compiled.only_utf8());
+                self.c_class_bytes(&[
+                    ByteRange { start: 0, end: 0x9 },
+                    ByteRange { start: 0xB, end: 0xFF },
+                ])
+            }
             Class(ref cls) => {
                 self.c_class(cls)
+            }
+            ClassBytes(ref cls) => {
+                self.c_class_bytes(cls)
             }
             StartLine if self.compiled.is_reverse => {
                 self.byte_classes.set_range(b'\n', b'\n');
@@ -246,6 +261,12 @@ impl Compiler {
             WordBoundary => self.c_empty_look(prog::EmptyLook::WordBoundary),
             NotWordBoundary => {
                 self.c_empty_look(prog::EmptyLook::NotWordBoundary)
+            }
+            WordBoundaryAscii => {
+                self.c_empty_look(prog::EmptyLook::WordBoundaryAscii)
+            }
+            NotWordBoundaryAscii => {
+                self.c_empty_look(prog::EmptyLook::NotWordBoundaryAscii)
             }
             Group { ref e, i: None, name: None } => self.c(e),
             Group { ref e, i, ref name } => {
@@ -288,6 +309,24 @@ impl Compiler {
         }
     }
 
+    fn c_dotstar(&mut self) -> result::Result<(), Error> {
+        let patch = if !self.compiled.only_utf8() {
+            try!(self.c(&Expr::Repeat {
+                e: Box::new(Expr::AnyByte),
+                r: Repeater::ZeroOrMore,
+                greedy: false,
+            }))
+        } else {
+            try!(self.c(&Expr::Repeat {
+                e: Box::new(Expr::AnyChar),
+                r: Repeater::ZeroOrMore,
+                greedy: false,
+            }))
+        };
+        self.fill_to_next(patch.hole);
+        Ok(())
+    }
+
     fn c_literal(&mut self, chars: &[char], casei: bool) -> Result {
         assert!(!chars.is_empty());
         let mut chars: Box<Iterator<Item=&char>> =
@@ -317,7 +356,7 @@ impl Compiler {
     }
 
     fn c_class(&mut self, ranges: &[ClassRange]) -> Result {
-        if self.compiled.is_bytes {
+        if self.compiled.uses_bytes() {
             CompileClass {
                 c: self,
                 ranges: ranges,
@@ -332,6 +371,60 @@ impl Compiler {
             };
             Ok(Patch { hole: hole, entry: self.insts.len() - 1 })
         }
+    }
+
+    fn c_bytes(&mut self, bytes: &[u8], casei: bool) -> Result {
+        assert!(!bytes.is_empty());
+        let mut bytes: Box<Iterator<Item=&u8>> =
+            if self.compiled.is_reverse {
+                Box::new(bytes.iter().rev())
+            } else {
+                Box::new(bytes.iter())
+            };
+        let first = *bytes.next().expect("non-empty literal");
+        let Patch { mut hole, entry } = try!(self.c_byte(first, casei));
+        for &b in bytes {
+            let p = try!(self.c_byte(b, casei));
+            self.fill(hole, p.entry);
+            hole = p.hole;
+        }
+        Ok(Patch { hole: hole, entry: entry })
+    }
+
+    fn c_byte(&mut self, b: u8, casei: bool) -> Result {
+        if casei {
+            self.c_class_bytes(&ByteClass::new(vec![
+                ByteRange { start: b, end: b },
+            ]).case_fold())
+        } else {
+            self.c_class_bytes(&[ByteRange { start: b, end: b }])
+        }
+    }
+
+    fn c_class_bytes(&mut self, ranges: &[ByteRange]) -> Result {
+        assert!(!ranges.is_empty());
+
+        let first_split_entry = self.insts.len();
+        let mut holes = vec![];
+        let mut prev_hole = Hole::None;
+        for r in &ranges[0..ranges.len() - 1] {
+            self.fill_to_next(prev_hole);
+            let split = self.push_split_hole();
+            let next = self.insts.len();
+            self.byte_classes.set_range(r.start, r.end);
+            holes.push(self.push_hole(InstHole::Bytes {
+                start: r.start, end: r.end,
+            }));
+            prev_hole = self.fill_split(split, Some(next), None);
+        }
+        let next = self.insts.len();
+        let r = &ranges[ranges.len() - 1];
+        self.byte_classes.set_range(r.start, r.end);
+        holes.push(self.push_hole(InstHole::Bytes {
+            start: r.start, end: r.end,
+        }));
+        self.fill(prev_hole, next);
+        Ok(Patch { hole: Hole::Many(holes), entry: first_split_entry })
     }
 
     fn c_empty_look(&mut self, look: EmptyLook) -> Result {
@@ -910,7 +1003,7 @@ impl ByteClassSet {
         let mut class = 0u8;
         for i in 0..256 {
             byte_classes[i] = class;
-            if i > 0 && self.0[i] {
+            if self.0[i] {
                 class = class.checked_add(1).unwrap();
             }
         }

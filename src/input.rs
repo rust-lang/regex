@@ -8,9 +8,15 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+use std::char;
+use std::cmp::Ordering;
+use std::fmt;
 use std::ops;
+use std::u32;
 
-use char::Char;
+use syntax;
+
+use utf8::{decode_utf8, decode_last_utf8};
 use literals::Literals;
 
 /// Represents a location in the input.
@@ -100,19 +106,19 @@ impl<'a, T: Input> Input for &'a T {
 
 /// An input reader over characters.
 #[derive(Clone, Copy, Debug)]
-pub struct CharInput<'t>(&'t str);
+pub struct CharInput<'t>(&'t [u8]);
 
 impl<'t> CharInput<'t> {
     /// Return a new character input reader for the given string.
-    pub fn new(s: &'t str) -> CharInput<'t> {
+    pub fn new(s: &'t [u8]) -> CharInput<'t> {
         CharInput(s)
     }
 }
 
 impl<'t> ops::Deref for CharInput<'t> {
-    type Target = str;
+    type Target = [u8];
 
-    fn deref(&self) -> &str {
+    fn deref(&self) -> &[u8] {
         self.0
     }
 }
@@ -125,7 +131,7 @@ impl<'t> Input for CharInput<'t> {
     // used *a lot* in the guts of the matching engines.
     #[inline(always)]
     fn at(&self, i: usize) -> InputAt {
-        let c = self[i..].chars().next().into();
+        let c = decode_utf8(&self[i..]).map(|(c, _)| c).into();
         InputAt {
             pos: i,
             c: c,
@@ -139,13 +145,11 @@ impl<'t> Input for CharInput<'t> {
     }
 
     fn previous_char(&self, at: InputAt) -> Char {
-        self[..at.pos()].chars().rev().next().into()
+        decode_last_utf8(&self[..at.pos()]).map(|(c, _)| c).into()
     }
 
     fn prefix_at(&self, prefixes: &Literals, at: InputAt) -> Option<InputAt> {
-        prefixes
-            .find(&self.as_bytes()[at.pos()..])
-            .map(|(s, _)| self.at(at.pos() + s))
+        prefixes.find(&self[at.pos()..]).map(|(s, _)| self.at(at.pos() + s))
     }
 
     fn len(&self) -> usize {
@@ -153,7 +157,7 @@ impl<'t> Input for CharInput<'t> {
     }
 
     fn as_bytes(&self) -> &[u8] {
-        self.0.as_bytes()
+        self.0
     }
 }
 
@@ -163,19 +167,19 @@ impl<'t> Input for CharInput<'t> {
 /// easy access to necessary Unicode decoding (used for word boundary look
 /// ahead/look behind).
 #[derive(Clone, Copy, Debug)]
-pub struct ByteInput<'t>(&'t str);
+pub struct ByteInput<'t>(&'t [u8]);
 
 impl<'t> ByteInput<'t> {
     /// Return a new byte-based input reader for the given string.
-    pub fn new(s: &'t str) -> ByteInput<'t> {
+    pub fn new(s: &'t [u8]) -> ByteInput<'t> {
         ByteInput(s)
     }
 }
 
 impl<'t> ops::Deref for ByteInput<'t> {
-    type Target = str;
+    type Target = [u8];
 
-    fn deref(&self) -> &str {
+    fn deref(&self) -> &[u8] {
         self.0
     }
 }
@@ -186,23 +190,21 @@ impl<'t> Input for ByteInput<'t> {
         InputAt {
             pos: i,
             c: None.into(),
-            byte: self.as_bytes().get(i).map(|&b| b),
+            byte: self.get(i).map(|&b| b),
             len: 1,
         }
     }
 
     fn next_char(&self, at: InputAt) -> Char {
-        self[at.pos()..].chars().next().into()
+        decode_utf8(&self[at.pos()..]).map(|(c, _)| c).into()
     }
 
     fn previous_char(&self, at: InputAt) -> Char {
-        self[..at.pos()].chars().rev().next().into()
+        decode_last_utf8(&self[..at.pos()]).map(|(c, _)| c).into()
     }
 
     fn prefix_at(&self, prefixes: &Literals, at: InputAt) -> Option<InputAt> {
-        prefixes
-            .find(&self.as_bytes()[at.pos()..])
-            .map(|(s, _)| self.at(at.pos() + s))
+        prefixes.find(&self[at.pos()..]).map(|(s, _)| self.at(at.pos() + s))
     }
 
     fn len(&self) -> usize {
@@ -210,6 +212,101 @@ impl<'t> Input for ByteInput<'t> {
     }
 
     fn as_bytes(&self) -> &[u8] {
-        self.0.as_bytes()
+        self.0
+    }
+}
+
+/// An inline representation of `Option<char>`.
+///
+/// This eliminates the need to do case analysis on `Option<char>` to determine
+/// ordinality with other characters.
+///
+/// (The `Option<char>` is not related to encoding. Instead, it is used in the
+/// matching engines to represent the beginning and ending boundaries of the
+/// search text.)
+#[derive(Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Char(u32);
+
+impl fmt::Debug for Char {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match char::from_u32(self.0) {
+            None => write!(f, "Empty"),
+            Some(c) => write!(f, "{:?}", c),
+        }
+    }
+}
+
+impl Char {
+    /// Returns true iff the character is absent.
+    #[inline]
+    pub fn is_none(self) -> bool { self.0 == u32::MAX }
+
+    /// Returns the length of the character's UTF-8 encoding.
+    ///
+    /// If the character is absent, then `0` is returned.
+    #[inline]
+    pub fn len_utf8(self) -> usize {
+        char::from_u32(self.0).map_or(0, |c| c.len_utf8())
+    }
+
+    /// Returns true iff the character is a word character.
+    ///
+    /// If the character is absent, then false is returned.
+    pub fn is_word_char(self) -> bool {
+        char::from_u32(self.0).map_or(false, syntax::is_word_char)
+    }
+
+    /// Returns true iff the byte is a word byte.
+    ///
+    /// If the byte is absent, then false is returned.
+    pub fn is_word_byte(self) -> bool {
+        match char::from_u32(self.0) {
+            None => false,
+            Some(c) if c <= '\u{FF}' => syntax::is_word_byte(c as u8),
+            Some(_) => false,
+        }
+    }
+
+    /// Converts the character to a real primitive `char`.
+    ///
+    /// If the character is absent, then `None` is returned.
+    pub fn as_char(self) -> Option<char> {
+        // This is only used in the `regex!` macro because it expands char
+        // classes into `match` expressions (instead of binary search).
+        char::from_u32(self.0)
+    }
+}
+
+impl From<char> for Char {
+    fn from(c: char) -> Char { Char(c as u32) }
+}
+
+impl From<Option<char>> for Char {
+    fn from(c: Option<char>) -> Char {
+        c.map_or(Char(u32::MAX), |c| c.into())
+    }
+}
+
+impl PartialEq<char> for Char {
+    #[inline]
+    fn eq(&self, other: &char) -> bool { self.0 == *other as u32 }
+}
+
+impl PartialEq<Char> for char {
+    #[inline]
+    fn eq(&self, other: &Char) -> bool { *self as u32 == other.0 }
+}
+
+impl PartialOrd<char> for Char {
+    #[inline]
+    fn partial_cmp(&self, other: &char) -> Option<Ordering> {
+        self.0.partial_cmp(&(*other as u32))
+    }
+}
+
+impl PartialOrd<Char> for char {
+    #[inline]
+    fn partial_cmp(&self, other: &Char) -> Option<Ordering> {
+        (*self as u32).partial_cmp(&other.0)
     }
 }

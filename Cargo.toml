@@ -23,10 +23,11 @@ regex-syntax = { path = "regex-syntax", version = "0.2.5" }
 utf8-ranges = "0.1"
 
 [dev-dependencies]
-# To prevent the benchmarking harness from running setup code more than once.
-# Why? Because it takes too long.
+# For examples.
 lazy_static = "0.1"
-# For generating random text to test/benchmark with.
+# For property based tests.
+quickcheck = "0.2"
+# For generating random test data.
 rand = "0.3"
 
 [features]
@@ -41,7 +42,7 @@ bench = false
 # Generally these tests specific pieces of the regex implementation.
 [[test]]
 path = "src/lib.rs"
-name = "regex"
+name = "regex-inline"
 
 # Run the test suite on the default behavior of Regex::new.
 # This includes a mish mash of NFAs and DFAs, which are chosen automatically
@@ -49,49 +50,45 @@ name = "regex"
 # usage with the test definitions below. (We can't test the DFA implementations
 # in the same way since they can't be used for every regex tested.)
 [[test]]
-path = "tests/test_dynamic.rs"
-name = "dynamic"
+path = "tests/test_default.rs"
+name = "default"
+test = false
+
+# The same as the default tests, but run on bytes::Regex.
+[[test]]
+path = "tests/test_default_bytes.rs"
+name = "default-bytes"
 
 # Run the test suite on the NFA algorithm over Unicode codepoints.
 [[test]]
-path = "tests/test_dynamic_nfa.rs"
-name = "dynamic-nfa"
+path = "tests/test_nfa.rs"
+name = "nfa"
 
-# Run the test suite on the NFA algorithm over bytes.
+# Run the test suite on the NFA algorithm over bytes that match UTF-8 only.
 [[test]]
-path = "tests/test_dynamic_nfa_bytes.rs"
-name = "dynamic-nfa-bytes"
+path = "tests/test_nfa_utf8bytes.rs"
+name = "nfa-utf8bytes"
+
+# Run the test suite on the NFA algorithm over arbitrary bytes.
+[[test]]
+path = "tests/test_nfa_bytes.rs"
+name = "nfa-bytes"
 
 # Run the test suite on the backtracking engine over Unicode codepoints.
 [[test]]
-path = "tests/test_dynamic_backtrack.rs"
-name = "dynamic-backtrack"
+path = "tests/test_backtrack.rs"
+name = "backtrack"
 
-# Run the test suite on the backtracking engine over bytes.
+# Run the test suite on the backtracking engine over bytes that match UTF-8
+# only.
 [[test]]
-path = "tests/test_dynamic_backtrack_bytes.rs"
-name = "dynamic-backtrack-bytes"
+path = "tests/test_backtrack_utf8bytes.rs"
+name = "backtrack-utf8bytes"
 
-# Run the benchmarks on the default behavior of Regex::new.
-#
-# N.B. These benchmarks were originally taken from Russ Cox.
-[[bench]]
-name = "dynamic"
-path = "benches/bench_dynamic.rs"
-test = false
-bench = true
-
-# Run the benchmarks on the NFA algorithm. We avoid chasing other permutations.
-#
-# N.B. These can take a *loong* time to run.
-[[bench]]
-name = "dynamic-nfa"
-path = "benches/bench_dynamic_nfa.rs"
-test = false
-bench = true
-
-[profile.bench]
-debug = true
+# Run the test suite on the backtracking engine over arbitrary bytes.
+[[test]]
+path = "tests/test_backtrack_bytes.rs"
+name = "backtrack-bytes"
 
 [profile.test]
 debug = true

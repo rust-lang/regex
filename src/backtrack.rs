@@ -186,13 +186,13 @@ impl<'a, 'b, 'c, 'm, 'r, I: Input> Backtrack<'a, 'b, 'c, 'r, 'm, I> {
                         // Only quit if we're matching one regex.
                         // If we're matching a regex set, then mush on and
                         // try to find other matches.
-                        if self.search.matches.len() <= 1 {
+                        if !self.search.find_many_matches() {
                             return true;
                         }
                     }
                 }
                 Job::SaveRestore { slot, old_pos } => {
-                    self.search.captures[slot] = old_pos;
+                    self.search.set_capture(slot, old_pos);
                 }
             }
         }
@@ -212,17 +212,16 @@ impl<'a, 'b, 'c, 'm, 'r, I: Input> Backtrack<'a, 'b, 'c, 'r, 'm, I> {
                     return true;
                 }
                 Save(ref inst) => {
-                    if inst.slot < self.search.captures.len() {
+                    if let Some(old_pos) = self.search.capture(inst.slot) {
                         // If this path doesn't work out, then we save the old
                         // capture index (if one exists) in an alternate
                         // job. If the next path fails, then the alternate
                         // job is popped and the old capture index is restored.
-                        let old_pos = self.search.captures[inst.slot];
                         self.m.jobs.push(Job::SaveRestore {
                             slot: inst.slot,
                             old_pos: old_pos,
                         });
-                        self.search.captures[inst.slot] = Some(at.pos());
+                        self.search.set_capture(inst.slot, Some(at.pos()));
                     }
                     ip = inst.goto;
                 }

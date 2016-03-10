@@ -11,22 +11,24 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use backtrack::{self, Backtrack};
-use compile::Compiler;
-use dfa::{self, Dfa};
-use input::{ByteInput, CharInput};
-use literals::BuildPrefixes;
-use nfa::Nfa;
-use prog::{Program, InstPtr};
 use syntax;
 
-use {Regex, Error};
+use backtrack::{self, Backtrack};
+use compile::Compiler;
+use dfa::{self, Dfa, DfaResult};
+use error::Error;
+use input::{ByteInput, CharInput};
+use literals::Literals;
+use nfa::Nfa;
+use prog::{Program, InstPtr};
+use re_bytes;
+use re_unicode;
 
 pub type CaptureSlots<'a> = &'a mut [CaptureSlot];
 
 pub type CaptureSlot = Option<usize>;
 
-/// The parameters to running one of the four match engines.
+/// The parameters to running a regex search over some text.
 #[derive(Debug)]
 pub struct Search<'caps, 'matches> {
     /// The matching engine writes capture locations to this slice.
@@ -41,41 +43,76 @@ pub struct Search<'caps, 'matches> {
     /// In standard searches, there is exactly one value in this slice and it
     /// should be initialized to `false`. When executing sets of regexes,
     /// there should be a location for each regex.
-    pub matches: &'matches mut [bool],
+    matches: &'matches mut [bool],
+    /// Whether the matching engine has recorded any match.
+    matched_any: bool,
 }
 
 impl<'caps, 'matches> Search<'caps, 'matches> {
-    pub fn quit_after_first_match(&self) -> bool {
-        self.captures.is_empty() && self.matches.len() == 1
-    }
-
-    pub fn all_matched(&self) -> bool {
-        self.matches.iter().all(|m| *m)
-    }
-
-    pub fn copy_captures_from(&mut self, caps: &[Option<usize>]) {
-        for (slot, val) in self.captures.iter_mut().zip(caps.iter()) {
-            *slot = *val;
+    pub fn new(
+        captures: CaptureSlots<'caps>,
+        matches: &'matches mut [bool],
+    ) -> Search<'caps, 'matches> {
+        Search {
+            captures: captures,
+            matches: matches,
+            matched_any: false,
         }
     }
 
+    pub fn quit_after_first_match(&self) -> bool {
+        self.captures.is_empty() && self.matches.len() <= 1
+    }
+
+    pub fn find_many_matches(&self) -> bool {
+        self.matches.len() > 1
+    }
+
+    pub fn find_one_match(&self) -> bool {
+        self.matches.len() == 1
+    }
+
+    pub fn matched_all(&self) -> bool {
+        self.matches.iter().all(|m| *m)
+    }
+
     pub fn set_match(&mut self, match_slot: usize) {
+        self.matched_any = true;
         if let Some(old) = self.matches.get_mut(match_slot) {
             *old = true;
         }
     }
 
-    pub fn set_start(&mut self, pos: Option<usize>) {
-        self.set_capture(0, pos);
+    pub fn capture(&self, i: usize) -> Option<CaptureSlot> {
+        self.captures.get(i).map(|&slot| slot)
     }
 
-    pub fn set_end(&mut self, pos: Option<usize>) {
-        self.set_capture(1, pos);
+    pub fn set_start(&mut self, slot: CaptureSlot) {
+        self.set_capture(0, slot);
     }
 
-    fn set_capture(&mut self, i: usize, pos: Option<usize>) {
-        if let Some(old_pos) = self.captures.get_mut(i) {
-            *old_pos = pos;
+    pub fn set_end(&mut self, slot: CaptureSlot) {
+        self.set_capture(1, slot);
+    }
+
+    pub fn set_capture(&mut self, i: usize, slot: CaptureSlot) {
+        if let Some(old_slot) = self.captures.get_mut(i) {
+            *old_slot = slot;
+        }
+    }
+
+    pub fn copy_captures_from(&mut self, caps: &[CaptureSlot]) {
+        for (slot, val) in self.captures.iter_mut().zip(caps.iter()) {
+            *slot = *val;
+        }
+    }
+
+    pub fn reset(&mut self) {
+        for slot in self.captures.iter_mut() {
+            *slot = None;
+        }
+        for m in self.matches.iter_mut() {
+            *m = false;
         }
     }
 }
@@ -127,6 +164,7 @@ pub struct ExecBuilder {
     match_engine: MatchEngine,
     size_limit: usize,
     bytes: bool,
+    only_utf8: bool,
 }
 
 impl ExecBuilder {
@@ -151,6 +189,7 @@ impl ExecBuilder {
             match_engine: MatchEngine::Automatic,
             size_limit: 10 * (1 << 20),
             bytes: false,
+            only_utf8: true,
         }
     }
 
@@ -205,13 +244,21 @@ impl ExecBuilder {
     /// By default, the NFA engines match on Unicode scalar values. They can
     /// be made to use byte based programs instead. In general, the byte based
     /// programs are slower because of a less efficient encoding of character
-    /// classes. However, it may be useful (some day) for matching on raw
-    /// bytes that may not be UTF-8.
+    /// classes.
     ///
     /// Note that this does not impact DFA matching engines, which always
     /// execute on bytes.
     pub fn bytes(mut self, yes: bool) -> Self {
         self.bytes = yes;
+        self
+    }
+
+    /// When disabled, the program compiled may match arbitrary bytes.
+    ///
+    /// When enabled (the default), all compiled programs exclusively match
+    /// valid UTF-8 bytes.
+    pub fn only_utf8(mut self, yes: bool) -> Self {
+        self.only_utf8 = yes;
         self
     }
 
@@ -222,29 +269,36 @@ impl ExecBuilder {
         }
         let mut exprs = vec![];
         for re in &self.res {
-            exprs.push(try!(syntax::Expr::parse(re)));
+            let parser =
+                syntax::ExprBuilder::new()
+                    .allow_bytes(!self.only_utf8)
+                    .unicode(self.only_utf8);
+            exprs.push(try!(parser.parse(re)));
         }
         let mut prog = try!(
             Compiler::new()
                      .size_limit(self.size_limit)
                      .bytes(self.bytes)
+                     .only_utf8(self.only_utf8)
                      .compile(&exprs));
         let mut dfa = try!(
             Compiler::new()
                      .size_limit(self.size_limit)
                      .dfa(true)
+                     .only_utf8(self.only_utf8)
                      .compile(&exprs));
         let dfa_reverse = try!(
             Compiler::new()
                      .size_limit(self.size_limit)
                      .dfa(true)
+                     .only_utf8(self.only_utf8)
                      .reverse(true)
                      .compile(&exprs));
 
         // Compute literal prefixes for only `prog`, which is likely a Unicode
         // based program. Literal prefix extract currently works better on
         // Unicode programs.
-        prog.prefixes = BuildPrefixes::new(&prog).literals().into_matcher();
+        prog.prefixes = Literals::prefixes(&prog);
         // And give it to the DFA too, which can use Unicode prefixes even
         // though the program itself is byte based.
         dfa.prefixes = prog.prefixes.clone();
@@ -283,7 +337,7 @@ impl Exec {
     pub fn exec<'c, 'm>(
         &self,
         search: &mut Search<'c, 'm>,
-        text: &str,
+        text: &[u8],
         start: usize,
     ) -> bool {
         // Why isn't the DFA or literal engine checked for here? Well, it's
@@ -300,7 +354,7 @@ impl Exec {
     fn exec_auto<'c, 'm>(
         &self,
         search: &mut Search<'c, 'm>,
-        text: &str,
+        text: &[u8],
         start: usize,
     ) -> bool {
         if search.captures.len() <= 2 && self.prog.prefixes.at_match() {
@@ -322,13 +376,17 @@ impl Exec {
     fn exec_dfa<'a, 'c, 'm>(
         &self,
         search: &'a mut Search<'c, 'm>,
-        text: &str,
+        text: &[u8],
         start: usize,
     ) -> bool {
         debug_assert!(self.can_dfa);
-        let btext = text.as_bytes();
-        if !Dfa::exec(&self.dfa, search, btext, start) {
-            return false;
+        match Dfa::exec(&self.dfa, search, text, start) {
+            DfaResult::Match => {} // fallthrough
+            DfaResult::NoMatch => return false,
+            DfaResult::Quit => {
+                search.reset();
+                return self.exec_auto_nfa(search, text, start);
+            }
         }
         let match_end = match search.captures.get(1) {
             Some(&Some(i)) => i,
@@ -354,10 +412,17 @@ impl Exec {
         }
         // OK, now we find the start of the match by running the DFA backwards
         // on the text. We *start* the search at the end of the match.
-        let matched = Dfa::exec(
-            &self.dfa_reverse, search, &btext[start..], match_end - start);
-        if !matched {
-            panic!("BUG: forward match implies backward match");
+        let result = Dfa::exec(
+            &self.dfa_reverse, search, &text[start..], match_end - start);
+        match result {
+            DfaResult::Match => {} // fallthrough
+            DfaResult::NoMatch => {
+                panic!("BUG: forward match implies backward match");
+            }
+            DfaResult::Quit => {
+                search.reset();
+                return self.exec_auto_nfa(search, text, start);
+            }
         }
         let match_start = match search.captures.get(0) {
             Some(&Some(i)) => start + i,
@@ -378,7 +443,7 @@ impl Exec {
     fn exec_auto_nfa<'c, 'm>(
         &self,
         search: &mut Search<'c, 'm>,
-        text: &str,
+        text: &[u8],
         start: usize,
     ) -> bool {
         if backtrack::should_exec(self.prog.len(), text.len()) {
@@ -392,10 +457,10 @@ impl Exec {
     fn exec_nfa<'c, 'm>(
         &self,
         search: &mut Search<'c, 'm>,
-        text: &str,
+        text: &[u8],
         start: usize,
     ) -> bool {
-        if self.prog.is_bytes {
+        if self.prog.uses_bytes() {
             Nfa::exec(&self.prog, search, ByteInput::new(text), start)
         } else {
             Nfa::exec(&self.prog, search, CharInput::new(text), start)
@@ -406,10 +471,10 @@ impl Exec {
     fn exec_backtrack<'c, 'm>(
         &self,
         search: &mut Search<'c, 'm>,
-        text: &str,
+        text: &[u8],
         start: usize,
     ) -> bool {
-        if self.prog.is_bytes {
+        if self.prog.uses_bytes() {
             Backtrack::exec(&self.prog, search, ByteInput::new(text), start)
         } else {
             Backtrack::exec(&self.prog, search, CharInput::new(text), start)
@@ -426,11 +491,11 @@ impl Exec {
     fn exec_literals<'c, 'm>(
         &self,
         search: &mut Search<'c, 'm>,
-        text: &str,
+        text: &[u8],
         start: usize,
     ) -> bool {
         debug_assert!(self.prog.prefixes.at_match());
-        match self.prog.prefixes.find(&text.as_bytes()[start..]) {
+        match self.prog.prefixes.find(&text[start..]) {
             None => false,
             Some((s, e)) => {
                 if search.captures.len() == 2 {
@@ -443,8 +508,14 @@ impl Exec {
     }
 
     /// Build a dynamic Regex from this executor.
-    pub fn into_regex(self) -> Regex {
-        Regex::Dynamic(self)
+    pub fn into_regex(self) -> re_unicode::Regex {
+        re_unicode::Regex::from(self)
+    }
+
+    /// Build a dynamic Regex from this executor that can match arbitrary
+    /// bytes.
+    pub fn into_byte_regex(self) -> re_bytes::Regex {
+        re_bytes::Regex::from(self)
     }
 
     /// The original regular expressions given by the caller that were

@@ -174,14 +174,14 @@ impl<'r, I: Input> Nfa<'r, I> {
                 );
                 if step {
                     if !matched {
-                        matched = search.all_matched();
+                        matched = search.matched_all();
                     }
                     if search.quit_after_first_match() {
                         // If we only care if a match occurs (not its
                         // position), then we can quit right now.
                         break 'LOOP;
                     }
-                    if search.matches.len() <= 1 {
+                    if !search.find_many_matches() {
                         // We don't need to check the rest of the threads
                         // in this set because we've matched something
                         // ("leftmost-first"). However, we still need to check

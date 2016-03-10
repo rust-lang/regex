@@ -9,11 +9,13 @@
 // except according to those terms.
 
 use std::cmp::{max, min};
+use std::u8;
 
 use unicode::regex::UNICODE_CLASSES;
 
 use {
-    Expr, Repeater, CharClass, ClassRange, CaptureIndex, CaptureName,
+    Expr, Repeater, CharClass, ClassRange,
+    CaptureIndex, CaptureName,
     Error, ErrorKind, Result,
 };
 
@@ -34,7 +36,7 @@ pub struct Parser {
 }
 
 /// Flag state used in the parser.
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug)]
 pub struct Flags {
     /// i
     pub casei: bool,
@@ -46,6 +48,25 @@ pub struct Flags {
     pub swap_greed: bool,
     /// x
     pub ignore_space: bool,
+    /// u
+    pub unicode: bool,
+    /// Not actually a flag, but when false, the `u` flag is forbidden and
+    /// setting `unicode` to `false` will result in an error.
+    pub allow_bytes: bool,
+}
+
+impl Default for Flags {
+    fn default() -> Self {
+        Flags {
+            casei: false,
+            multi: false,
+            dotnl: false,
+            swap_greed: false,
+            ignore_space: false,
+            unicode: true,
+            allow_bytes: false,
+        }
+    }
 }
 
 /// An ephemeral type for representing the expression stack.
@@ -83,6 +104,9 @@ impl Parser {
     // Starts at the beginning of the input and consumes until either the end
     // of input or an error.
     fn parse_expr(mut self) -> Result<Expr> {
+        if !self.flags.unicode && !self.flags.allow_bytes {
+            return Err(self.err(ErrorKind::FlagNotAllowed('u')));
+        }
         while !self.eof() {
             let build_expr = match self.cur() {
                 '\\' => try!(self.parse_escape()),
@@ -93,7 +117,13 @@ impl Parser {
                 '{' => try!(self.parse_counted_repeat()),
                 '[' => match self.maybe_parse_ascii() {
                     None => try!(self.parse_class()),
-                    Some(cls) => Build::Expr(Expr::Class(cls)),
+                    Some(cls) => {
+                        Build::Expr(if self.flags.unicode {
+                            Expr::Class(cls)
+                        } else {
+                            Expr::ClassBytes(cls.to_byte_class())
+                        })
+                    }
                 },
                 '^' => {
                     if self.flags.multi {
@@ -111,9 +141,17 @@ impl Parser {
                 }
                 '.' => {
                     if self.flags.dotnl {
-                        self.parse_one(Expr::AnyChar)
+                        if self.flags.unicode {
+                            self.parse_one(Expr::AnyChar)
+                        } else {
+                            self.parse_one(Expr::AnyByte)
+                        }
                     } else {
-                        self.parse_one(Expr::AnyCharNoNL)
+                        if self.flags.unicode {
+                            self.parse_one(Expr::AnyCharNoNL)
+                        } else {
+                            self.parse_one(Expr::AnyByteNoNL)
+                        }
                     }
                 }
                 '(' => try!(self.parse_group()),
@@ -123,10 +161,10 @@ impl Parser {
                     self.flags = old_flags;
                     e
                 }
-                _ => Build::Expr(Expr::Literal {
-                    chars: vec![self.bump()],
-                    casei: self.flags.casei,
-                }),
+                _ => {
+                    let c = self.bump();
+                    try!(self.lit(c))
+                }
             };
             if !build_expr.is_empty() {
                 self.stack.push(build_expr);
@@ -146,26 +184,34 @@ impl Parser {
         }
         let c = self.cur();
         if is_punct(c) {
-            return Ok(Build::Expr(Expr::Literal {
-                chars: vec![self.bump()],
-                casei: self.flags.casei,
-            }));
-        }
-
-        fn lit(c: char) -> Build {
-            Build::Expr(Expr::Literal { chars: vec![c], casei: false })
+            let c = self.bump();
+            return Ok(try!(self.lit(c)));
         }
         match c {
-            'a' => { self.bump(); Ok(lit('\x07')) }
-            'f' => { self.bump(); Ok(lit('\x0C')) }
-            't' => { self.bump(); Ok(lit('\t')) }
-            'n' => { self.bump(); Ok(lit('\n')) }
-            'r' => { self.bump(); Ok(lit('\r')) }
-            'v' => { self.bump(); Ok(lit('\x0B')) }
+            'a' => { self.bump(); Ok(try!(self.lit('\x07'))) }
+            'f' => { self.bump(); Ok(try!(self.lit('\x0C'))) }
+            't' => { self.bump(); Ok(try!(self.lit('\t'))) }
+            'n' => { self.bump(); Ok(try!(self.lit('\n'))) }
+            'r' => { self.bump(); Ok(try!(self.lit('\r'))) }
+            'v' => { self.bump(); Ok(try!(self.lit('\x0B'))) }
             'A' => { self.bump(); Ok(Build::Expr(Expr::StartText)) }
             'z' => { self.bump(); Ok(Build::Expr(Expr::EndText)) }
-            'b' => { self.bump(); Ok(Build::Expr(Expr::WordBoundary)) }
-            'B' => { self.bump(); Ok(Build::Expr(Expr::NotWordBoundary)) }
+            'b' => {
+                self.bump();
+                Ok(Build::Expr(if self.flags.unicode {
+                    Expr::WordBoundary
+                } else {
+                    Expr::WordBoundaryAscii
+                }))
+            }
+            'B' => {
+                self.bump();
+                Ok(Build::Expr(if self.flags.unicode {
+                    Expr::NotWordBoundary
+                } else {
+                    Expr::NotWordBoundaryAscii
+                }))
+            }
             '0'|'1'|'2'|'3'|'4'|'5'|'6'|'7' => self.parse_octal(),
             'x' => { self.bump(); self.parse_hex() }
             'p'|'P' => {
@@ -175,7 +221,11 @@ impl Parser {
             }
             'd'|'s'|'w'|'D'|'S'|'W' => {
                 self.bump();
-                Ok(Build::Expr(Expr::Class(self.parse_perl_class(c))))
+                Ok(Build::Expr(if self.flags.unicode {
+                    Expr::Class(self.parse_perl_class(c))
+                } else {
+                    Expr::ClassBytes(self.parse_perl_class(c).to_byte_class())
+                }))
             }
             c => Err(self.err(ErrorKind::UnrecognizedEscape(c))),
         }
@@ -242,6 +292,13 @@ impl Parser {
                 's' => { self.flags.dotnl = sign; saw_flag = true }
                 'U' => { self.flags.swap_greed = sign; saw_flag = true }
                 'x' => { self.flags.ignore_space = sign; saw_flag = true }
+                'u' => {
+                    if !self.flags.allow_bytes {
+                        return Err(self.err(ErrorKind::FlagNotAllowed('u')));
+                    }
+                    self.flags.unicode = sign;
+                    saw_flag = true;
+                }
                 '-' => {
                     if !sign {
                         // e.g., (?-i-s)
@@ -414,10 +471,11 @@ impl Parser {
         //
         // Hence, we `unwrap` with reckless abandon.
         let n = u32::from_str_radix(&n, 8).ok().expect("valid octal number");
-        Ok(Build::Expr(Expr::Literal {
-            chars: vec![char::from_u32(n).expect("Unicode scalar value")],
-            casei: self.flags.casei,
-        }))
+        if !self.flags.unicode {
+            return Ok(try!(self.u32_to_one_byte(n)));
+        }
+        let c = char::from_u32(n).expect("Unicode scalar value");
+        Ok(try!(self.lit(c)))
     }
 
     // Parses a hex number, e.g., `a\x5ab`.
@@ -447,16 +505,16 @@ impl Parser {
         let s = self.bump_get(|c| c != '}').unwrap_or("".into());
         let n = try!(u32::from_str_radix(&s, 16)
                          .map_err(|_| self.err(ErrorKind::InvalidBase16(s))));
-        let c = try!(char::from_u32(n)
-                          .ok_or(self.err(ErrorKind::InvalidScalarValue(n))));
         if !self.bump_if('}') {
             // e.g., a\x{d
             return Err(self.err(ErrorKind::UnclosedHex));
         }
-        Ok(Build::Expr(Expr::Literal {
-            chars: vec![c],
-            casei: self.flags.casei,
-        }))
+        if !self.flags.unicode {
+            return Ok(try!(self.u32_to_one_byte(n)));
+        }
+        let c = try!(char::from_u32(n)
+                          .ok_or(self.err(ErrorKind::InvalidScalarValue(n))));
+        Ok(try!(self.lit(c)))
     }
 
     // Parses a two-digit hex number, e.g., `a\x5ab`.
@@ -475,11 +533,11 @@ impl Parser {
         }
         let n = try!(u32::from_str_radix(&s, 16)
                          .map_err(|_| self.err(ErrorKind::InvalidBase16(s))));
-        Ok(Build::Expr(Expr::Literal {
-            // Because 0...255 are all valid Unicode scalar values.
-            chars: vec![char::from_u32(n).expect("Unicode scalar value")],
-            casei: self.flags.casei,
-        }))
+        if !self.flags.unicode {
+            return Ok(try!(self.u32_to_one_byte(n)));
+        }
+        let c = char::from_u32(n).expect("Unicode scalar value");
+        Ok(try!(self.lit(c)))
     }
 
     // Parses a character class, e.g., `[^a-zA-Z0-9]+`.
@@ -514,8 +572,19 @@ impl Parser {
                     Build::Expr(Expr::Class(class2)) => {
                         class.ranges.extend(class2);
                     }
+                    Build::Expr(Expr::ClassBytes(class2)) => {
+                        for byte_range in class2 {
+                            let s = byte_range.start as char;
+                            let e = byte_range.end as char;
+                            class.ranges.push(ClassRange::new(s, e));
+                        }
+                    }
                     Build::Expr(Expr::Literal { chars, .. }) => {
                         try!(self.parse_class_range(&mut class, chars[0]));
+                    }
+                    Build::Expr(Expr::LiteralBytes { bytes, .. }) => {
+                        let start = bytes[0] as char;
+                        try!(self.parse_class_range(&mut class, start));
                     }
                     Build::Expr(e) => {
                         let err = ErrorKind::InvalidClassEscape(e);
@@ -531,7 +600,11 @@ impl Parser {
             }
         }
         class = self.class_transform(negated, class).canonicalize();
-        Ok(Build::Expr(Expr::Class(class)))
+        Ok(Build::Expr(if self.flags.unicode {
+            Expr::Class(class)
+        } else {
+            Expr::ClassBytes(class.to_byte_class())
+        }))
     }
 
     // Parses a single range in a character class.
@@ -567,7 +640,12 @@ impl Parser {
         // make sure it's a valid range.
         let end = match self.cur() {
             '\\' => match try!(self.parse_escape()) {
-                Build::Expr(Expr::Literal { chars, .. }) => chars[0],
+                Build::Expr(Expr::Literal { chars, .. }) => {
+                    chars[0]
+                }
+                Build::Expr(Expr::LiteralBytes { bytes, .. }) => {
+                    bytes[0] as char
+                }
                 Build::Expr(e) => {
                     return Err(self.err(ErrorKind::InvalidClassEscape(e)));
                 }
@@ -648,7 +726,13 @@ impl Parser {
             };
         match unicode_class(&name) {
             None => Err(self.err(ErrorKind::UnrecognizedUnicodeClass(name))),
-            Some(cls) => Ok(self.class_transform(neg, cls)),
+            Some(cls) => {
+                if self.flags.unicode {
+                    Ok(self.class_transform(neg, cls))
+                } else {
+                    Err(self.err(ErrorKind::UnicodeNotAllowed))
+                }
+            }
         }
     }
 
@@ -659,10 +743,19 @@ impl Parser {
     // No parser state is changed.
     fn parse_perl_class(&mut self, name: char) -> CharClass {
         use unicode::regex::{PERLD, PERLS, PERLW};
-        let (cls, negate) = match name {
-            'd' | 'D' => (raw_class_to_expr(PERLD), name == 'D'),
-            's' | 'S' => (raw_class_to_expr(PERLS), name == 'S'),
-            'w' | 'W' => (raw_class_to_expr(PERLW), name == 'W'),
+        let (cls, negate) = match (self.flags.unicode, name) {
+            (true, 'd') => (raw_class_to_expr(PERLD), false),
+            (true, 'D') => (raw_class_to_expr(PERLD), true),
+            (true, 's') => (raw_class_to_expr(PERLS), false),
+            (true, 'S') => (raw_class_to_expr(PERLS), true),
+            (true, 'w') => (raw_class_to_expr(PERLW), false),
+            (true, 'W') => (raw_class_to_expr(PERLW), true),
+            (false, 'd') => (ascii_class("digit").unwrap(), false),
+            (false, 'D') => (ascii_class("digit").unwrap(), true),
+            (false, 's') => (ascii_class("space").unwrap(), false),
+            (false, 'S') => (ascii_class("space").unwrap(), true),
+            (false, 'w') => (ascii_class("word").unwrap(), false),
+            (false, 'W') => (ascii_class("word").unwrap(), true),
             _ => unreachable!(),
         };
         self.class_transform(negate, cls)
@@ -754,6 +847,54 @@ impl Parser {
             cls = cls.negate();
         }
         cls
+    }
+
+    // Translates a Unicode codepoint into a single UTF-8 byte, and returns an
+    // error if it's not possible.
+    //
+    // This will panic if self.flags.unicode == true.
+    fn codepoint_to_one_byte(&self, c: char) -> Result<u8> {
+        assert!(!self.flags.unicode);
+        let bytes = c.to_string().as_bytes().to_owned();
+        if bytes.len() > 1 {
+            return Err(self.err(ErrorKind::UnicodeNotAllowed));
+        }
+        Ok(bytes[0])
+    }
+
+    // Creates a new byte literal from a single byte.
+    //
+    // If the given number can't fit into a single byte, then it is assumed
+    // to be a Unicode codepoint and an error is returned.
+    //
+    // This should only be called when the bytes flag is enabled.
+    fn u32_to_one_byte(&self, b: u32) -> Result<Build> {
+        assert!(!self.flags.unicode);
+        if b > u8::MAX as u32 {
+            Err(self.err(ErrorKind::UnicodeNotAllowed))
+        } else {
+            Ok(Build::Expr(Expr::LiteralBytes {
+                bytes: vec![b as u8],
+                casei: self.flags.casei,
+            }))
+        }
+    }
+
+    // Creates a new literal expr from a Unicode codepoint.
+    //
+    // Creates a byte literal if the `bytes` flag is set.
+    fn lit(&self, c: char) -> Result<Build> {
+        Ok(Build::Expr(if self.flags.unicode {
+            Expr::Literal {
+                chars: vec![c],
+                casei: self.flags.casei,
+            }
+        } else {
+            Expr::LiteralBytes {
+                bytes: vec![try!(self.codepoint_to_one_byte(c))],
+                casei: self.flags.casei,
+            }
+        }))
     }
 }
 
@@ -1130,9 +1271,13 @@ const XDIGIT: Class = &[('0', '9'), ('A', 'F'), ('a', 'f')];
 
 #[cfg(test)]
 mod tests {
-    use { CharClass, ClassRange, Expr, Repeater, ErrorKind };
+    use {
+        CharClass, ClassRange, ByteClass, ByteRange,
+        Expr, Repeater,
+        ErrorKind,
+    };
     use unicode::regex::{PERLD, PERLS, PERLW};
-    use super::{LOWER, UPPER, Flags, Parser};
+    use super::{LOWER, UPPER, Flags, Parser, ascii_class};
 
     static YI: &'static [(char, char)] = &[
         ('\u{a000}', '\u{a48c}'), ('\u{a490}', '\u{a4c6}'),
@@ -1144,6 +1289,25 @@ mod tests {
     fn liti(c: char) -> Expr { Expr::Literal { chars: vec![c], casei: true } }
     fn b<T>(v: T) -> Box<T> { Box::new(v) }
     fn c(es: &[Expr]) -> Expr { Expr::Concat(es.to_vec()) }
+
+    fn pb(s: &str) -> Expr {
+        let flags = Flags { allow_bytes: true, .. Flags::default() };
+        Parser::parse(s, flags).unwrap()
+    }
+
+    fn blit(b: u8) -> Expr {
+        Expr::LiteralBytes {
+            bytes: vec![b],
+            casei: false,
+        }
+    }
+
+    fn bliti(b: u8) -> Expr {
+        Expr::LiteralBytes {
+            bytes: vec![b],
+            casei: true,
+        }
+    }
 
     fn class(ranges: &[(char, char)]) -> CharClass {
         let ranges = ranges.iter().cloned()
@@ -1159,6 +1323,24 @@ mod tests {
         cls.canonicalize()
     }
 
+    fn bclass(ranges: &[(u8, u8)]) -> ByteClass {
+        let ranges = ranges.iter().cloned()
+                           .map(|(c1, c2)| ByteRange::new(c1, c2)).collect();
+        ByteClass::new(ranges)
+    }
+
+    fn asciid() -> ByteClass {
+        ascii_class("digit").unwrap().to_byte_class()
+    }
+
+    fn asciis() -> ByteClass {
+        ascii_class("space").unwrap().to_byte_class()
+    }
+
+    fn asciiw() -> ByteClass {
+        ascii_class("word").unwrap().to_byte_class()
+    }
+
     #[test]
     fn empty() {
         assert_eq!(p(""), Expr::Empty);
@@ -1167,11 +1349,13 @@ mod tests {
     #[test]
     fn literal() {
         assert_eq!(p("a"), lit('a'));
+        assert_eq!(pb("(?-u)a"), blit(b'a'));
     }
 
     #[test]
     fn literal_string() {
         assert_eq!(p("ab"), Expr::Concat(vec![lit('a'), lit('b')]));
+        assert_eq!(pb("(?-u)ab"), Expr::Concat(vec![blit(b'a'), blit(b'b')]));
     }
 
     #[test]
@@ -1434,6 +1618,11 @@ mod tests {
             i: None,
             name: None,
         });
+        assert_eq!(pb("(?i-u:a)"), Expr::Group {
+            e: b(bliti(b'a')),
+            i: None,
+            name: None,
+        });
     }
 
     #[test]
@@ -1441,6 +1630,14 @@ mod tests {
         assert_eq!(p("(?i:a)a"), c(&[
             Expr::Group {
                 e: b(liti('a')),
+                i: None,
+                name: None,
+            },
+            lit('a'),
+        ]));
+        assert_eq!(pb("(?i-u:a)a"), c(&[
+            Expr::Group {
+                e: b(bliti(b'a')),
                 i: None,
                 name: None,
             },
@@ -1457,6 +1654,14 @@ mod tests {
                 name: None,
             },
             liti('a'),
+        ]));
+        assert_eq!(pb("(?i-u)(?u-i:a)a"), c(&[
+            Expr::Group {
+                e: b(lit('a')),
+                i: None,
+                name: None,
+            },
+            bliti(b'a'),
         ]));
     }
 
@@ -1506,6 +1711,14 @@ mod tests {
         assert_eq!(p("(?is)a.(?i-s)a."), c(&[
             liti('a'), Expr::AnyChar, liti('a'), Expr::AnyCharNoNL,
         ]));
+    }
+
+    #[test]
+    fn any_byte() {
+        assert_eq!(
+            pb("(?-u).(?u)."), c(&[Expr::AnyByteNoNL, Expr::AnyCharNoNL]));
+        assert_eq!(
+            pb("(?s)(?-u).(?u)."), c(&[Expr::AnyByte, Expr::AnyChar]));
     }
 
     #[test]
@@ -1585,6 +1798,9 @@ mod tests {
             Expr::StartText, Expr::EndText,
             Expr::WordBoundary, Expr::NotWordBoundary,
         ]));
+        assert_eq!(pb(r"(?-u)\b\B"), c(&[
+            Expr::WordBoundaryAscii, Expr::NotWordBoundaryAscii,
+        ]));
     }
 
     #[test]
@@ -1600,12 +1816,21 @@ mod tests {
     fn escape_octal() {
         assert_eq!(p(r"\123"), lit('S'));
         assert_eq!(p(r"\1234"), c(&[lit('S'), lit('4')]));
+
+        assert_eq!(pb(r"(?-u)\377"), blit(0xFF));
     }
 
     #[test]
     fn escape_hex2() {
         assert_eq!(p(r"\x53"), lit('S'));
         assert_eq!(p(r"\x534"), c(&[lit('S'), lit('4')]));
+
+        assert_eq!(pb(r"(?-u)\xff"), blit(0xFF));
+        assert_eq!(pb(r"(?-u)\x00"), blit(0x0));
+        assert_eq!(pb(r"(?-u)[\x00]"),
+                   Expr::ClassBytes(bclass(&[(b'\x00', b'\x00')])));
+        assert_eq!(pb(r"(?-u)[^\x00]"),
+                   Expr::ClassBytes(bclass(&[(b'\x01', b'\xFF')])));
     }
 
     #[test]
@@ -1613,6 +1838,8 @@ mod tests {
         assert_eq!(p(r"\x{53}"), lit('S'));
         assert_eq!(p(r"\x{53}4"), c(&[lit('S'), lit('4')]));
         assert_eq!(p(r"\x{2603}"), lit('\u{2603}'));
+
+        assert_eq!(pb(r"(?-u)\x{00FF}"), blit(0xFF));
     }
 
     #[test]
@@ -1679,64 +1906,79 @@ mod tests {
     #[test]
     fn escape_perl_d() {
         assert_eq!(p(r"\d"), Expr::Class(class(PERLD)));
+        assert_eq!(pb(r"(?-u)\d"), Expr::ClassBytes(asciid()));
     }
 
     #[test]
     fn escape_perl_s() {
         assert_eq!(p(r"\s"), Expr::Class(class(PERLS)));
+        assert_eq!(pb(r"(?-u)\s"), Expr::ClassBytes(asciis()));
     }
 
     #[test]
     fn escape_perl_w() {
         assert_eq!(p(r"\w"), Expr::Class(class(PERLW)));
+        assert_eq!(pb(r"(?-u)\w"), Expr::ClassBytes(asciiw()));
     }
 
     #[test]
     fn escape_perl_d_negate() {
         assert_eq!(p(r"\D"), Expr::Class(class(PERLD).negate()));
+        assert_eq!(pb(r"(?-u)\D"), Expr::ClassBytes(asciid().negate()));
     }
 
     #[test]
     fn escape_perl_s_negate() {
         assert_eq!(p(r"\S"), Expr::Class(class(PERLS).negate()));
+        assert_eq!(pb(r"(?-u)\S"), Expr::ClassBytes(asciis().negate()));
     }
 
     #[test]
     fn escape_perl_w_negate() {
         assert_eq!(p(r"\W"), Expr::Class(class(PERLW).negate()));
+        assert_eq!(pb(r"(?-u)\W"), Expr::ClassBytes(asciiw().negate()));
     }
 
     #[test]
     fn escape_perl_d_case_fold() {
         assert_eq!(p(r"(?i)\d"), Expr::Class(class(PERLD).case_fold()));
+        assert_eq!(pb(r"(?i-u)\d"), Expr::ClassBytes(asciid().case_fold()));
     }
 
     #[test]
     fn escape_perl_s_case_fold() {
         assert_eq!(p(r"(?i)\s"), Expr::Class(class(PERLS).case_fold()));
+        assert_eq!(pb(r"(?i-u)\s"), Expr::ClassBytes(asciis().case_fold()));
     }
 
     #[test]
     fn escape_perl_w_case_fold() {
         assert_eq!(p(r"(?i)\w"), Expr::Class(class(PERLW).case_fold()));
+        assert_eq!(pb(r"(?i-u)\w"), Expr::ClassBytes(asciiw().case_fold()));
     }
 
     #[test]
     fn escape_perl_d_case_fold_negate() {
         assert_eq!(p(r"(?i)\D"),
-                   Expr::Class(class(PERLD).negate().case_fold()));
+                   Expr::Class(class(PERLD).case_fold().negate()));
+        let bytes = asciid().case_fold().negate();
+        assert_eq!(pb(r"(?i-u)\D"), Expr::ClassBytes(bytes));
     }
 
     #[test]
     fn escape_perl_s_case_fold_negate() {
         assert_eq!(p(r"(?i)\S"),
-                   Expr::Class(class(PERLS).negate().case_fold()));
+                   Expr::Class(class(PERLS).case_fold().negate()));
+        let bytes = asciis().case_fold().negate();
+        assert_eq!(pb(r"(?i-u)\S"), Expr::ClassBytes(bytes));
     }
 
     #[test]
     fn escape_perl_w_case_fold_negate() {
         assert_eq!(p(r"(?i)\W"),
-                   Expr::Class(class(PERLW).negate().case_fold()));
+                   Expr::Class(class(PERLW).case_fold().negate()));
+        let bytes = asciiw().case_fold().negate();
+        assert_eq!(pb(r"(?i-u)\W"), Expr::ClassBytes(bytes));
     }
 
     #[test]
@@ -1745,6 +1987,13 @@ mod tests {
         assert_eq!(p(r"[\x00]"), Expr::Class(class(&[('\x00', '\x00')])));
         assert_eq!(p(r"[\n]"), Expr::Class(class(&[('\n', '\n')])));
         assert_eq!(p("[\n]"), Expr::Class(class(&[('\n', '\n')])));
+
+        assert_eq!(pb(r"(?-u)[a]"), Expr::ClassBytes(bclass(&[(b'a', b'a')])));
+        assert_eq!(pb(r"(?-u)[\x00]"), Expr::ClassBytes(bclass(&[(0, 0)])));
+        assert_eq!(pb("(?-u)[\n]"),
+                   Expr::ClassBytes(bclass(&[(b'\n', b'\n')])));
+        assert_eq!(pb(r"(?-u)[\n]"),
+                   Expr::ClassBytes(bclass(&[(b'\n', b'\n')])));
     }
 
     #[test]
@@ -1761,12 +2010,28 @@ mod tests {
         assert_eq!(p("[^\n]"), Expr::Class(class(&[
             ('\x00', '\x09'), ('\x0b', '\u{10FFFF}'),
         ])));
+
+        assert_eq!(pb(r"(?-u)[^a]"), Expr::ClassBytes(bclass(&[
+            (0x00, 0x60), (0x62, 0xFF),
+        ])));
+        assert_eq!(pb(r"(?-u)[^\x00]"), Expr::ClassBytes(bclass(&[
+            (0x01, 0xFF),
+        ])));
+        assert_eq!(pb(r"(?-u)[^\n]"), Expr::ClassBytes(bclass(&[
+            (0x00, 0x09), (0x0B, 0xFF),
+        ])));
+        assert_eq!(pb("(?-u)[^\n]"), Expr::ClassBytes(bclass(&[
+            (0x00, 0x09), (0x0B, 0xFF),
+        ])));
     }
 
     #[test]
     fn class_singleton_class() {
         assert_eq!(p(r"[\d]"), Expr::Class(class(PERLD)));
         assert_eq!(p(r"[\p{Yi}]"), Expr::Class(class(YI)));
+
+        let bytes = class(PERLD).to_byte_class();
+        assert_eq!(pb(r"(?-u)[\d]"), Expr::ClassBytes(bytes));
     }
 
     #[test]
@@ -1774,6 +2039,13 @@ mod tests {
         assert_eq!(p(r"[^\d]"), Expr::Class(class(PERLD).negate()));
         assert_eq!(p(r"[^\w]"), Expr::Class(class(PERLW).negate()));
         assert_eq!(p(r"[^\s]"), Expr::Class(class(PERLS).negate()));
+
+        let bytes = asciid().negate();
+        assert_eq!(pb(r"(?-u)[^\d]"), Expr::ClassBytes(bytes));
+        let bytes = asciiw().negate();
+        assert_eq!(pb(r"(?-u)[^\w]"), Expr::ClassBytes(bytes));
+        let bytes = asciis().negate();
+        assert_eq!(pb(r"(?-u)[^\s]"), Expr::ClassBytes(bytes));
     }
 
     #[test]
@@ -1781,22 +2053,35 @@ mod tests {
         assert_eq!(p(r"[^\D]"), Expr::Class(class(PERLD)));
         assert_eq!(p(r"[^\W]"), Expr::Class(class(PERLW)));
         assert_eq!(p(r"[^\S]"), Expr::Class(class(PERLS)));
+
+        assert_eq!(pb(r"(?-u)[^\D]"), Expr::ClassBytes(asciid()));
+        assert_eq!(pb(r"(?-u)[^\W]"), Expr::ClassBytes(asciiw()));
+        assert_eq!(pb(r"(?-u)[^\S]"), Expr::ClassBytes(asciis()));
     }
 
     #[test]
     fn class_singleton_class_casei() {
         assert_eq!(p(r"(?i)[\d]"), Expr::Class(class(PERLD).case_fold()));
         assert_eq!(p(r"(?i)[\p{Yi}]"), Expr::Class(class(YI).case_fold()));
+
+        assert_eq!(pb(r"(?i-u)[\d]"), Expr::ClassBytes(asciid().case_fold()));
     }
 
     #[test]
     fn class_singleton_class_negate_casei() {
         assert_eq!(p(r"(?i)[^\d]"),
-                   Expr::Class(class(PERLD).negate().case_fold()));
+                   Expr::Class(class(PERLD).case_fold().negate()));
         assert_eq!(p(r"(?i)[^\w]"),
-                   Expr::Class(class(PERLW).negate().case_fold()));
+                   Expr::Class(class(PERLW).case_fold().negate()));
         assert_eq!(p(r"(?i)[^\s]"),
-                   Expr::Class(class(PERLS).negate().case_fold()));
+                   Expr::Class(class(PERLS).case_fold().negate()));
+
+        let bytes = asciid().case_fold().negate();
+        assert_eq!(pb(r"(?i-u)[^\d]"), Expr::ClassBytes(bytes));
+        let bytes = asciiw().case_fold().negate();
+        assert_eq!(pb(r"(?i-u)[^\w]"), Expr::ClassBytes(bytes));
+        let bytes = asciis().case_fold().negate();
+        assert_eq!(pb(r"(?i-u)[^\s]"), Expr::ClassBytes(bytes));
     }
 
     #[test]
@@ -1804,6 +2089,10 @@ mod tests {
         assert_eq!(p(r"(?i)[^\D]"), Expr::Class(class(PERLD).case_fold()));
         assert_eq!(p(r"(?i)[^\W]"), Expr::Class(class(PERLW).case_fold()));
         assert_eq!(p(r"(?i)[^\S]"), Expr::Class(class(PERLS).case_fold()));
+
+        assert_eq!(pb(r"(?i-u)[^\D]"), Expr::ClassBytes(asciid().case_fold()));
+        assert_eq!(pb(r"(?i-u)[^\W]"), Expr::ClassBytes(asciiw().case_fold()));
+        assert_eq!(pb(r"(?i-u)[^\S]"), Expr::ClassBytes(asciis().case_fold()));
     }
 
     #[test]
@@ -1839,7 +2128,7 @@ mod tests {
     fn class_multiple_class_negate_casei() {
         assert_eq!(p(r"(?i)[^\d\p{Yi}]"), Expr::Class(classes(&[
             PERLD, YI,
-        ]).negate().case_fold()));
+        ]).case_fold().negate()));
     }
 
     #[test]
@@ -1848,7 +2137,7 @@ mod tests {
         let nyi = class(YI).negate();
         let class = CharClass::empty().merge(nperld).merge(nyi);
         assert_eq!(p(r"(?i)[^\D\P{Yi}]"),
-                   Expr::Class(class.negate().case_fold()));
+                   Expr::Class(class.case_fold().negate()));
     }
 
     #[test]
@@ -1884,34 +2173,54 @@ mod tests {
     fn class_overlapping() {
         assert_eq!(p("[a-fd-h]"), Expr::Class(class(&[('a', 'h')])));
         assert_eq!(p("[a-fg-m]"), Expr::Class(class(&[('a', 'm')])));
+
+        assert_eq!(pb("(?-u)[a-fd-h]"),
+                   Expr::ClassBytes(bclass(&[(b'a', b'h')])));
+        assert_eq!(pb("(?-u)[a-fg-m]"),
+                   Expr::ClassBytes(bclass(&[(b'a', b'm')])));
     }
 
     #[test]
-    fn ascii_class() {
+    fn ascii_classes() {
         assert_eq!(p("[:upper:]"), Expr::Class(class(UPPER)));
         assert_eq!(p("[[:upper:]]"), Expr::Class(class(UPPER)));
+
+        assert_eq!(pb("(?-u)[:upper:]"),
+                   Expr::ClassBytes(class(UPPER).to_byte_class()));
+        assert_eq!(pb("(?-u)[[:upper:]]"),
+                   Expr::ClassBytes(class(UPPER).to_byte_class()));
     }
 
     #[test]
-    fn ascii_class_not() {
+    fn ascii_classes_not() {
         assert_eq!(p("[:abc:]"),
                    Expr::Class(class(&[(':', ':'), ('a', 'c')])));
+        assert_eq!(pb("(?-u)[:abc:]"),
+                   Expr::ClassBytes(bclass(&[(b':', b':'), (b'a', b'c')])));
     }
 
     #[test]
-    fn ascii_class_multiple() {
+    fn ascii_classes_multiple() {
         assert_eq!(p("[[:lower:][:upper:]]"),
                    Expr::Class(classes(&[UPPER, LOWER])));
+
+        assert_eq!(pb("(?-u)[[:lower:][:upper:]]"),
+                   Expr::ClassBytes(classes(&[UPPER, LOWER]).to_byte_class()));
     }
 
     #[test]
-    fn ascii_class_negate() {
+    fn ascii_classes_negate() {
         assert_eq!(p("[[:^upper:]]"), Expr::Class(class(UPPER).negate()));
         assert_eq!(p("[^[:^upper:]]"), Expr::Class(class(UPPER)));
+
+        assert_eq!(pb("(?-u)[[:^upper:]]"),
+                   Expr::ClassBytes(class(UPPER).to_byte_class().negate()));
+        assert_eq!(pb("(?-u)[^[:^upper:]]"),
+                   Expr::ClassBytes(class(UPPER).to_byte_class()));
     }
 
     #[test]
-    fn ascii_class_negate_multiple() {
+    fn ascii_classes_negate_multiple() {
         let (nlower, nupper) = (class(LOWER).negate(), class(UPPER).negate());
         let cls = CharClass::empty().merge(nlower).merge(nupper);
         assert_eq!(p("[[:^lower:][:^upper:]]"), Expr::Class(cls.clone()));
@@ -1919,24 +2228,40 @@ mod tests {
     }
 
     #[test]
-    fn ascii_class_case_fold() {
+    fn ascii_classes_case_fold() {
         assert_eq!(p("(?i)[:upper:]"), Expr::Class(class(UPPER).case_fold()));
         assert_eq!(p("(?i)[[:upper:]]"),
                    Expr::Class(class(UPPER).case_fold()));
+
+        assert_eq!(pb("(?i-u)[:upper:]"),
+                   Expr::ClassBytes(class(UPPER).to_byte_class().case_fold()));
+        assert_eq!(pb("(?i-u)[[:upper:]]"),
+                   Expr::ClassBytes(class(UPPER).to_byte_class().case_fold()));
     }
 
     #[test]
-    fn ascii_class_negate_case_fold() {
+    fn ascii_classes_negate_case_fold() {
         assert_eq!(p("(?i)[[:^upper:]]"),
                    Expr::Class(class(UPPER).case_fold().negate()));
         assert_eq!(p("(?i)[^[:^upper:]]"),
                    Expr::Class(class(UPPER).case_fold()));
+
+        assert_eq!(pb("(?i-u)[[:^upper:]]"),
+                   Expr::ClassBytes(
+                       class(UPPER).to_byte_class().case_fold().negate()));
+        assert_eq!(pb("(?i-u)[^[:^upper:]]"),
+                   Expr::ClassBytes(class(UPPER).to_byte_class().case_fold()));
     }
 
     #[test]
     fn single_class_negate_case_fold() {
         assert_eq!(p("(?i)[^x]"),
                    Expr::Class(class(&[('x', 'x')]).case_fold().negate()));
+
+        assert_eq!(pb("(?i-u)[^x]"),
+                   Expr::ClassBytes(
+                       class(&[('x', 'x')])
+                       .to_byte_class().case_fold().negate()));
     }
 
     #[test]
@@ -2028,12 +2353,51 @@ mod tests {
     // Test every single possible error case.
 
     macro_rules! test_err {
-        ($re:expr, $pos:expr, $kind:expr) => {{
-            let err = Parser::parse($re, Flags::default()).unwrap_err();
+        ($re:expr, $pos:expr, $kind:expr) => {
+            test_err!($re, $pos, $kind, Flags::default());
+        };
+        ($re:expr, $pos:expr, $kind:expr, $flags:expr) => {{
+            let err = Parser::parse($re, $flags).unwrap_err();
             assert_eq!($pos, err.pos);
             assert_eq!($kind, err.kind);
             assert!($re.contains(&err.surround));
         }}
+    }
+
+    #[test]
+    fn flags_default_byte_flag_not_allowed() {
+        let flags = Flags { unicode: false, .. Flags::default() };
+        test_err!("a", 0, ErrorKind::FlagNotAllowed('u'), flags);
+    }
+
+    #[test]
+    fn flags_byte_flag_not_allowed() {
+        test_err!("(?-u)a", 3, ErrorKind::FlagNotAllowed('u'));
+    }
+
+    #[test]
+    fn unicode_char_not_allowed() {
+        let flags = Flags { allow_bytes: true, .. Flags::default() };
+        test_err!("☃(?-u:☃)", 7, ErrorKind::UnicodeNotAllowed, flags);
+    }
+
+    #[test]
+    fn unicode_class_not_allowed() {
+        let flags = Flags { allow_bytes: true, .. Flags::default() };
+        test_err!(r"☃(?-u:\pL)", 9, ErrorKind::UnicodeNotAllowed, flags);
+    }
+
+    #[test]
+    fn unicode_hex_not_allowed() {
+        let flags = Flags { allow_bytes: true, .. Flags::default() };
+        test_err!(r"(?-u)\x{FFFF}", 13, ErrorKind::UnicodeNotAllowed, flags);
+        test_err!(r"(?-u)\x{100}", 12, ErrorKind::UnicodeNotAllowed, flags);
+    }
+
+    #[test]
+    fn unicode_octal_not_allowed() {
+        let flags = Flags { allow_bytes: true, .. Flags::default() };
+        test_err!(r"(?-u)\400", 9, ErrorKind::UnicodeNotAllowed, flags);
     }
 
     #[test]
@@ -2253,12 +2617,12 @@ mod tests {
 
     #[test]
     fn error_escape_hex_invalid_scalar_value_surrogate() {
-        test_err!(r"\x{D800}", 7, ErrorKind::InvalidScalarValue(0xD800));
+        test_err!(r"\x{D800}", 8, ErrorKind::InvalidScalarValue(0xD800));
     }
 
     #[test]
     fn error_escape_hex_invalid_scalar_value_high() {
-        test_err!(r"\x{110000}", 9, ErrorKind::InvalidScalarValue(0x110000));
+        test_err!(r"\x{110000}", 10, ErrorKind::InvalidScalarValue(0x110000));
     }
 
     #[test]
