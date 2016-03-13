@@ -10,6 +10,7 @@ by [RE2](https://github.com/google/re2).
 
 [![Build Status](https://travis-ci.org/rust-lang-nursery/regex.svg?branch=master)](https://travis-ci.org/rust-lang-nursery/regex)
 [![Build status](https://ci.appveyor.com/api/projects/status/22g48bo866qr4u77?svg=true)](https://ci.appveyor.com/project/alexcrichton/regex)
+[![Coverage Status](https://coveralls.io/repos/rust-lang-nursery/regex/badge.svg?branch=master)](https://coveralls.io/r/rust-lang-nursery/regex?branch=master)
 [![](http://meritbadge.herokuapp.com/regex)](https://crates.io/crates/regex)
 
 ### Documentation
