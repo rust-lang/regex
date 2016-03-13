@@ -23,7 +23,6 @@ Documentation with examples for the various matching functions and iterators
 can be found on the
 [`Regex` type](https://doc.rust-lang.org/regex/regex/enum.Regex.html).
 
-
 ### Usage
 
 Add this to your `Cargo.toml`:
