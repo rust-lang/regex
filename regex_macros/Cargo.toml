@@ -26,6 +26,10 @@ features = ["pattern"]
 path = "../regex-syntax"
 version = "0.3.0"
 
+[dev-dependencies]
+# For generating random test data.
+rand = "0.3"
+
 [[test]]
 path = "../tests/test_plugin.rs"
 name = "plugin"
