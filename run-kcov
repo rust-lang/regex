@@ -37,6 +37,7 @@ done
 if [ -n "$with_plugin" ]; then
   cargo test --manifest-path regex_macros/Cargo.toml --no-run --verbose
   kcov \
+    --verify \
     --include-pattern '/regex/src/' \
     "$tmpdir/plugin" \
     $(ls -t ./regex_macros/target/debug/plugin-* | head -n1)
@@ -45,13 +46,14 @@ fi
 cargo test --no-run --verbose
 for t in ${tests[@]}; do
   kcov \
+    --verify \
     --include-pattern '/regex/src/' \
     "$tmpdir/$t" \
     $(ls -t ./target/debug/"$t"-* | head -n1)
 done
 
 if [ -n "$coveralls_id" ]; then
-  kcov --coveralls-id=$coveralls_id --merge target/cov "$tmpdir"/*
+  kcov --verify --coveralls-id=$coveralls_id --merge target/cov "$tmpdir"/*
 else
-  kcov --merge target/cov "$tmpdir"/*
+  kcov --verify --merge target/cov "$tmpdir"/*
 fi
