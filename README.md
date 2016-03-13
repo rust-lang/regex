@@ -128,6 +128,42 @@ fn some_helper_function(text: &str) -> bool {
 Specifically, in this example, the regex will be compiled when it is used for
 the first time. On subsequent uses, it will reuse the previous compilation.
 
+### Usage: match regular expressions on `&[u8]`
+
+The main API of this crate (`regex::Regex`) requires the caller to pass a
+`&str` for searching. In Rust, an `&str` is required to be valid UTF-8, which
+means the main API can't be used for searching arbitrary bytes.
+
+To match on arbitrary bytes, use the `regex::bytes::Regex` API. The API
+is identical to the main API, except that it takes an `&[u8]` to search
+on instead of an `&str`. By default, `.` will match any *byte* using
+`regex::bytes::Regex`, while `.` will match any encoded Unicode *codepoint*
+using the main API.
+
+This example shows how to find all null-terminated strings in a slice of bytes:
+
+```rust
+This shows how to find all null-terminated strings in a slice of bytes:
+
+```rust
+use regex::bytes::Regex;
+
+let re = Regex::new(r"(?P<cstr>[^\x00]+)\x00").unwrap();
+let text = b"foo\x00bar\x00baz\x00";
+
+// Extract all of the strings without the null terminator from each match.
+// The unwrap is OK here since a match requires the `cstr` capture to match.
+let cstrs: Vec<&[u8]> =
+    re.captures_iter(text)
+      .map(|c| c.name("cstr").unwrap())
+      .collect();
+assert_eq!(vec![&b"foo"[..], &b"bar"[..], &b"baz"[..]], cstrs);
+```
+
+Notice here that the `[^\x00]+` will match any *byte* except for `NUL`. When
+using the main API, `[^\x00]+` would instead match any valid UTF-8 sequence
+except for `NUL`.
+
 ### Usage: match multiple regular expressions simultaneously
 
 This demonstrates how to use a `RegexSet` to match multiple (possibly
