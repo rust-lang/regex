@@ -5,8 +5,9 @@ rust:
   - beta
   - nightly
 sudo: false
-#script:
-#  - cargo build --verbose
+script:
+  - cargo build --verbose
+  - cargo doc --verbose
 #  - if [ "$TRAVIS_RUST_VERSION" = "nightly" ]; then
 #      travis_wait cargo test --verbose --features pattern;
 #    else
