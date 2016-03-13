@@ -15,8 +15,26 @@ tests=(
   regex_inline
 )
 tmpdir=$(mktemp -d)
+with_plugin=
+coveralls_id=
 
-if [ "$1" = "--with-plugin" ]; then
+while true; do
+  case "$1" in
+    --with-plugin)
+      with_plugin=yes
+      shift
+      ;;
+    --coveralls-id)
+      coveralls_id="$2"
+      shift 2
+      ;;
+    *)
+      break
+      ;;
+  esac
+done
+
+if [ -n "$with_plugin" ]; then
   echo "compiling regex_macros test, this can take a while..."
   cargo test --manifest-path regex_macros/Cargo.toml --no-run
   kcov \
@@ -33,4 +51,8 @@ for t in ${tests[@]}; do
     $(ls -t ./target/debug/"$t"-* | head -n1)
 done
 
-kcov --merge target/cov "$tmpdir"/*
+if [ -n "$coveralls_id" ]; then
+  kcov --coveralls-id=$coveralls_id --merge target/cov "$tmpdir"/*
+else
+  kcov --merge target/cov "$tmpdir"/*
+fi

@@ -52,7 +52,6 @@ name = "regex-inline"
 [[test]]
 path = "tests/test_default.rs"
 name = "default"
-test = false
 
 # The same as the default tests, but run on bytes::Regex.
 [[test]]
