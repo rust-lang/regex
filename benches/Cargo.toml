@@ -1,0 +1,70 @@
+[package]
+publish = false
+name = "regex-benchmark"
+version = "0.1.0"
+authors = ["The Rust Project Developers"]
+license = "MIT/Apache-2.0"
+repository = "https://github.com/rust-lang/regex"
+documentation = "http://doc.rust-lang.org/regex/regex_syntax/index.html"
+homepage = "https://github.com/rust-lang/regex"
+description = "Regex benchmarks for Rust's and other engines."
+
+[dependencies]
+enum-set = "0.0.6"
+lazy_static = "0.1"
+onig = { version = "0.4", optional = true }
+pcre = { version = "0.2", optional = true }
+rand = "0.3"
+regex = { version = "0.1", path = ".." }
+regex_macros = { version = "0.1", path = "../regex_macros", optional = true }
+regex-syntax = { version = "0.2", path = "../regex-syntax" }
+
+# Use features to conditionally compile benchmarked regexes, since not every
+# regex works on every engine. :-(
+[features]
+re-pcre = ["pcre"]
+re-onig = ["onig"]
+re-rust = []
+re-rust-bytes = []
+re-rust-plugin = ["regex_macros"]
+
+# Run the benchmarks on the default behavior of Regex::new.
+[[bench]]
+name = "rust"
+path = "src/bench_rust.rs"
+test = false
+bench = true
+
+# Run the benchmarks on the default behavior of bytes::Regex::new.
+[[bench]]
+name = "rust-bytes"
+path = "src/bench_rust_bytes.rs"
+test = false
+bench = true
+
+# Run the benchmarks on the default behavior of the `regex!` compiler plugin.
+[[bench]]
+name = "rust-plugin"
+path = "src/bench_rust_plugin.rs"
+test = false
+bench = true
+
+# Run the benchmarks on PCRE.
+[[bench]]
+name = "pcre"
+path = "src/bench_pcre.rs"
+test = false
+bench = true
+
+# Run the benchmarks on Oniguruma.
+[[bench]]
+name = "onig"
+path = "src/bench_onig.rs"
+test = false
+bench = true
+
+[profile.bench]
+debug = true
+
+[profile.test]
+debug = true

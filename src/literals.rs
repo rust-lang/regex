@@ -16,7 +16,7 @@ use std::mem;
 use aho_corasick::{Automaton, AcAutomaton, FullAcAutomaton};
 use memchr::{memchr, memchr2, memchr3};
 
-use char_utf8::encode_utf8;
+use utf8::encode_utf8;
 use prog::{Program, Inst, InstBytes, InstRanges};
 
 #[derive(Clone, Eq, PartialEq)]
@@ -199,14 +199,14 @@ impl AlternateLiterals {
     }
 }
 
-pub struct BuildPrefixes<'a> {
+struct BuildPrefixes<'a> {
     insts: &'a Program,
     limit: usize,
     alts: AlternateLiterals,
 }
 
 impl<'a> BuildPrefixes<'a> {
-    pub fn new(insts: &'a Program) -> Self {
+    fn new(insts: &'a Program) -> Self {
         BuildPrefixes {
             insts: insts,
             limit: 250,
@@ -214,7 +214,7 @@ impl<'a> BuildPrefixes<'a> {
         }
     }
 
-    pub fn literals(mut self) -> AlternateLiterals {
+    fn literals(mut self) -> AlternateLiterals {
         let mut stack = vec![self.insts.skip(self.insts.start)];
         let mut seen = HashSet::new();
         while let Some(mut pc) = stack.pop() {
@@ -357,7 +357,7 @@ impl<'a> BuildRequiredLiterals<'a> {
         // Compute roughly how many bytes will be in our literals following
         // the addition of the given range. If we blow our limit, then we
         // can't add anything.
-        let nbytes = (inst.end - inst.start + 1) as usize;
+        let nbytes = (inst.end as usize) - (inst.start as usize) + 1;
         let new_byte_count = (self.alts.num_bytes() * nbytes)
                              + (self.alts.literals.len() * nbytes);
         if new_byte_count > self.limit {
@@ -408,55 +408,15 @@ enum LiteralMatcher {
     AC(FullAcAutomaton<Vec<u8>>),
 }
 
-impl LiteralMatcher {
-    /// Create a new prefix matching machine.
-    fn new(mut alts: AlternateLiterals) -> Self {
-        use self::LiteralMatcher::*;
-
-        if alts.is_empty() {
-            Empty
-        } else if alts.distinct_single_bytes() >= 26 {
-            // Why do we do this? Well, it's a heuristic to prevent thrashing.
-            // Basically, if our literal matcher has lots of literals that are
-            // a single byte, then we lose a lot of the benefits of fast
-            // literal searching. In particular, single bytes have a high
-            // probability of matching. In a regex that rarely matches, we end
-            // up ping-ponging between the literal matcher and the regex engine
-            // for every byte of input. That's bad juju.
-            //
-            // Note that we only count distinct starting bytes from literals of
-            // length 1. For literals longer than that, we assume they have
-            // a lower probability of matching.
-            //
-            // This particular heuristic would be triggered on, e.g.,
-            // `[a-z].+`. The prefix here is a single byte that is very likely
-            // to match on any given byte in the input, so it's quicker just
-            // to let the matching engine process it.
-            //
-            // TODO(burntsushi): Consider lowering the threshold!
-            Empty
-        } else if alts.is_single_byte() {
-            Byte(alts.literals[0][0])
-        } else if alts.all_single_bytes() {
-            let mut set = vec![false; 256];
-            let mut bytes = vec![];
-            for lit in alts.literals {
-                bytes.push(lit[0]);
-                set[lit[0] as usize] = true;
-            }
-            Bytes { chars: bytes, sparse: set }
-        } else if alts.is_one_literal() {
-            Single(SingleSearch::new(alts.literals.pop().unwrap()))
-        } else {
-            AC(AcAutomaton::new(alts.literals).into_full())
-        }
-    }
-}
-
 impl Literals {
     /// Returns a matcher that never matches and never advances the input.
     pub fn empty() -> Self {
         Literals { at_match: false, matcher: LiteralMatcher::Empty }
+    }
+
+    /// Returns a matcher for literal prefixes in the given program.
+    pub fn prefixes(prog: &Program) -> Self {
+        BuildPrefixes::new(prog).literals().into_matcher()
     }
 
     /// Returns true if and only if a literal match corresponds to a match
@@ -530,19 +490,19 @@ impl Literals {
         }
     }
 
-    /// Returns all of the prefixes participating in this machine.
+    /// Returns all of the literal participating in this machine.
     ///
     /// For debug/testing only! (It allocates.)
     #[allow(dead_code)]
-    fn prefixes(&self) -> Vec<String> {
-        self.byte_prefixes()
+    fn strings(&self) -> Vec<String> {
+        self.byte_strings()
             .into_iter()
             .map(|p| String::from_utf8(p).unwrap())
             .collect()
     }
 
     #[allow(dead_code)]
-    fn byte_prefixes(&self) -> Vec<Vec<u8>> {
+    fn byte_strings(&self) -> Vec<Vec<u8>> {
         use self::LiteralMatcher::*;
         match self.matcher {
             Empty => vec![],
@@ -552,6 +512,50 @@ impl Literals {
             }
             Single(ref searcher) => vec![searcher.pat.clone()],
             AC(ref aut) => aut.patterns().iter().cloned().collect(),
+        }
+    }
+}
+
+impl LiteralMatcher {
+    fn new(mut alts: AlternateLiterals) -> Self {
+        use self::LiteralMatcher::*;
+
+        if alts.is_empty() {
+            Empty
+        } else if alts.distinct_single_bytes() >= 26 {
+            // Why do we do this? Well, it's a heuristic to prevent thrashing.
+            // Basically, if our literal matcher has lots of literals that are
+            // a single byte, then we lose a lot of the benefits of fast
+            // literal searching. In particular, single bytes have a high
+            // probability of matching. In a regex that rarely matches, we end
+            // up ping-ponging between the literal matcher and the regex engine
+            // for every byte of input. That's bad juju.
+            //
+            // Note that we only count distinct starting bytes from literals of
+            // length 1. For literals longer than that, we assume they have
+            // a lower probability of matching.
+            //
+            // This particular heuristic would be triggered on, e.g.,
+            // `[a-z].+`. The prefix here is a single byte that is very likely
+            // to match on any given byte in the input, so it's quicker just
+            // to let the matching engine process it.
+            //
+            // TODO(burntsushi): Consider lowering the threshold!
+            Empty
+        } else if alts.is_single_byte() {
+            Byte(alts.literals[0][0])
+        } else if alts.all_single_bytes() {
+            let mut set = vec![false; 256];
+            let mut bytes = vec![];
+            for lit in alts.literals {
+                bytes.push(lit[0]);
+                set[lit[0] as usize] = true;
+            }
+            Bytes { chars: bytes, sparse: set }
+        } else if alts.is_one_literal() {
+            Single(SingleSearch::new(alts.literals.pop().unwrap()))
+        } else {
+            AC(AcAutomaton::new(alts.literals).into_full())
         }
     }
 }
@@ -679,7 +683,7 @@ mod tests {
             let p = prog!($re);
             let prefixes = BuildPrefixes::new(&p).literals().into_matcher();
             assert!(!prefixes.at_match());
-            prefixes.prefixes()
+            prefixes.strings()
         }}
     }
     macro_rules! prefixes_complete {
@@ -687,7 +691,7 @@ mod tests {
             let p = prog!($re);
             let prefixes = BuildPrefixes::new(&p).literals().into_matcher();
             assert!(prefixes.at_match());
-            prefixes.prefixes()
+            prefixes.strings()
         }}
     }
 

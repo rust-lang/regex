@@ -68,6 +68,7 @@ assert_eq!(err.kind(), &ErrorKind::UnclosedParen);
 mod parser;
 mod unicode;
 
+use std::ascii;
 use std::char;
 use std::cmp::{Ordering, max, min};
 use std::fmt;
@@ -75,6 +76,7 @@ use std::iter::IntoIterator;
 use std::ops::Deref;
 use std::result;
 use std::slice;
+use std::u8;
 use std::vec;
 
 use unicode::case_folding;
@@ -98,12 +100,30 @@ pub enum Expr {
         /// Whether to match case insensitively.
         casei: bool,
     },
+    /// A sequence of one or more literal bytes to be matched.
+    LiteralBytes {
+        /// The bytes.
+        bytes: Vec<u8>,
+        /// Whether to match case insensitively.
+        ///
+        /// The interpretation of "case insensitive" in this context is
+        /// ambiguous since `bytes` can be arbitrary. However, a good heuristic
+        /// is to assume that the bytes are ASCII-compatible and do simple
+        /// ASCII case folding.
+        casei: bool,
+    },
     /// Match any character.
     AnyChar,
-    /// Match any character, excluding new line.
+    /// Match any character, excluding new line (`0xA`).
     AnyCharNoNL,
+    /// Match any byte.
+    AnyByte,
+    /// Match any byte, excluding new line (`0xA`).
+    AnyByteNoNL,
     /// A character class.
     Class(CharClass),
+    /// A character class with byte ranges only.
+    ClassBytes(ByteClass),
     /// Match the start of a line or beginning of input.
     StartLine,
     /// Match the end of a line or end of input.
@@ -118,6 +138,10 @@ pub enum Expr {
     /// Match a position that is not a word boundary (word or non-word
     /// characters on both sides).
     NotWordBoundary,
+    /// Match an ASCII word boundary.
+    WordBoundaryAscii,
+    /// Match a position that is not an ASCII word boundary.
+    NotWordBoundaryAscii,
     /// A group, possibly non-capturing.
     Group {
         /// The expression inside the group.
@@ -233,6 +257,47 @@ pub struct ClassRange {
     pub end: char,
 }
 
+/// A byte class for byte ranges only.
+///
+/// A byte class has a canonical format that the parser guarantees. Its
+/// canonical format is defined by the following invariants:
+///
+/// 1. Given any byte, it is matched by *at most* one byte range in a canonical
+///    character class.
+/// 2. Every adjacent byte range is separated by at least one byte.
+/// 3. Given any pair of byte ranges `r1` and `r2`, if
+///    `r1.end < r2.start`, then `r1` comes before `r2` in a canonical
+///    character class.
+///
+/// In sum, any `ByteClass` produced by this crate's parser is a sorted
+/// sequence of non-overlapping ranges. This makes it possible to test whether
+/// a byte is matched by a class with a binary search.
+///
+/// If the case insensitive flag was set when parsing a character class,
+/// then simple ASCII-only case folding is done automatically. For example,
+/// `(?i)[a-c]` is automatically translated to `[a-cA-C]`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ByteClass {
+    ranges: Vec<ByteRange>,
+}
+
+/// A single inclusive range in a byte class.
+///
+/// Note that this has a few convenient impls on `PartialEq` and `PartialOrd`
+/// for testing whether a byte is contained inside a given range.
+#[derive(Clone, Copy, Debug, PartialEq, PartialOrd, Eq, Ord)]
+pub struct ByteRange {
+    /// The start byte of the range.
+    ///
+    /// This must be less than or equal to `end`.
+    pub start: u8,
+
+    /// The end byte of the range.
+    ///
+    /// This must be greater than or equal to `end`.
+    pub end: u8,
+}
+
 /// A builder for configuring regular expression parsing.
 ///
 /// This allows setting the default values of flags and other options, such
@@ -249,13 +314,7 @@ impl ExprBuilder {
     /// Note that all flags are disabled by default.
     pub fn new() -> ExprBuilder {
         ExprBuilder {
-            flags: Flags {
-                casei: false,
-                multi: false,
-                dotnl: false,
-                swap_greed: false,
-                ignore_space: false,
-            },
+            flags: Flags::default(),
             nest_limit: 200,
         }
     }
@@ -290,6 +349,28 @@ impl ExprBuilder {
         self
     }
 
+    /// Set the default value for the Unicode (`u`) flag.
+    ///
+    /// If `yes` is false, then `allow_bytes` is set to true.
+    pub fn unicode(mut self, yes: bool) -> ExprBuilder {
+        self.flags.unicode = yes;
+        if !yes {
+            self.allow_bytes(true)
+        } else {
+            self
+        }
+    }
+
+    /// Whether the Unicode flag can be used or not. By default, the flag is
+    /// enabled but it cannot be toggled.
+    ///
+    /// When disabled, use of the `u` flag will cause the parser to return an
+    /// error.
+    pub fn allow_bytes(mut self, yes: bool) -> ExprBuilder {
+        self.flags.allow_bytes = yes;
+        self
+    }
+
     /// Set the nesting limit for regular expression parsing.
     ///
     /// Regular expressions that nest more than this limit will result in a
@@ -318,12 +399,12 @@ impl Expr {
     /// Returns true iff the expression can be repeated by a quantifier.
     fn can_repeat(&self) -> bool {
         match *self {
-            Literal{..}
-            | AnyChar
-            | AnyCharNoNL
-            | Class(_)
+            Literal{..} | LiteralBytes{..}
+            | AnyChar | AnyCharNoNL | AnyByte | AnyByteNoNL
+            | Class(_) | ClassBytes(_)
             | StartLine | EndLine | StartText | EndText
             | WordBoundary | NotWordBoundary
+            | WordBoundaryAscii | NotWordBoundaryAscii
             | Group{..}
             => true,
             _ => false,
@@ -335,13 +416,23 @@ impl Expr {
             match (es.pop(), e) {
                 (None, e) => es.push(e),
                 (Some(Literal { chars: mut chars1, casei: casei1 }),
-                 Literal { chars: chars2, casei: casei2 }) => {
+                      Literal { chars: chars2, casei: casei2 }) => {
                     if casei1 == casei2 {
                         chars1.extend(chars2);
                         es.push(Literal { chars: chars1, casei: casei1 });
                     } else {
                         es.push(Literal { chars: chars1, casei: casei1 });
                         es.push(Literal { chars: chars2, casei: casei2 });
+                    }
+                }
+                (Some(LiteralBytes { bytes: mut bytes1, casei: casei1 }),
+                      LiteralBytes { bytes: bytes2, casei: casei2 }) => {
+                    if casei1 == casei2 {
+                        bytes1.extend(bytes2);
+                        es.push(LiteralBytes { bytes: bytes1, casei: casei1 });
+                    } else {
+                        es.push(LiteralBytes { bytes: bytes1, casei: casei1 });
+                        es.push(LiteralBytes { bytes: bytes2, casei: casei2 });
                     }
                 }
                 (Some(e1), e2) => {
@@ -426,6 +517,22 @@ impl Expr {
             _ => false,
         }
     }
+
+    /// Returns true if and only if the expression contains sub-expressions
+    /// that can match arbitrary bytes.
+    pub fn has_bytes(&self) -> bool {
+        match *self {
+            Repeat { ref e, .. } => e.has_bytes(),
+            Group { ref e, .. } => e.has_bytes(),
+            Concat(ref es) => es.iter().any(|e| e.has_bytes()),
+            Alternate(ref es) => es.iter().any(|e| e.has_bytes()),
+            LiteralBytes{..} => true,
+            AnyByte | AnyByteNoNL => true,
+            ClassBytes(_) => true,
+            WordBoundaryAscii | NotWordBoundaryAscii => true,
+            _ => false,
+        }
+    }
 }
 
 impl Deref for CharClass {
@@ -464,6 +571,16 @@ impl CharClass {
     /// Create a new empty class from this one.
     fn to_empty(&self) -> CharClass {
         CharClass { ranges: Vec::with_capacity(self.len()) }
+    }
+
+    /// Create a byte class from this character class.
+    ///
+    /// Codepoints above 0xFF are removed.
+    fn to_byte_class(self) -> ByteClass {
+        ByteClass::new(
+            self.ranges.into_iter()
+                       .filter_map(|r| r.to_byte_range())
+                       .collect()).canonicalize()
     }
 
     /// Merge two classes and canonicalize them.
@@ -557,6 +674,21 @@ impl ClassRange {
             ClassRange { start: start, end: end }
         } else {
             ClassRange { start: end, end: start }
+        }
+    }
+
+    /// Translate this to a byte class.
+    ///
+    /// If the start codepoint exceeds 0xFF, then this returns `None`.
+    ///
+    /// If the end codepoint exceeds 0xFF, then it is set to 0xFF.
+    fn to_byte_range(self) -> Option<ByteRange> {
+        if self.start > '\u{FF}' {
+            None
+        } else {
+            let s = self.start as u8;
+            let e = min('\u{FF}', self.end) as u8;
+            Some(ByteRange::new(s, e))
         }
     }
 
@@ -671,6 +803,199 @@ impl PartialOrd<ClassRange> for char {
     }
 }
 
+impl ByteClass {
+    /// Create a new class from an existing set of ranges.
+    pub fn new(ranges: Vec<ByteRange>) -> ByteClass {
+        ByteClass { ranges: ranges }
+    }
+
+    /// Returns true if `b` is matched by this byte class.
+    pub fn matches(&self, b: u8) -> bool {
+        self.binary_search_by(|range| b.partial_cmp(range).unwrap()).is_ok()
+    }
+
+    /// Create a new empty class from this one.
+    fn to_empty(&self) -> ByteClass {
+        ByteClass { ranges: Vec::with_capacity(self.len()) }
+    }
+
+    /// Canonicalze any sequence of ranges.
+    ///
+    /// This is responsible for enforcing the canonical format invariants
+    /// as described on the docs for the `ByteClass` type.
+    fn canonicalize(mut self) -> ByteClass {
+        // TODO: Save some cycles here by checking if already canonicalized.
+        self.ranges.sort();
+        let mut ordered = self.to_empty(); // TODO: Do this in place?
+        for candidate in self {
+            // If the candidate overlaps with an existing range, then it must
+            // be the most recent range added because we process the candidates
+            // in order.
+            if let Some(or) = ordered.ranges.last_mut() {
+                if or.overlapping(candidate) {
+                    *or = or.merge(candidate);
+                    continue;
+                }
+            }
+            ordered.ranges.push(candidate);
+        }
+        ordered
+    }
+
+    /// Negates the byte class.
+    ///
+    /// For all `b` where `b` is a byte, `b` matches `self` if and only if `b`
+    /// does not match `self.negate()`.
+    pub fn negate(mut self) -> ByteClass {
+        fn range(s: u8, e: u8) -> ByteRange { ByteRange::new(s, e) }
+
+        if self.is_empty() {
+            // Inverting an empty range yields all bytes.
+            return ByteClass {
+                ranges: vec![ByteRange { start: b'\x00', end: b'\xff' }],
+            };
+        }
+        self = self.canonicalize();
+        let mut inv = self.to_empty();
+        if self[0].start > b'\x00' {
+            inv.ranges.push(range(b'\x00', self[0].start.saturating_sub(1)));
+        }
+        for win in self.windows(2) {
+            inv.ranges.push(range(win[0].end.saturating_add(1),
+                                  win[1].start.saturating_sub(1)));
+        }
+        if self[self.len() - 1].end < u8::MAX {
+            inv.ranges.push(range(self[self.len() - 1].end.saturating_add(1),
+                                  u8::MAX));
+        }
+        inv
+    }
+
+    /// Apply case folding to this byte class.
+    ///
+    /// This assumes that the bytes in the ranges are ASCII compatible.
+    ///
+    /// N.B. Applying case folding to a negated character class probably
+    /// won't produce the expected result. e.g., `(?i)[^x]` really should
+    /// match any character sans `x` and `X`, but if `[^x]` is negated
+    /// before being case folded, you'll end up matching any character.
+    pub fn case_fold(self) -> ByteClass {
+        let mut folded = self.to_empty();
+        for r in self {
+            folded.ranges.extend(r.case_fold());
+        }
+        folded.canonicalize()
+    }
+}
+
+impl ByteRange {
+    /// Create a new class range.
+    ///
+    /// If `end < start`, then the two values are swapped so that
+    /// the invariant `start <= end` is preserved.
+    fn new(start: u8, end: u8) -> ByteRange {
+        if start <= end {
+            ByteRange { start: start, end: end }
+        } else {
+            ByteRange { start: end, end: start }
+        }
+    }
+
+    /// Returns true if and only if the two ranges are overlapping. Note that
+    /// since ranges are inclusive, `a-c` and `d-f` are overlapping!
+    fn overlapping(self, other: ByteRange) -> bool {
+        max(self.start, other.start)
+        <= min(self.end, other.end).saturating_add(1)
+    }
+
+    /// Returns true if and only if the intersection of self and other is non
+    /// empty.
+    fn is_intersect_empty(self, other: ByteRange) -> bool {
+        max(self.start, other.start) > min(self.end, other.end)
+    }
+
+    /// Creates a new range representing the union of `self` and `other.
+    fn merge(self, other: ByteRange) -> ByteRange {
+        ByteRange {
+            start: min(self.start, other.start),
+            end: max(self.end, other.end),
+        }
+    }
+
+    /// Apply case folding to this range.
+    ///
+    /// Since case folding might add bytes such that the range is no
+    /// longer contiguous, this returns multiple byte ranges.
+    ///
+    /// This assumes that the bytes in this range are ASCII compatible.
+    fn case_fold(self) -> Vec<ByteRange> {
+        // So much easier than Unicode case folding!
+        let mut ranges = vec![self];
+        if !ByteRange::new(b'a', b'z').is_intersect_empty(self) {
+            let lower = max(self.start, b'a');
+            let upper = min(self.end, b'z');
+            ranges.push(ByteRange::new(lower - 32, upper - 32));
+        }
+        if !ByteRange::new(b'A', b'Z').is_intersect_empty(self) {
+            let lower = max(self.start, b'A');
+            let upper = min(self.end, b'Z');
+            ranges.push(ByteRange::new(lower + 32, upper + 32));
+        }
+        ranges
+    }
+}
+
+impl Deref for ByteClass {
+    type Target = Vec<ByteRange>;
+    fn deref(&self) -> &Vec<ByteRange> { &self.ranges }
+}
+
+impl IntoIterator for ByteClass {
+    type Item = ByteRange;
+    type IntoIter = vec::IntoIter<ByteRange>;
+    fn into_iter(self) -> vec::IntoIter<ByteRange> { self.ranges.into_iter() }
+}
+
+impl<'a> IntoIterator for &'a ByteClass {
+    type Item = &'a ByteRange;
+    type IntoIter = slice::Iter<'a, ByteRange>;
+    fn into_iter(self) -> slice::Iter<'a, ByteRange> { self.iter() }
+}
+
+impl PartialEq<u8> for ByteRange {
+    #[inline]
+    fn eq(&self, other: &u8) -> bool {
+        self.start <= *other && *other <= self.end
+    }
+}
+
+impl PartialEq<ByteRange> for u8 {
+    #[inline]
+    fn eq(&self, other: &ByteRange) -> bool {
+        other.eq(self)
+    }
+}
+
+impl PartialOrd<u8> for ByteRange {
+    #[inline]
+    fn partial_cmp(&self, other: &u8) -> Option<Ordering> {
+        Some(if self == other {
+            Ordering::Equal
+        } else if *other > self.end {
+            Ordering::Greater
+        } else {
+            Ordering::Less
+        })
+    }
+}
+
+impl PartialOrd<ByteRange> for u8 {
+    #[inline]
+    fn partial_cmp(&self, other: &ByteRange) -> Option<Ordering> {
+        other.partial_cmp(self).map(|o| o.reverse())
+    }
+}
+
 /// This implementation of `Display` will write a regular expression from the
 /// syntax tree. It does not write the original string parsed.
 impl fmt::Display for Expr {
@@ -685,15 +1010,32 @@ impl fmt::Display for Expr {
                 if casei { try!(write!(f, ")")); }
                 Ok(())
             }
+            LiteralBytes { ref bytes, casei } => {
+                if casei {
+                    try!(write!(f, "(?i-u:"));
+                } else {
+                    try!(write!(f, "(?-u:"));
+                }
+                for &b in bytes {
+                    try!(write!(f, "{}", quote_byte(b)));
+                }
+                try!(write!(f, ")"));
+                Ok(())
+            }
             AnyChar => write!(f, "(?s:.)"),
             AnyCharNoNL => write!(f, "."),
+            AnyByte => write!(f, "(?s-u:.)"),
+            AnyByteNoNL => write!(f, "(?-u:.)"),
             Class(ref cls) => write!(f, "{}", cls),
+            ClassBytes(ref cls) => write!(f, "{}", cls),
             StartLine => write!(f, "(?m:^)"),
             EndLine => write!(f, "(?m:$)"),
             StartText => write!(f, r"^"),
             EndText => write!(f, r"$"),
             WordBoundary => write!(f, r"\b"),
             NotWordBoundary => write!(f, r"\B"),
+            WordBoundaryAscii => write!(f, r"(?-u:\b)"),
+            NotWordBoundaryAscii => write!(f, r"(?-u:\B)"),
             Group { ref e, i: None, name: None } => write!(f, "(?:{})", e),
             Group { ref e, name: None, .. } => write!(f, "({})", e),
             Group { ref e, name: Some(ref n), .. } => {
@@ -753,6 +1095,23 @@ impl fmt::Display for CharClass {
 impl fmt::Display for ClassRange {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}-{}", quote_char(self.start), quote_char(self.end))
+    }
+}
+
+impl fmt::Display for ByteClass {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        try!(write!(f, "(?-u:["));
+        for range in self.iter() {
+            try!(write!(f, "{}", range));
+        }
+        try!(write!(f, "])"));
+        Ok(())
+    }
+}
+
+impl fmt::Display for ByteRange {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}-{}", quote_byte(self.start), quote_byte(self.end))
     }
 }
 
@@ -854,6 +1213,10 @@ pub enum ErrorKind {
     /// an explicit heap allocated stack is not (yet?) used. Regardless, some
     /// sort of limit must be applied to avoid unbounded memory growth.
     StackExhausted,
+    /// A disallowed flag was found (e.g., `b`).
+    FlagNotAllowed(char),
+    /// A Unicode class was used when the bytes (`b`) flag was enabled.
+    UnicodeNotAllowed,
     /// Hints that destructuring should not be exhaustive.
     ///
     /// This enum may grow additional variants, so this makes sure clients
@@ -913,6 +1276,8 @@ impl ErrorKind {
             UnrecognizedFlag(_) => "unrecognized flag",
             UnrecognizedUnicodeClass(_) => "unrecognized Unicode class name",
             StackExhausted => "stack exhausted, too much nesting",
+            FlagNotAllowed(_) => "flag not allowed",
+            UnicodeNotAllowed => "Unicode features not allowed",
             __Nonexhaustive => unreachable!(),
         }
     }
@@ -1015,6 +1380,11 @@ impl fmt::Display for ErrorKind {
             StackExhausted =>
                 write!(f, "Exhausted space required to parse regex with too \
                            much nesting."),
+            FlagNotAllowed(flag) =>
+                write!(f, "Use of the flag '{}' is not allowed.", flag),
+            UnicodeNotAllowed =>
+                write!(f, "Unicode features are not allowed when the byte \
+                           (b) flag is set."),
             __Nonexhaustive => unreachable!(),
         }
     }
@@ -1079,6 +1449,15 @@ fn quote_char(c: char) -> String {
     s
 }
 
+fn quote_byte(b: u8) -> String {
+    if parser::is_punct(b as char) || b == b'\'' || b == b'"' {
+        quote_char(b as char)
+    } else {
+        let escaped: Vec<u8> = ascii::escape_default(b).collect();
+        String::from_utf8(escaped).unwrap()
+    }
+}
+
 fn inc_char(c: char) -> char {
     match c {
         char::MAX => char::MAX,
@@ -1112,12 +1491,21 @@ pub fn is_word_char(c: char) -> bool {
     }
 }
 
+/// Returns true if and only if `c` is an ASCII word byte.
+#[doc(hidden)]
+pub fn is_word_byte(b: u8) -> bool {
+    match b {
+        b'_' | b'0' ... b'9' | b'a' ... b'z' | b'A' ... b'Z'  => true,
+        _ => false,
+    }
+}
+
 #[cfg(test)]
 mod properties;
 
 #[cfg(test)]
 mod tests {
-    use {CharClass, ClassRange, Expr};
+    use {CharClass, ClassRange, ByteClass, ByteRange, Expr};
 
     fn class(ranges: &[(char, char)]) -> CharClass {
         let ranges = ranges.iter().cloned()
@@ -1125,7 +1513,11 @@ mod tests {
         CharClass::new(ranges)
     }
 
-    fn classi(ranges: &[(char, char)]) -> CharClass { class(ranges) }
+    fn bclass(ranges: &[(u8, u8)]) -> ByteClass {
+        let ranges = ranges.iter().cloned()
+                           .map(|(c1, c2)| ByteRange::new(c1, c2)).collect();
+        ByteClass::new(ranges)
+    }
 
     fn e(re: &str) -> Expr { Expr::parse(re).unwrap() }
 
@@ -1196,19 +1588,6 @@ mod tests {
         ]);
         assert_eq!(cls.clone().canonicalize(), class(&[
             ('a', 'j'), ('l', 's'),
-        ]));
-    }
-
-    #[test]
-    fn class_canon_overlap_many_case_fold() {
-        let cls = class(&[
-            ('C', 'F'), ('A', 'G'), ('D', 'J'), ('A', 'C'),
-            ('M', 'P'), ('L', 'S'), ('c', 'f'),
-        ]);
-        assert_eq!(cls.case_fold(), classi(&[
-            ('A', 'J'), ('L', 'S'),
-            ('a', 'j'), ('l', 's'),
-            ('\u{17F}', '\u{17F}'),
         ]));
     }
 
@@ -1323,18 +1702,49 @@ mod tests {
     }
 
     #[test]
+    fn class_canon_overlap_many_case_fold() {
+        let cls = class(&[
+            ('C', 'F'), ('A', 'G'), ('D', 'J'), ('A', 'C'),
+            ('M', 'P'), ('L', 'S'), ('c', 'f'),
+        ]);
+        assert_eq!(cls.case_fold(), class(&[
+            ('A', 'J'), ('L', 'S'),
+            ('a', 'j'), ('l', 's'),
+            ('\u{17F}', '\u{17F}'),
+        ]));
+
+        let cls = bclass(&[
+            (b'C', b'F'), (b'A', b'G'), (b'D', b'J'), (b'A', b'C'),
+            (b'M', b'P'), (b'L', b'S'), (b'c', b'f'),
+        ]);
+        assert_eq!(cls.case_fold(), bclass(&[
+            (b'A', b'J'), (b'L', b'S'),
+            (b'a', b'j'), (b'l', b's'),
+        ]));
+    }
+
+    #[test]
     fn class_fold_az() {
         let cls = class(&[('A', 'Z')]);
-        assert_eq!(cls.case_fold(), classi(&[
+        assert_eq!(cls.case_fold(), class(&[
             ('A', 'Z'), ('a', 'z'),
             ('\u{17F}', '\u{17F}'),
             ('\u{212A}', '\u{212A}'),
         ]));
         let cls = class(&[('a', 'z')]);
-        assert_eq!(cls.case_fold(), classi(&[
+        assert_eq!(cls.case_fold(), class(&[
             ('A', 'Z'), ('a', 'z'),
             ('\u{17F}', '\u{17F}'),
             ('\u{212A}', '\u{212A}'),
+        ]));
+
+        let cls = bclass(&[(b'A', b'Z')]);
+        assert_eq!(cls.case_fold(), bclass(&[
+            (b'A', b'Z'), (b'a', b'z'),
+        ]));
+        let cls = bclass(&[(b'a', b'z')]);
+        assert_eq!(cls.case_fold(), bclass(&[
+            (b'A', b'Z'), (b'a', b'z'),
         ]));
     }
 
@@ -1344,8 +1754,16 @@ mod tests {
         assert_eq!(cls.clone().canonicalize(), class(&[
             ('A', 'A'), ('_', '_'),
         ]));
-        assert_eq!(cls.case_fold(), classi(&[
+        assert_eq!(cls.case_fold(), class(&[
             ('A', 'A'), ('_', '_'), ('a', 'a'),
+        ]));
+
+        let cls = bclass(&[(b'A', b'A'), (b'_', b'_')]);
+        assert_eq!(cls.clone().canonicalize(), bclass(&[
+            (b'A', b'A'), (b'_', b'_'),
+        ]));
+        assert_eq!(cls.case_fold(), bclass(&[
+            (b'A', b'A'), (b'_', b'_'), (b'a', b'a'),
         ]));
     }
 
@@ -1355,35 +1773,72 @@ mod tests {
         assert_eq!(cls.clone().canonicalize(), class(&[
             ('=', '='), ('A', 'A'),
         ]));
-        assert_eq!(cls.case_fold(), classi(&[
+        assert_eq!(cls.case_fold(), class(&[
             ('=', '='), ('A', 'A'), ('a', 'a'),
+        ]));
+
+        let cls = bclass(&[(b'A', b'A'), (b'=', b'=')]);
+        assert_eq!(cls.clone().canonicalize(), bclass(&[
+            (b'=', b'='), (b'A', b'A'),
+        ]));
+        assert_eq!(cls.case_fold(), bclass(&[
+            (b'=', b'='), (b'A', b'A'), (b'a', b'a'),
         ]));
     }
 
     #[test]
     fn class_fold_no_folding_needed() {
         let cls = class(&[('\x00', '\x10')]);
-        assert_eq!(cls.case_fold(), classi(&[
+        assert_eq!(cls.case_fold(), class(&[
             ('\x00', '\x10'),
+        ]));
+
+        let cls = bclass(&[(b'\x00', b'\x10')]);
+        assert_eq!(cls.case_fold(), bclass(&[
+            (b'\x00', b'\x10'),
         ]));
     }
 
     #[test]
     fn class_fold_negated() {
         let cls = class(&[('x', 'x')]);
-        assert_eq!(cls.clone().case_fold(), classi(&[
+        assert_eq!(cls.clone().case_fold(), class(&[
             ('X', 'X'), ('x', 'x'),
         ]));
-        assert_eq!(cls.case_fold().negate(), classi(&[
+        assert_eq!(cls.case_fold().negate(), class(&[
             ('\x00', 'W'), ('Y', 'w'), ('y', '\u{10FFFF}'),
+        ]));
+
+        let cls = bclass(&[(b'x', b'x')]);
+        assert_eq!(cls.clone().case_fold(), bclass(&[
+            (b'X', b'X'), (b'x', b'x'),
+        ]));
+        assert_eq!(cls.case_fold().negate(), bclass(&[
+            (b'\x00', b'W'), (b'Y', b'w'), (b'y', b'\xff'),
         ]));
     }
 
     #[test]
     fn class_fold_single_to_multiple() {
         let cls = class(&[('k', 'k')]);
-        assert_eq!(cls.case_fold(), classi(&[
+        assert_eq!(cls.case_fold(), class(&[
             ('K', 'K'), ('k', 'k'), ('\u{212A}', '\u{212A}'),
         ]));
+
+        let cls = bclass(&[(b'k', b'k')]);
+        assert_eq!(cls.case_fold(), bclass(&[
+            (b'K', b'K'), (b'k', b'k'),
+        ]));
+    }
+
+    #[test]
+    fn class_fold_at() {
+        let cls = class(&[('@', '@')]);
+        assert_eq!(cls.clone().canonicalize(), class(&[('@', '@')]));
+        assert_eq!(cls.case_fold(), class(&[('@', '@')]));
+
+        let cls = bclass(&[(b'@', b'@')]);
+        assert_eq!(cls.clone().canonicalize(), bclass(&[(b'@', b'@')]));
+        assert_eq!(cls.case_fold(), bclass(&[(b'@', b'@')]));
     }
 }

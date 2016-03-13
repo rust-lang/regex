@@ -160,7 +160,7 @@ fn exec<'t>(
 
     use regex::internal::{Char, CharInput, InputAt, Input, Inst};
 
-    let input = CharInput::new(input);
+    let input = CharInput::new(input.as_bytes());
     let at = input.at(start);
     return Nfa {
         input: input,
@@ -330,12 +330,12 @@ fn exec<'t>(
     }
 }
 
-::regex::Regex::Native(::regex::internal::ExNative {
+::regex::Regex(::regex::internal::_Regex::Native(::regex::internal::ExNative {
     original: $regex,
     names: &CAPTURES,
     groups: &CAPTURE_NAME_IDX,
     prog: exec,
-})
+}))
         })
     }
 
@@ -392,6 +392,10 @@ fn exec<'t>(
                                     self.add(nlist, thread_caps, $nextpc, at);
                                 }
                             })
+                        }
+                        EmptyLook::WordBoundaryAscii
+                        | EmptyLook::NotWordBoundaryAscii => {
+                            unreachable!()
                         }
                     }
                 }

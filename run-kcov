@@ -1,0 +1,36 @@
+#!/bin/bash
+
+set -e
+
+tests=(
+  default
+  default_bytes
+  backtrack
+  backtrack_utf8bytes
+  backtrack_bytes
+  nfa
+  nfa_utf8bytes
+  nfa_bytes
+  regex
+  regex_inline
+)
+tmpdir=$(mktemp -d)
+
+if [ "$1" = "--with-plugin" ]; then
+  echo "compiling regex_macros test, this can take a while..."
+  cargo test --manifest-path regex_macros/Cargo.toml --no-run
+  kcov \
+    --include-pattern '/regex/src/' \
+    "$tmpdir/plugin" \
+    $(ls -t ./regex_macros/target/debug/plugin-* | head -n1)
+fi
+
+cargo test --no-run
+for t in ${tests[@]}; do
+  kcov \
+    --include-pattern '/regex/src/' \
+    "$tmpdir/$t" \
+    $(ls -t ./target/debug/"$t"-* | head -n1)
+done
+
+kcov --merge target/cov "$tmpdir"/*

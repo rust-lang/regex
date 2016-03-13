@@ -13,10 +13,19 @@ use std::iter;
 use std::slice;
 use std::vec;
 
-use syntax::Expr;
-
 use exec::{Exec, ExecBuilder, Search};
 use Error;
+
+macro_rules! define_set {
+    (
+        $ty:ident,
+        $ty_set_matches:ident,
+        $ty_set_matches_iter:ident,
+        $ty_set_matches_into_iter:ident,
+        $exec_build:expr,
+        $text_ty:ty,
+        $as_bytes:expr
+    ) => {
 
 /// Match multiple (possibly overlapping) regular expressions in a single scan.
 ///
@@ -45,8 +54,7 @@ use Error;
 /// domains) might work:
 ///
 /// ```rust
-/// use regex::RegexSet;
-///
+/// # use regex::RegexSet;
 /// let set = RegexSet::new(&[
 ///     r"[a-z]+@[a-z]+\.(com|org|net)",
 ///     r"[a-z]+\.(com|org|net)",
@@ -101,9 +109,9 @@ use Error;
 /// search takes `O(mn)` time, where `m` is proportional to the size of the
 /// regex set and `n` is proportional to the length of the search text.
 #[derive(Clone)]
-pub struct RegexSet(Exec);
+pub struct $ty(Exec);
 
-impl RegexSet {
+impl $ty {
     /// Create a new regex set with the given regular expressions.
     ///
     /// This takes an iterator of `S`, where `S` is something that can produce
@@ -115,18 +123,17 @@ impl RegexSet {
     /// Create a new regex set from an iterator of strings:
     ///
     /// ```rust
-    /// use regex::RegexSet;
-    ///
+    /// # use regex::RegexSet;
     /// let set = RegexSet::new(&[r"\w+", r"\d+"]).unwrap();
     /// assert!(set.is_match("foo"));
     /// ```
-    pub fn new<I, S>(exprs: I) -> Result<RegexSet, Error>
+    pub fn new<I, S>(exprs: I) -> Result<$ty, Error>
             where S: AsRef<str>, I: IntoIterator<Item=S> {
-        let exec = try!(ExecBuilder::new_many(exprs).build());
+        let exec = try!($exec_build(exprs));
         if exec.regex_strings().len() < 2 {
             return Err(Error::InvalidSet);
         }
-        Ok(RegexSet(exec))
+        Ok($ty(exec))
     }
 
     /// Returns true if and only if one of the regexes in this set matches
@@ -148,15 +155,14 @@ impl RegexSet {
     /// Tests whether a set matches some text:
     ///
     /// ```rust
-    /// use regex::RegexSet;
-    ///
+    /// # use regex::RegexSet;
     /// let set = RegexSet::new(&[r"\w+", r"\d+"]).unwrap();
     /// assert!(set.is_match("foo"));
     /// assert!(!set.is_match("☃"));
     /// ```
-    pub fn is_match(&self, text: &str) -> bool {
-        let mut search = Search { captures: &mut [], matches: &mut [] };
-        self.0.exec(&mut search, text, 0)
+    pub fn is_match(&self, text: $text_ty) -> bool {
+        let mut search = Search::new(&mut [], &mut []);
+        self.0.exec(&mut search, $as_bytes(text), 0)
     }
 
     /// Returns the set of regular expressions that match in the given text.
@@ -177,8 +183,7 @@ impl RegexSet {
     /// Tests which regular expressions match the given text:
     ///
     /// ```rust
-    /// use regex::RegexSet;
-    ///
+    /// # use regex::RegexSet;
     /// let set = RegexSet::new(&[
     ///     r"\w+",
     ///     r"\d+",
@@ -196,14 +201,11 @@ impl RegexSet {
     /// assert!(!matches.matched(5));
     /// assert!(matches.matched(6));
     /// ```
-    pub fn matches(&self, text: &str) -> SetMatches {
+    pub fn matches(&self, text: $text_ty) -> SetMatches {
         let mut matches = vec![false; self.0.matches().len()];
         let matched_any = {
-            let mut search = Search {
-                captures: &mut [],
-                matches: &mut matches
-            };
-            self.0.exec(&mut search, text, 0)
+            let mut search = Search::new(&mut [], &mut matches);
+            self.0.exec(&mut search, $as_bytes(text), 0)
         };
         SetMatches {
             matched_any: matched_any,
@@ -217,20 +219,14 @@ impl RegexSet {
     }
 }
 
-impl fmt::Debug for RegexSet {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "RegexSet({:?})", self.0.regex_strings())
-    }
-}
-
 /// A set of matches returned by a regex set.
 #[derive(Clone, Debug)]
-pub struct SetMatches {
+pub struct $ty_set_matches {
     matched_any: bool,
     matches: Vec<bool>,
 }
 
-impl SetMatches {
+impl $ty_set_matches {
     /// Whether this set contains any matches.
     pub fn matched_any(&self) -> bool {
         self.matched_any
@@ -254,22 +250,22 @@ impl SetMatches {
     }
 
     /// Returns an iterator over indexes in the regex that matched.
-    pub fn iter(&self) -> SetMatchesIter {
-        SetMatchesIter((&*self.matches).into_iter().enumerate())
+    pub fn iter(&self) -> $ty_set_matches_iter {
+        $ty_set_matches_iter((&*self.matches).into_iter().enumerate())
     }
 }
 
-impl IntoIterator for SetMatches {
-    type IntoIter = SetMatchesIntoIter;
+impl IntoIterator for $ty_set_matches {
+    type IntoIter = $ty_set_matches_into_iter;
     type Item = usize;
 
     fn into_iter(self) -> Self::IntoIter {
-        SetMatchesIntoIter(self.matches.into_iter().enumerate())
+        $ty_set_matches_into_iter(self.matches.into_iter().enumerate())
     }
 }
 
-impl<'a> IntoIterator for &'a SetMatches {
-    type IntoIter = SetMatchesIter<'a>;
+impl<'a> IntoIterator for &'a $ty_set_matches {
+    type IntoIter = $ty_set_matches_iter<'a>;
     type Item = usize;
 
     fn into_iter(self) -> Self::IntoIter {
@@ -278,9 +274,9 @@ impl<'a> IntoIterator for &'a SetMatches {
 }
 
 /// An owned iterator over the set of matches from a regex set.
-pub struct SetMatchesIntoIter(iter::Enumerate<vec::IntoIter<bool>>);
+pub struct $ty_set_matches_into_iter(iter::Enumerate<vec::IntoIter<bool>>);
 
-impl Iterator for SetMatchesIntoIter {
+impl Iterator for $ty_set_matches_into_iter {
     type Item = usize;
 
     fn next(&mut self) -> Option<usize> {
@@ -298,9 +294,9 @@ impl Iterator for SetMatchesIntoIter {
 ///
 /// The lifetime `'a` refers to the lifetime of a `SetMatches` value.
 #[derive(Clone)]
-pub struct SetMatchesIter<'a>(iter::Enumerate<slice::Iter<'a, bool>>);
+pub struct $ty_set_matches_iter<'a>(iter::Enumerate<slice::Iter<'a, bool>>);
 
-impl<'a> Iterator for SetMatchesIter<'a> {
+impl<'a> Iterator for $ty_set_matches_iter<'a> {
     type Item = usize;
 
     fn next(&mut self) -> Option<usize> {
@@ -311,5 +307,43 @@ impl<'a> Iterator for SetMatchesIter<'a> {
                 Some((i, &true)) => return Some(i),
             }
         }
+    }
+}
+
+    }
+}
+
+fn as_bytes_str(text: &str) -> &[u8] { text.as_bytes() }
+fn as_bytes_bytes(text: &[u8]) -> &[u8] { text }
+
+define_set! {
+    RegexSet,
+    SetMatches,
+    SetMatchesIter,
+    SetMatchesIntoIter,
+    |exprs| ExecBuilder::new_many(exprs).build(),
+    &str,
+    as_bytes_str
+}
+
+define_set! {
+    RegexSetBytes,
+    SetMatchesBytes,
+    SetMatchesIterBytes,
+    SetMatchesIntoIterBytes,
+    |exprs| ExecBuilder::new_many(exprs).only_utf8(false).build(),
+    &[u8],
+    as_bytes_bytes
+}
+
+impl fmt::Debug for RegexSet {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "RegexSet({:?})", self.0.regex_strings())
+    }
+}
+
+impl fmt::Debug for RegexSetBytes {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "RegexSet({:?})", self.0.regex_strings())
     }
 }

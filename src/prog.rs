@@ -7,8 +7,8 @@ use std::slice;
 use std::sync::Arc;
 
 use backtrack::BacktrackCache;
-use char::Char;
 use dfa::DfaCache;
+use input::Char;
 use literals::Literals;
 use nfa::NfaCache;
 use pool::{Pool, PoolGuard};
@@ -20,18 +20,45 @@ pub type InstPtr = usize;
 /// instructions.
 #[derive(Clone)]
 pub struct Program {
+    /// A sequence of instructions that represents an NFA.
     pub insts: Vec<Inst>,
+    /// Pointers to each Match instruction in the sequence.
+    ///
+    /// This is always length 1 unless this program represents a regex set.
     pub matches: Vec<InstPtr>,
+    /// The ordered sequence of all capture groups extracted from the AST.
+    /// Unnamed groups are `None`.
     pub captures: Vec<Option<String>>,
+    /// Pointers to all named capture groups into `captures`.
     pub capture_name_idx: Arc<HashMap<String, usize>>,
+    /// A pointer to the start instruction. This can vary depending on how
+    /// the program was compiled. For example, programs for use with the DFA
+    /// engine have a `.*?` inserted at the beginning of unanchored regular
+    /// expressions. The actual starting point of the program is after the
+    /// `.*?`.
     pub start: InstPtr,
+    /// A set of equivalence classes for discriminating bytes in the compiled
+    /// program.
     pub byte_classes: Vec<u8>,
+    /// When true, this program can only match valid UTF-8.
+    pub only_utf8: bool,
+    /// When true, this program uses byte range instructions instead of Unicode
+    /// range instructions.
     pub is_bytes: bool,
+    /// When true, the program is compiled for DFA matching. For example, this
+    /// implies `is_bytes` and also inserts a preceding `.*?` for unanchored
+    /// regexes.
     pub is_dfa: bool,
+    /// When true, the program matches text in reverse (for use only in the
+    /// DFA).
     pub is_reverse: bool,
+    /// Whether the regex must match from the start of the input.
     pub is_anchored_start: bool,
+    /// Whether the regex must match at the end of the input.
     pub is_anchored_end: bool,
+    /// A possibly empty machine for very quickly matching prefix literals.
     pub prefixes: Literals,
+    /// Caches for use by the matching engines.
     pub cache: EngineCache,
 }
 
@@ -46,6 +73,7 @@ impl Program {
             capture_name_idx: Arc::new(HashMap::new()),
             start: 0,
             byte_classes: vec![],
+            only_utf8: true,
             is_bytes: false,
             is_dfa: false,
             is_reverse: false,
@@ -86,6 +114,19 @@ impl Program {
     /// `.*?` be prepended to the instruction sequence.
     pub fn needs_dotstar(&self) -> bool {
         self.is_dfa && !self.is_reverse && !self.is_anchored_start
+    }
+
+    /// Returns true if this program uses Byte instructions instead of
+    /// Char/Range instructions.
+    pub fn uses_bytes(&self) -> bool {
+        self.is_bytes || self.is_dfa || !self.only_utf8
+    }
+
+    /// Returns true if this program exclusively matches valid UTF-8 bytes.
+    ///
+    /// That is, if an invalid UTF-8 byte is seen, then no match is possible.
+    pub fn only_utf8(&self) -> bool {
+        self.only_utf8
     }
 
     /// Retrieve cached state for NFA execution.
@@ -321,6 +362,10 @@ pub enum EmptyLook {
     WordBoundary,
     /// Word character on both sides or non-word character on both sides.
     NotWordBoundary,
+    /// ASCII word boundary.
+    WordBoundaryAscii,
+    /// Not ASCII word boundary.
+    NotWordBoundaryAscii,
 }
 
 impl InstEmptyLook {
@@ -333,10 +378,21 @@ impl InstEmptyLook {
             EndLine => c2.is_none() || c2 == '\n',
             StartText => c1.is_none(),
             EndText => c2.is_none(),
-            ref wbty => {
+            WordBoundary => {
                 let (w1, w2) = (c1.is_word_char(), c2.is_word_char());
-                (*wbty == WordBoundary && w1 ^ w2)
-                || (*wbty == NotWordBoundary && !(w1 ^ w2))
+                w1 ^ w2
+            }
+            NotWordBoundary => {
+                let (w1, w2) = (c1.is_word_char(), c2.is_word_char());
+                !(w1 ^ w2)
+            }
+            WordBoundaryAscii => {
+                let (w1, w2) = (c1.is_word_byte(), c2.is_word_byte());
+                w1 ^ w2
+            }
+            NotWordBoundaryAscii => {
+                let (w1, w2) = (c1.is_word_byte(), c2.is_word_byte());
+                !(w1 ^ w2)
             }
         }
     }
