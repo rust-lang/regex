@@ -35,15 +35,14 @@ while true; do
 done
 
 if [ -n "$with_plugin" ]; then
-  echo "compiling regex_macros test, this can take a while..."
-  cargo test --manifest-path regex_macros/Cargo.toml --no-run
+  cargo test --manifest-path regex_macros/Cargo.toml --no-run --verbose
   kcov \
     --include-pattern '/regex/src/' \
     "$tmpdir/plugin" \
     $(ls -t ./regex_macros/target/debug/plugin-* | head -n1)
 fi
 
-cargo test --no-run
+cargo test --no-run --verbose
 for t in ${tests[@]}; do
   kcov \
     --include-pattern '/regex/src/' \
