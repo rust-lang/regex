@@ -46,7 +46,7 @@ use std::fmt;
 use std::mem;
 
 use exec::Search;
-use prog::Program;
+use prog::{Inst, Program};
 use sparse::SparseSet;
 
 /// The cache limit specifies approximately how much space we're willing to
@@ -465,7 +465,6 @@ impl<'a, 'b, 'c, 'm> Dfa<'a, 'b, 'c, 'm> {
             }
             self.at += 1;
         }
-        // println!("exiting loop at input {:?}", self.at);
         // Run the DFA once more on the special EOF senitnel value.
         si = match self.next_state(qcur, qnext, si, Byte::eof()) {
             None => return DfaResult::Quit,
@@ -481,6 +480,13 @@ impl<'a, 'b, 'c, 'm> Dfa<'a, 'b, 'c, 'm> {
             }
             result = DfaResult::Match;
             self.search.set_end(Some(text.len()));
+        }
+        if result.is_match() && !self.search.find_one_match() {
+            for &ip in &self.states[si as usize].insts {
+                if let Inst::Match(slot) = self.prog[ip as usize] {
+                    self.search.set_match(slot);
+                }
+            }
         }
         result
     }
@@ -622,16 +628,16 @@ impl<'a, 'b, 'c, 'm> Dfa<'a, 'b, 'c, 'm> {
                 Char(_) | Ranges(_) => unreachable!(),
                 // These states are handled when following epsilon transitions.
                 Save(_) | Split(_) | EmptyLook(_) => {}
-                Match(slot) => {
+                Match(_) => {
                     is_match = true;
                     if !self.continue_past_first_match() {
                         break;
-                    } else if !self.search.find_one_match()
-                            && !self.search.has_match(slot)
-                            && !qnext.contains_ip(ip as usize) {
+                    } else if !self.search.find_one_match() {
                         // If we are continuing on to find other matches,
                         // then keep a record of the match states we've seen.
-                        qnext.add(ip);
+                        if !qnext.contains_ip(ip as usize) {
+                            qnext.add(ip);
+                        }
                     }
                 }
                 Bytes(ref inst) => {
@@ -870,9 +876,8 @@ impl<'a, 'b, 'c, 'm> Dfa<'a, 'b, 'c, 'm> {
                         | NotWordBoundaryAscii => unreachable!(),
                     }
                 }
-                Match(slot) => {
+                Match(_) => {
                     insts.push(ip);
-                    self.search.set_match(slot);
                     if !self.continue_past_first_match() {
                         break;
                     }

@@ -76,10 +76,6 @@ impl<'caps, 'matches> Search<'caps, 'matches> {
         self.matches.iter().all(|m| *m)
     }
 
-    pub fn has_match(&mut self, match_slot: usize) -> bool {
-        self.matches.get(match_slot).map_or(false, |&b| b)
-    }
-
     pub fn set_match(&mut self, match_slot: usize) {
         self.matched_any = true;
         if let Some(old) = self.matches.get_mut(match_slot) {
