@@ -15,3 +15,12 @@ matset!(set14, &[r".*", "a"], "zzzzzz", 0);
 
 nomatset!(nset1, &["a", "a"], "b");
 nomatset!(nset2, &["^foo", "bar$"], "bar foo");
+
+// See: https://github.com/rust-lang-nursery/regex/issues/187
+#[test]
+fn regression_subsequent_matches() {
+    let set = regex_set!(&["ab", "b"]);
+    let text = text!("ba");
+    assert!(set.matches(text).matched(1));
+    assert!(set.matches(text).matched(1));
+}

@@ -172,6 +172,10 @@ pub struct Dfa<'a, 'b, 'c: 'b, 'm: 'b> {
     search: &'b mut Search<'c, 'm>,
     /// The current position in the input.
     at: usize,
+    /// The last state that matched.
+    ///
+    /// When no match has occurred, this is set to STATE_UNKNOWN.
+    last_match_si: StatePtr,
     /// The input position of the last cache flush. We use this to determine
     /// if we're thrashing in the cache too often. If so, the DFA quits so
     /// that we can fall back to the NFA algorithm.
@@ -352,6 +356,7 @@ impl<'a, 'b, 'c, 'm> Dfa<'a, 'b, 'c, 'm> {
             start: 0, // filled in below
             search: search,
             at: at,
+            last_match_si: STATE_UNKNOWN,
             last_cache_flush: at,
             compiled: &mut cache.compiled,
             states: &mut cache.states,
@@ -370,8 +375,18 @@ impl<'a, 'b, 'c, 'm> Dfa<'a, 'b, 'c, 'm> {
         } else {
             dfa.exec_at(&mut cache.qcur, &mut cache.qnext, text)
         };
-        if result.is_match() && !dfa.search.find_many_matches() {
-            dfa.search.set_match(0);
+        if result.is_match() {
+            if dfa.search.find_one_match() {
+                dfa.search.set_match(0);
+            } else {
+                debug_assert!(dfa.last_match_si != STATE_UNKNOWN);
+                debug_assert!(dfa.last_match_si != STATE_DEAD);
+                for &ip in &dfa.states[dfa.last_match_si as usize].insts {
+                    if let Inst::Match(slot) = dfa.prog[ip as usize] {
+                        dfa.search.set_match(slot);
+                    }
+                }
+            }
         }
         result
     }
@@ -457,6 +472,7 @@ impl<'a, 'b, 'c, 'm> Dfa<'a, 'b, 'c, 'm> {
             }
             si = next_si;
             if self.states[si as usize].is_match {
+                self.last_match_si = si;
                 if self.search.quit_after_first_match() {
                     return DfaResult::Match;
                 }
@@ -475,18 +491,12 @@ impl<'a, 'b, 'c, 'm> Dfa<'a, 'b, 'c, 'm> {
             return result;
         }
         if self.states[si as usize].is_match {
+            self.last_match_si = si;
             if self.search.quit_after_first_match() {
                 return DfaResult::Match;
             }
             result = DfaResult::Match;
             self.search.set_end(Some(text.len()));
-        }
-        if result.is_match() && !self.search.find_one_match() {
-            for &ip in &self.states[si as usize].insts {
-                if let Inst::Match(slot) = self.prog[ip as usize] {
-                    self.search.set_match(slot);
-                }
-            }
         }
         result
     }
@@ -529,6 +539,7 @@ impl<'a, 'b, 'c, 'm> Dfa<'a, 'b, 'c, 'm> {
             }
             si = next_si;
             if self.states[si as usize].is_match {
+                self.last_match_si = si;
                 if self.search.quit_after_first_match() {
                     return DfaResult::NoMatch;
                 }
@@ -546,6 +557,7 @@ impl<'a, 'b, 'c, 'm> Dfa<'a, 'b, 'c, 'm> {
             return result;
         }
         if self.states[si as usize].is_match {
+            self.last_match_si = si;
             if self.search.quit_after_first_match() {
                 return DfaResult::Match;
             }
@@ -632,12 +644,17 @@ impl<'a, 'b, 'c, 'm> Dfa<'a, 'b, 'c, 'm> {
                     is_match = true;
                     if !self.continue_past_first_match() {
                         break;
-                    } else if !self.search.find_one_match() {
+                    } else if !self.search.find_one_match()
+                            && !qnext.contains_ip(ip as usize) {
                         // If we are continuing on to find other matches,
                         // then keep a record of the match states we've seen.
-                        if !qnext.contains_ip(ip as usize) {
-                            qnext.add(ip);
-                        }
+                        qnext.add(ip);
+                        // BREADCRUMBS:
+                        // Perhaps we need another sparse set here and track
+                        // these "recorded" matches separately. They should
+                        // still make their way into cached states, but perhaps
+                        // they shouldn't prevent a DEAD state from
+                        // occurring.
                     }
                 }
                 Bytes(ref inst) => {
