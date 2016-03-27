@@ -54,9 +54,9 @@ bench_find!(name_sherlock, regex!("Sherlock"), 97);
 bench_find!(name_holmes, regex!("Holmes"), 461);
 bench_find!(name_sherlock_holmes, regex!("Sherlock Holmes"), 91);
 
-// Like the above, except case insensitively.
-// The prefix finder is broken at the moment, so these are probably a touch
-// slower than they should be.
+// Like the above, except case insensitively. The prefix detector will extract
+// multiple *cut* prefix literals for each of the following before hitting its
+// limit. All of these should be able to use either memchr2 or memchr3.
 bench_find!(name_sherlock_nocase, regex!("(?i)Sherlock"), 102);
 bench_find!(name_holmes_nocase, regex!("(?i)Holmes"), 467);
 bench_find!(name_sherlock_holmes_nocase, regex!("(?i)Sherlock Holmes"), 96);
@@ -69,10 +69,12 @@ bench_find!(name_whitespace, regex!(r"Sherlock\s+Holmes"), 97);
 // This one has two alternates that both start with 'S'. This should compile
 // to an Aho-Corasick automaton that uses memchr. Never enters lazy DFA.
 bench_find!(name_alt1, regex!("Sherlock|Street"), 158);
-// This one doesn't have a common byte, but should still use Aho-Corasick.
+// This one doesn't have a common byte, but should still use Aho-Corasick and
+// memchr2.
 // Never enters lazy DFA.
 bench_find!(name_alt2, regex!("Sherlock|Holmes"), 558);
-// OK, still using Aho-Corasick, but more patterns. Never enters lazy DFA.
+// Still using Aho-Corasick, but more patterns. Never enters lazy DFA but
+// also can't use any memchr variant.
 bench_find!(
     name_alt3,
     regex!("Sherlock|Holmes|Watson|Irene|Adler|John|Baker"), 740);
@@ -84,17 +86,28 @@ bench_find!(
 // we need to use the lazy DFA to complete it.
 bench_find!(name_alt4, regex!("Sher[a-z]+|Hol[a-z]+"), 582);
 bench_find!(name_alt4_nocase, regex!("(?i)Sher[a-z]+|Hol[a-z]+"), 697);
+// Uses Aho-Corasick, but can use memchr3 (unlike name_alt3).
+bench_find!(name_alt5, regex!("Sherlock|Holmes|Watson"), 639);
+bench_find!(name_alt5_nocase, regex!("(?i)Sherlock|Holmes|Watson"), 650);
 
-// How long does it take to discover that there's no match?
-// If it starts with an uncommon character, then not long at all.
-// A common character? It might be 25x slower!
-bench_find!(no_match_uncommon, regex!("zyx"), 0);
-bench_find!(no_match_common, regex!("ayx"), 0);
+// How long does it take to discover that there's no match? In the first two
+// cases, we detect the rarest byte in the literal to run memchr on. In the
+// first, it's 'z' and in the second it's 'j'. The third case only has common
+// letters, and is therefore slower.
+bench_find!(no_match_uncommon, regex!("zqj"), 0);
+bench_find!(no_match_common, regex!("aqj"), 0);
+bench_find!(no_match_really_common, regex!("aei"), 0);
 
-// Various twiddling on very common words.
+// Various twiddling on very common words. This tends to stress the constant
+// overhead of actually reporting a match. (None of these actually enter any
+// matching engines.)
 bench_find!(the_lower, regex!("the"), 7218);
 bench_find!(the_upper, regex!("The"), 741);
 bench_find!(the_nocase, regex!("(?i)the"), 7987);
+
+// Process whitespace after a very common word.
+// Uses Boyer-Moore to find `the` and the lazy DFA for the rest.
+bench_find!(the_whitespace, regex!(r"the\s+\w+"), 5410);
 
 // How fast can we match everything? This essentially defeats any clever prefix
 // tricks and just executes the DFA across the entire input.
@@ -117,12 +130,8 @@ bench_find!(letters_lower, regex!(r"\p{Ll}"), 432980);
 #[cfg(not(feature = "re-rust-bytes"))]
 bench_find!(words, regex!(r"\w+"), 109214);
 
-// Process whitespace after a very common word.
-// Uses Boyer-Moore to find `the` and the lazy DFA for the rest.
-bench_find!(the_whitespace, regex!(r"the\s+\w+"), 5410);
-
 // Find complete words before Holmes. The `\w` defeats any prefix
-// optimizations, so it's the lazy DFA the entire way.
+// optimizations, but 'Holmes' triggers the reverse suffix optimization.
 bench_find!(before_holmes, regex!(r"\w+\s+Holmes"), 319);
 
 // Find Holmes co-occuring with Watson in a particular window of characters.
@@ -169,15 +178,18 @@ bench_find!(word_ending_n, regex!(r"\b\w+n\b"), 8366);
 // quickly and falls back to the NFA algorithm.
 bench_find!(repeated_class_negation, regex!(r"[a-q][^u-z]{13}x"), 142);
 
-// This defeats any prefix optimizations and just chugs along in the DFA.
-//
-// (This is a potential candidate for a suffix literal optimization, but
-// requires quite a bit more sophistication in the implementation.)
+// This defeats any prefix optimizations but triggers the reverse suffix
+// optimization.
 bench_find!(ing_suffix, regex!(r"[a-zA-Z]+ing"), 2824);
 
 // Similar to ing_suffix, but a little more complex by limiting the length
-// of the word and making sure it's surrounded by whitespace.
+// of the word and making sure it's surrounded by whitespace. The trailing
+// `\s` defeats the reverse suffix optimization.
 //
 // Onig does surprisingly well on this benchmark and yet does quite poorly on
 // the ing_suffix benchmark. That one has me stumped.
+//
+// Interestingly, this is slower in the rust-bytes benchmark, presumably
+// because scanning for one of the bytes in the Unicode *unaware* `\s` ends
+// up being slower than avoiding the prefix scan at all.
 bench_find!(ing_suffix_limited_space, regex!(r"\s[a-zA-Z]{0,12}ing\s"), 2081);
