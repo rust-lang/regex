@@ -10,6 +10,10 @@
 
 use regex::Regex;
 
+mat!(prefix_literal_match, r"^abc", r"abc", Some((0, 3)));
+mat!(prefix_literal_nomatch, r"^abc", r"zabc", None);
+mat!(one_literal_edge, r"abc", r"xxxxxab", None);
+
 #[test]
 fn eq() {
     assert_eq!(regex!(r"[a-z]+"), Regex::new("[a-z]+").unwrap());

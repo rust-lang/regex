@@ -17,7 +17,8 @@
 //!
 //! This crate's documentation provides some simple examples, describes Unicode
 //! support and exhaustively lists the supported syntax. For more specific
-//! details on the API, please see the documentation for the `Regex` type.
+//! details on the API, please see the documentation for the
+//! [`Regex`](struct.Regex.html) type.
 //!
 //! # Usage
 //!
@@ -486,6 +487,7 @@
 
 extern crate aho_corasick;
 extern crate memchr;
+extern crate mempool;
 #[cfg(test)] extern crate quickcheck;
 extern crate regex_syntax as syntax;
 extern crate utf8_ranges;
@@ -596,10 +598,11 @@ mod dfa;
 mod error;
 mod exec;
 mod expand;
+mod freqs;
 mod input;
 mod literals;
 mod nfa;
-mod pool;
+mod params;
 mod prog;
 mod re_bytes;
 mod re_unicode;
@@ -607,13 +610,14 @@ mod set;
 mod sparse;
 
 /// The `internal` module exists to support the `regex!` macro and other
-/// suspicious activity, such as testing different matching engines.
+/// suspicious activity, such as testing different matching engines and
+/// supporting the `regex-debug` CLI utility.
 #[doc(hidden)]
 pub mod internal {
     pub use compile::Compiler;
     pub use exec::{Exec, ExecBuilder};
     pub use input::{Char, Input, CharInput, InputAt};
-    pub use literals::Literals;
+    pub use literals::LiteralSearcher;
     pub use prog::{Program, Inst, EmptyLook, InstRanges};
     pub use re_unicode::{_Regex, ExNative};
 }

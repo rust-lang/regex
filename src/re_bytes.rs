@@ -18,9 +18,10 @@ use std::sync::Arc;
 
 use memchr::memchr;
 
-use exec::{Exec, ExecBuilder, Search, CaptureSlots};
+use exec::{Exec, ExecBuilder};
 use expand::expand;
 use error::Error;
+use params::{Params, Slot};
 
 pub use set::RegexSetBytes as RegexSet;
 pub use set::SetMatchesBytes as SetMatches;
@@ -487,6 +488,39 @@ impl Regex {
         new
     }
 
+    /// Returns the end location of a match in the text given.
+    ///
+    /// This method may have the same performance characteristics as
+    /// `is_match`, except it provides an end location for a match. In
+    /// particular, the location returned *may be shorter* than the proper end
+    /// of the leftmost-first match.
+    ///
+    /// # Example
+    ///
+    /// Typically, `a+` would match the entire first sequence of `a` in some
+    /// text, but `shortest_match` can give up as soon as it sees the first
+    /// `a`.
+    ///
+    /// ```rust
+    /// # extern crate regex; use regex::bytes::Regex;
+    /// # fn main() {
+    /// let text = b"aaaaa";
+    /// let pos = Regex::new(r"a+").unwrap().shortest_match(text);
+    /// assert_eq!(pos, Some(1));
+    /// # }
+    /// ```
+    pub fn shortest_match(&self, text: &[u8]) -> Option<usize> {
+        let mut caps = [None, None];
+        let mut _matched = [false];
+        let mut params =
+            Params::new(&mut caps, &mut _matched).set_match_short(true);
+        if !self.execp(&mut params, text, 0) {
+            None
+        } else {
+            params.captures()[1]
+        }
+    }
+
     /// Returns the original string of this regex.
     pub fn as_str(&self) -> &str {
         &self.0.regex_strings()[0]
@@ -502,10 +536,14 @@ impl Regex {
         self.0.captures().len()
     }
 
-    fn exec(&self, caps: CaptureSlots, text: &[u8], start: usize) -> bool {
+    fn exec(&self, caps: &mut [Slot], text: &[u8], start: usize) -> bool {
         let mut _matches = [false];
-        let mut search = Search::new(caps, &mut _matches);
-        self.0.exec(&mut search, text, start)
+        let mut params = Params::new(caps, &mut _matches);
+        self.0.exec(&mut params, text, start)
+    }
+
+    fn execp(&self, params: &mut Params, text: &[u8], start: usize) -> bool {
+        self.0.exec(params, text, start)
     }
 
     fn alloc_captures(&self) -> Vec<Option<usize>> {

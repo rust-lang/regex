@@ -12,7 +12,6 @@
 
 #[macro_use] extern crate lazy_static;
 extern crate onig;
-extern crate rand;
 extern crate test;
 
 use std::ops::Deref;

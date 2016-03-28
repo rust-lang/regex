@@ -6,12 +6,8 @@ use std::mem;
 use std::slice;
 use std::sync::Arc;
 
-use backtrack::BacktrackCache;
-use dfa::DfaCache;
 use input::Char;
-use literals::Literals;
-use nfa::NfaCache;
-use pool::{Pool, PoolGuard};
+use literals::LiteralSearcher;
 
 /// InstPtr represents the index of an instruction in a regex program.
 pub type InstPtr = usize;
@@ -57,9 +53,7 @@ pub struct Program {
     /// Whether the regex must match at the end of the input.
     pub is_anchored_end: bool,
     /// A possibly empty machine for very quickly matching prefix literals.
-    pub prefixes: Literals,
-    /// Caches for use by the matching engines.
-    pub cache: EngineCache,
+    pub prefixes: LiteralSearcher,
 }
 
 impl Program {
@@ -79,8 +73,7 @@ impl Program {
             is_reverse: false,
             is_anchored_start: false,
             is_anchored_end: false,
-            prefixes: Literals::empty(),
-            cache: EngineCache::new(),
+            prefixes: LiteralSearcher::empty(),
         }
     }
 
@@ -129,21 +122,6 @@ impl Program {
         self.only_utf8
     }
 
-    /// Retrieve cached state for NFA execution.
-    pub fn cache_nfa(&self) -> PoolGuard<Box<NfaCache>> {
-        self.cache.nfa.get()
-    }
-
-    /// Retrieve cached state for backtracking execution.
-    pub fn cache_backtrack(&self) -> PoolGuard<Box<BacktrackCache>> {
-        self.cache.backtrack.get()
-    }
-
-    /// Retrieve cached state for DFA execution.
-    pub fn cache_dfa(&self) -> PoolGuard<Box<DfaCache>> {
-        self.cache.dfa.get()
-    }
-
     /// Return the approximate heap usage of this instruction sequence in
     /// bytes.
     pub fn approximate_size(&self) -> usize {
@@ -180,29 +158,28 @@ impl fmt::Debug for Program {
             String::from_utf8_lossy(&escaped).into_owned()
         }
 
-        try!(writeln!(f, "--------------------------------"));
         for (pc, inst) in self.iter().enumerate() {
             match *inst {
                 Match(slot) => {
-                    try!(writeln!(f, "{:04} Match({:?})", pc, slot))
+                    try!(write!(f, "{:04} Match({:?})", pc, slot))
                 }
                 Save(ref inst) => {
                     let s = format!("{:04} Save({})", pc, inst.slot);
-                    try!(writeln!(f, "{}", with_goto(pc, inst.goto, s)));
+                    try!(write!(f, "{}", with_goto(pc, inst.goto, s)));
                 }
                 Split(ref inst) => {
-                    try!(writeln!(f, "{:04} Split({}, {})",
-                                  pc, inst.goto1, inst.goto2));
+                    try!(write!(f, "{:04} Split({}, {})",
+                                pc, inst.goto1, inst.goto2));
                 }
                 EmptyLook(ref inst) => {
                     let s = format!("{:?}", inst.look);
-                    try!(writeln!(f, "{:04} {}",
-                                  pc, with_goto(pc, inst.goto, s)));
+                    try!(write!(f, "{:04} {}",
+                                pc, with_goto(pc, inst.goto, s)));
                 }
                 Char(ref inst) => {
                     let s = format!("{:?}", inst.c);
-                    try!(writeln!(f, "{:04} {}",
-                                  pc, with_goto(pc, inst.goto, s)));
+                    try!(write!(f, "{:04} {}",
+                                pc, with_goto(pc, inst.goto, s)));
                 }
                 Ranges(ref inst) => {
                     let ranges = inst.ranges
@@ -211,20 +188,23 @@ impl fmt::Debug for Program {
                         .collect::<Vec<String>>()
                         .join(", ");
                     let s = format!("{}", ranges);
-                    try!(writeln!(f, "{:04} {}",
-                                  pc, with_goto(pc, inst.goto, s)));
+                    try!(write!(f, "{:04} {}",
+                                pc, with_goto(pc, inst.goto, s)));
                 }
                 Bytes(ref inst) => {
                     let s = format!(
                         "Bytes({}, {})",
                         visible_byte(inst.start),
                         visible_byte(inst.end));
-                    try!(writeln!(f, "{:04} {}",
-                                  pc, with_goto(pc, inst.goto, s)));
+                    try!(write!(f, "{:04} {}",
+                                pc, with_goto(pc, inst.goto, s)));
                 }
             }
+            if pc == self.start {
+                try!(write!(f, " (start)"));
+            }
+            try!(write!(f, "\n"));
         }
-        try!(writeln!(f, "--------------------------------"));
         Ok(())
     }
 }
@@ -233,39 +213,6 @@ impl<'a> IntoIterator for &'a Program {
     type Item = &'a Inst;
     type IntoIter = slice::Iter<'a, Inst>;
     fn into_iter(self) -> Self::IntoIter { self.iter() }
-}
-
-/// EngineCache maintains reusable allocations for each matching engine
-/// available to a particular program.
-///
-/// The allocations are created lazily, so we don't pay for caches that
-/// aren't used.
-///
-/// N.B. These are all behind a pointer because it's fewer bytes to memcpy.
-/// These caches are pushed/popped from the pool a lot, and a smaller
-/// footprint can have an impact on matching small inputs. See, for example,
-/// the hard_32 benchmark.
-#[derive(Debug)]
-pub struct EngineCache {
-    nfa: Pool<Box<NfaCache>>,
-    backtrack: Pool<Box<BacktrackCache>>,
-    dfa: Pool<Box<DfaCache>>,
-}
-
-impl EngineCache {
-    fn new() -> Self {
-        EngineCache {
-            nfa: Pool::new(Box::new(|| Box::new(NfaCache::new()))),
-            backtrack: Pool::new(Box::new(|| Box::new(BacktrackCache::new()))),
-            dfa: Pool::new(Box::new(|| Box::new(DfaCache::new()))),
-        }
-    }
-}
-
-impl Clone for EngineCache {
-    fn clone(&self) -> EngineCache {
-        EngineCache::new()
-    }
 }
 
 /// Inst is an instruction code in a Regex program.

@@ -138,14 +138,20 @@ impl Compiler {
         // add a `.*?` before the first capture group.
         // Other matching engines handle this by baking the logic into the
         // matching engine itself.
+        let mut dotstar_patch = Patch { hole: Hole::None, entry: 0 };
         self.compiled.is_anchored_start = expr.is_anchored_start();
         self.compiled.is_anchored_end = expr.is_anchored_end();
         if self.compiled.needs_dotstar() {
-            try!(self.c_dotstar());
+            dotstar_patch = try!(self.c_dotstar());
+            self.compiled.start = dotstar_patch.entry;
         }
         self.compiled.captures = vec![None];
-        self.compiled.start = self.insts.len();
         let patch = try!(self.c_capture(0, expr));
+        if self.compiled.needs_dotstar() {
+            self.fill(dotstar_patch.hole, patch.entry);
+        } else {
+            self.compiled.start = patch.entry;
+        }
         self.fill_to_next(patch.hole);
         self.compiled.matches = vec![self.insts.len()];
         self.push_compiled(Inst::Match(0));
@@ -162,11 +168,15 @@ impl Compiler {
             exprs.iter().all(|e| e.is_anchored_start());
         self.compiled.is_anchored_end =
             exprs.iter().all(|e| e.is_anchored_end());
+        let mut dotstar_patch = Patch { hole: Hole::None, entry: 0 };
         if self.compiled.needs_dotstar() {
-            try!(self.c_dotstar());
+            dotstar_patch = try!(self.c_dotstar());
+            self.compiled.start = dotstar_patch.entry;
+        } else {
+            self.compiled.start = 0; // first instruction is always split
         }
+        self.fill_to_next(dotstar_patch.hole);
 
-        self.compiled.start = self.insts.len();
         for (i, expr) in exprs[0..exprs.len() - 1].iter().enumerate() {
             let split = self.push_split_hole();
             let Patch { hole, entry } = try!(self.c_capture(0, expr));
@@ -182,7 +192,6 @@ impl Compiler {
         self.fill_to_next(hole);
         self.compiled.matches.push(self.insts.len());
         self.push_compiled(Inst::Match(i));
-
         self.compile_finish()
     }
 
@@ -214,11 +223,9 @@ impl Compiler {
                 ])
             }
             AnyByte => {
-                assert!(!self.compiled.only_utf8());
                 self.c_class_bytes(&[ByteRange { start: 0, end: 0xFF }])
             }
             AnyByteNoNL => {
-                assert!(!self.compiled.only_utf8());
                 self.c_class_bytes(&[
                     ByteRange { start: 0, end: 0x9 },
                     ByteRange { start: 0xB, end: 0xFF },
@@ -309,8 +316,8 @@ impl Compiler {
         }
     }
 
-    fn c_dotstar(&mut self) -> result::Result<(), Error> {
-        let patch = if !self.compiled.only_utf8() {
+    fn c_dotstar(&mut self) -> Result {
+        Ok(if !self.compiled.only_utf8() {
             try!(self.c(&Expr::Repeat {
                 e: Box::new(Expr::AnyByte),
                 r: Repeater::ZeroOrMore,
@@ -322,13 +329,11 @@ impl Compiler {
                 r: Repeater::ZeroOrMore,
                 greedy: false,
             }))
-        };
-        self.fill_to_next(patch.hole);
-        Ok(())
+        })
     }
 
     fn c_literal(&mut self, chars: &[char], casei: bool) -> Result {
-        assert!(!chars.is_empty());
+        debug_assert!(!chars.is_empty());
         let mut chars: Box<Iterator<Item=&char>> =
             if self.compiled.is_reverse {
                 Box::new(chars.iter().rev())
@@ -374,7 +379,7 @@ impl Compiler {
     }
 
     fn c_bytes(&mut self, bytes: &[u8], casei: bool) -> Result {
-        assert!(!bytes.is_empty());
+        debug_assert!(!bytes.is_empty());
         let mut bytes: Box<Iterator<Item=&u8>> =
             if self.compiled.is_reverse {
                 Box::new(bytes.iter().rev())
@@ -402,7 +407,7 @@ impl Compiler {
     }
 
     fn c_class_bytes(&mut self, ranges: &[ByteRange]) -> Result {
-        assert!(!ranges.is_empty());
+        debug_assert!(!ranges.is_empty());
 
         let first_split_entry = self.insts.len();
         let mut holes = vec![];
@@ -451,7 +456,8 @@ impl Compiler {
     }
 
     fn c_alternate(&mut self, exprs: &[Expr]) -> Result {
-        assert!(exprs.len() >= 2, "alternates must have at least 2 exprs");
+        debug_assert!(
+            exprs.len() >= 2, "alternates must have at least 2 exprs");
 
         // Initial entry point is always the first split.
         let first_split_entry = self.insts.len();
@@ -892,9 +898,9 @@ impl<'a, 'b> CompileClass<'a, 'b> {
                 }));
             }
             from_inst = self.c.insts.len().checked_sub(1).unwrap();
-            assert!(from_inst < ::std::usize::MAX);
+            debug_assert!(from_inst < ::std::usize::MAX);
         }
-        assert!(from_inst < ::std::usize::MAX);
+        debug_assert!(from_inst < ::std::usize::MAX);
         Ok(Patch { hole: last_hole, entry: from_inst })
     }
 }
@@ -987,7 +993,7 @@ impl ByteClassSet {
     }
 
     fn set_range(&mut self, start: u8, end: u8) {
-        assert!(start <= end);
+        debug_assert!(start <= end);
         if start > 0 {
             self.0[start as usize - 1] = true;
         }

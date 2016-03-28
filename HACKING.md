@@ -32,7 +32,8 @@ The code to find prefixes and search for prefixes is in src/literals.rs. When
 more than one literal prefix is found, we fall back to an Aho-Corasick DFA
 using the aho-corasick crate. For one literal, we use a variant of the
 Boyer-Moore algorithm. Both Aho-Corasick and Boyer-Moore use `memchr` when
-appropriate.
+appropriate. The Boyer-Moore variant in this library also uses elementary
+frequency analysis to choose the write byte to run `memchr` with.
 
 Of course, detecting prefix literals can only take us so far. Not all regular
 expressions have literal prefixes. To remedy this, we try another approach to
@@ -53,10 +54,12 @@ text results in at most one new DFA state. It is made fast by caching states.
 DFAs are susceptible to exponential state blow up (where the worst case is
 computing a new state for every input byte, regardless of what's in the state
 cache). To avoid using a lot of memory, the lazy DFA uses a bounded cache. Once
-the cache is full, it is wiped and state computation starts over again.
+the cache is full, it is wiped and state computation starts over again. If the
+cache is wiped too frequently, then the DFA gives up and searching falls back
+to one of the aforementioned algorithms.
 
-All of the above matching engines expose precisely the matching semantics. This
-is indeed tested. (See the section below about testing.)
+All of the above matching engines expose precisely the same matching semantics.
+This is indeed tested. (See the section below about testing.)
 
 The following sub-sections describe the rest of the library and how each of the
 matching engines are actually used.
@@ -69,6 +72,9 @@ syntax and provides very detailed error messages when a parse error is
 encountered. Parsing is done in a separate crate so that others may benefit
 from its existence, and because it is relatively divorced from the rest of the
 regex library.
+
+The regex-syntax crate also provides sophisticated support for extracting
+prefix and suffix literals from regular expressions.
 
 ### Compilation
 
@@ -162,7 +168,7 @@ knows what the caller wants. Using this information, we can determine which
 engine (or engines) to use.
 
 The logic for choosing which engine to execute is in src/exec.rs and is
-documented on the Exec type. Exec values collection regular expression
+documented on the Exec type. Exec values contain regular expression
 Programs (defined in src/prog.rs), which contain all the necessary tidbits
 for actually executing a regular expression on search text.
 
@@ -171,6 +177,14 @@ limitations of each engine described above pretty faithfully. The hairiest part
 of src/exec.rs by far is the execution of the lazy DFA, since it requires a
 forwards and backwards search, and then falls back to either the NFA algorithm
 or backtracking if the caller requested capture locations.
+
+The parameterization of every search is defined in src/params.rs. Among other
+things, search parameters provide storage for recording capture locations and
+matches (for regex sets). The existence and nature of storage is itself a
+configuration for how each matching engine behaves. For example, if no storage
+for capture locations is provided, then the matching engines can give up as
+soon as a match is witnessed (which may occur well before the leftmost-first
+match).
 
 ### Programs
 
@@ -268,48 +282,46 @@ N.B. To run tests for the `regex!` macro, use:
 
 The benchmarking in this crate is made up of many micro-benchmarks. Currently,
 there are two primary sets of benchmarks: the benchmarks that were adopted at
-this library's inception (in `benches/bench.rs`) and a newer set of benchmarks
+this library's inception (in `benches/src/misc.rs`) and a newer set of benchmarks
 meant to test various optimizations. Specifically, the latter set contain some
-analysis and are in `benches/bench_sherlock.rs`. Also, the latter set are all
+analysis and are in `benches/src/sherlock.rs`. Also, the latter set are all
 executed on the same lengthy input whereas the former benchmarks are executed
 on strings of varying length.
 
 There is also a smattering of benchmarks for parsing and compilation.
 
+Benchmarks are in a separate crate so that its dependencies can be managed
+separately from the main regex crate.
+
 Benchmarking follows a similarly wonky setup as tests. There are multiple
 entry points:
 
-* `bench_native.rs` - benchmarks the `regex!` macro
-* `bench_dynamic.rs` - benchmarks `Regex::new`
-* `bench_dynamic_nfa.rs` benchmarks `Regex::new`, forced to use the NFA
-  algorithm on every regex. (N.B. This can take a few minutes to run.)
+* `bench_rust_plugin.rs` - benchmarks the `regex!` macro
+* `bench_rust.rs` - benchmarks `Regex::new`
+* `bench_rust_bytes.rs` benchmarks `bytes::Regex::new`
 * `bench_pcre.rs` - benchmarks PCRE
+* `bench_onig.rs` - benchmarks Oniguruma
 
-The PCRE benchmarks exist as a comparison point to a mature regular expression
-library. In general, this regex library compares favorably (there are even a
-few benchmarks that PCRE simply runs too slowly on or outright can't execute at
-all). I would love to add other regular expression library benchmarks
-(especially RE2), but PCRE is the only one with reasonable bindings.
+The PCRE and Oniguruma benchmarks exist as a comparison point to a mature
+regular expression library. In general, this regex library compares favorably
+(there are even a few benchmarks that PCRE simply runs too slowly on or
+outright can't execute at all). I would love to add other regular expression
+library benchmarks (especially RE2).
 
 If you're hacking on one of the matching engines and just want to see
 benchmarks, then all you need to run is:
 
-    $ cargo bench --bench dynamic
+    $ ./run-bench rust
 
 If you want to compare your results with older benchmarks, then try:
 
-    $ cargo bench --bench dynamic | tee old
+    $ ./run-bench rust | tee old
     $ ... make it faster
-    $ cargo bench --bench dynamic | tee new
+    $ ./run-bench rust | tee new
     $ cargo-benchcmp old new --improvements
 
 The `cargo-benchcmp` utility is available here:
 https://github.com/BurntSushi/cargo-benchcmp
 
-To run the same benchmarks on PCRE, you'll need to use the sub-crate in
-`regex-pcre-benchmark` like so:
-
-    $ cargo bench --manifest-path regex-pcre-benchmark/Cargo.toml
-
-The PCRE benchmarks are separated from the main regex crate so that its
-dependency doesn't break builds in environments without PCRE.
+The `run-bench` utility can run benchmarks for PCRE and Oniguruma too. See
+`./run-bench --help`.

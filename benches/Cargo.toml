@@ -14,7 +14,6 @@ enum-set = "0.0.6"
 lazy_static = "0.1"
 onig = { version = "0.4", optional = true }
 pcre = { version = "0.2", optional = true }
-rand = "0.3"
 regex = { version = "0.1", path = ".." }
 regex_macros = { version = "0.1", path = "../regex_macros", optional = true }
 regex-syntax = { version = "0.3", path = "../regex-syntax" }

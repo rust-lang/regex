@@ -1,3 +1,5 @@
+mat!(ascii_literal, u!(r"a"), "a", Some((0, 1)));
+
 // Some crazy expressions from regular-expressions.info.
 mat!(match_ranges,
      r"\b(?:[0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])\b",

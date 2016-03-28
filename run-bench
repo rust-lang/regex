@@ -1,8 +1,12 @@
 #!/bin/bash
 
-if [ $# = 0 ] || [ $1 = '-h' ]; then
+usage() {
   echo "Usage: $(basename $0) [rust | rust-bytes | rust-plugin | pcre | onig]" >&2
   exit 1
+}
+
+if [ $# = 0 ] || [ $1 = '-h' ] || [ $1 = '--help' ]; then
+  usage
 fi
 
 which="$1"
@@ -42,5 +46,8 @@ case $which in
       --bench onig \
       --features re-onig \
       "$@"
+    ;;
+  *)
+    usage
     ;;
 esac

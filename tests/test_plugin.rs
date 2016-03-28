@@ -27,4 +27,5 @@ mod fowler;
 mod multiline;
 mod plugin;
 mod replace;
+mod suffix_reverse;
 mod unicode;

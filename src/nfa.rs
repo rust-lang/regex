@@ -27,8 +27,8 @@
 
 use std::mem;
 
-use exec::Search;
 use input::{Input, InputAt};
+use params::Params;
 use prog::{Program, InstPtr};
 use sparse::SparseSet;
 
@@ -100,12 +100,11 @@ impl<'r, I: Input> Nfa<'r, I> {
     /// captures accordingly.
     pub fn exec(
         prog: &'r Program,
-        search: &mut Search,
+        cache: &mut NfaCache,
+        params: &mut Params,
         input: I,
         start: usize,
     ) -> bool {
-        let mut _cache = prog.cache_nfa();
-        let mut cache = &mut **_cache;
         cache.clist.resize(prog.len(), prog.captures.len());
         cache.nlist.resize(prog.len(), prog.captures.len());
         let at = input.at(start);
@@ -113,14 +112,14 @@ impl<'r, I: Input> Nfa<'r, I> {
             prog: prog,
             stack: &mut cache.stack,
             input: input,
-        }.exec_(&mut cache.clist, &mut cache.nlist, search, at)
+        }.exec_(&mut cache.clist, &mut cache.nlist, params, at)
     }
 
     fn exec_(
         &mut self,
         mut clist: &mut Threads,
         mut nlist: &mut Threads,
-        mut search: &mut Search,
+        mut params: &mut Params,
         mut at: InputAt,
     ) -> bool {
         let mut matched = false;
@@ -155,7 +154,7 @@ impl<'r, I: Input> Nfa<'r, I> {
             // a state starting at the current position in the input for the
             // beginning of the program only if we don't already have a match.
             if clist.set.is_empty() || (!self.prog.is_anchored_start && !matched) {
-                self.add(&mut clist, &mut search.captures, 0, at)
+                self.add(&mut clist, params.captures_mut(), 0, at)
             }
             // The previous call to "add" actually inspects the position just
             // before the current character. For stepping through the machine,
@@ -166,7 +165,7 @@ impl<'r, I: Input> Nfa<'r, I> {
                 let ip = clist.set[i];
                 let step = self.step(
                     &mut nlist,
-                    search,
+                    params,
                     clist.caps(ip),
                     ip,
                     at,
@@ -174,14 +173,14 @@ impl<'r, I: Input> Nfa<'r, I> {
                 );
                 if step {
                     if !matched {
-                        matched = search.matched_all();
+                        matched = params.matches().iter().all(|&m| m);
                     }
-                    if search.quit_after_first_match() {
+                    if params.style().quit_after_first_match() {
                         // If we only care if a match occurs (not its
                         // position), then we can quit right now.
                         break 'LOOP;
                     }
-                    if !search.find_many_matches() {
+                    if self.prog.matches.len() == 1 {
                         // We don't need to check the rest of the threads
                         // in this set because we've matched something
                         // ("leftmost-first"). However, we still need to check
@@ -201,7 +200,7 @@ impl<'r, I: Input> Nfa<'r, I> {
             mem::swap(clist, nlist);
             nlist.set.clear();
         }
-        matched
+        params.is_match()
     }
 
     /// Step through the input, one token (byte or codepoint) at a time.
@@ -219,7 +218,7 @@ impl<'r, I: Input> Nfa<'r, I> {
     fn step(
         &mut self,
         nlist: &mut Threads,
-        search: &mut Search,
+        params: &mut Params,
         thread_caps: &mut [Option<usize>],
         ip: usize,
         at: InputAt,
@@ -228,8 +227,8 @@ impl<'r, I: Input> Nfa<'r, I> {
         use prog::Inst::*;
         match self.prog[ip] {
             Match(match_slot) => {
-                search.copy_captures_from(thread_caps);
-                search.set_match(match_slot);
+                params.copy_captures_from(thread_caps);
+                params.set_match(match_slot);
                 true
             }
             Char(ref inst) => {

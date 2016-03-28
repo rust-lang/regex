@@ -24,7 +24,6 @@
 extern crate enum_set;
 #[macro_use] extern crate lazy_static;
 extern crate pcre;
-extern crate rand;
 extern crate test;
 
 /// A nominal wrapper around pcre::Pcre to expose an interface similar to

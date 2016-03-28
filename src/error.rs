@@ -20,7 +20,10 @@ pub enum Error {
     /// The compiled program exceeded the set size limit.
     /// The argument is the size limit imposed.
     CompiledTooBig(usize),
-    /// An invalid set is a regex set with fewer than 2 regular expressions.
+    /// **DEPRECATED:** Will be removed on next major version bump.
+    ///
+    /// This error is no longer used. (A `RegexSet` can now contain zero or
+    /// more regular expressions.)
     InvalidSet,
     /// Hints that destructuring should not be exhaustive.
     ///

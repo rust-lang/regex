@@ -45,7 +45,7 @@ use std::collections::HashMap;
 use std::fmt;
 use std::mem;
 
-use exec::Search;
+use params::Params;
 use prog::{Inst, Program};
 use sparse::SparseSet;
 
@@ -157,7 +157,7 @@ pub struct DfaCache {
 /// N.B. We only use a single lifetime here since all pointers are taken
 /// from the same cache.
 #[derive(Debug)]
-pub struct Dfa<'a, 'b, 'c: 'b, 'm: 'b> {
+pub struct Dfa<'a, 'p, 'c: 'p, 'm: 'p> {
     /// prog contains the NFA instruction opcodes. DFA execution uses either
     /// the `dfa` instructions or the `dfa_reverse` instructions from
     /// `exec::Executor`. (It never uses `Executor.prog`, which may have
@@ -169,7 +169,7 @@ pub struct Dfa<'a, 'b, 'c: 'b, 'm: 'b> {
     /// The search configuration, which includes capture groups. It also
     /// includes space for indicating which regex matched if executing a
     /// regex set.
-    search: &'b mut Search<'c, 'm>,
+    params: &'p mut Params<'c, 'm>,
     /// The current position in the input.
     at: usize,
     /// The last state that matched.
@@ -325,7 +325,7 @@ impl DfaCache {
     }
 }
 
-impl<'a, 'b, 'c, 'm> Dfa<'a, 'b, 'c, 'm> {
+impl<'a, 'p, 'c, 'm> Dfa<'a, 'p, 'c, 'm> {
     /// The main entry point to executing a DFA, which returns the *end* of
     /// a match if one exists, using Perl's "leftmost-first" semantics.
     ///
@@ -340,21 +340,20 @@ impl<'a, 'b, 'c, 'm> Dfa<'a, 'b, 'c, 'm> {
     /// at the beginning of `text` or not (i.e., for empty assertions).
     pub fn exec(
         prog: &'a Program,
-        search: &'b mut Search<'c, 'm>,
+        cache: &mut DfaCache,
+        params: &'p mut Params<'c, 'm>,
         text: &[u8],
         at: usize,
     ) -> DfaResult {
         // Retrieve our DFA cache from the program. If another thread tries to
         // execute this DFA *simultaneously*, then a new independent cache is
         // created.
-        let mut _cache = prog.cache_dfa();
-        let mut cache = &mut **_cache;
         cache.resize(prog.len());
 
         let mut dfa = Dfa {
             prog: prog,
             start: 0, // filled in below
-            search: search,
+            params: params,
             at: at,
             last_match_si: STATE_UNKNOWN,
             last_cache_flush: at,
@@ -376,14 +375,14 @@ impl<'a, 'b, 'c, 'm> Dfa<'a, 'b, 'c, 'm> {
             dfa.exec_at(&mut cache.qcur, &mut cache.qnext, text)
         };
         if result.is_match() {
-            if dfa.search.find_one_match() {
-                dfa.search.set_match(0);
+            if prog.matches.len() == 1 {
+                dfa.params.set_match(0);
             } else {
                 debug_assert!(dfa.last_match_si != STATE_UNKNOWN);
                 debug_assert!(dfa.last_match_si != STATE_DEAD);
                 for &ip in &dfa.states[dfa.last_match_si as usize].insts {
                     if let Inst::Match(slot) = dfa.prog[ip as usize] {
-                        dfa.search.set_match(slot);
+                        dfa.params.set_match(slot);
                     }
                 }
             }
@@ -473,11 +472,11 @@ impl<'a, 'b, 'c, 'm> Dfa<'a, 'b, 'c, 'm> {
             si = next_si;
             if self.states[si as usize].is_match {
                 self.last_match_si = si;
-                if self.search.quit_after_first_match() {
-                    return DfaResult::Match;
-                }
                 result = DfaResult::Match;
-                self.search.set_end(Some(self.at));
+                self.params.set_end(Some(self.at));
+                if self.params.style().quit_after_first_match() {
+                    return result;
+                }
             }
             self.at += 1;
         }
@@ -492,11 +491,11 @@ impl<'a, 'b, 'c, 'm> Dfa<'a, 'b, 'c, 'm> {
         }
         if self.states[si as usize].is_match {
             self.last_match_si = si;
-            if self.search.quit_after_first_match() {
-                return DfaResult::Match;
-            }
             result = DfaResult::Match;
-            self.search.set_end(Some(text.len()));
+            self.params.set_end(Some(text.len()));
+            if self.params.style().quit_after_first_match() {
+                return result;
+            }
         }
         result
     }
@@ -540,11 +539,11 @@ impl<'a, 'b, 'c, 'm> Dfa<'a, 'b, 'c, 'm> {
             si = next_si;
             if self.states[si as usize].is_match {
                 self.last_match_si = si;
-                if self.search.quit_after_first_match() {
-                    return DfaResult::NoMatch;
-                }
                 result = DfaResult::Match;
-                self.search.set_start(Some(self.at+1));
+                self.params.set_start(Some(self.at+1));
+                if self.params.style().quit_after_first_match() {
+                    return result;
+                }
             }
         }
         // Run the DFA once more on the special EOF senitnel value.
@@ -558,11 +557,11 @@ impl<'a, 'b, 'c, 'm> Dfa<'a, 'b, 'c, 'm> {
         }
         if self.states[si as usize].is_match {
             self.last_match_si = si;
-            if self.search.quit_after_first_match() {
-                return DfaResult::Match;
-            }
             result = DfaResult::Match;
-            self.search.set_start(Some(0));
+            self.params.set_start(Some(0));
+            if self.params.style().quit_after_first_match() {
+                return result;
+            }
         }
         result
     }
@@ -644,17 +643,11 @@ impl<'a, 'b, 'c, 'm> Dfa<'a, 'b, 'c, 'm> {
                     is_match = true;
                     if !self.continue_past_first_match() {
                         break;
-                    } else if !self.search.find_one_match()
+                    } else if self.prog.matches.len() > 1
                             && !qnext.contains_ip(ip as usize) {
                         // If we are continuing on to find other matches,
                         // then keep a record of the match states we've seen.
                         qnext.add(ip);
-                        // BREADCRUMBS:
-                        // Perhaps we need another sparse set here and track
-                        // these "recorded" matches separately. They should
-                        // still make their way into cached states, but perhaps
-                        // they shouldn't prevent a DEAD state from
-                        // occurring.
                     }
                 }
                 Bytes(ref inst) => {
@@ -666,7 +659,7 @@ impl<'a, 'b, 'c, 'm> Dfa<'a, 'b, 'c, 'm> {
             }
         }
         let mut cache = true;
-        if b.is_eof() && !self.search.find_one_match() {
+        if b.is_eof() && self.prog.matches.len() > 1 {
             // If we're processing the last byte of the input and we're
             // matching a regex set, then make the next state contain the
             // previous states transitions. We do this so that the main
@@ -1054,7 +1047,8 @@ impl<'a, 'b, 'c, 'm> Dfa<'a, 'b, 'c, 'm> {
             si => return Some(si),
         }
         q.clear();
-        self.follow_epsilons(0, q, start_flags);
+        let start = usize_to_u32(self.prog.start);
+        self.follow_epsilons(start, q, start_flags);
         // Start states can never be match states because we delay every match
         // by one byte. Given an empty string and an empty match, the match
         // won't actually occur until the DFA processes the special EOF
@@ -1129,7 +1123,7 @@ impl<'a, 'b, 'c, 'm> Dfa<'a, 'b, 'c, 'm> {
     /// the longest match (for reverse search) or all possible matches (for
     /// regex sets).
     fn continue_past_first_match(&self) -> bool {
-        self.prog.is_reverse || !self.search.find_one_match()
+        self.prog.is_reverse || self.prog.matches.len() > 1
     }
 
     /// Approximate size returns the approximate heap space currently used by
