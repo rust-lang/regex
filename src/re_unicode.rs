@@ -19,8 +19,9 @@ use std::sync::Arc;
 
 use syntax;
 
-use exec::{CaptureSlots, Exec, ExecBuilder, Search};
+use exec::{Exec, ExecBuilder};
 use error::Error;
+use params::{Params, Slot};
 
 /// Escapes all regular expression meta characters in `text`.
 ///
@@ -121,7 +122,7 @@ pub struct ExNative {
     #[doc(hidden)]
     pub groups: &'static &'static [(&'static str, usize)],
     #[doc(hidden)]
-    pub prog: fn(CaptureSlots, &str, usize) -> bool,
+    pub prog: fn(&mut [Option<usize>], &str, usize) -> bool,
 }
 
 impl Copy for ExNative {}
@@ -339,7 +340,7 @@ impl Regex {
     /// The `0`th capture group is always unnamed, so it must always be
     /// accessed with `at(0)` or `[0]`.
     pub fn captures<'t>(&self, text: &'t str) -> Option<Captures<'t>> {
-        let mut caps = self.alloc_captures();
+        let mut caps = Params::alloc_captures(self.captures_len());
         if !self.exec(&mut caps, text, 0) {
             None
         } else {
@@ -577,6 +578,39 @@ impl Regex {
         new
     }
 
+    /// Returns the end location of a match in the text given.
+    ///
+    /// This method may have the same performance characteristics as
+    /// `is_match`, except it provides an end location for a match. In
+    /// particular, the location returned *may be shorter* than the proper end
+    /// of the leftmost-first match.
+    ///
+    /// # Example
+    ///
+    /// Typically, `a+` would match the entire first sequence of `a` in some
+    /// text, but `shortest_match` can give up as soon as it sees the first
+    /// `a`.
+    ///
+    /// ```rust
+    /// # extern crate regex; use regex::Regex;
+    /// # fn main() {
+    /// let text = "aaaaa";
+    /// let pos = Regex::new(r"a+").unwrap().shortest_match(text);
+    /// assert_eq!(pos, Some(1));
+    /// # }
+    /// ```
+    pub fn shortest_match(&self, text: &str) -> Option<usize> {
+        let mut caps = [None, None];
+        let mut _matched = [false];
+        let mut params =
+            Params::new(&mut caps, &mut _matched).set_match_short(true);
+        if !self.execp(&mut params, text, 0) {
+            None
+        } else {
+            params.captures()[1]
+        }
+    }
+
     /// Returns the original string of this regex.
     pub fn as_str(&self) -> &str {
         match self.0 {
@@ -603,22 +637,19 @@ impl Regex {
         }
     }
 
-    fn alloc_captures(&self) -> Vec<Option<usize>> {
-        match self.0 {
-            _Regex::Native(ref n) => vec![None; 2 * n.names.len()],
-            _Regex::Dynamic(ref d) => vec![None; 2 * d.captures().len()],
-        }
+    fn exec(&self, caps: &mut [Slot], text: &str, start: usize) -> bool {
+        let mut _matches = [false];
+        let mut params = Params::new(caps, &mut _matches);
+        self.execp(&mut params, text, start)
     }
 
-    fn exec(&self, caps: CaptureSlots, text: &str, start: usize) -> bool {
+    fn execp(&self, params: &mut Params, text: &str, start: usize) -> bool {
         match self.0 {
             _Regex::Native(ExNative { ref prog, .. }) => {
-                (*prog)(caps, text, start)
+                (*prog)(params.captures_mut(), text, start)
             }
             _Regex::Dynamic(ref exec) => {
-                let mut _matches = [false];
-                let mut search = Search::new(caps, &mut _matches);
-                exec.exec(&mut search, text.as_bytes(), start)
+                exec.exec(params, text.as_bytes(), start)
             }
         }
     }
@@ -1074,7 +1105,7 @@ impl<'r, 't> Iterator for FindCaptures<'r, 't> {
             return None
         }
 
-        let mut caps = self.re.alloc_captures();
+        let mut caps = Params::alloc_captures(self.re.captures_len());
         if !self.re.exec(&mut caps, self.text, self.last_end) {
             return None
         }

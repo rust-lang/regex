@@ -18,6 +18,7 @@ macro_rules! mat(
             let got: Vec<Option<_>> = match r.captures(text) {
                 Some(c) => {
                     assert!(r.is_match(text));
+                    assert!(r.shortest_match(text).is_some());
                     c.iter_pos().collect()
                 }
                 None => vec![None],

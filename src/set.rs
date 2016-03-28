@@ -13,7 +13,8 @@ use std::iter;
 use std::slice;
 use std::vec;
 
-use exec::{Exec, ExecBuilder, Search};
+use exec::{Exec, ExecBuilder};
+use params::Params;
 use Error;
 
 macro_rules! define_set {
@@ -130,9 +131,6 @@ impl $ty {
     pub fn new<I, S>(exprs: I) -> Result<$ty, Error>
             where S: AsRef<str>, I: IntoIterator<Item=S> {
         let exec = try!($exec_build(exprs));
-        if exec.regex_strings().len() < 2 {
-            return Err(Error::InvalidSet);
-        }
         Ok($ty(exec))
     }
 
@@ -161,8 +159,8 @@ impl $ty {
     /// assert!(!set.is_match("☃"));
     /// ```
     pub fn is_match(&self, text: $text_ty) -> bool {
-        let mut search = Search::new(&mut [], &mut []);
-        self.0.exec(&mut search, $as_bytes(text), 0)
+        let mut params = Params::new(&mut [], &mut []);
+        self.0.exec(&mut params, $as_bytes(text), 0)
     }
 
     /// Returns the set of regular expressions that match in the given text.
@@ -202,10 +200,10 @@ impl $ty {
     /// assert!(matches.matched(6));
     /// ```
     pub fn matches(&self, text: $text_ty) -> SetMatches {
-        let mut matches = vec![false; self.0.matches().len()];
+        let mut matches = Params::alloc_matches(self.0.matches().len());
         let matched_any = {
-            let mut search = Search::new(&mut [], &mut matches);
-            self.0.exec(&mut search, $as_bytes(text), 0)
+            let mut params = Params::new(&mut [], &mut matches);
+            self.0.exec(&mut params, $as_bytes(text), 0)
         };
         SetMatches {
             matched_any: matched_any,
@@ -307,6 +305,13 @@ impl<'a> Iterator for $ty_set_matches_iter<'a> {
                 Some((i, &true)) => return Some(i),
             }
         }
+    }
+}
+
+#[doc(hidden)]
+impl From<Exec> for $ty {
+    fn from(exec: Exec) -> Self {
+        $ty(exec)
     }
 }
 

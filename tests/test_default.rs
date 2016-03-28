@@ -27,17 +27,17 @@ macro_rules! regex_new {
     }}
 }
 
+macro_rules! regex {
+    ($re:expr) => {
+        regex_new!($re).unwrap()
+    }
+}
+
 macro_rules! regex_set_new {
     ($re:expr) => {{
         use regex::RegexSet;
         RegexSet::new($re)
     }}
-}
-
-macro_rules! regex {
-    ($re:expr) => {
-        regex_new!($re).unwrap()
-    }
 }
 
 macro_rules! regex_set {
@@ -60,33 +60,16 @@ mod api_str;
 mod crazy;
 mod flags;
 mod fowler;
+mod misc;
 mod multiline;
 mod noparse;
 mod regression;
 mod replace;
 mod searcher;
 mod set;
+mod shortest_match;
+mod suffix_reverse;
 mod unicode;
-
-#[test]
-fn set_empty() {
-    use regex::{Error, RegexSet};
-    let err = RegexSet::new::<&[String], &String>(&[]).unwrap_err();
-    match err {
-        Error::InvalidSet => {}
-        err => panic!("expected Error::InvalidSet but got {:?}", err),
-    }
-}
-
-#[test]
-fn set_one() {
-    use regex::{Error, RegexSet};
-    let err = RegexSet::new(&["foo"]).unwrap_err();
-    match err {
-        Error::InvalidSet => {}
-        err => panic!("expected Error::InvalidSet but got {:?}", err),
-    }
-}
 
 #[test]
 fn disallow_unicode_flag() {

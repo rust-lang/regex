@@ -23,6 +23,7 @@ const TAG_FOUR: u8 = 0b1111_0000;
 ///
 /// If `dst` is not long enough, then `None` is returned. Otherwise, the number
 /// of bytes written is returned.
+#[allow(dead_code)]
 #[inline]
 pub fn encode_utf8(character: char, dst: &mut [u8]) -> Option<usize> {
     let code = character as u32;

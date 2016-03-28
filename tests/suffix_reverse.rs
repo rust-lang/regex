@@ -8,21 +8,10 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![feature(test)]
-
-#[macro_use] extern crate lazy_static;
-extern crate regex;
-extern crate regex_syntax;
-extern crate test;
-
-pub use regex::bytes::Regex;
-
-// Due to macro scoping rules, this definition only applies for the modules
-// defined below. Effectively, it allows us to use the same tests for both
-// native and dynamic regexes.
-macro_rules! regex(
-    ($re:expr) => {{ ::Regex::new($re).unwrap() }}
-);
-
-mod misc;
-mod sherlock;
+mat!(t01, r".*abcd", r"abcd", Some((0, 4)));
+mat!(t02, r".*(?:abcd)+", r"abcd", Some((0, 4)));
+mat!(t03, r".*(?:abcd)+", r"abcdabcd", Some((0, 8)));
+mat!(t04, r".*(?:abcd)+", r"abcdxabcd", Some((0, 9)));
+mat!(t05, r".*x(?:abcd)+", r"abcdxabcd", Some((0, 9)));
+mat!(t06, r"[^abcd]*x(?:abcd)+", r"abcdxabcd", Some((4, 9)));
+// mat!(t05, r".*(?:abcd)+", r"abcdabcd", Some((0, 4)));

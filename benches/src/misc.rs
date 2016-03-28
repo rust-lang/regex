@@ -130,6 +130,14 @@ bench_match!(one_pass_long_prefix_not, regex!("^.bcdefghijklmnopqrstuvwxyz.*$"),
     "abcdefghijklmnopqrstuvwxyz".to_owned()
 });
 
+bench_match!(long_needle1, regex!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaab"), {
+    repeat("a").take(100_000).collect::<String>() + "b"
+});
+
+bench_match!(long_needle2, regex!("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbba"), {
+    repeat("b").take(100_000).collect::<String>() + "a"
+});
+
 #[cfg(feature = "re-rust")]
 #[bench]
 fn replace_all(b: &mut Bencher) {

@@ -26,8 +26,8 @@
 // the bitset has to be zeroed on each execution, which becomes quite expensive
 // on large bitsets.
 
-use exec::Search;
 use input::{Input, InputAt};
+use params::Params;
 use prog::{Program, InstPtr};
 
 /// Returns true iff the given regex and input should be executed by this
@@ -50,10 +50,10 @@ const MAX_INPUT_SIZE: usize = 128 * (1 << 10);
 
 /// A backtracking matching engine.
 #[derive(Debug)]
-pub struct Backtrack<'a, 'b, 'c: 'b, 'm: 'b, 'r, I> {
+pub struct Backtrack<'a, 'r, 'p, 'c: 'p, 'm: 'p, I> {
     prog: &'r Program,
     input: I,
-    search: &'b mut Search<'m, 'c>,
+    params: &'p mut Params<'c, 'm>,
     m: &'a mut BacktrackCache,
 }
 
@@ -84,24 +84,24 @@ enum Job {
     SaveRestore { slot: usize, old_pos: Option<usize> },
 }
 
-impl<'a, 'b, 'c, 'm, 'r, I: Input> Backtrack<'a, 'b, 'c, 'r, 'm, I> {
+impl<'a, 'r, 'p, 'c, 'm, I: Input> Backtrack<'a, 'r, 'p, 'c, 'm, I> {
     /// Execute the backtracking matching engine.
     ///
     /// If there's a match, `exec` returns `true` and populates the given
     /// captures accordingly.
     pub fn exec(
         prog: &'r Program,
-        search: &'b mut Search<'c, 'm>,
+        cache: &mut BacktrackCache,
+        params: &'p mut Params<'c, 'm>,
         input: I,
         start: usize,
     ) -> bool {
         let start = input.at(start);
-        let mut m = prog.cache_backtrack();
         let mut b = Backtrack {
             prog: prog,
             input: input,
-            search: search,
-            m: &mut m,
+            params: params,
+            m: cache,
         };
         b.exec_(start)
     }
@@ -155,18 +155,19 @@ impl<'a, 'b, 'c, 'm, 'r, I: Input> Backtrack<'a, 'b, 'c, 'r, 'm, I> {
         loop {
             if !self.prog.prefixes.is_empty() {
                 at = match self.input.prefix_at(&self.prog.prefixes, at) {
-                    None => return false,
+                    None => break,
                     Some(at) => at,
                 };
             }
-            if self.backtrack(at) {
+            if self.backtrack(at) && self.prog.matches.len() == 1 {
                 return true;
             }
             if at.is_end() {
-                return false;
+                break;
             }
             at = self.input.at(at.next_pos());
         }
+        self.params.is_match()
     }
 
     /// The main backtracking loop starting at the given input position.
@@ -185,18 +186,18 @@ impl<'a, 'b, 'c, 'm, 'r, I: Input> Backtrack<'a, 'b, 'c, 'r, 'm, I> {
                     if self.step(ip, at) {
                         // Only quit if we're matching one regex.
                         // If we're matching a regex set, then mush on and
-                        // try to find other matches.
-                        if !self.search.find_many_matches() {
+                        // try to find other matches (if we want them).
+                        if self.prog.matches.len() == 1 {
                             return true;
                         }
                     }
                 }
                 Job::SaveRestore { slot, old_pos } => {
-                    self.search.set_capture(slot, old_pos);
+                    self.params.set_capture(slot, old_pos);
                 }
             }
         }
-        false
+        self.params.is_match()
     }
 
     fn step(&mut self, mut ip: InstPtr, mut at: InputAt) -> bool {
@@ -208,11 +209,11 @@ impl<'a, 'b, 'c, 'm, 'r, I: Input> Backtrack<'a, 'b, 'c, 'r, 'm, I> {
             // in place.
             match self.prog[ip] {
                 Match(slot) => {
-                    self.search.set_match(slot);
+                    self.params.set_match(slot);
                     return true;
                 }
                 Save(ref inst) => {
-                    if let Some(old_pos) = self.search.capture(inst.slot) {
+                    if let Some(&old_pos) = self.params.captures().get(inst.slot) {
                         // If this path doesn't work out, then we save the old
                         // capture index (if one exists) in an alternate
                         // job. If the next path fails, then the alternate
@@ -221,7 +222,7 @@ impl<'a, 'b, 'c, 'm, 'r, I: Input> Backtrack<'a, 'b, 'c, 'r, 'm, I> {
                             slot: inst.slot,
                             old_pos: old_pos,
                         });
-                        self.search.set_capture(inst.slot, Some(at.pos()));
+                        self.params.set_capture(inst.slot, Some(at.pos()));
                     }
                     ip = inst.goto;
                 }

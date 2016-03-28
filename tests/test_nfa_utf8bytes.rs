@@ -26,6 +26,20 @@ macro_rules! regex {
     }
 }
 
+macro_rules! regex_set_new {
+    ($re:expr) => {{
+        use regex::internal::ExecBuilder;
+        ExecBuilder::new_many($re)
+            .nfa().bytes(true).build().map(|e| e.into_regex_set())
+    }}
+}
+
+macro_rules! regex_set {
+    ($res:expr) => {
+        regex_set_new!($res).unwrap()
+    }
+}
+
 // Must come before other module definitions.
 include!("macros_str.rs");
 include!("macros.rs");
@@ -39,4 +53,6 @@ mod multiline;
 mod noparse;
 mod regression;
 mod replace;
+mod set;
+mod suffix_reverse;
 mod unicode;

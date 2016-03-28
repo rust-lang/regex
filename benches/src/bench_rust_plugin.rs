@@ -12,7 +12,6 @@
 #![plugin(regex_macros)]
 
 #[macro_use] extern crate lazy_static;
-extern crate rand;
 extern crate regex;
 extern crate regex_syntax;
 extern crate test;

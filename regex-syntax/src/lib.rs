@@ -61,10 +61,12 @@ assert_eq!(err.kind(), &ErrorKind::UnclosedParen);
 */
 
 #![deny(missing_docs)]
+#![cfg_attr(test, deny(warnings))]
 
 #[cfg(test)] extern crate quickcheck;
 #[cfg(test)] extern crate rand;
 
+mod literals;
 mod parser;
 mod unicode;
 
@@ -85,6 +87,8 @@ use self::Expr::*;
 use self::Repeater::*;
 
 use parser::{Flags, Parser};
+
+pub use literals::{Literals, Lit};
 
 /// A regular expression abstract syntax tree.
 ///
@@ -488,6 +492,20 @@ impl Expr {
         simp(self, 0, nest_limit)
     }
 
+    /// Returns a set of literal prefixes extracted from this expression.
+    pub fn prefixes(&self) -> Literals {
+        let mut lits = Literals::empty();
+        lits.union_prefixes(self);
+        lits
+    }
+
+    /// Returns a set of literal suffixes extracted from this expression.
+    pub fn suffixes(&self) -> Literals {
+        let mut lits = Literals::empty();
+        lits.union_suffixes(self);
+        lits
+    }
+
     /// Returns true if and only if the expression is required to match from
     /// the beginning of text.
     pub fn is_anchored_start(&self) -> bool {
@@ -566,6 +584,41 @@ impl CharClass {
     /// Returns true if `c` is matched by this character class.
     pub fn matches(&self, c: char) -> bool {
         self.binary_search_by(|range| c.partial_cmp(range).unwrap()).is_ok()
+    }
+
+    /// Removes the given character from the class if it exists.
+    ///
+    /// Note that this takes `O(n)` time in the number of ranges.
+    pub fn remove(&mut self, c: char) {
+        let mut i = match self.binary_search_by(|r| c.partial_cmp(r).unwrap()) {
+            Ok(i) => i,
+            Err(_) => return,
+        };
+        let mut r = self.ranges.remove(i);
+        if r.start == c {
+            r.start = inc_char(c);
+            if r.start > r.end || c == char::MAX {
+                return;
+            }
+            self.ranges.insert(i, r);
+        } else if r.end == c {
+            r.end = dec_char(c);
+            if r.end < r.start || c == '\x00' {
+                return;
+            }
+            self.ranges.insert(0, r);
+        } else {
+            let (mut r1, mut r2) = (r.clone(), r.clone());
+            r1.end = dec_char(c);
+            if r1.start <= r1.end {
+                self.ranges.insert(i, r1);
+                i += 1;
+            }
+            r2.start = inc_char(c);
+            if r2.start <= r2.end {
+                self.ranges.insert(i, r2);
+            }
+        }
     }
 
     /// Create a new empty class from this one.
@@ -661,6 +714,14 @@ impl CharClass {
             folded.ranges.push(r);
         }
         folded.canonicalize()
+    }
+
+    /// Returns the number of characters that match this class.
+    fn num_chars(&self) -> usize {
+        self.ranges.iter()
+            .map(|&r| 1 + (r.end as u32) - (r.start as u32))
+            .fold(0, |acc, len| acc + len)
+            as usize
     }
 }
 
@@ -814,6 +875,41 @@ impl ByteClass {
         self.binary_search_by(|range| b.partial_cmp(range).unwrap()).is_ok()
     }
 
+    /// Removes the given byte from the class if it exists.
+    ///
+    /// Note that this takes `O(n)` time in the number of ranges.
+    pub fn remove(&mut self, b: u8) {
+        let mut i = match self.binary_search_by(|r| b.partial_cmp(r).unwrap()) {
+            Ok(i) => i,
+            Err(_) => return,
+        };
+        let mut r = self.ranges.remove(i);
+        if r.start == b {
+            r.start = b.saturating_add(1);
+            if r.start > r.end || b == u8::MAX {
+                return;
+            }
+            self.ranges.insert(i, r);
+        } else if r.end == b {
+            r.end = b.saturating_sub(1);
+            if r.end < r.start || b == b'\x00' {
+                return;
+            }
+            self.ranges.insert(0, r);
+        } else {
+            let (mut r1, mut r2) = (r.clone(), r.clone());
+            r1.end = b.saturating_sub(1);
+            if r1.start <= r1.end {
+                self.ranges.insert(i, r1);
+                i += 1;
+            }
+            r2.start = b.saturating_add(1);
+            if r2.start <= r2.end {
+                self.ranges.insert(i, r2);
+            }
+        }
+    }
+
     /// Create a new empty class from this one.
     fn to_empty(&self) -> ByteClass {
         ByteClass { ranges: Vec::with_capacity(self.len()) }
@@ -885,6 +981,14 @@ impl ByteClass {
             folded.ranges.extend(r.case_fold());
         }
         folded.canonicalize()
+    }
+
+    /// Returns the number of bytes that match this class.
+    fn num_bytes(&self) -> usize {
+        self.ranges.iter()
+            .map(|&r| 1 + (r.end as u32) - (r.start as u32))
+            .fold(0, |acc, len| acc + len)
+            as usize
     }
 }
 

@@ -51,4 +51,6 @@ mod noparse;
 mod regression;
 mod replace;
 mod set;
+mod shortest_match;
+mod suffix_reverse;
 mod unicode;
