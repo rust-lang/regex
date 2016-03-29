@@ -364,7 +364,7 @@ impl Literals {
         }
         let mut i = 1;
         while size + (i * self.lits.len()) <= self.limit_size
-            && i <= bytes.len() {
+            && i < bytes.len() {
             i += 1;
         }
         for lit in &mut self.lits {
