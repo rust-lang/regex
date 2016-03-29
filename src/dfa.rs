@@ -440,7 +440,9 @@ impl<'a, 'p, 'c, 'm> Dfa<'a, 'p, 'c, 'm> {
             // Our set of literal prefixes can itself be a DFA, but it is
             // offline and can generally be quite a bit faster. (For instance,
             // memchr is used if possible.)
-            if !self.prog.prefixes.is_empty() && si == self.start {
+            if !self.prog.prefixes.is_empty()
+                && si == self.start
+                && !self.prog.is_anchored_start {
                 self.at = match self.prefix_at(text, self.at) {
                     None => return DfaResult::NoMatch,
                     Some(i) => i,

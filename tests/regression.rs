@@ -45,3 +45,7 @@ mat!(uni_case_lower_nocase_flag, u!(r"(?i)\p{Ll}+"), "ΛΘΓΔα", Some((0, 10))
 
 // See: https://github.com/rust-lang-nursery/regex/issues/191
 mat!(many_alternates, r"1|2|3|4|5|6|7|8|9|10|int", "int", Some((0, 3)));
+
+mat!(anchored_prefix1, r"^a\S", "a ", None);
+mat!(anchored_prefix2, r"^a\S", "foo boo a ", None);
+mat!(anchored_prefix3, r"^-[a-z]", "r-f", None);
