@@ -39,6 +39,7 @@ pub use set::SetMatchesIntoIterBytes as SetMatchesIntoIterBytes;
 /// byte offsets into the search text. **Unlike** the parent `Regex` type,
 /// these byte offsets may not correspond to UTF-8 sequence boundaries since
 /// the regexes in this module can match arbitrary bytes.
+#[derive(Clone)]
 pub struct Regex(Exec);
 
 impl fmt::Display for Regex {
