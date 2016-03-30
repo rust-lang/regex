@@ -1107,11 +1107,15 @@ impl fmt::Display for Expr {
         match *self {
             Empty => write!(f, ""),
             Literal { ref chars, casei } => {
-                if casei { try!(write!(f, "(?i:")); }
+                if casei {
+                    try!(write!(f, "(?iu:"));
+                } else {
+                    try!(write!(f, "(?u:"));
+                }
                 for &c in chars {
                     try!(write!(f, "{}", quote_char(c)));
                 }
-                if casei { try!(write!(f, ")")); }
+                try!(write!(f, ")"));
                 Ok(())
             }
             LiteralBytes { ref bytes, casei } => {
@@ -1126,8 +1130,8 @@ impl fmt::Display for Expr {
                 try!(write!(f, ")"));
                 Ok(())
             }
-            AnyChar => write!(f, "(?s:.)"),
-            AnyCharNoNL => write!(f, "."),
+            AnyChar => write!(f, "(?su:.)"),
+            AnyCharNoNL => write!(f, "(?u:.)"),
             AnyByte => write!(f, "(?s-u:.)"),
             AnyByteNoNL => write!(f, "(?-u:.)"),
             Class(ref cls) => write!(f, "{}", cls),
@@ -1136,8 +1140,8 @@ impl fmt::Display for Expr {
             EndLine => write!(f, "(?m:$)"),
             StartText => write!(f, r"^"),
             EndText => write!(f, r"$"),
-            WordBoundary => write!(f, r"\b"),
-            NotWordBoundary => write!(f, r"\B"),
+            WordBoundary => write!(f, r"(?u:\b)"),
+            NotWordBoundary => write!(f, r"(?u:\B)"),
             WordBoundaryAscii => write!(f, r"(?-u:\b)"),
             NotWordBoundaryAscii => write!(f, r"(?-u:\B)"),
             Group { ref e, i: None, name: None } => write!(f, "(?:{})", e),
@@ -1187,11 +1191,11 @@ impl fmt::Display for Repeater {
 
 impl fmt::Display for CharClass {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        try!(write!(f, "["));
+        try!(write!(f, "(?u:["));
         for range in self.iter() {
             try!(write!(f, "{}", range));
         }
-        try!(write!(f, "]"));
+        try!(write!(f, "])"));
         Ok(())
     }
 }
