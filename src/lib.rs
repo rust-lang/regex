@@ -603,6 +603,8 @@ mod input;
 mod literals;
 mod nfa;
 mod params;
+#[cfg(feature = "pattern")]
+mod pattern;
 mod prog;
 mod re_bytes;
 mod re_unicode;
