@@ -18,7 +18,7 @@ aho-corasick = "0.5.1"
 # For skipping along search text quickly when a leading byte is known.
 memchr = "0.1.9"
 # For managing regex caches quickly across multiple threads.
-mempool = "0.2.0"
+mempool = "0.3.0"
 # For parsing regular expressions.
 regex-syntax = { path = "regex-syntax", version = "0.3.1" }
 # For compiling UTF-8 decoding into automata.

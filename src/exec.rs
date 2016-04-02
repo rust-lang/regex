@@ -8,6 +8,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ops::Deref;
 use std::sync::Arc;
@@ -277,8 +278,14 @@ impl Exec {
         // MatchEngine below for more details.
         match self.match_engine {
             MatchEngine::Automatic => self.exec_auto(params, text, start),
-            MatchEngine::Backtrack => self.exec_backtrack(params, text, start),
-            MatchEngine::Nfa => self.exec_nfa(params, text, start),
+            MatchEngine::Backtrack => {
+                let mut cache = &mut *self.cache.get().borrow_mut();
+                self.exec_backtrack(cache, params, text, start)
+            }
+            MatchEngine::Nfa => {
+                let mut cache = &mut *self.cache.get().borrow_mut();
+                self.exec_nfa(cache, params, text, start)
+            }
         }
     }
 
@@ -298,7 +305,8 @@ impl Exec {
         } else if self.can_dfa {
             self.exec_dfa(params, text, start)
         } else {
-            self.exec_auto_nfa(params, text, start)
+            let mut cache = &mut *self.cache.get().borrow_mut();
+            self.exec_auto_nfa(cache, params, text, start)
         }
     }
 
@@ -315,13 +323,13 @@ impl Exec {
         if self.should_suffix_scan() {
             return self.exec_dfa_reverse_first(params, text, start);
         }
-        let mut cache = self.cache.get_ref();
+        let mut cache = &mut *self.cache.get().borrow_mut();
         match Dfa::exec(&self.dfa, &mut cache.dfa, params, text, start) {
             DfaResult::Match => {} // fallthrough
             DfaResult::NoMatch => return false,
             DfaResult::Quit => {
                 params.reset();
-                return self.exec_auto_nfa(params, text, start);
+                return self.exec_auto_nfa(cache, params, text, start);
             }
         }
         if params.style().match_only() {
@@ -347,7 +355,7 @@ impl Exec {
                 params.set_end(Some(start));
                 return true;
             }
-            return self.exec_auto_nfa(params, text, start);
+            return self.exec_auto_nfa(cache, params, text, start);
         }
         // OK, now we find the start of the match by running the DFA backwards
         // on the text. We *start* the search at the end of the match.
@@ -364,7 +372,7 @@ impl Exec {
             }
             DfaResult::Quit => {
                 params.reset();
-                return self.exec_auto_nfa(params, text, start);
+                return self.exec_auto_nfa(cache, params, text, start);
             }
         }
         let match_start = match params.captures().get(0) {
@@ -378,7 +386,7 @@ impl Exec {
             params.set_end(Some(match_end));
             return true;
         }
-        self.exec_auto_nfa(params, text, match_start)
+        self.exec_auto_nfa(cache, params, text, match_start)
     }
 
     /// Like exec_dfa, but tries executing the DFA in reverse from suffix
@@ -391,7 +399,7 @@ impl Exec {
         text: &[u8],
         start: usize,
     ) -> bool {
-        let mut cache = self.cache.get_ref();
+        let mut cache = &mut *self.cache.get().borrow_mut();
         let lcs = self.suffixes.lcs();
 
         let mut end = start;
@@ -419,7 +427,7 @@ impl Exec {
                 DfaResult::NoMatch => continue,
                 DfaResult::Quit => {
                     params.reset();
-                    return self.exec_auto_nfa(params, text, start);
+                    return self.exec_auto_nfa(cache, params, text, start);
                 }
             };
             if params.style().match_only() {
@@ -443,7 +451,7 @@ impl Exec {
                 }
                 DfaResult::Quit => {
                     params.reset();
-                    return self.exec_auto_nfa(params, text, start);
+                    return self.exec_auto_nfa(cache, params, text, start);
                 }
             };
 
@@ -455,7 +463,7 @@ impl Exec {
                 return true;
             }
             // Otherwise, we have to fall back to NFA to fill in captures.
-            return self.exec_auto_nfa(params, text, match_start);
+            return self.exec_auto_nfa(cache, params, text, match_start);
         }
         false
     }
@@ -464,25 +472,26 @@ impl Exec {
     /// full NFA simulation or the bounded backtracking engine.
     fn exec_auto_nfa(
         &self,
+        cache: &mut ProgramCache,
         params: &mut Params,
         text: &[u8],
         start: usize,
     ) -> bool {
         if backtrack::should_exec(self.nfa.len(), text.len()) {
-            self.exec_backtrack(params, text, start)
+            self.exec_backtrack(cache, params, text, start)
         } else {
-            self.exec_nfa(params, text, start)
+            self.exec_nfa(cache, params, text, start)
         }
     }
 
     /// Always run the NFA algorithm.
     fn exec_nfa(
         &self,
+        cache: &mut ProgramCache,
         params: &mut Params,
         text: &[u8],
         start: usize,
     ) -> bool {
-        let mut cache = self.cache.get_ref();
         if self.nfa.uses_bytes() {
             Nfa::exec(
                 &self.nfa,
@@ -503,11 +512,11 @@ impl Exec {
     /// Always runs the NFA using bounded backtracking.
     fn exec_backtrack(
         &self,
+        cache: &mut ProgramCache,
         params: &mut Params,
         text: &[u8],
         start: usize,
     ) -> bool {
-        let mut cache = self.cache.get_ref();
         if self.nfa.uses_bytes() {
             Backtrack::exec(
                 &self.nfa,
@@ -682,16 +691,17 @@ enum MatchEngine {
 
 /// ProgramPool is a proxy for mempool::Pool that knows how to impl Clone.
 #[derive(Debug)]
-struct ProgramPool(Pool<Box<ProgramCache>>);
+struct ProgramPool(Pool<RefCell<ProgramCache>>);
 
 impl ProgramPool {
     fn new() -> Self {
-        ProgramPool(Pool::new(Box::new(|| Box::new(ProgramCache::new()))))
+        let create = || RefCell::new(ProgramCache::new());
+        ProgramPool(Pool::new(Box::new(create)))
     }
 }
 
 impl Deref for ProgramPool {
-    type Target = Pool<Box<ProgramCache>>;
+    type Target = Pool<RefCell<ProgramCache>>;
     fn deref(&self) -> &Self::Target { &self.0 }
 }
 
