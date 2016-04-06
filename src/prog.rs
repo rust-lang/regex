@@ -367,7 +367,6 @@ pub struct InstRanges {
 
 impl InstRanges {
     /// Tests whether the given input character matches this instruction.
-    #[inline(always)] // About ~5-15% more throughput then `#[inline]`
     pub fn matches(&self, c: Char) -> bool {
         // This speeds up the `match_class_unicode` benchmark by checking
         // some common cases quickly without binary search. e.g., Matching

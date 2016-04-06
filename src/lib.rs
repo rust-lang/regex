@@ -478,7 +478,9 @@
 //! allowed to store a fixed number of states. (When the limit is reached, its
 //! states are wiped and continues on, possibly duplicating previous work.)
 
-#![deny(missing_docs)]
+#![allow(dead_code)]
+
+// #![deny(missing_docs)]
 #![cfg_attr(test, deny(warnings))]
 #![cfg_attr(feature = "pattern", feature(pattern))]
 #![doc(html_logo_url = "https://www.rust-lang.org/logos/rust-logo-128x128-blk-v2.png",
@@ -601,12 +603,13 @@ mod expand;
 mod freqs;
 mod input;
 mod literals;
-mod nfa;
-mod params;
 #[cfg(feature = "pattern")]
 mod pattern;
+mod pikevm;
 mod prog;
 mod re_bytes;
+mod re_plugin;
+mod re_trait;
 mod re_unicode;
 mod set;
 mod sparse;
@@ -621,5 +624,6 @@ pub mod internal {
     pub use input::{Char, Input, CharInput, InputAt};
     pub use literals::LiteralSearcher;
     pub use prog::{Program, Inst, EmptyLook, InstRanges};
-    pub use re_unicode::{_Regex, ExNative};
+    pub use re_plugin::Plugin;
+    pub use re_unicode::_Regex;
 }

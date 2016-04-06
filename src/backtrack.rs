@@ -26,9 +26,10 @@
 // the bitset has to be zeroed on each execution, which becomes quite expensive
 // on large bitsets.
 
+use exec::ProgramCache;
 use input::{Input, InputAt};
-use params::Params;
 use prog::{Program, InstPtr};
+use re_trait::Slot;
 
 /// Returns true iff the given regex and input should be executed by this
 /// engine with reasonable memory usage.
@@ -50,25 +51,26 @@ const MAX_INPUT_SIZE: usize = 128 * (1 << 10);
 
 /// A backtracking matching engine.
 #[derive(Debug)]
-pub struct Backtrack<'a, 'r, 'p, 'c: 'p, 'm: 'p, I> {
+pub struct Bounded<'a, 'm, 'r, 's, I> {
     prog: &'r Program,
     input: I,
-    params: &'p mut Params<'c, 'm>,
-    m: &'a mut BacktrackCache,
+    matches: &'m mut [bool],
+    slots: &'s mut [Slot],
+    m: &'a mut Cache,
 }
 
 /// Shared cached state between multiple invocations of a backtracking engine
 /// in the same thread.
-#[derive(Debug)]
-pub struct BacktrackCache {
+#[derive(Clone, Debug)]
+pub struct Cache {
     jobs: Vec<Job>,
     visited: Vec<Bits>,
 }
 
-impl BacktrackCache {
+impl Cache {
     /// Create new empty cache for the backtracking engine.
-    pub fn new() -> Self {
-        BacktrackCache { jobs: vec![], visited: vec![] }
+    pub fn new(_prog: &Program) -> Self {
+        Cache { jobs: vec![], visited: vec![] }
     }
 }
 
@@ -84,23 +86,27 @@ enum Job {
     SaveRestore { slot: usize, old_pos: Option<usize> },
 }
 
-impl<'a, 'r, 'p, 'c, 'm, I: Input> Backtrack<'a, 'r, 'p, 'c, 'm, I> {
+impl<'a, 'm, 'r, 's, I: Input> Bounded<'a, 'm, 'r, 's, I> {
     /// Execute the backtracking matching engine.
     ///
     /// If there's a match, `exec` returns `true` and populates the given
     /// captures accordingly.
     pub fn exec(
         prog: &'r Program,
-        cache: &mut BacktrackCache,
-        params: &'p mut Params<'c, 'm>,
+        cache: &ProgramCache,
+        matches: &'m mut [bool],
+        slots: &'s mut [Slot],
         input: I,
         start: usize,
     ) -> bool {
+        let mut cache = cache.borrow_mut();
+        let mut cache = &mut cache.backtrack;
         let start = input.at(start);
-        let mut b = Backtrack {
+        let mut b = Bounded {
             prog: prog,
             input: input,
-            params: params,
+            matches: matches,
+            slots: slots,
             m: cache,
         };
         b.exec_(start)
@@ -152,6 +158,7 @@ impl<'a, 'r, 'p, 'c, 'm, I: Input> Backtrack<'a, 'r, 'p, 'c, 'm, I> {
                 self.backtrack(at)
             };
         }
+        let mut matched = false;
         loop {
             if !self.prog.prefixes.is_empty() {
                 at = match self.input.prefix_at(&self.prog.prefixes, at) {
@@ -159,7 +166,8 @@ impl<'a, 'r, 'p, 'c, 'm, I: Input> Backtrack<'a, 'r, 'p, 'c, 'm, I> {
                     Some(at) => at,
                 };
             }
-            if self.backtrack(at) && self.prog.matches.len() == 1 {
+            matched = self.backtrack(at) || matched;
+            if matched && self.prog.matches.len() == 1 {
                 return true;
             }
             if at.is_end() {
@@ -167,18 +175,16 @@ impl<'a, 'r, 'p, 'c, 'm, I: Input> Backtrack<'a, 'r, 'p, 'c, 'm, I> {
             }
             at = self.input.at(at.next_pos());
         }
-        self.params.is_match()
+        matched
     }
 
     /// The main backtracking loop starting at the given input position.
-    // This `inline(always)` seems to result in about a 10-15% increase in
-    // throughput on the `hard` benchmarks (over a standard `inline`). ---AG
-    #[inline(always)]
     fn backtrack(&mut self, start: InputAt) -> bool {
         // N.B. We use an explicit stack to avoid recursion.
         // To avoid excessive pushing and popping, most transitions are handled
         // in the `step` helper function, which only pushes to the stack when
         // there's a capture or a branch.
+        let mut matched = false;
         self.m.jobs.push(Job::Inst { ip: 0, at: start });
         while let Some(job) = self.m.jobs.pop() {
             match job {
@@ -190,14 +196,17 @@ impl<'a, 'r, 'p, 'c, 'm, I: Input> Backtrack<'a, 'r, 'p, 'c, 'm, I> {
                         if self.prog.matches.len() == 1 {
                             return true;
                         }
+                        matched = true;
                     }
                 }
                 Job::SaveRestore { slot, old_pos } => {
-                    self.params.set_capture(slot, old_pos);
+                    if slot < self.slots.len() {
+                        self.slots[slot] = old_pos;
+                    }
                 }
             }
         }
-        self.params.is_match()
+        matched
     }
 
     fn step(&mut self, mut ip: InstPtr, mut at: InputAt) -> bool {
@@ -209,11 +218,13 @@ impl<'a, 'r, 'p, 'c, 'm, I: Input> Backtrack<'a, 'r, 'p, 'c, 'm, I> {
             // in place.
             match self.prog[ip] {
                 Match(slot) => {
-                    self.params.set_match(slot);
+                    if slot < self.matches.len() {
+                        self.matches[slot] = true;
+                    }
                     return true;
                 }
                 Save(ref inst) => {
-                    if let Some(&old_pos) = self.params.captures().get(inst.slot) {
+                    if let Some(&old_pos) = self.slots.get(inst.slot) {
                         // If this path doesn't work out, then we save the old
                         // capture index (if one exists) in an alternate
                         // job. If the next path fails, then the alternate
@@ -222,7 +233,7 @@ impl<'a, 'r, 'p, 'c, 'm, I: Input> Backtrack<'a, 'r, 'p, 'c, 'm, I> {
                             slot: inst.slot,
                             old_pos: old_pos,
                         });
-                        self.params.set_capture(inst.slot, Some(at.pos()));
+                        self.slots[inst.slot] = Some(at.pos());
                     }
                     ip = inst.goto;
                 }

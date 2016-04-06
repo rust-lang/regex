@@ -14,7 +14,7 @@ use std::slice;
 use std::vec;
 
 use exec::{Exec, ExecBuilder};
-use params::Params;
+use re_trait::RegularExpression;
 use Error;
 
 macro_rules! define_set {
@@ -159,8 +159,7 @@ impl $ty {
     /// assert!(!set.is_match("☃"));
     /// ```
     pub fn is_match(&self, text: $text_ty) -> bool {
-        let mut params = Params::new(&mut [], &mut []);
-        self.0.exec(&mut params, $as_bytes(text), 0)
+        self.0.searcher().is_match_at($as_bytes(text), 0)
     }
 
     /// Returns the set of regular expressions that match in the given text.
@@ -200,13 +199,11 @@ impl $ty {
     /// assert!(matches.matched(6));
     /// ```
     pub fn matches(&self, text: $text_ty) -> SetMatches {
-        let mut matches = Params::alloc_matches(self.0.matches().len());
-        let matched_any = {
-            let mut params = Params::new(&mut [], &mut matches);
-            self.0.exec(&mut params, $as_bytes(text), 0)
-        };
+        let mut matches = vec![false; self.0.regex_strings().len()];
+        let any = self.0.searcher().many_matches_at(
+            &mut matches, $as_bytes(text), 0);
         SetMatches {
-            matched_any: matched_any,
+            matched_any: any,
             matches: matches,
         }
     }

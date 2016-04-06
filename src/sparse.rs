@@ -15,7 +15,7 @@ use std::slice;
 /// N.B. The type parameter is misleading. For the most part, this is only
 /// meant to work on instruction pointers. We use a touch of generics to
 /// support 32 bit instruction pointers.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct SparseSet {
     /// Dense contains the instruction pointers in the order in which they
     /// were inserted. Accessing elements >= self.size is illegal.
