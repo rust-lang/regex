@@ -18,10 +18,10 @@ use std::sync::Arc;
 
 use memchr::memchr;
 
-use exec::{Exec, ExecBuilder};
+use exec::{Exec, ExecNoSync, ExecBuilder};
 use expand::expand;
 use error::Error;
-use params::{Params, Slot};
+use re_trait::{self, RegularExpression};
 
 pub use set::RegexSetBytes as RegexSet;
 pub use set::SetMatchesBytes as SetMatches;
@@ -116,7 +116,7 @@ impl Regex {
     /// # }
     /// ```
     pub fn is_match(&self, text: &[u8]) -> bool {
-        self.exec(&mut [], text, 0)
+        self.shortest_match(text).is_some()
     }
 
     /// Returns the start and end byte range of the leftmost-first match in
@@ -140,12 +140,7 @@ impl Regex {
     /// # }
     /// ```
     pub fn find(&self, text: &[u8]) -> Option<(usize, usize)> {
-        let mut caps = [None, None];
-        if !self.exec(&mut caps, text, 0) {
-            None
-        } else {
-            Some((caps[0].unwrap(), caps[1].unwrap()))
-        }
+        self.0.searcher().find_at(text, 0)
     }
 
     /// Returns an iterator for each successive non-overlapping match in
@@ -172,12 +167,7 @@ impl Regex {
     /// # }
     /// ```
     pub fn find_iter<'r, 't>(&'r self, text: &'t [u8]) -> FindMatches<'r, 't> {
-        FindMatches {
-            re: self,
-            text: text,
-            last_end: 0,
-            last_match: None,
-        }
+        FindMatches(self.0.searcher().find_iter(text))
     }
 
     /// Returns the capture groups corresponding to the leftmost-first
@@ -244,16 +234,13 @@ impl Regex {
     /// The `0`th capture group is always unnamed, so it must always be
     /// accessed with `at(0)` or `[0]`.
     pub fn captures<'t>(&self, text: &'t [u8]) -> Option<Captures<'t>> {
-        let mut caps = self.alloc_captures();
-        if !self.exec(&mut caps, text, 0) {
-            None
-        } else {
-            Some(Captures {
+        let mut slots = vec![None; 2 * self.captures_len()];
+        self.0.searcher().captures_at(&mut slots, text, 0)
+            .map(|_| Captures {
                 text: text,
-                caps: caps,
+                slots: slots,
                 named_groups: self.0.capture_name_idx().clone(),
             })
-        }
     }
 
     /// Returns an iterator over all the non-overlapping capture groups matched
@@ -286,12 +273,7 @@ impl Regex {
         &'r self,
         text: &'t [u8],
     ) -> FindCaptures<'r, 't> {
-        FindCaptures {
-            re: self,
-            text: text,
-            last_end: 0,
-            last_match: None,
-        }
+        FindCaptures(self.0.searcher().captures_iter(text))
     }
 
     /// Returns an iterator of substrings of `text` delimited by a match of the
@@ -511,15 +493,7 @@ impl Regex {
     /// # }
     /// ```
     pub fn shortest_match(&self, text: &[u8]) -> Option<usize> {
-        let mut caps = [None, None];
-        let mut _matched = [false];
-        let mut params =
-            Params::new(&mut caps, &mut _matched).set_match_short(true);
-        if !self.execp(&mut params, text, 0) {
-            None
-        } else {
-            params.captures()[1]
-        }
+        self.0.searcher().shortest_match_at(text, 0)
     }
 
     /// Returns the original string of this regex.
@@ -529,26 +503,12 @@ impl Regex {
 
     /// Returns an iterator over the capture names.
     pub fn capture_names(&self) -> CaptureNames {
-        CaptureNames(self.0.captures().iter())
+        CaptureNames(self.0.capture_names().iter())
     }
 
     /// Returns the number of captures.
     pub fn captures_len(&self) -> usize {
-        self.0.captures().len()
-    }
-
-    fn exec(&self, caps: &mut [Slot], text: &[u8], start: usize) -> bool {
-        let mut _matches = [false];
-        let mut params = Params::new(caps, &mut _matches);
-        self.0.exec(&mut params, text, start)
-    }
-
-    fn execp(&self, params: &mut Params, text: &[u8], start: usize) -> bool {
-        self.0.exec(params, text, start)
-    }
-
-    fn alloc_captures(&self) -> Vec<Option<usize>> {
-        vec![None; 2 * self.0.captures().len()]
+        self.0.capture_names().len()
     }
 }
 
@@ -560,38 +520,13 @@ impl Regex {
 ///
 /// `'r` is the lifetime of the compiled regular expression and `'t` is the
 /// lifetime of the matched byte string.
-pub struct FindMatches<'r, 't> {
-    re: &'r Regex,
-    text: &'t [u8],
-    last_end: usize,
-    last_match: Option<usize>,
-}
+pub struct FindMatches<'r, 't>(re_trait::FindMatches<'t, ExecNoSync<'r>>);
 
 impl<'r, 't> Iterator for FindMatches<'r, 't> {
     type Item = (usize, usize);
 
     fn next(&mut self) -> Option<(usize, usize)> {
-        if self.last_end > self.text.len() {
-            return None
-        }
-
-        let mut caps = [None, None];
-        if !self.re.exec(&mut caps, self.text, self.last_end) {
-            return None;
-        }
-        let (s, e) = (caps[0].unwrap(), caps[1].unwrap());
-        // Don't accept empty matches immediately following a match.
-        // i.e., no infinite loops please.
-        if e == s && Some(self.last_end) == self.last_match {
-            if self.last_end >= self.text.len() {
-                return None;
-            }
-            self.last_end += 1;
-            return self.next();
-        }
-        self.last_end = e;
-        self.last_match = Some(self.last_end);
-        Some((s, e))
+        self.0.next()
     }
 }
 
@@ -602,42 +537,16 @@ impl<'r, 't> Iterator for FindMatches<'r, 't> {
 ///
 /// `'r` is the lifetime of the compiled regular expression and `'t` is the
 /// lifetime of the matched byte string.
-pub struct FindCaptures<'r, 't> {
-    re: &'r Regex,
-    text: &'t [u8],
-    last_end: usize,
-    last_match: Option<usize>,
-}
+pub struct FindCaptures<'r, 't>(re_trait::FindCaptures<'t, ExecNoSync<'r>>);
 
 impl<'r, 't> Iterator for FindCaptures<'r, 't> {
     type Item = Captures<'t>;
 
     fn next(&mut self) -> Option<Captures<'t>> {
-        if self.last_end > self.text.len() {
-            return None
-        }
-
-        let mut caps = self.re.alloc_captures();
-        if !self.re.exec(&mut caps, self.text, self.last_end) {
-            return None;
-        }
-        let (s, e) = (caps[0].unwrap(), caps[1].unwrap());
-
-        // Don't accept empty matches immediately following a match.
-        // i.e., no infinite loops please.
-        if e == s && Some(self.last_end) == self.last_match {
-            if self.last_end >= self.text.len() {
-                return None;
-            }
-            self.last_end += 1;
-            return self.next();
-        }
-        self.last_end = e;
-        self.last_match = Some(self.last_end);
-        Some(Captures {
-            text: self.text,
-            caps: caps,
-            named_groups: self.re.0.capture_name_idx().clone(),
+        self.0.next().map(|slots| Captures {
+            text: self.0.text(),
+            slots: slots,
+            named_groups: self.0.regex().capture_name_idx().clone(),
         })
     }
 }
@@ -655,7 +564,7 @@ impl<'r, 't> Iterator for Splits<'r, 't> {
     type Item = &'t [u8];
 
     fn next(&mut self) -> Option<&'t [u8]> {
-        let text = self.finder.text;
+        let text = self.finder.0.text();
         match self.finder.next() {
             None => {
                 if self.last >= text.len() {
@@ -695,7 +604,7 @@ impl<'r, 't> Iterator for SplitsN<'r, 't> {
         }
         self.n -= 1;
         if self.n == 0 {
-            let text = self.splits.finder.text;
+            let text = self.splits.finder.0.text();
             Some(&text[self.splits.last..])
         } else {
             self.splits.next()
@@ -737,7 +646,7 @@ impl<'r> Iterator for CaptureNames<'r> {
 /// `'t` is the lifetime of the matched text.
 pub struct Captures<'t> {
     text: &'t [u8],
-    caps: Vec<Option<usize>>,
+    slots: Vec<Option<usize>>,
     named_groups: Arc<HashMap<String, usize>>,
 }
 
@@ -748,7 +657,7 @@ impl<'t> Captures<'t> {
     /// with respect to the original byte string matched.
     pub fn pos(&self, i: usize) -> Option<(usize, usize)> {
         let (s, e) = (i * 2, i * 2 + 1);
-        match (self.caps.get(s), self.caps.get(e)) {
+        match (self.slots.get(s), self.slots.get(e)) {
             (Some(&Some(s)), Some(&Some(e))) => Some((s, e)),
             _ => None,
         }
@@ -774,14 +683,14 @@ impl<'t> Captures<'t> {
     /// Creates an iterator of all the capture groups in order of appearance
     /// in the regular expression.
     pub fn iter<'a>(&'a self) -> SubCaptures<'a, 't> {
-        SubCaptures { idx: 0, caps: self, }
+        SubCaptures { idx: 0, caps: self }
     }
 
     /// Creates an iterator of all the capture group positions in order of
     /// appearance in the regular expression. Positions are byte indices
     /// in terms of the original string matched.
     pub fn iter_pos(&'t self) -> SubCapturesPos<'t> {
-        SubCapturesPos { idx: 0, caps: &self.caps }
+        SubCapturesPos { idx: 0, slots: &self.slots }
     }
 
     /// Creates an iterator of all named groups as an tuple with the group
@@ -817,7 +726,7 @@ impl<'t> Captures<'t> {
     /// Returns the number of captured groups.
     #[inline]
     pub fn len(&self) -> usize {
-        self.caps.len() / 2
+        self.slots.len() / 2
     }
 
     /// Returns true if and only if there are no captured groups.
@@ -897,17 +806,17 @@ impl<'c, 't> Iterator for SubCaptures<'c, 't> {
 /// `'c` is the lifetime of the captures.
 pub struct SubCapturesPos<'c> {
     idx: usize,
-    caps: &'c [Option<usize>]
+    slots: &'c [Option<usize>]
 }
 
 impl<'c> Iterator for SubCapturesPos<'c> {
     type Item = Option<(usize, usize)>;
 
     fn next(&mut self) -> Option<Option<(usize, usize)>> {
-        if self.idx >= self.caps.len() {
+        if self.idx >= self.slots.len() {
             return None
         }
-        let r = match (self.caps[self.idx], self.caps[self.idx + 1]) {
+        let r = match (self.slots[self.idx], self.slots[self.idx + 1]) {
             (Some(s), Some(e)) => Some((s, e)),
             _ => None,
         };

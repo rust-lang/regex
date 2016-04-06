@@ -330,7 +330,7 @@ fn exec<'t>(
     }
 }
 
-::regex::Regex(::regex::internal::_Regex::Native(::regex::internal::ExNative {
+::regex::Regex(::regex::internal::_Regex::Plugin(::regex::internal::Plugin {
     original: $regex,
     names: &CAPTURES,
     groups: &CAPTURE_NAME_IDX,

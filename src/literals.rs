@@ -92,6 +92,7 @@ impl LiteralSearcher {
     }
 
     /// Find the position of a literal in `haystack` if it exists.
+    #[inline(always)] // reduces constant overhead
     pub fn find(&self, haystack: &[u8]) -> Option<(usize, usize)> {
         use self::Matcher::*;
         match self.matcher {
@@ -298,6 +299,7 @@ impl SingleByteSet {
     }
 
     /// Faster find that special cases certain sizes to use memchr.
+    #[inline(always)] // reduces constant overhead
     fn find(&self, text: &[u8]) -> Option<usize> {
         match self.dense.len() {
             0 => None,
@@ -417,6 +419,7 @@ impl SingleSearch {
         }
     }
 
+    #[inline(always)] // reduces constant overhead
     pub fn find(&self, haystack: &[u8]) -> Option<usize> {
         let pat = &*self.pat;
         if haystack.len() < pat.len() || pat.is_empty() {
@@ -440,6 +443,14 @@ impl SingleSearch {
             i += 1;
         }
         None
+    }
+
+    #[inline(always)] // reduces constant overhead
+    pub fn is_suffix(&self, text: &[u8]) -> bool {
+        if text.len() < self.len() {
+            return false;
+        }
+        &text[text.len() - self.len()..] == &*self.pat
     }
 
     pub fn len(&self) -> usize {

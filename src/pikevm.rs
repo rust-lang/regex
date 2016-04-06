@@ -27,14 +27,15 @@
 
 use std::mem;
 
+use exec::ProgramCache;
 use input::{Input, InputAt};
-use params::Params;
 use prog::{Program, InstPtr};
+use re_trait::Slot;
 use sparse::SparseSet;
 
 /// An NFA simulation matching engine.
 #[derive(Debug)]
-pub struct Nfa<'r, I> {
+pub struct Fsm<'r, I> {
     /// The sequence of opcodes (among other things) that is actually executed.
     ///
     /// The program may be byte oriented or Unicode codepoint oriented.
@@ -47,8 +48,8 @@ pub struct Nfa<'r, I> {
 }
 
 /// A cached allocation that can be reused on each execution.
-#[derive(Debug)]
-pub struct NfaCache {
+#[derive(Clone, Debug)]
+pub struct Cache {
     /// A pair of ordered sets for tracking NFA states.
     clist: Threads,
     nlist: Threads,
@@ -57,7 +58,7 @@ pub struct NfaCache {
 }
 
 /// An ordered set of NFA states and their captures.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct Threads {
     /// An ordered set of opcodes (each opcode is an NFA state).
     set: SparseSet,
@@ -65,7 +66,7 @@ struct Threads {
     ///
     /// It is stored in row-major order, where the columns are the capture
     /// slots and the rows are the states.
-    caps: Vec<Option<usize>>,
+    caps: Vec<Slot>,
     /// The number of capture slots stored per thread. (Every capture has
     /// two slots.)
     slots_per_thread: usize,
@@ -73,19 +74,19 @@ struct Threads {
 
 /// A representation of an explicit stack frame when following epsilon
 /// transitions. This is used to avoid recursion.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 enum FollowEpsilon {
     /// Follow transitions at the given instruction pointer.
     IP(InstPtr),
     /// Restore the capture slot with the given position in the input.
-    Capture { slot: usize, pos: Option<usize> },
+    Capture { slot: usize, pos: Slot },
 }
 
-impl NfaCache {
+impl Cache {
     /// Create a new allocation used by the NFA machine to record execution
     /// and captures.
-    pub fn new() -> Self {
-        NfaCache {
+    pub fn new(_prog: &Program) -> Self {
+        Cache {
             clist: Threads::new(),
             nlist: Threads::new(),
             stack: vec![],
@@ -93,36 +94,50 @@ impl NfaCache {
     }
 }
 
-impl<'r, I: Input> Nfa<'r, I> {
+impl<'r, I: Input> Fsm<'r, I> {
     /// Execute the NFA matching engine.
     ///
     /// If there's a match, `exec` returns `true` and populates the given
     /// captures accordingly.
     pub fn exec(
         prog: &'r Program,
-        cache: &mut NfaCache,
-        params: &mut Params,
+        cache: &ProgramCache,
+        matches: &mut [bool],
+        slots: &mut [Slot],
+        quit_after_match: bool,
         input: I,
         start: usize,
     ) -> bool {
+        let mut cache = cache.borrow_mut();
+        let mut cache = &mut cache.pikevm;
         cache.clist.resize(prog.len(), prog.captures.len());
         cache.nlist.resize(prog.len(), prog.captures.len());
         let at = input.at(start);
-        Nfa {
+        Fsm {
             prog: prog,
             stack: &mut cache.stack,
             input: input,
-        }.exec_(&mut cache.clist, &mut cache.nlist, params, at)
+        }.exec_(
+            &mut cache.clist,
+            &mut cache.nlist,
+            matches,
+            slots,
+            quit_after_match,
+            at,
+        )
     }
 
     fn exec_(
         &mut self,
         mut clist: &mut Threads,
         mut nlist: &mut Threads,
-        mut params: &mut Params,
+        matches: &mut [bool],
+        slots: &mut [Slot],
+        quit_after_match: bool,
         mut at: InputAt,
     ) -> bool {
         let mut matched = false;
+        let mut all_matched = false;
         clist.set.clear();
         nlist.set.clear();
 'LOOP:  loop {
@@ -131,11 +146,15 @@ impl<'r, I: Input> Nfa<'r, I> {
                 // empty.
                 //
                 // 1. We have a match---so we're done exploring any possible
-                //    alternatives.  Time to quit.
+                //    alternatives. Time to quit. (We can't do this if we're
+                //    looking for matches for multiple regexes, unless we know
+                //    they all matched.)
                 //
                 // 2. If the expression starts with a '^' we can terminate as
                 //    soon as the last thread dies.
-                if matched || (!at.is_start() && self.prog.is_anchored_start) {
+                if (matched && matches.len() <= 1)
+                    || all_matched
+                    || (!at.is_start() && self.prog.is_anchored_start) {
                     break;
                 }
 
@@ -153,8 +172,9 @@ impl<'r, I: Input> Nfa<'r, I> {
             // This simulates a preceding '.*?' for every regex by adding
             // a state starting at the current position in the input for the
             // beginning of the program only if we don't already have a match.
-            if clist.set.is_empty() || (!self.prog.is_anchored_start && !matched) {
-                self.add(&mut clist, params.captures_mut(), 0, at)
+            if clist.set.is_empty()
+                || (!self.prog.is_anchored_start && !all_matched) {
+                self.add(&mut clist, slots, 0, at);
             }
             // The previous call to "add" actually inspects the position just
             // before the current character. For stepping through the machine,
@@ -163,19 +183,18 @@ impl<'r, I: Input> Nfa<'r, I> {
             let at_next = self.input.at(at.next_pos());
             for i in 0..clist.set.len() {
                 let ip = clist.set[i];
-                let step = self.step(
+                if self.step(
                     &mut nlist,
-                    params,
+                    matches,
+                    slots,
                     clist.caps(ip),
                     ip,
                     at,
                     at_next,
-                );
-                if step {
-                    if !matched {
-                        matched = params.matches().iter().all(|&m| m);
-                    }
-                    if params.style().quit_after_first_match() {
+                ) {
+                    matched = true;
+                    all_matched = all_matched || matches.iter().all(|&b| b);
+                    if quit_after_match {
                         // If we only care if a match occurs (not its
                         // position), then we can quit right now.
                         break 'LOOP;
@@ -200,7 +219,7 @@ impl<'r, I: Input> Nfa<'r, I> {
             mem::swap(clist, nlist);
             nlist.set.clear();
         }
-        params.is_match()
+        matched
     }
 
     /// Step through the input, one token (byte or codepoint) at a time.
@@ -218,7 +237,8 @@ impl<'r, I: Input> Nfa<'r, I> {
     fn step(
         &mut self,
         nlist: &mut Threads,
-        params: &mut Params,
+        matches: &mut [bool],
+        slots: &mut [Slot],
         thread_caps: &mut [Option<usize>],
         ip: usize,
         at: InputAt,
@@ -227,8 +247,12 @@ impl<'r, I: Input> Nfa<'r, I> {
         use prog::Inst::*;
         match self.prog[ip] {
             Match(match_slot) => {
-                params.copy_captures_from(thread_caps);
-                params.set_match(match_slot);
+                if match_slot < matches.len() {
+                    matches[match_slot] = true;
+                }
+                for (slot, val) in slots.iter_mut().zip(thread_caps.iter()) {
+                    *slot = *val;
+                }
                 true
             }
             Char(ref inst) => {
@@ -257,10 +281,6 @@ impl<'r, I: Input> Nfa<'r, I> {
 
     /// Follows epsilon transitions and adds them for processing to nlist,
     /// starting at and including ip.
-    ///
-    /// N.B. The inline(always) appears to increase throughput by about
-    /// 20% on micro-benchmarks.
-    #[inline(always)]
     fn add(
         &mut self,
         nlist: &mut Threads,

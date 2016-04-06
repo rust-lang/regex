@@ -17,9 +17,10 @@ use std::sync::Arc;
 
 use syntax;
 
-use exec::{Exec, ExecBuilder};
+use exec::{Exec, ExecNoSyncStr, ExecBuilder};
 use error::Error;
-use params::{Params, Slot};
+use re_plugin::Plugin;
+use re_trait::{self, RegularExpression};
 
 /// Escapes all regular expression meta characters in `text`.
 ///
@@ -108,27 +109,7 @@ pub enum _Regex {
     #[doc(hidden)]
     Dynamic(Exec),
     #[doc(hidden)]
-    Native(ExNative),
-}
-
-#[doc(hidden)]
-pub struct ExNative {
-    #[doc(hidden)]
-    pub original: &'static str,
-    #[doc(hidden)]
-    pub names: &'static &'static [Option<&'static str>],
-    #[doc(hidden)]
-    pub groups: &'static &'static [(&'static str, usize)],
-    #[doc(hidden)]
-    pub prog: fn(&mut [Option<usize>], &str, usize) -> bool,
-}
-
-impl Copy for ExNative {}
-
-impl Clone for ExNative {
-    fn clone(&self) -> ExNative {
-        *self
-    }
+    Plugin(Plugin),
 }
 
 impl fmt::Display for Regex {
@@ -210,7 +191,7 @@ impl Regex {
     /// # }
     /// ```
     pub fn is_match(&self, text: &str) -> bool {
-        self.exec(&mut [], text, 0)
+        self.shortest_match(text).is_some()
     }
 
     /// Returns the start and end byte range of the leftmost-first match in
@@ -234,11 +215,11 @@ impl Regex {
     /// # }
     /// ```
     pub fn find(&self, text: &str) -> Option<(usize, usize)> {
-        let mut caps = [None, None];
-        if !self.exec(&mut caps, text, 0) {
-            None
-        } else {
-            Some((caps[0].unwrap(), caps[1].unwrap()))
+        match self.0 {
+            _Regex::Dynamic(ref exec) => {
+                exec.searcher_str().find_at(text, 0)
+            }
+            _Regex::Plugin(ref plug) => plug.find_at(text, 0),
         }
     }
 
@@ -266,11 +247,15 @@ impl Regex {
     /// # }
     /// ```
     pub fn find_iter<'r, 't>(&'r self, text: &'t str) -> FindMatches<'r, 't> {
-        FindMatches {
-            re: self,
-            text: text,
-            last_end: 0,
-            last_match: None,
+        match self.0 {
+            _Regex::Dynamic(ref exec) => {
+                let it = exec.searcher_str().find_iter(text);
+                FindMatches(FindMatchesInner::Dynamic(it))
+            }
+            _Regex::Plugin(ref plug) => {
+                let it = plug.find_iter(text);
+                FindMatches(FindMatchesInner::Plugin(it))
+            }
         }
     }
 
@@ -338,16 +323,18 @@ impl Regex {
     /// The `0`th capture group is always unnamed, so it must always be
     /// accessed with `at(0)` or `[0]`.
     pub fn captures<'t>(&self, text: &'t str) -> Option<Captures<'t>> {
-        let mut caps = Params::alloc_captures(self.captures_len());
-        if !self.exec(&mut caps, text, 0) {
-            None
-        } else {
-            Some(Captures {
-                text: text,
-                caps: caps,
-                named_groups: NamedGroups::from_regex(self)
-            })
-        }
+        let mut slots = vec![None; 2 * self.captures_len()];
+        let result = match self.0 {
+            _Regex::Dynamic(ref exec) => {
+                exec.searcher_str().captures_at(&mut slots, text, 0)
+            }
+            _Regex::Plugin(ref plug) => plug.captures_at(&mut slots, text, 0),
+        };
+        result.map(|_| Captures {
+            text: text,
+            slots: slots,
+            named_groups: NamedGroups::from_regex(self)
+        })
     }
 
     /// Returns an iterator over all the non-overlapping capture groups matched
@@ -379,11 +366,15 @@ impl Regex {
         &'r self,
         text: &'t str,
     ) -> FindCaptures<'r, 't> {
-        FindCaptures {
-            re: self,
-            text: text,
-            last_end: 0,
-            last_match: None,
+        match self.0 {
+            _Regex::Dynamic(ref exec) => {
+                let it = exec.searcher_str().captures_iter(text);
+                FindCaptures(FindCapturesInner::Dynamic(it))
+            }
+            _Regex::Plugin(ref plug) => {
+                let it = plug.captures_iter(text);
+                FindCaptures(FindCapturesInner::Plugin(it))
+            }
         }
     }
 
@@ -598,14 +589,11 @@ impl Regex {
     /// # }
     /// ```
     pub fn shortest_match(&self, text: &str) -> Option<usize> {
-        let mut caps = [None, None];
-        let mut _matched = [false];
-        let mut params =
-            Params::new(&mut caps, &mut _matched).set_match_short(true);
-        if !self.execp(&mut params, text, 0) {
-            None
-        } else {
-            params.captures()[1]
+        match self.0 {
+            _Regex::Dynamic(ref exec) => {
+                exec.searcher_str().shortest_match_at(text, 0)
+            }
+            _Regex::Plugin(ref plug) => plug.shortest_match_at(text, 0),
         }
     }
 
@@ -613,16 +601,16 @@ impl Regex {
     pub fn as_str(&self) -> &str {
         match self.0 {
             _Regex::Dynamic(ref exec) => &exec.regex_strings()[0],
-            _Regex::Native(ExNative { ref original, .. }) => original,
+            _Regex::Plugin(ref plug) => &plug.original,
         }
     }
 
     /// Returns an iterator over the capture names.
     pub fn capture_names(&self) -> CaptureNames {
         CaptureNames(match self.0 {
-            _Regex::Native(ref n) => _CaptureNames::Native(n.names.iter()),
+            _Regex::Plugin(ref n) => _CaptureNames::Plugin(n.names.iter()),
             _Regex::Dynamic(ref d) => {
-                _CaptureNames::Dynamic(d.captures().iter())
+                _CaptureNames::Dynamic(d.capture_names().iter())
             }
         })
     }
@@ -630,25 +618,8 @@ impl Regex {
     /// Returns the number of captures.
     pub fn captures_len(&self) -> usize {
         match self.0 {
-            _Regex::Native(ref n) => n.names.len(),
-            _Regex::Dynamic(ref d) => d.captures().len()
-        }
-    }
-
-    fn exec(&self, caps: &mut [Slot], text: &str, start: usize) -> bool {
-        let mut _matches = [false];
-        let mut params = Params::new(caps, &mut _matches);
-        self.execp(&mut params, text, start)
-    }
-
-    fn execp(&self, params: &mut Params, text: &str, start: usize) -> bool {
-        match self.0 {
-            _Regex::Native(ExNative { ref prog, .. }) => {
-                (*prog)(params.captures_mut(), text, start)
-            }
-            _Regex::Dynamic(ref exec) => {
-                exec.exec(params, text.as_bytes(), start)
-            }
+            _Regex::Plugin(ref n) => n.names.len(),
+            _Regex::Dynamic(ref d) => d.capture_names().len()
         }
     }
 }
@@ -663,7 +634,7 @@ pub struct CaptureNames<'r>(_CaptureNames<'r>);
 
 enum _CaptureNames<'r> {
     #[doc(hidden)]
-    Native(::std::slice::Iter<'r, Option<&'static str>>),
+    Plugin(::std::slice::Iter<'r, Option<&'static str>>),
     #[doc(hidden)]
     Dynamic(::std::slice::Iter<'r, Option<String>>)
 }
@@ -673,7 +644,7 @@ impl<'r> Iterator for CaptureNames<'r> {
 
     fn next(&mut self) -> Option<Option<&'r str>> {
         match self.0 {
-            _CaptureNames::Native(ref mut i) => i.next().cloned(),
+            _CaptureNames::Plugin(ref mut i) => i.next().cloned(),
             _CaptureNames::Dynamic(ref mut i) => {
                 i.next().as_ref().map(|o| o.as_ref().map(|s| s.as_ref()))
             }
@@ -682,7 +653,7 @@ impl<'r> Iterator for CaptureNames<'r> {
 
     fn size_hint(&self) -> (usize, Option<usize>) {
         match self.0 {
-            _CaptureNames::Native(ref i)  => i.size_hint(),
+            _CaptureNames::Plugin(ref i)  => i.size_hint(),
             _CaptureNames::Dynamic(ref i) => i.size_hint(),
         }
     }
@@ -753,7 +724,7 @@ impl<'r, 't> Iterator for RegexSplits<'r, 't> {
     type Item = &'t str;
 
     fn next(&mut self) -> Option<&'t str> {
-        let text = self.finder.text;
+        let text = self.finder.text();
         match self.finder.next() {
             None => {
                 if self.last >= text.len() {
@@ -793,7 +764,7 @@ impl<'r, 't> Iterator for RegexSplitsN<'r, 't> {
         }
         self.n -= 1;
         if self.n == 0 {
-            let text = self.splits.finder.text;
+            let text = self.splits.finder.text();
             Some(&text[self.splits.last..])
         } else {
             self.splits.next()
@@ -802,16 +773,14 @@ impl<'r, 't> Iterator for RegexSplitsN<'r, 't> {
 }
 
 enum NamedGroups {
-    Native(&'static [(&'static str, usize)]),
+    Plugin(&'static [(&'static str, usize)]),
     Dynamic(Arc<HashMap<String, usize>>),
 }
 
 impl NamedGroups {
     fn from_regex(regex: &Regex) -> NamedGroups {
         match regex.0 {
-            _Regex::Native(ExNative { ref groups, .. }) => {
-                NamedGroups::Native(groups)
-            }
+            _Regex::Plugin(ref plug) => NamedGroups::Plugin(&plug.groups),
             _Regex::Dynamic(ref exec) => {
                 NamedGroups::Dynamic(exec.capture_name_idx().clone())
             }
@@ -820,7 +789,7 @@ impl NamedGroups {
 
     fn pos(&self, name: &str) -> Option<usize> {
         match *self {
-            NamedGroups::Native(groups) => {
+            NamedGroups::Plugin(groups) => {
                 groups.binary_search_by(|&(n, _)| n.cmp(name))
                       .ok().map(|i| groups[i].1)
             },
@@ -832,14 +801,14 @@ impl NamedGroups {
 
     fn iter<'n>(&'n self) -> NamedGroupsIter<'n> {
         match *self {
-            NamedGroups::Native(g) => NamedGroupsIter::Native(g.iter()),
+            NamedGroups::Plugin(g) => NamedGroupsIter::Plugin(g.iter()),
             NamedGroups::Dynamic(ref g) => NamedGroupsIter::Dynamic(g.iter()),
         }
     }
 }
 
 enum NamedGroupsIter<'n> {
-    Native(::std::slice::Iter<'static, (&'static str, usize)>),
+    Plugin(::std::slice::Iter<'static, (&'static str, usize)>),
     Dynamic(::std::collections::hash_map::Iter<'n, String, usize>),
 }
 
@@ -848,7 +817,7 @@ impl<'n> Iterator for NamedGroupsIter<'n> {
 
     fn next(&mut self) -> Option<Self::Item> {
         match *self {
-            NamedGroupsIter::Native(ref mut it) => it.next().map(|&v| v),
+            NamedGroupsIter::Plugin(ref mut it) => it.next().map(|&v| v),
             NamedGroupsIter::Dynamic(ref mut it) => {
                 it.next().map(|(s, i)| (s.as_ref(), *i))
             }
@@ -869,7 +838,7 @@ impl<'n> Iterator for NamedGroupsIter<'n> {
 /// `'t` is the lifetime of the matched text.
 pub struct Captures<'t> {
     text: &'t str,
-    caps: Vec<Option<usize>>,
+    slots: Vec<Option<usize>>,
     named_groups: NamedGroups,
 }
 
@@ -880,7 +849,7 @@ impl<'t> Captures<'t> {
     /// with respect to the original string matched.
     pub fn pos(&self, i: usize) -> Option<(usize, usize)> {
         let (s, e) = (i * 2, i * 2 + 1);
-        match (self.caps.get(s), self.caps.get(e)) {
+        match (self.slots.get(s), self.slots.get(e)) {
             (Some(&Some(s)), Some(&Some(e))) => Some((s, e)),
             _ => None,
         }
@@ -913,7 +882,7 @@ impl<'t> Captures<'t> {
     /// appearance in the regular expression. Positions are byte indices
     /// in terms of the original string matched.
     pub fn iter_pos(&'t self) -> SubCapturesPos<'t> {
-        SubCapturesPos { idx: 0, caps: &self.caps }
+        SubCapturesPos { idx: 0, slots: &self.slots }
     }
 
     /// Creates an iterator of all named groups as an tuple with the group
@@ -965,7 +934,7 @@ impl<'t> Captures<'t> {
     /// Returns the number of captured groups.
     #[inline]
     pub fn len(&self) -> usize {
-        self.caps.len() / 2
+        self.slots.len() / 2
     }
 
     /// Returns true if and only if there are no captured groups.
@@ -1044,17 +1013,17 @@ impl<'c> Iterator for SubCaptures<'c> {
 /// `'c` is the lifetime of the captures.
 pub struct SubCapturesPos<'c> {
     idx: usize,
-    caps: &'c [Option<usize>]
+    slots: &'c [Option<usize>]
 }
 
 impl<'c> Iterator for SubCapturesPos<'c> {
     type Item = Option<(usize, usize)>;
 
     fn next(&mut self) -> Option<Option<(usize, usize)>> {
-        if self.idx >= self.caps.len() {
+        if self.idx >= self.slots.len() {
             return None
         }
-        let r = match (self.caps[self.idx], self.caps[self.idx + 1]) {
+        let r = match (self.slots[self.idx], self.slots[self.idx + 1]) {
             (Some(s), Some(e)) => Some((s, e)),
             (None, None) => None,
             _ => unreachable!()
@@ -1088,44 +1057,34 @@ impl<'c> Iterator for SubCapturesNamed<'c> {
 ///
 /// `'r` is the lifetime of the compiled regular expression and `'t` is the
 /// lifetime of the matched string.
-pub struct FindCaptures<'r, 't> {
-    re: &'r Regex,
-    text: &'t str,
-    last_end: usize,
-    last_match: Option<usize>,
+pub struct FindCaptures<'r, 't>(FindCapturesInner<'r, 't>);
+
+enum FindCapturesInner<'r, 't> {
+    Dynamic(re_trait::FindCaptures<'t, ExecNoSyncStr<'r>>),
+    Plugin(re_trait::FindCaptures<'t, Plugin>),
 }
 
 impl<'r, 't> Iterator for FindCaptures<'r, 't> {
     type Item = Captures<'t>;
 
     fn next(&mut self) -> Option<Captures<'t>> {
-        if self.last_end > self.text.len() {
-            return None
-        }
-
-        let mut caps = Params::alloc_captures(self.re.captures_len());
-        if !self.re.exec(&mut caps, self.text, self.last_end) {
-            return None
-        }
-        let (s, e) = (caps[0].unwrap(), caps[1].unwrap());
-
-        // Don't accept empty matches immediately following a match.
-        // i.e., no infinite loops please.
-        if e == s && Some(self.last_end) == self.last_match {
-            if self.last_end >= self.text.len() {
-                return None;
+        match self.0 {
+            FindCapturesInner::Dynamic(ref mut it) => {
+                let named = it.regex().capture_name_idx().clone();
+                it.next().map(|slots| Captures {
+                    text: it.text(),
+                    slots: slots,
+                    named_groups: NamedGroups::Dynamic(named),
+                })
             }
-            self.last_end += self.text[self.last_end..].chars()
-                                 .next().unwrap().len_utf8();
-            return self.next();
+            FindCapturesInner::Plugin(ref mut it) => {
+                it.next().map(|slots| Captures {
+                    text: it.text(),
+                    slots: slots,
+                    named_groups: NamedGroups::Plugin(it.regex().groups),
+                })
+            }
         }
-        self.last_end = e;
-        self.last_match = Some(self.last_end);
-        Some(Captures {
-            text: self.text,
-            caps: caps,
-            named_groups: NamedGroups::from_regex(self.re),
-        })
     }
 }
 
@@ -1137,39 +1096,29 @@ impl<'r, 't> Iterator for FindCaptures<'r, 't> {
 ///
 /// `'r` is the lifetime of the compiled regular expression and `'t` is the
 /// lifetime of the matched string.
-pub struct FindMatches<'r, 't> {
-    re: &'r Regex,
-    text: &'t str,
-    last_end: usize,
-    last_match: Option<usize>,
+pub struct FindMatches<'r, 't>(FindMatchesInner<'r, 't>);
+
+enum FindMatchesInner<'r, 't> {
+    Dynamic(re_trait::FindMatches<'t, ExecNoSyncStr<'r>>),
+    Plugin(re_trait::FindMatches<'t, Plugin>),
+}
+
+impl<'r, 't> FindMatches<'r, 't> {
+    fn text(&self) -> &'t str {
+        match self.0 {
+            FindMatchesInner::Dynamic(ref it) => it.text(),
+            FindMatchesInner::Plugin(ref it) => it.text(),
+        }
+    }
 }
 
 impl<'r, 't> Iterator for FindMatches<'r, 't> {
     type Item = (usize, usize);
 
     fn next(&mut self) -> Option<(usize, usize)> {
-        if self.last_end > self.text.len() {
-            return None
+        match self.0 {
+            FindMatchesInner::Dynamic(ref mut it) => it.next(),
+            FindMatchesInner::Plugin(ref mut it) => it.next(),
         }
-
-        let mut caps = [None, None];
-        if !self.re.exec(&mut caps, self.text, self.last_end) {
-            return None;
-        }
-        let (s, e) = (caps[0].unwrap(), caps[1].unwrap());
-
-        // Don't accept empty matches immediately following a match.
-        // i.e., no infinite loops please.
-        if e == s && Some(self.last_end) == self.last_match {
-            if self.last_end >= self.text.len() {
-                return None;
-            }
-            self.last_end += self.text[self.last_end..].chars()
-                                 .next().unwrap().len_utf8();
-            return self.next();
-        }
-        self.last_end = e;
-        self.last_match = Some(self.last_end);
-        Some((s, e))
     }
 }

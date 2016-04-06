@@ -137,12 +137,6 @@ impl<'t> ops::Deref for CharInput<'t> {
 }
 
 impl<'t> Input for CharInput<'t> {
-    // This `inline(always)` increases throughput by almost 25% on the `hard`
-    // benchmarks over a normal `inline` annotation.
-    //
-    // I'm not sure why `#[inline]` isn't enough to convince LLVM, but it is
-    // used *a lot* in the guts of the matching engines.
-    #[inline(always)]
     fn at(&self, i: usize) -> InputAt {
         let c = decode_utf8(&self[i..]).map(|(c, _)| c).into();
         InputAt {
@@ -202,7 +196,6 @@ impl<'t> ops::Deref for ByteInput<'t> {
 }
 
 impl<'t> Input for ByteInput<'t> {
-    #[inline(always)]
     fn at(&self, i: usize) -> InputAt {
         InputAt {
             pos: i,
