@@ -193,10 +193,6 @@ a few examples of regexes that get literal prefixes detected:
 * `a*b` detects `a` and `b`
 * `(ab){3,6}` detects `ababab`
 
-Literals may also be used in other ways. For example, if a regex *ends* with a
-literal, then it may be possible to scan for that literal and search backwards
-from a match location using the DFA.
-
 Literals in anchored regexes can also be used for detecting non-matches very
 quickly. For example, `^foo\w+` and `\w+foo$` may be able to detect a non-match
 just by examing the first (or last) three bytes of the haystack.
