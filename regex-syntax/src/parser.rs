@@ -50,8 +50,8 @@ pub struct Flags {
     pub ignore_space: bool,
     /// u
     pub unicode: bool,
-    /// Not actually a flag, but when false, the `u` flag is forbidden and
-    /// setting `unicode` to `false` will result in an error.
+    /// Not actually a flag, but when disabled, every regex that may not match
+    /// UTF-8 exclusively will cause the parser to return an error.
     pub allow_bytes: bool,
 }
 
@@ -104,9 +104,6 @@ impl Parser {
     // Starts at the beginning of the input and consumes until either the end
     // of input or an error.
     fn parse_expr(mut self) -> Result<Expr> {
-        if !self.flags.unicode && !self.flags.allow_bytes {
-            return Err(self.err(ErrorKind::FlagNotAllowed('u')));
-        }
         while !self.eof() {
             let build_expr = match self.cur() {
                 '\\' => try!(self.parse_escape()),
@@ -144,12 +141,18 @@ impl Parser {
                         if self.flags.unicode {
                             self.parse_one(Expr::AnyChar)
                         } else {
+                            if !self.flags.allow_bytes {
+                                return Err(self.err(ErrorKind::InvalidUtf8));
+                            }
                             self.parse_one(Expr::AnyByte)
                         }
                     } else {
                         if self.flags.unicode {
                             self.parse_one(Expr::AnyCharNoNL)
                         } else {
+                            if !self.flags.allow_bytes {
+                                return Err(self.err(ErrorKind::InvalidUtf8));
+                            }
                             self.parse_one(Expr::AnyByteNoNL)
                         }
                     }
@@ -292,13 +295,7 @@ impl Parser {
                 's' => { self.flags.dotnl = sign; saw_flag = true }
                 'U' => { self.flags.swap_greed = sign; saw_flag = true }
                 'x' => { self.flags.ignore_space = sign; saw_flag = true }
-                'u' => {
-                    if !self.flags.allow_bytes {
-                        return Err(self.err(ErrorKind::FlagNotAllowed('u')));
-                    }
-                    self.flags.unicode = sign;
-                    saw_flag = true;
-                }
+                'u' => { self.flags.unicode = sign; saw_flag = true }
                 '-' => {
                     if !sign {
                         // e.g., (?-i-s)
@@ -872,6 +869,8 @@ impl Parser {
         assert!(!self.flags.unicode);
         if b > u8::MAX as u32 {
             Err(self.err(ErrorKind::UnicodeNotAllowed))
+        } else if !self.flags.allow_bytes && b > 0x7F {
+            Err(self.err(ErrorKind::InvalidUtf8))
         } else {
             Ok(Build::Expr(Expr::LiteralBytes {
                 bytes: vec![b as u8],
@@ -2365,14 +2364,14 @@ mod tests {
     }
 
     #[test]
-    fn flags_default_byte_flag_not_allowed() {
-        let flags = Flags { unicode: false, .. Flags::default() };
-        test_err!("a", 0, ErrorKind::FlagNotAllowed('u'), flags);
-    }
-
-    #[test]
-    fn flags_byte_flag_not_allowed() {
-        test_err!("(?-u)a", 3, ErrorKind::FlagNotAllowed('u'));
+    fn invalid_utf8_not_allowed() {
+        // let flags = Flags { unicode: false, .. Flags::default() };
+        test_err!(r"(?-u)\xFF", 9, ErrorKind::InvalidUtf8);
+        test_err!(r"(?-u).", 5, ErrorKind::InvalidUtf8);
+        test_err!(r"(?-u)(?s).", 9, ErrorKind::InvalidUtf8);
+        test_err!(r"(?-u)[\x00-\x80]", 15, ErrorKind::InvalidUtf8);
+        test_err!(r"(?-u)\222", 9, ErrorKind::InvalidUtf8);
+        test_err!(r"(?-u)\x{0080}", 13, ErrorKind::InvalidUtf8);
     }
 
     #[test]

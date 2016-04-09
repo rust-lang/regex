@@ -242,6 +242,7 @@ impl ExecBuilder {
             match_type: MatchType::Nothing,
         };
         ro.match_type = ro.choose_match_type(self.match_type);
+        // println!("MATCH TYPE for '{:?}': {:?}", ro.res, ro.match_type);
 
         let ro = Arc::new(ro);
         let ro_ = ro.clone();

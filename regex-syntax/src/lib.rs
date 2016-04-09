@@ -365,11 +365,18 @@ impl ExprBuilder {
         }
     }
 
-    /// Whether the Unicode flag can be used or not. By default, the flag is
-    /// enabled but it cannot be toggled.
+    /// Whether the parser allows matching arbitrary bytes or not.
     ///
-    /// When disabled, use of the `u` flag will cause the parser to return an
-    /// error.
+    /// When the `u` flag is disabled (either with this builder or in the
+    /// expression itself), the parser switches to interpreting the expression
+    /// as matching arbitrary bytes instead of Unicode codepoints. For example,
+    /// the expression `(?u:\xFF)` matches the *codepoint* `\xFF`, which
+    /// corresponds to the UTF-8 byte sequence `\xCE\xBF`. Conversely,
+    /// `(?-u:\xFF)` matches the *byte* `\xFF`, which is not valid UTF-8.
+    ///
+    /// When `allow_bytes` is disabled (the default), an expression like
+    /// `(?-u:\xFF)` will cause the parser to return an error, since it would
+    /// otherwise match invalid UTF-8. When enabled, it will be allowed.
     pub fn allow_bytes(mut self, yes: bool) -> ExprBuilder {
         self.flags.allow_bytes = yes;
         self
@@ -1321,10 +1328,14 @@ pub enum ErrorKind {
     /// an explicit heap allocated stack is not (yet?) used. Regardless, some
     /// sort of limit must be applied to avoid unbounded memory growth.
     StackExhausted,
-    /// A disallowed flag was found (e.g., `b`).
+    /// A disallowed flag was found (e.g., `u`).
     FlagNotAllowed(char),
-    /// A Unicode class was used when the bytes (`b`) flag was enabled.
+    /// A Unicode class was used when the Unicode (`u`) flag was disabled.
     UnicodeNotAllowed,
+    /// InvalidUtf8 indicates that the expression may match non-UTF-8 bytes.
+    /// This never returned if the parser is permitted to allow expressions
+    /// that match arbitrary bytes.
+    InvalidUtf8,
     /// Hints that destructuring should not be exhaustive.
     ///
     /// This enum may grow additional variants, so this makes sure clients
@@ -1386,6 +1397,7 @@ impl ErrorKind {
             StackExhausted => "stack exhausted, too much nesting",
             FlagNotAllowed(_) => "flag not allowed",
             UnicodeNotAllowed => "Unicode features not allowed",
+            InvalidUtf8 => "matching arbitrary bytes is not allowed",
             __Nonexhaustive => unreachable!(),
         }
     }
@@ -1491,8 +1503,10 @@ impl fmt::Display for ErrorKind {
             FlagNotAllowed(flag) =>
                 write!(f, "Use of the flag '{}' is not allowed.", flag),
             UnicodeNotAllowed =>
-                write!(f, "Unicode features are not allowed when the byte \
-                           (b) flag is set."),
+                write!(f, "Unicode features are not allowed when the Unicode \
+                           (u) flag is not set."),
+            InvalidUtf8 =>
+                write!(f, "Matching arbitrary bytes is not allowed."),
             __Nonexhaustive => unreachable!(),
         }
     }

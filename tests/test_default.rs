@@ -70,8 +70,13 @@ mod set;
 mod shortest_match;
 mod suffix_reverse;
 mod unicode;
+mod word_boundary;
+mod word_boundary_unicode;
 
 #[test]
-fn disallow_unicode_flag() {
-    assert!(regex::Regex::new("(?-u)a").is_err());
+fn disallow_non_utf8() {
+    assert!(regex::Regex::new(r"(?-u)\xFF").is_err());
+    assert!(regex::Regex::new(r"(?-u).").is_err());
+    assert!(regex::Regex::new(r"(?-u)[\xFF]").is_err());
+    assert!(regex::Regex::new(r"(?-u)☃").is_err());
 }
