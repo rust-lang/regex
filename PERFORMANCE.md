@@ -181,7 +181,7 @@ it's possible that the regex engine can be avoided entirely even when there's a
 match.
 
 When one literal is found, Boyer-Moore is used. When multiple literals are
-found, then an optimized version of Aho-Coraisck is used.
+found, then an optimized version of Aho-Corasick is used.
 
 This optimization is in particular extended quite a bit in this crate. Here are
 a few examples of regexes that get literal prefixes detected:
