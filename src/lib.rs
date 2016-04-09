@@ -347,14 +347,14 @@
 //! x*        zero or more of x (greedy)
 //! x+        one or more of x (greedy)
 //! x?        zero or one of x (greedy)
-//! x*?       zero or more of x (ungreedy)
-//! x+?       one or more of x (ungreedy)
-//! x??       zero or one of x (ungreedy)
+//! x*?       zero or more of x (ungreedy/lazy)
+//! x+?       one or more of x (ungreedy/lazy)
+//! x??       zero or one of x (ungreedy/lazy)
 //! x{n,m}    at least n x and at most m x (greedy)
 //! x{n,}     at least n x (greedy)
 //! x{n}      exactly n x
-//! x{n,m}?   at least n x and at most m x (ungreedy)
-//! x{n,}?    at least n x (ungreedy)
+//! x{n,m}?   at least n x and at most m x (ungreedy/lazy)
+//! x{n,}?    at least n x (ungreedy/lazy)
 //! x{n}?     exactly n x
 //! </pre>
 //!
