@@ -24,7 +24,7 @@ At some point, you'll figure out that it won't terminate any time soon. ^C it.
 The promise of this crate is that *this pathological behavior can't happen*.
 
 With that said, just because we have protected ourselves against worst case
-exponential behavior up doesn't mean we are immune from large constant factors
+exponential behavior doesn't mean we are immune from large constant factors
 or places where the current regex engine isn't quite optimal. This guide will
 detail those cases, among other general advice, and give advice on how to avoid
 them.
