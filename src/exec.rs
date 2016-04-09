@@ -326,36 +326,6 @@ impl<'c> RegularExpression for ExecNoSync<'c> {
                     }
                 }
             }
-            MatchType::DfaSuffix => {
-                let lcs = self.ro.suffixes.lcs();
-                let mut end = start;
-                while end <= text.len() {
-                    end = end + match lcs.find(&text[end..]) {
-                        None => return None,
-                        Some(e) => e + lcs.len(),
-                    };
-
-                    // Search in reverse from the end of the suffix match.
-                    match dfa::Fsm::reverse(
-                        &self.ro.dfa_reverse,
-                        &self.cache,
-                        true,
-                        &text[start..end],
-                        end - start,
-                    ) {
-                        // We don't care about the "start" location since we're
-                        // trying to return the first ending position that
-                        // satisfies the regex. The end of the suffix is it!
-                        dfa::Result::Match(_) => return Some(end),
-                        dfa::Result::NoMatch => continue,
-                        dfa::Result::Quit => {
-                            return self.shortest_match_nfa(
-                                MatchNfaType::Auto, text, start);
-                        }
-                    }
-                }
-                None
-            }
             MatchType::Nfa(ty) => self.shortest_match_nfa(ty, text, start),
             MatchType::Nothing => None,
         }
@@ -375,7 +345,7 @@ impl<'c> RegularExpression for ExecNoSync<'c> {
         // filling in captures[1], but a RegexSet has no captures. In other
         // words, a RegexSet can't (currently) use shortest_match. ---AG
         match self.ro.match_type {
-            Literal(_) | Dfa | DfaMany | DfaSuffix | Nothing => {
+            Literal(_) | Dfa | DfaMany | Nothing => {
                 self.shortest_match_at(text, start).is_some()
             }
             Nfa(ty) => {
@@ -397,15 +367,6 @@ impl<'c> RegularExpression for ExecNoSync<'c> {
             }
             MatchType::Dfa => {
                 match self.find_dfa_forward(text, start) {
-                    dfa::Result::Match((s, e)) => Some((s, e)),
-                    dfa::Result::NoMatch => None,
-                    dfa::Result::Quit => {
-                        self.find_nfa(MatchNfaType::Auto, text, start)
-                    }
-                }
-            }
-            MatchType::DfaSuffix => {
-                match self.find_dfa_reverse_suffix(text, start) {
                     dfa::Result::Match((s, e)) => Some((s, e)),
                     dfa::Result::NoMatch => None,
                     dfa::Result::Quit => {
@@ -457,19 +418,6 @@ impl<'c> RegularExpression for ExecNoSync<'c> {
                     }
                 }
             }
-            MatchType::DfaSuffix => {
-                match self.find_dfa_reverse_suffix(text, start) {
-                    dfa::Result::Match((s, _)) => {
-                        self.captures_nfa(
-                            MatchNfaType::Auto, slots, text, s)
-                    }
-                    dfa::Result::NoMatch => None,
-                    dfa::Result::Quit => {
-                        self.captures_nfa(
-                            MatchNfaType::Auto, slots, text, start)
-                    }
-                }
-            }
             MatchType::Nfa(ty) => {
                 self.captures_nfa(ty, slots, text, start)
             }
@@ -505,7 +453,7 @@ impl<'c> ExecNoSync<'c> {
                 matches[0] = self.exec_literals(ty, text, start).is_some();
                 matches[0]
             }
-            Dfa | DfaMany | DfaSuffix => {
+            Dfa | DfaMany => {
                 match dfa::Fsm::forward_many(
                     &self.ro.dfa,
                     &self.cache,
@@ -581,60 +529,6 @@ impl<'c> ExecNoSync<'c> {
             NoMatch => NoMatch,
             Quit => Quit,
         }
-    }
-
-    /// Finds the leftmost-first match (start and end) using only the DFA
-    /// by scanning for suffix literals.
-    ///
-    /// If the result returned indicates that the DFA quit, then another
-    /// matching engine should be used.
-    #[inline(always)] // reduces constant overhead
-    fn find_dfa_reverse_suffix(
-        &self,
-        text: &[u8],
-        start: usize,
-    ) -> dfa::Result<(usize, usize)> {
-        use dfa::Result::*;
-
-        let lcs = self.ro.suffixes.lcs();
-        debug_assert!(lcs.len() >= 1);
-        let mut end = start;
-        while end <= text.len() {
-            end = end + match lcs.find(&text[end..]) {
-                None => return NoMatch,
-                Some(end) => end + lcs.len(),
-            };
-            let match_start = match dfa::Fsm::reverse(
-                &self.ro.dfa_reverse,
-                &self.cache,
-                false,
-                &text[start..end],
-                end - start,
-            ) {
-                NoMatch => continue,
-                Quit => return Quit,
-                Match(s) => start + s,
-            };
-            // At this point, we've found a match. The only way to quit now
-            // without a match is if the DFA gives up (seems unlikely).
-            //
-            // Now run the DFA forwards to find the proper end of the match.
-            // (The suffix literal match can only indicate the earliest
-            // possible end location, which may appear before the end of the
-            // leftmost-first match.)
-            return match dfa::Fsm::forward(
-                &self.ro.dfa,
-                &self.cache,
-                false,
-                text,
-                match_start,
-            ) {
-                NoMatch => panic!("BUG: reverse match implies forward match"),
-                Quit => Quit,
-                Match(e) => Match((match_start, e)),
-            };
-        }
-        NoMatch
     }
 
     /// Like find, but executes an NFA engine.
@@ -908,38 +802,11 @@ impl ExecReadOnly {
             if self.res.len() >= 2 {
                 return DfaMany;
             }
-            // If there's a longish suffix literal, then it might be faster
-            // to look for that first.
-            if self.should_suffix_scan() {
-                return DfaSuffix;
-            }
             // Fall back to your garden variety forward searching lazy DFA.
             return Dfa;
         }
         // We're so totally hosed.
         Nfa(MatchNfaType::Auto)
-    }
-
-    /// Returns true if the program is amenable to suffix scanning.
-    ///
-    /// When this is true, as a heuristic, we assume it is OK to quickly scan
-    /// for suffix literals and then do a *reverse* DFA match from any matches
-    /// produced by the literal scan. (And then followed by a forward DFA
-    /// search, since the previously found suffix literal maybe not actually be
-    /// the end of a match.)
-    ///
-    /// This is a bit of a specialized optimization, but can result in pretty
-    /// big performance wins if 1) there are no prefix literals and 2) the
-    /// suffix literals are pretty rare in the text. (1) is obviously easy to
-    /// account for but (2) is harder. As a proxy, we assume that longer
-    /// strings are generally rarer, so we only enable this optimization when
-    /// we have a meaty suffix.
-    fn should_suffix_scan(&self) -> bool {
-        if self.suffixes.is_empty() {
-            return false;
-        }
-        let lcs_len = self.suffixes.lcs().char_len();
-        lcs_len >= 3 && lcs_len > self.dfa.prefixes.lcp().char_len()
     }
 }
 
@@ -950,8 +817,6 @@ enum MatchType {
     Literal(MatchLiteralType),
     /// A normal DFA search.
     Dfa,
-    /// A reverse DFA search with suffix literal scanning.
-    DfaSuffix,
     /// Use the DFA on two or more regular expressions.
     DfaMany,
     /// An NFA variant.
