@@ -262,10 +262,10 @@
 //! This implementation executes regular expressions **only** on valid UTF-8
 //! while exposing match locations as byte indices into the search string.
 //!
-//! Currently, only simple case folding is supported. Namely, when matching
-//! case-insensitively, the characters are first mapped using the
-//! [simple case folding](ftp://ftp.unicode.org/Public/UNIDATA/CaseFolding.txt)
-//! mapping.
+//! Only simple case folding is supported. Namely, when matching
+//! case-insensitively, the characters are first mapped using the [simple case
+//! folding](ftp://ftp.unicode.org/Public/UNIDATA/CaseFolding.txt) mapping
+//! before matching.
 //!
 //! Regular expressions themselves are **only** interpreted as a sequence of
 //! Unicode scalar values. This means you can use Unicode characters directly
@@ -299,8 +299,11 @@
 //! Unicode codepoint). Unicode support can be selectively enabled with the
 //! `u` flag. See the `bytes` module documentation for more details.
 //!
-//! Note that Unicode support *cannot* be selectively disabled on the main
-//! `Regex` type that matches on `&str`.
+//! Unicode support can also be selectively *disabled* with the main `Regex`
+//! type that matches on `&str`. For example, `(?-u:\b)` will match an ASCII
+//! word boundary. Note though that invalid UTF-8 is not allowed to be matched
+//! even when the `u` flag is disabled. For example, `(?-u:.)` will return an
+//! error, since `.` matches *any byte* when Unicode support is disabled.
 //!
 //! # Syntax
 //!
@@ -381,13 +384,14 @@
 //! the same time: `(?xy)` sets both the `x` and `y` flags and `(?x-y)` sets
 //! the `x` flag and clears the `y` flag.
 //!
-//! All flags are by default disabled. They are:
+//! All flags are by default disabled unless stated otherwise. They are:
 //!
 //! <pre class="rust">
 //! i     case-insensitive
 //! m     multi-line mode: ^ and $ match begin/end of line
 //! s     allow . to match \n
 //! U     swap the meaning of x* and x*?
+//! u     Unicode support (enabled by default)
 //! x     ignore whitespace and allow line comments (starting with `#`)
 //! </pre>
 //!
@@ -405,6 +409,18 @@
 //!
 //! Notice that the `a+` matches either `a` or `A`, but the `b+` only matches
 //! `b`.
+//!
+//! Here is an example that uses an ASCII word boundary instead of a Unicode
+//! word boundary:
+//!
+//! ```rust
+//! # extern crate regex; use regex::Regex;
+//! # fn main() {
+//! let re = Regex::new(r"\b.+\b").unwrap();
+//! let cap = re.captures("$$abc$$").unwrap();
+//! assert_eq!(cap.at(0), Some("abc"));
+//! # }
+//! ```
 //!
 //! ## Escape sequences
 //!
@@ -476,11 +492,11 @@
 //! our time complexity guarantees, but can lead to unbounded memory growth
 //! proportional to the size of the input. As a stopgap, the DFA is only
 //! allowed to store a fixed number of states. (When the limit is reached, its
-//! states are wiped and continues on, possibly duplicating previous work.)
+//! states are wiped and continues on, possibly duplicating previous work. If
+//! the limit is reached too frequently, it gives up and hands control of to
+//! another matching engine with fixed memory requirements.)
 
-#![allow(dead_code)]
-
-// #![deny(missing_docs)]
+#![deny(missing_docs)]
 #![cfg_attr(test, deny(warnings))]
 #![cfg_attr(feature = "pattern", feature(pattern))]
 #![doc(html_logo_url = "https://www.rust-lang.org/logos/rust-logo-128x128-blk-v2.png",
@@ -567,21 +583,21 @@ The supported syntax is pretty much the same as the syntax for Unicode
 regular expressions with a few changes that make sense for matching arbitrary
 bytes:
 
-1. A new flag, `u`, is available for switching to Unicode mode.
-2. By default, `u` is disabled, which roughly corresponds to "ASCII compatible"
-mode.
-3. In ASCII compatible mode, neither Unicode codepoints nor Unicode character
+1. The `u` flag is *disabled* by default, but can be selectively enabled. (The
+opposite is true for the main `Regex` type.) Disabling the `u` flag is said to
+invoke "ASCII compatible" mode.
+2. In ASCII compatible mode, neither Unicode codepoints nor Unicode character
 classes are allowed.
-4. In ASCII compatible mode, Perl character classes (`\w`, `\d` and `\s`)
+3. In ASCII compatible mode, Perl character classes (`\w`, `\d` and `\s`)
 revert to their typical ASCII definition. `\w` maps to `[[:word:]]`, `\d` maps
 to `[[:digit:]]` and `\s` maps to `[[:space:]]`.
-5. In ASCII compatible mode, word boundaries use the ASCII compatible `\w` to
+4. In ASCII compatible mode, word boundaries use the ASCII compatible `\w` to
 determine whether a byte is a word byte or not.
-6. Hexadecimal notation can be used to specify arbitrary bytes instead of
+5. Hexadecimal notation can be used to specify arbitrary bytes instead of
 Unicode codepoints. For example, in ASCII compatible mode, `\xFF` matches the
 literal byte `\xFF`, while in Unicode mode, `\xFF` is a Unicode codepoint that
 matches its UTF-8 encoding of `\xC3\xBF`. Similarly for octal notation.
-7. `.` matches any *byte* except for `\n` instead of any codepoint. When the
+6. `.` matches any *byte* except for `\n` instead of any codepoint. When the
 `s` flag is enabled, `.` matches any byte.
 
 # Performance

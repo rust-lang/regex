@@ -61,3 +61,5 @@ mod replace;
 mod set;
 mod suffix_reverse;
 mod unicode;
+mod word_boundary;
+mod word_boundary_ascii;

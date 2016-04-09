@@ -26,30 +26,43 @@ pub type Slot = Option<usize>;
 /// the ability to start the search of a regex anywhere in a haystack, which
 /// isn't possible in the current public API.
 pub trait RegularExpression: Sized {
+    /// The type of the haystack.
     type Text: ?Sized;
 
+    /// The number of capture slots in the compiled regular expression. This is
+    /// always two times the number of capture groups (two slots per group).
     fn slots_len(&self) -> usize;
 
+    /// Returns the position of the next character after `i`.
+    ///
+    /// For example, a haystack with type `&[u8]` probably returns `i+1`,
+    /// whereas a haystack with type `&str` probably returns `i` plus the
+    /// length of the next UTF-8 sequence.
     fn next_after_empty(&self, text: &Self::Text, i: usize) -> usize;
 
+    /// Returns the location of the shortest match.
     fn shortest_match_at(
         &self,
         text: &Self::Text,
         start: usize,
     ) -> Option<usize>;
 
+    /// Returns whether the regex matches the text given.
     fn is_match_at(
         &self,
         text: &Self::Text,
         start: usize,
     ) -> bool;
 
+    /// Returns the leftmost-first match location if one exists.
     fn find_at(
         &self,
         text: &Self::Text,
         start: usize,
     ) -> Option<(usize, usize)>;
 
+    /// Returns the leftmost-first match location if one exists, and also
+    /// fills in any matching capture slot locations.
     fn captures_at(
         &self,
         slots: &mut [Slot],
@@ -57,6 +70,8 @@ pub trait RegularExpression: Sized {
         start: usize,
     ) -> Option<(usize, usize)>;
 
+    /// Returns an iterator over all non-overlapping successive leftmost-first
+    /// matches.
     fn find_iter<'t>(
         self,
         text: &'t Self::Text,
@@ -69,6 +84,8 @@ pub trait RegularExpression: Sized {
         }
     }
 
+    /// Returns an iterator over all non-overlapping successive leftmost-first
+    /// matches with captures.
     fn captures_iter<'t>(
         self,
         text: &'t Self::Text,
@@ -77,6 +94,7 @@ pub trait RegularExpression: Sized {
     }
 }
 
+/// An iterator over all non-overlapping successive leftmost-first matches.
 pub struct FindMatches<'t, R> where R: RegularExpression, R::Text: 't {
     re: R,
     text: &'t R::Text,
@@ -85,10 +103,12 @@ pub struct FindMatches<'t, R> where R: RegularExpression, R::Text: 't {
 }
 
 impl<'t, R> FindMatches<'t, R> where R: RegularExpression, R::Text: 't {
+    /// Return the text being searched.
     pub fn text(&self) -> &'t R::Text {
         self.text
     }
 
+    /// Return the underlying regex.
     pub fn regex(&self) -> &R {
         &self.re
     }
@@ -123,14 +143,18 @@ impl<'t, R> Iterator for FindMatches<'t, R>
     }
 }
 
+/// An iterator over all non-overlapping successive leftmost-first matches with
+/// captures.
 pub struct FindCaptures<'t, R>(FindMatches<'t, R>)
     where R: RegularExpression, R::Text: 't;
 
 impl<'t, R> FindCaptures<'t, R> where R: RegularExpression, R::Text: 't {
+    /// Return the text being searched.
     pub fn text(&self) -> &'t R::Text {
         self.0.text()
     }
 
+    /// Return the underlying regex.
     pub fn regex(&self) -> &R {
         self.0.regex()
     }

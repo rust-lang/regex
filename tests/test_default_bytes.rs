@@ -54,3 +54,5 @@ mod set;
 mod shortest_match;
 mod suffix_reverse;
 mod unicode;
+mod word_boundary;
+mod word_boundary_ascii;
