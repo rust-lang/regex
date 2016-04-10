@@ -326,6 +326,22 @@ impl<'c> RegularExpression for ExecNoSync<'c> {
                     }
                 }
             }
+            MatchType::DfaAnchoredReverse => {
+                match dfa::Fsm::reverse(
+                    &self.ro.dfa_reverse,
+                    &self.cache,
+                    true,
+                    &text[start..],
+                    text.len(),
+                ) {
+                    dfa::Result::Match(_) => Some(text.len()),
+                    dfa::Result::NoMatch => None,
+                    dfa::Result::Quit => {
+                        return self.shortest_match_nfa(
+                            MatchNfaType::Auto, text, start);
+                    }
+                }
+            }
             MatchType::Nfa(ty) => self.shortest_match_nfa(ty, text, start),
             MatchType::Nothing => None,
         }
@@ -345,7 +361,7 @@ impl<'c> RegularExpression for ExecNoSync<'c> {
         // filling in captures[1], but a RegexSet has no captures. In other
         // words, a RegexSet can't (currently) use shortest_match. ---AG
         match self.ro.match_type {
-            Literal(_) | Dfa | DfaMany | Nothing => {
+            Literal(_) | Dfa | DfaAnchoredReverse | DfaMany | Nothing => {
                 self.shortest_match_at(text, start).is_some()
             }
             Nfa(ty) => {
@@ -367,6 +383,15 @@ impl<'c> RegularExpression for ExecNoSync<'c> {
             }
             MatchType::Dfa => {
                 match self.find_dfa_forward(text, start) {
+                    dfa::Result::Match((s, e)) => Some((s, e)),
+                    dfa::Result::NoMatch => None,
+                    dfa::Result::Quit => {
+                        self.find_nfa(MatchNfaType::Auto, text, start)
+                    }
+                }
+            }
+            MatchType::DfaAnchoredReverse => {
+                match self.find_dfa_anchored_reverse(text, start) {
                     dfa::Result::Match((s, e)) => Some((s, e)),
                     dfa::Result::NoMatch => None,
                     dfa::Result::Quit => {
@@ -418,6 +443,19 @@ impl<'c> RegularExpression for ExecNoSync<'c> {
                     }
                 }
             }
+            MatchType::DfaAnchoredReverse => {
+                match self.find_dfa_anchored_reverse(text, start) {
+                    dfa::Result::Match((s, _)) => {
+                        self.captures_nfa(
+                            MatchNfaType::Auto, slots, text, s)
+                    }
+                    dfa::Result::NoMatch => None,
+                    dfa::Result::Quit => {
+                        self.captures_nfa(
+                            MatchNfaType::Auto, slots, text, start)
+                    }
+                }
+            }
             MatchType::Nfa(ty) => {
                 self.captures_nfa(ty, slots, text, start)
             }
@@ -453,7 +491,7 @@ impl<'c> ExecNoSync<'c> {
                 matches[0] = self.exec_literals(ty, text, start).is_some();
                 matches[0]
             }
-            Dfa | DfaMany => {
+            Dfa | DfaAnchoredReverse | DfaMany => {
                 match dfa::Fsm::forward_many(
                     &self.ro.dfa,
                     &self.cache,
@@ -526,6 +564,32 @@ impl<'c> ExecNoSync<'c> {
             end - start,
         ) {
             Match(s) => Match((start + s, end)),
+            NoMatch => NoMatch,
+            Quit => Quit,
+        }
+    }
+
+    /// Finds the leftmost-first match (start and end) using only the DFA,
+    /// but assumes the regex is anchored at the end and therefore starts at
+    /// the end of the regex and matches in reverse.
+    ///
+    /// If the result returned indicates that the DFA quit, then another
+    /// matching engine should be used.
+    #[inline(always)] // reduces constant overhead
+    fn find_dfa_anchored_reverse(
+        &self,
+        text: &[u8],
+        start: usize,
+    ) -> dfa::Result<(usize, usize)> {
+        use dfa::Result::*;
+        match dfa::Fsm::reverse(
+            &self.ro.dfa_reverse,
+            &self.cache,
+            false,
+            &text[start..],
+            text.len(),
+        ) {
+            Match(s) => Match((start + s, text.len())),
             NoMatch => NoMatch,
             Quit => Quit,
         }
@@ -802,6 +866,11 @@ impl ExecReadOnly {
             if self.res.len() >= 2 {
                 return DfaMany;
             }
+            // If the regex is anchored at the end but not the start, then
+            // just match in reverse from the end of the haystack.
+            if !self.nfa.is_anchored_start && self.nfa.is_anchored_end {
+                return DfaAnchoredReverse;
+            }
             // Fall back to your garden variety forward searching lazy DFA.
             return Dfa;
         }
@@ -817,6 +886,8 @@ enum MatchType {
     Literal(MatchLiteralType),
     /// A normal DFA search.
     Dfa,
+    /// A reverse DFA search starting from the end of a haystack.
+    DfaAnchoredReverse,
     /// Use the DFA on two or more regular expressions.
     DfaMany,
     /// An NFA variant.
