@@ -587,7 +587,7 @@ impl<'c> ExecNoSync<'c> {
             &self.cache,
             false,
             &text[start..],
-            text.len(),
+            text.len() - start,
         ) {
             Match(s) => Match((start + s, text.len())),
             NoMatch => NoMatch,
