@@ -309,7 +309,7 @@ fn exec<'t>(
 
         #[inline]
         fn contains(&self, pc: usize) -> bool {
-            let s = self.sparse[pc];
+            let s = unsafe { ::std::ptr::read_volatile(&self.sparse[pc]) };
             s < self.size && self.dense[s].pc == pc
         }
 
