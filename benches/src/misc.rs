@@ -67,6 +67,7 @@ macro_rules! bench_nomatch {
 
 #[cfg(not(feature = "re-onig"))]
 #[cfg(not(feature = "re-pcre"))]
+#[cfg(not(feature = "re-pcre2"))]
 #[cfg(not(feature = "re-rust-plugin"))]
 bench_match!(no_exponential, {
     let re = format!(

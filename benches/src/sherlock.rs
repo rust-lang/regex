@@ -112,23 +112,35 @@ bench_find!(the_whitespace, regex!(r"the\s+\w+"), 5410);
 // How fast can we match everything? This essentially defeats any clever prefix
 // tricks and just executes the DFA across the entire input.
 #[cfg(not(feature = "re-pcre"))]
+#[cfg(not(feature = "re-pcre2"))]
 bench_find!(everything_greedy, regex!(".*"), 13053);
 #[cfg(not(feature = "re-onig"))]
 #[cfg(not(feature = "re-pcre"))]
+#[cfg(not(feature = "re-pcre2"))]
 bench_find!(everything_greedy_nl, regex!("(?s).*"), 1);
 
 // How fast can we match every letter? This also defeats any clever prefix
-// tricks.
+// tricks. Weird. Looks like PCRE2 diverges. Not clear who is right...
 #[cfg(not(feature = "re-rust-bytes"))]
 bench_find!(letters, regex!(r"\p{L}"), 447160);
+#[cfg(feature = "re-rust-bytes")]
+bench_find!(letters, regex!(r"(?u)\p{L}"), 447160);
+
 #[cfg(not(feature = "re-rust-bytes"))]
 bench_find!(letters_upper, regex!(r"\p{Lu}"), 14180);
+#[cfg(feature = "re-rust-bytes")]
+bench_find!(letters_upper, regex!(r"(?u)\p{Lu}"), 14180);
+
 #[cfg(not(feature = "re-rust-bytes"))]
 bench_find!(letters_lower, regex!(r"\p{Ll}"), 432980);
+#[cfg(feature = "re-rust-bytes")]
+bench_find!(letters_lower, regex!(r"(?u)\p{Ll}"), 432980);
 
 // Similarly, for words.
 #[cfg(not(feature = "re-rust-bytes"))]
 bench_find!(words, regex!(r"\w+"), 109214);
+#[cfg(feature = "re-rust-bytes")]
+bench_find!(words, regex!(r"(?u)\w+"), 109214);
 
 // Find complete words before Holmes. The `\w` defeats any prefix
 // optimizations, but 'Holmes' triggers the reverse suffix optimization.
@@ -146,6 +158,7 @@ bench_find!(
 // the rest.
 #[cfg(not(feature = "re-onig"))]
 #[cfg(not(feature = "re-pcre"))]
+#[cfg(not(feature = "re-pcre2"))]
 bench_find!(
     holmes_coword_watson,
     regex!(r"Holmes(?:\s*.+\s*){0,10}Watson|Watson(?:\s*.+\s*){0,10}Holmes"),
@@ -167,6 +180,9 @@ bench_find!(
 // This uses word boundaries, which the lazy DFA cannot handle. Since the word
 // boundary also defeats finding any literal prefixes, we have to use the
 // NFA algorithm the whole way, which is quite slow.
+//
+// Unless we're using bytes::Regex, which will use an ASCII word boundary,
+// which the DFA can indeed handle.
 bench_find!(word_ending_n, regex!(r"\b\w+n\b"), 8366);
 
 // This is a real bad one for Rust's engine. This particular expression

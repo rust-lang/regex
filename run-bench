@@ -40,6 +40,13 @@ case $which in
       --features re-pcre \
       "$@"
     ;;
+  pcre2)
+    exec cargo bench \
+      --manifest-path benches/Cargo.toml \
+      --bench pcre2 \
+      --features re-pcre2 \
+      "$@"
+    ;;
   onig|oniguruma)
     exec cargo bench \
       --manifest-path benches/Cargo.toml \

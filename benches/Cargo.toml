@@ -9,19 +9,27 @@ documentation = "http://doc.rust-lang.org/regex/regex_syntax/index.html"
 homepage = "https://github.com/rust-lang/regex"
 description = "Regex benchmarks for Rust's and other engines."
 
+build = "build.rs"
+
 [dependencies]
-enum-set = "0.0.6"
 lazy_static = "0.1"
+libc = "0.2"
 onig = { version = "0.4", optional = true }
-pcre = { version = "0.2", optional = true }
+libpcre-sys = { version = "0.2", optional = true }
 regex = { version = "0.1", path = ".." }
 regex_macros = { version = "0.1", path = "../regex_macros", optional = true }
 regex-syntax = { version = "0.3", path = "../regex-syntax" }
 
+[build-dependencies]
+pkg-config = "0.3"
+
 # Use features to conditionally compile benchmarked regexes, since not every
-# regex works on every engine. :-(
+# regex works on every engine. Additionally, it is useful to be able to build
+# each benchmark individually, so that not all dependencies are required to
+# run only one benchmark.
 [features]
-re-pcre = ["pcre"]
+re-pcre = ["libpcre-sys"]
+re-pcre2 = []
 re-onig = ["onig"]
 re-rust = []
 re-rust-bytes = []
@@ -52,6 +60,13 @@ bench = true
 [[bench]]
 name = "pcre"
 path = "src/bench_pcre.rs"
+test = false
+bench = true
+
+# Run the benchmarks on PCRE2.
+[[bench]]
+name = "pcre2"
+path = "src/bench_pcre2.rs"
 test = false
 bench = true
 

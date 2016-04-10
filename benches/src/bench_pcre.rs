@@ -21,48 +21,147 @@
 #![feature(test)]
 #![allow(non_snake_case)]
 
-extern crate enum_set;
 #[macro_use] extern crate lazy_static;
-extern crate pcre;
+extern crate libc;
+extern crate libpcre_sys;
 extern crate test;
 
-/// A nominal wrapper around pcre::Pcre to expose an interface similar to
-/// regex::Regex.
-struct Regex(pcre::Pcre);
+use std::ffi::{CString, CStr};
+use std::fmt;
+use std::ptr;
 
-/// lazy_static wants this. No reason not to provide it.
-/// It's unsafe, but we don't really care when benchmarking.
+use libc::{c_char, c_int, c_void};
+use libpcre_sys::{
+    PCRE_UTF8, PCRE_NO_UTF8_CHECK, PCRE_ERROR_NOMATCH,
+    pcre, pcre_extra,
+    pcre_compile, pcre_free, pcre_study, pcre_free_study, pcre_exec,
+};
+
+const PCRE_UCP: c_int = 0x20000000;
+const PCRE_STUDY_JIT_COMPLETE: c_int = 0x0001;
+
+// We use libpcre-sys directly because the pcre crate has unavoidable
+// performance problems in its core matching routines. (e.g., It always
+// allocates an ovector.)
+struct Regex {
+    code: *mut pcre,
+    extra: *mut pcre_extra,
+}
+
+// Regex can't be used safely from multiple threads simultaneously, so this is
+// a lie and therefore unsafe. It is, however, convenient and fine for the
+// purposes of benchmarking where a Regex is only ever used in one thread.
 unsafe impl Send for Regex {}
 unsafe impl Sync for Regex {}
 
+impl Drop for Regex {
+    fn drop(&mut self) {
+        unsafe {
+            pcre_free_study(self.extra);
+            pcre_free(self.code as *mut c_void);
+        }
+    }
+}
+
+struct Error {
+    msg: String,
+    offset: c_int,
+}
+
+struct FindMatches<'r, 't> {
+    re: &'r Regex,
+    text: &'t str,
+    last_match_end: usize,
+}
+
 impl Regex {
-    fn new(pattern: &str) -> Result<Regex, pcre::CompilationError> {
-        use enum_set::EnumSet;
-        use pcre::{Pcre, CompileOption, StudyOption};
+    fn new(pattern: &str) -> Result<Regex, Error> {
+        let pattern = CString::new(pattern.to_owned()).unwrap();
+        let mut errptr: *const c_char = ptr::null();
+        let mut erroffset: c_int = 0;
+        let code = unsafe { pcre_compile(
+            pattern.as_ptr(),
+            PCRE_UCP | PCRE_UTF8,
+            &mut errptr,
+            &mut erroffset,
+            ptr::null(),
+        ) };
+        if code.is_null() {
+            let msg = unsafe {
+                CStr::from_ptr(errptr).to_str().unwrap().to_owned()
+            };
+            return Err(Error { msg: msg, offset: erroffset });
+        }
 
-        let mut comp_opts = EnumSet::new();
-        // Rust's regex library exclusively uses Unicode-aware character
-        // classes.
-        comp_opts.insert(CompileOption::Ucp);
-        let mut re = try!(Pcre::compile_with_options(pattern, &comp_opts));
+        let extra = unsafe { pcre_study(
+            code,
+            PCRE_STUDY_JIT_COMPLETE,
+            &mut errptr,
+        ) };
+        if extra.is_null() {
+            if errptr.is_null() {
+                panic!("unexpected error. Maybe JIT support isn't enabled?");
+            }
+            let msg = unsafe {
+                CStr::from_ptr(errptr).to_str().unwrap().to_owned()
+            };
+            return Err(Error { msg: msg, offset: 0 });
+        }
+        Ok(Regex { code: code, extra: extra })
+    }
 
-        // Make it go as fast as possible?
-        let mut study_opts = EnumSet::new();
-        study_opts.insert(StudyOption::StudyJitCompile);
-        re.study_with_options(&study_opts);
-
-        Ok(Regex(re))
+    fn _match(&self, text: &str, start: usize) -> Option<(usize, usize)> {
+        const OVEC_SIZE: usize = 15 * 3; // hopefully enough for benchmarks?
+        let mut ovec: [c_int; OVEC_SIZE] = [0; OVEC_SIZE];
+        let err = unsafe { pcre_exec(
+            self.code,
+            self.extra,
+            text.as_ptr() as *const i8,
+            text.len() as c_int,
+            start as c_int,
+            PCRE_NO_UTF8_CHECK,
+            ovec.as_mut_ptr(),
+            OVEC_SIZE as c_int,
+        ) };
+        if err == PCRE_ERROR_NOMATCH {
+            None
+        } else if err < 0 {
+            panic!("unknown error code: {:?}", err)
+        } else {
+            Some((ovec[0] as usize, ovec[1] as usize))
+        }
     }
 
     fn is_match(&mut self, text: &str) -> bool {
-        self.0.exec(text).is_some()
+        self._match(text, 0).is_some()
     }
 
-    fn find_iter<'a, 'p>(
-        &'p mut self,
-        text: &'a str,
-    ) -> pcre::MatchIterator<'a, 'p> {
-        self.0.matches(text)
+    fn find_iter<'r, 't>(&'r self, text: &'t str) -> FindMatches<'r, 't> {
+        FindMatches {
+            re: self,
+            text: text,
+            last_match_end: 0,
+        }
+    }
+}
+
+impl<'r, 't> Iterator for FindMatches<'r, 't> {
+    type Item = (usize, usize);
+
+    fn next(&mut self) -> Option<(usize, usize)> {
+        match self.re._match(self.text, self.last_match_end) {
+            None => None,
+            Some((s, e)) => {
+                self.last_match_end = e;
+                Some((s, e))
+            }
+        }
+    }
+}
+
+impl fmt::Debug for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "PCRE error at {:?}: {}", self.offset, self.msg)
     }
 }
 
