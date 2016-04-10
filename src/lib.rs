@@ -505,7 +505,7 @@
 
 extern crate aho_corasick;
 extern crate memchr;
-extern crate mempool;
+extern crate thread_local;
 #[cfg(test)] extern crate quickcheck;
 extern crate regex_syntax as syntax;
 extern crate utf8_ranges;
