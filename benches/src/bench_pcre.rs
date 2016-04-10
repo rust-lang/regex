@@ -8,16 +8,6 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// These benchmarks use PCRE to reproduce some of the benchmarks used to track
-// performance of regexes in this crate. I'm not an experienced user of PCRE,
-// so it's possible that usage here is not optimal. If it isn't, then
-// improvements are welcome. (I'm aware that PCRE has a DFA, but it doesn't
-// seem to actually preserve leftmost-first semantics, like the DFA in this
-// crate does.)
-//
-// Note that for these benchmarks, all we need is to detect whether there is
-// a match or not.
-
 #![feature(test)]
 #![allow(non_snake_case)]
 
