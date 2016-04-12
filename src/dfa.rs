@@ -44,6 +44,7 @@ implementation.)
 use std::collections::HashMap;
 use std::fmt;
 use std::mem;
+use std::ops::{Deref, DerefMut};
 
 use exec::ProgramCache;
 use prog::{Inst, Program};
@@ -74,9 +75,9 @@ pub fn can_exec(insts: &Program) -> bool {
     use prog::Inst::*;
     use prog::EmptyLook::*;
     // If for some reason we manage to allocate a regex program with more
-    // than 2^32-1 instructions, then we can't execute the DFA because we
-    // use 32 bit pointers.
-    if insts.len() > ::std::u32::MAX as usize {
+    // than STATE_MAX instructions, then we can't execute the DFA because we
+    // use 32 bit pointers with some of the bits reserved for special use.
+    if insts.len() > STATE_MAX as usize {
         return false;
     }
     for inst in insts {
@@ -131,7 +132,26 @@ struct CacheInner {
     /// indexes, which can significantly impact the number of states we can
     /// cram into our memory bounds.
     compiled: HashMap<StateKey, StatePtr>,
-    /// Our heap of states. Both `CacheInner.compiled` and `State.next` point
+    /// The transition table.
+    ///
+    /// This is tricky and is NOT a simple sequence of vecs with length 256. A
+    /// vec with length 256 would work fine if not for the following:
+    ///
+    /// 1. Empty assertions can lead to matches "at the boundary" of the input,
+    ///    so it is useful to have one extra transition that corresponds to
+    ///    EOF. So why doesn't a vec with length 257 work?
+    /// 2. If the vec has length 257 and each StatePtr is 4 bytes (even on 64
+    ///    bit), then every state occupies at least 1KB on the heap. That's
+    ///    ridiculous. As an optimization, we compute the set of all
+    ///    equivalence classes of bytes in the regex. Each equivalence class
+    ///    is defined to be the set of bytes that are indistinguishable when
+    ///    searching for a match. For example, in the regex `[a-z]`, the byte
+    ///    ranges `0..ord(a)-1`, `ord(a)-ord(z)` and `ord(z)+1..257` all
+    ///    correspond to distinct classes. Therefore, we only need a vec of
+    ///    length *3* for that particular regex, which is quite a bit better.
+    ///    (Equivalence classes are computed during compilation.)
+    trans: TransitionTable,
+    /// Our set of states. Both `CacheInner.compiled` and `State.next` point
     /// into this vec.
     states: Vec<State>,
     /// A set of cached start states, which are limited to the number of
@@ -150,6 +170,12 @@ struct CacheInner {
     /// because of space constraints.
     flush_count: u64,
 }
+
+#[derive(Clone)]
+struct TransitionTable(Vec<Transitions>);
+
+#[derive(Clone)]
+struct Transitions(Box<[StatePtr]>);
 
 /// Fsm encapsulates the actual execution of the DFA.
 ///
@@ -220,25 +246,6 @@ impl<T> Result<T> {
 /// follow epsilon transitions.)
 #[derive(Clone)]
 struct State {
-    /// The set of transitions out of this state to other states.
-    ///
-    /// This is tricky and is NOT a simple vec with length 256. A vec with
-    /// length 256 would work fine if not for the following:
-    ///
-    /// 1. Empty assertions can lead to matches "at the boundary" of the input,
-    ///    so it is useful to have one extra transition that corresponds to
-    ///    EOF. So why doesn't a vec with length 257 work?
-    /// 2. If the vec has length 257 and each StatePtr is 4 bytes (even on 64
-    ///    bit), then every state occupies at least 1KB on the heap. That's
-    ///    ridiculous. As an optimization, we compute the set of all
-    ///    equivalence classes of bytes in the regex. Each equivalence class
-    ///    is defined to be the set of bytes that are indistinguishable when
-    ///    searching for a match. For example, in the regex `[a-z]`, the byte
-    ///    ranges `0..ord(a)-1`, `ord(a)-ord(z)` and `ord(z)+1..257` all
-    ///    correspond to distinct classes. Therefore, we only need a vec of
-    ///    length *3* for that particular regex, which is quite a bit better.
-    ///    (Equivalence classes are computed during compilation.)
-    next: Box<[StatePtr]>,
     /// The set of NFA states in this DFA state, which are computed by
     /// following epsilon transitions from `insts[0]`. Note that not all
     /// epsilon transitions are necessarily followed! Namely, epsilon
@@ -283,11 +290,26 @@ type StatePtr = u32;
 
 /// An unknown state means that the state has not been computed yet, and that
 /// the only way to progress is to compute it.
-const STATE_UNKNOWN: StatePtr = 0;
+const STATE_UNKNOWN: StatePtr = 1<<31;
 
 /// A dead state means that the state has been computed and it is known that
 /// once it is entered, no match can ever occur.
-const STATE_DEAD: StatePtr = 1;
+const STATE_DEAD: StatePtr = 1<<30;
+
+/// A start state is a state that the DFA can start in.
+///
+/// Note that unlike unknown and dead states, start states have their lower
+/// bits set to a state pointer.
+const STATE_START: StatePtr = 1<<29;
+
+/// A match state means that the regex has successfully matched.
+///
+/// Note that unlike unknown and dead states, match states have their lower
+/// bits set to a state pointer.
+const STATE_MATCH: StatePtr = 1<<28;
+
+/// The maximum state pointer.
+const STATE_MAX: StatePtr = STATE_MATCH - 1;
 
 /// Byte is a u8 in spirit, but a u16 in practice so that we can represent the
 /// special EOF sentinel value.
@@ -316,7 +338,8 @@ impl Cache {
         Cache {
             inner: CacheInner {
                 compiled: HashMap::new(),
-                states: vec![State::invalid(), State::invalid()],
+                trans: TransitionTable(vec![]),
+                states: vec![],
                 start_states: vec![STATE_UNKNOWN; 256],
                 stack: vec![],
                 flush_count: 0,
@@ -480,74 +503,136 @@ impl<'a> Fsm<'a> {
         //   6. We can't actually do state.next[byte]. Instead, we have to do
         //      state.next[byte_classes[byte]], which permits us to keep the
         //      'next' list very small.
+        //
+        // Since there's a bunch of extra stuff we need to consider, we do some
+        // pretty hairy tricks to get the inner loop to run as fast as
+        // possible.
         debug_assert!(!self.prog.is_reverse);
 
         // The last match is the currently known ending match position. It is
         // reported as an index to the most recent byte that resulted in a
         // transition to a match state and is always stored in capture slot `1`
-        // when searching forwards. Its maximum value is `text.len()`,
-        // which can only happen after the special EOF sentinel value is fed
-        // to the DFA.
+        // when searching forwards. Its maximum value is `text.len()`.
         let mut result = Result::NoMatch;
-        let mut si = self.start;
-        let mut next_si;
-        let mut b: u8;
+        let (mut prev_si, mut next_si) = (self.start, self.start);
         while self.at < text.len() {
-            // Our set of literal prefixes can itself be a DFA, but it is
-            // offline and can generally be quite a bit faster. (For instance,
-            // memchr is used if possible.)
-            if !self.prog.prefixes.is_empty()
-                && si == self.start
-                && !self.prog.is_anchored_start {
+            // This is the real inner loop. We take advantage of special bits
+            // set in the state pointer to determine whether a state is in the
+            // "common" case or not. Specifically, the common case is a
+            // non-match non-start non-dead state that has already been
+            // computed. So long as we remain in the common case, this inner
+            // loop will chew through the input.
+            //
+            // We also unroll the loop 4 times to amortize the cost of checking
+            // whether we've consumed the entire input. We are also careful
+            // to make sure that `prev_si` always represents the previous state
+            // and `next_si` always represents the next state after the loop
+            // exits, even if it isn't always true inside the loop.
+            while next_si <= STATE_MAX && self.at < text.len() {
+                // Argument for safety is in the definition of next_si.
+                prev_si = unsafe { self.next_si(next_si, text, self.at) };
+                self.at += 1;
+                if prev_si > STATE_MAX || self.at + 2 >= text.len() {
+                    mem::swap(&mut prev_si, &mut next_si);
+                    break;
+                }
+                next_si = unsafe { self.next_si(prev_si, text, self.at) };
+                self.at += 1;
+                if next_si > STATE_MAX {
+                    break;
+                }
+                prev_si = unsafe { self.next_si(next_si, text, self.at) };
+                self.at += 1;
+                if prev_si > STATE_MAX {
+                    mem::swap(&mut prev_si, &mut next_si);
+                    break;
+                }
+                next_si = unsafe { self.next_si(prev_si, text, self.at) };
+                self.at += 1;
+            }
+            if next_si & STATE_MATCH > 0 {
+                // A match state is outside of the common case because it needs
+                // special case analysis. In particular, we need to record the
+                // last position as having matched and possibly quit the DFA if
+                // we don't need to keep matching.
+                next_si &= !STATE_MATCH;
+                result = Result::Match(self.at - 1);
+                if self.quit_after_match {
+                    return result;
+                }
+                self.last_match_si = next_si;
+                prev_si = next_si;
+
+                // Another inner loop! If the DFA stays in this particular
+                // match state, then we can rip through all of the input
+                // very quickly, and only recording the match location once
+                // we've left this particular state.
+                let cur = self.at;
+                while (next_si & !STATE_MATCH) == prev_si
+                    && self.at + 2 < text.len() {
+                    // Argument for safety is in the definition of next_si.
+                    next_si = unsafe {
+                        self.next_si(next_si & !STATE_MATCH, text, self.at)
+                    };
+                    self.at += 1;
+                }
+                if self.at > cur {
+                    result = Result::Match(self.at - 2);
+                }
+            } else if next_si & STATE_START > 0 {
+                // A start state isn't in the common case because we may
+                // what to do quick prefix scanning. If the program doesn't
+                // have a detected prefix, then start states are actually
+                // considered common and this case is never reached.
+                debug_assert!(self.has_prefix());
+                next_si &= !STATE_START;
+                prev_si = next_si;
                 self.at = match self.prefix_at(text, self.at) {
                     None => return Result::NoMatch,
                     Some(i) => i,
                 };
-            }
-
-            b = text[self.at];
-            next_si = {
-                let s = self.cache.state(si);
-                if s.flags.is_match() {
-                    result = Result::Match(self.at - 1);
-                    if self.quit_after_match {
-                        return result;
-                    }
-                    self.last_match_si = si;
-                }
-                s.next[self.u8_class(b)]
-            };
-            if next_si <= STATE_DEAD {
-                // The next state may not have been cached, so re-compute it
-                // (i.e., follow epsilon transitions).
-                let byte = Byte::byte(b);
-                next_si = match self.next_state(qcur, qnext, si, byte) {
+            } else if next_si >= STATE_DEAD {
+                // Finally, this corresponds to the case where the transition
+                // entered a state that can never lead to a match or a state
+                // that hasn't been computed yet. The latter being the "slow"
+                // path.
+                let byte = Byte::byte(text[self.at - 1]);
+                // We no longer care about the special bits in the state
+                // pointer.
+                prev_si &= STATE_MAX;
+                next_si = match self.next_state(qcur, qnext, prev_si, byte) {
                     None => return Result::Quit,
                     Some(STATE_DEAD) => return result,
                     Some(si) => si,
                 };
                 debug_assert!(next_si != STATE_UNKNOWN);
+                if next_si & STATE_MATCH > 0 {
+                    next_si &= !STATE_MATCH;
+                    result = Result::Match(self.at - 1);
+                    if self.quit_after_match {
+                        return result;
+                    }
+                    self.last_match_si = next_si;
+                }
+                prev_si = next_si;
+            } else {
+                prev_si = next_si;
             }
-            si = next_si;
-            self.at += 1;
-        }
-        if self.cache.state(si).flags.is_match() {
-            result = Result::Match(self.at - 1);
-            if self.quit_after_match {
-                return result;
-            }
-            self.last_match_si = si;
         }
 
         // Run the DFA once more on the special EOF senitnel value.
-        si = match self.next_state(qcur, qnext, si, Byte::eof()) {
+        // We don't care about the special bits in the state pointer any more,
+        // so get rid of them.
+        prev_si &= STATE_MAX;
+        prev_si = match self.next_state(qcur, qnext, prev_si, Byte::eof()) {
             None => return Result::Quit,
             Some(STATE_DEAD) => return result,
-            Some(si) => si,
+            Some(si) => si & !STATE_START,
         };
-        debug_assert!(si != STATE_UNKNOWN);
-        if self.cache.state(si).flags.is_match() {
-            self.last_match_si = si;
+        debug_assert!(prev_si != STATE_UNKNOWN);
+        if prev_si & STATE_MATCH > 0 {
+            prev_si &= !STATE_MATCH;
+            self.last_match_si = prev_si;
             result = Result::Match(text.len());
         }
         result
@@ -569,57 +654,126 @@ impl<'a> Fsm<'a> {
         // it without sacrificing performance are welcome. ---AG
         debug_assert!(self.prog.is_reverse);
         let mut result = Result::NoMatch;
-        let mut si = self.start;
-        let mut next_si;
-        let mut b: u8;
+        let (mut prev_si, mut next_si) = (self.start, self.start);
         while self.at > 0 {
-            self.at -= 1;
-            b = text[self.at];
-
-            next_si = {
-                let s = self.cache.state(si);
-                if s.flags.is_match() {
-                    result = Result::Match(self.at + 2);
-                    if self.quit_after_match {
-                        return result;
-                    }
-                    self.last_match_si = si;
+            while next_si <= STATE_MAX && self.at > 0 {
+                // Argument for safety is in the definition of next_si.
+                self.at -= 1;
+                prev_si = unsafe { self.next_si(next_si, text, self.at) };
+                if prev_si > STATE_MAX || self.at <= 2 {
+                    mem::swap(&mut prev_si, &mut next_si);
+                    break;
                 }
-                s.next[self.u8_class(b)]
-            };
-            if next_si <= STATE_DEAD {
-                // The next state may not have been cached, so re-compute it
-                // (i.e., follow epsilon transitions).
-                let byte = Byte::byte(b);
-                next_si = match self.next_state(qcur, qnext, si, byte) {
+                self.at -= 1;
+                next_si = unsafe { self.next_si(prev_si, text, self.at) };
+                if next_si > STATE_MAX {
+                    break;
+                }
+                self.at -= 1;
+                prev_si = unsafe { self.next_si(next_si, text, self.at) };
+                if prev_si > STATE_MAX {
+                    mem::swap(&mut prev_si, &mut next_si);
+                    break;
+                }
+                self.at -= 1;
+                next_si = unsafe { self.next_si(prev_si, text, self.at) };
+            }
+            if next_si & STATE_MATCH > 0 {
+                next_si &= !STATE_MATCH;
+                result = Result::Match(self.at + 1);
+                if self.quit_after_match {
+                    return result
+                }
+                self.last_match_si = next_si;
+                prev_si = next_si;
+                let cur = self.at;
+                while (next_si & !STATE_MATCH) == prev_si && self.at >= 2 {
+                    // Argument for safety is in the definition of next_si.
+                    self.at -= 1;
+                    next_si = unsafe {
+                        self.next_si(next_si & !STATE_MATCH, text, self.at)
+                    };
+                }
+                if self.at < cur {
+                    result = Result::Match(self.at + 2);
+                }
+            } else if next_si >= STATE_DEAD {
+                let byte = Byte::byte(text[self.at]);
+                prev_si &= STATE_MAX;
+                next_si = match self.next_state(qcur, qnext, prev_si, byte) {
                     None => return Result::Quit,
                     Some(STATE_DEAD) => return result,
                     Some(si) => si,
                 };
                 debug_assert!(next_si != STATE_UNKNOWN);
+                if next_si & STATE_MATCH > 0 {
+                    next_si &= !STATE_MATCH;
+                    result = Result::Match(self.at + 1);
+                    if self.quit_after_match {
+                        return result;
+                    }
+                    self.last_match_si = next_si;
+                }
+                prev_si = next_si;
+            } else {
+                prev_si = next_si;
             }
-            si = next_si;
-        }
-        if self.cache.state(si).flags.is_match() {
-            result = Result::Match(self.at + 1);
-            if self.quit_after_match {
-                return result;
-            }
-            self.last_match_si = si;
         }
 
         // Run the DFA once more on the special EOF senitnel value.
-        si = match self.next_state(qcur, qnext, si, Byte::eof()) {
+        prev_si = match self.next_state(qcur, qnext, prev_si, Byte::eof()) {
             None => return Result::Quit,
             Some(STATE_DEAD) => return result,
             Some(si) => si,
         };
-        debug_assert!(si != STATE_UNKNOWN);
-        if self.cache.state(si).flags.is_match() {
-            self.last_match_si = si;
+        debug_assert!(prev_si != STATE_UNKNOWN);
+        if prev_si & STATE_MATCH > 0 {
+            prev_si &= !STATE_MATCH;
+            self.last_match_si = prev_si;
             result = Result::Match(0);
         }
         result
+    }
+
+    /// next_si transitions to the next state, where the transition input
+    /// corresponds to text[i].
+    ///
+    /// This elides bounds checks, and is therefore unsafe.
+    #[inline(always)]
+    unsafe fn next_si(&self, si: StatePtr, text: &[u8], i: usize) -> StatePtr {
+        // What is the argument for safety here?
+        // We have four unchecked accesses that could possibly violate safety:
+        //
+        //   1. The transitions for the given state pointer (`si`).
+        //   2. The given byte of input (`text[i]`).
+        //   3. The class of the byte of input (`classes[text[i]]`).
+        //   4. The transition for the class (`trans[si][classes[text[i]]]`).
+        //
+        // (1) is only safe under two conditions: a) calling next_si is
+        // guarded by `si <= STATE_MAX` and b) `si` was retrieved via the
+        // transition table, since only valid state pointers are in the
+        // transition table.
+        //
+        // (2) is only safe when calling next_si is guarded by
+        // `i < text.len()`.
+        //
+        // (3) is the easiest case to guarantee since `text[i]` is always a
+        // `u8` and `self.prog.byte_classes` always has length `u8::MAX`.
+        // (See `ByteClassSet.byte_classes` in `compile.rs`.)
+        //
+        // (4) is only safe if (1)+(2)+(3) are safe. Namely, the transitions
+        // of every state are defined to have length equal to the number of
+        // byte classes in the program. Therefore, a valid class leads to a
+        // valid transition. (All possible transitions are valid lookups, even
+        // if it points to a state that hasn't been computed yet.)
+        debug_assert!(i < text.len());
+        debug_assert!((si as usize) < self.cache.trans.len());
+        let trans = self.cache.trans.get_unchecked(si as usize);
+        let b = *text.get_unchecked(i);
+        debug_assert!((b as usize) < self.prog.byte_classes.len());
+        let cls = *self.prog.byte_classes.get_unchecked(b as usize);
+        debug_assert!((cls as usize) < trans.len());
+        *trans.get_unchecked(cls as usize)
     }
 
     /// Computes the next state given the current state and the current input
@@ -740,15 +894,28 @@ impl<'a> Fsm<'a> {
         // N.B. We pass `&mut si` here because the cache may clear itself if
         // it has gotten too full. When that happens, the location of the
         // current state may change.
-        let next = match self.cached_state(qnext, state_flags, Some(&mut si)) {
+        let mut next = match self.cached_state(
+            qnext,
+            state_flags,
+            Some(&mut si),
+        ) {
             None => return None,
             Some(next) => next,
         };
+        if (self.start & !STATE_START) == next {
+            // Start states can never be match states since all matches are
+            // delayed by one byte.
+            debug_assert!(!self.cache.state(next).flags.is_match());
+            next = self.start_ptr(next);
+        }
+        if next <= STATE_MAX && self.cache.state(next).flags.is_match() {
+            next = STATE_MATCH | next;
+        }
         debug_assert!(next != STATE_UNKNOWN);
         // And now store our state in the current state's next list.
-        let cls = self.byte_class(b);
         if cache {
-            self.cache.state_mut(si).next[cls] = next;
+            let cls = self.byte_class(b);
+            self.cache.trans[si as usize][cls] = next;
         }
         Some(next)
     }
@@ -881,16 +1048,22 @@ impl<'a> Fsm<'a> {
                 return None;
             }
         }
+        // It's also too big if the number of states has exceeded our maximum.
+        // This probably isn't possible in practice, since the CACHE_LIMIT
+        // will have been reached long ago.
+        if self.cache.states.len() >= STATE_MAX as usize {
+            return None;
+        }
 
         // OK, now there's enough room to push our new state.
         // We do this even if the cache size is set to 0!
-        let next = vec![STATE_UNKNOWN; self.num_byte_classes()];
+        let trans = Transitions::new(self.num_byte_classes());
+        let si = usize_to_u32(self.cache.states.len());
         self.cache.states.push(State {
-            next: next.into_boxed_slice(),
             insts: key.insts.clone(),
             flags: state_flags,
         });
-        let si = usize_to_u32(self.cache.states.len().checked_sub(1).unwrap());
+        self.cache.trans.push(trans);
         self.cache.compiled.insert(key, si);
         Some(si)
     }
@@ -992,18 +1165,14 @@ impl<'a> Fsm<'a> {
         &mut self,
         current_state: Option<&mut StatePtr>,
     ) -> bool {
-        if self.cache.states.len() <= 2 {
-            // Why <= 2? Well, the states list always has its first two
-            // positions filled by marker states for STATE_UNKNOWN and
-            // STATE_DEAD. These states aren't actually used, but exist to
-            // make sure no other state lives in those locations. Therefore,
-            // a state vec with length <= 2 is actually "empty."
+        if self.cache.states.is_empty() {
+            // Nothing to clear...
             return true;
         }
         match current_state {
             None => self.clear_cache(),
             Some(si) => {
-                let cur = self.copy_state(*si);
+                let cur = self.cache.state(*si).clone();
                 if !self.clear_cache() {
                     return false;
                 }
@@ -1034,27 +1203,16 @@ impl<'a> Fsm<'a> {
         self.cache.flush_count += 1;
 
         // OK, actually flush the cache.
-        let start = self.copy_state(self.start);
+        let start = self.cache.state(self.start & !STATE_START).clone();
+        self.cache.trans.clear();
         self.cache.states.clear();
         self.cache.compiled.clear();
         for start in self.cache.start_states.iter_mut() {
             *start = STATE_UNKNOWN;
         }
-        self.cache.states.push(State::invalid());
-        self.cache.states.push(State::invalid());
-        self.start = self.restore_state(start);
+        let start = self.restore_state(start);
+        self.start = self.start_ptr(start);
         true
-    }
-
-    /// Returns a fresh copy of state si with all of its next pointers set to
-    /// unknown.
-    fn copy_state(&self, si: StatePtr) -> State {
-        let mut state = self.cache.state(si).clone();
-        // Make sure to erase any pointers from this state, so that
-        // they are forced to be re-computed.
-        let unknowns = vec![STATE_UNKNOWN; self.num_byte_classes()];
-        state.next = unknowns.into_boxed_slice();
-        state
     }
 
     /// Restores the given state back into the cache, and returns a pointer
@@ -1068,7 +1226,9 @@ impl<'a> Fsm<'a> {
             return si;
         }
         let si = usize_to_u32(self.cache.states.len());
+        let trans = Transitions::new(self.num_byte_classes());
         self.cache.states.push(state);
+        self.cache.trans.push(trans);
         self.cache.compiled.insert(key, si);
         si
     }
@@ -1095,8 +1255,7 @@ impl<'a> Fsm<'a> {
         if si == STATE_DEAD {
             return Some(STATE_DEAD);
         }
-        let cls = self.byte_class(b);
-        match self.cache.state(si).next[cls] {
+        match self.cache.trans[si as usize][self.byte_class(b)] {
             STATE_UNKNOWN => self.exec_byte(qcur, qnext, si, b),
             STATE_DEAD => return Some(STATE_DEAD),
             nsi => return Some(nsi),
@@ -1131,7 +1290,7 @@ impl<'a> Fsm<'a> {
         // sentinel byte.
         let sp = match self.cached_state(q, state_flags, None) {
             None => return None,
-            Some(sp) => sp,
+            Some(sp) => self.start_ptr(sp),
         };
         self.cache.start_states[flagi] = sp;
         Some(sp)
@@ -1181,6 +1340,7 @@ impl<'a> Fsm<'a> {
     /// then None is returned.
     ///
     /// This should only be called when the DFA is in a start state.
+    #[allow(dead_code)]
     fn prefix_at(&self, text: &[u8], at: usize) -> Option<usize> {
         self.prog.prefixes.find(&text[at..]).map(|(s, _)| at + s)
     }
@@ -1196,15 +1356,16 @@ impl<'a> Fsm<'a> {
 
     /// Given an input byte or the special EOF sentinel, return its
     /// corresponding byte class.
+    #[inline(always)]
     fn byte_class(&self, b: Byte) -> usize {
-        if b.is_eof() {
-            self.num_byte_classes() - 1
-        } else {
-            self.prog.byte_classes[b.0 as usize] as usize
+        match b.as_byte() {
+            None => self.num_byte_classes() - 1,
+            Some(b) => self.u8_class(b),
         }
     }
 
     /// Like byte_class, but explicitly for u8s.
+    #[inline(always)]
     fn u8_class(&self, b: u8) -> usize {
         self.prog.byte_classes[b as usize] as usize
     }
@@ -1219,6 +1380,26 @@ impl<'a> Fsm<'a> {
     /// regex sets).
     fn continue_past_first_match(&self) -> bool {
         self.prog.is_reverse || self.prog.matches.len() > 1
+    }
+
+    /// Returns true if there is a prefix we can quickly search for.
+    fn has_prefix(&self) -> bool {
+        !self.prog.is_reverse
+        && !self.prog.prefixes.is_empty()
+        && !self.prog.is_anchored_start
+    }
+
+    /// Sets the STATE_START bit in the given state pointer if and only if
+    /// we have a prefix to scan for.
+    ///
+    /// If there's no prefix, then it's a waste to treat the start state
+    /// specially.
+    fn start_ptr(&self, si: StatePtr) -> StatePtr {
+        if self.has_prefix() {
+            si | STATE_START
+        } else {
+            si
+        }
     }
 
     /// Approximate size returns the approximate heap space currently used by
@@ -1258,11 +1439,13 @@ impl<'a> Fsm<'a> {
         let mut states = 0;
         for s in &self.cache.states {
             states += mem::size_of::<State>();
-            states += s.next.len() * mem::size_of::<StatePtr>();
             states += s.insts.len() * mem::size_of::<InstPtr>();
         }
         compiled
         + states
+        + (self.cache.trans.len() *
+           (mem::size_of::<Box<[StatePtr]>>()
+            + (self.num_byte_classes() * mem::size_of::<StatePtr>())))
         + (self.cache.start_states.len() * mem::size_of::<StatePtr>())
         + (self.cache.stack.len() * mem::size_of::<InstPtr>())
         + mem::size_of::<Fsm>()
@@ -1271,16 +1454,9 @@ impl<'a> Fsm<'a> {
     }
 }
 
-impl State {
-    /// Return an invalid state. This is only used to "pad" the state cache so
-    /// that the special sentinel values (STATE_UNKNOWN and STATE_DEAD) are
-    /// never used.
-    fn invalid() -> State {
-        State {
-            next: vec![].into_boxed_slice(),
-            insts: vec![].into_boxed_slice(),
-            flags: StateFlags::default(),
-        }
+impl Transitions {
+    fn new(size: usize) -> Transitions {
+        Transitions(vec![STATE_UNKNOWN; size].into_boxed_slice())
     }
 }
 
@@ -1288,11 +1464,6 @@ impl CacheInner {
     /// Get a state at the given pointer.
     fn state(&self, si: StatePtr) -> &State {
         &self.states[si as usize]
-    }
-
-    /// Get a mutable state at the given pointer.
-    fn state_mut(&mut self, si: StatePtr) -> &mut State {
-        &mut self.states[si as usize]
     }
 }
 
@@ -1359,21 +1530,58 @@ impl Byte {
     }
 }
 
+impl Deref for TransitionTable {
+    type Target = Vec<Transitions>;
+    #[inline] fn deref(&self) -> &Self::Target { &self.0 }
+}
+
+impl DerefMut for TransitionTable {
+    #[inline] fn deref_mut(&mut self) -> &mut Self::Target { &mut self.0 }
+}
+
+impl Deref for Transitions {
+    type Target = Box<[StatePtr]>;
+    #[inline] fn deref(&self) -> &Self::Target { &self.0 }
+}
+
+impl DerefMut for Transitions {
+    #[inline] fn deref_mut(&mut self) -> &mut Self::Target { &mut self.0 }
+}
+
 impl fmt::Debug for State {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let mut next = vec![];
-        for (b, next_sp) in self.next.iter().enumerate() {
-            match *next_sp {
-                STATE_UNKNOWN => {}
-                STATE_DEAD => next.push((vb(b as usize), "DEAD".to_string())),
-                si => next.push((vb(b as usize), si.to_string())),
-            }
-        }
         f.debug_struct("State")
          .field("flags", &self.flags)
          .field("insts", &self.insts)
-         .field("next", &next)
          .finish()
+    }
+}
+
+impl fmt::Debug for TransitionTable {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let mut fmtd = f.debug_map();
+        for (si, trans) in self.iter().enumerate() {
+            fmtd.entry(&si.to_string(), trans);
+        }
+        fmtd.finish()
+    }
+}
+
+impl fmt::Debug for Transitions {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let mut fmtd = f.debug_map();
+        for (b, si) in self.iter().enumerate() {
+            match *si {
+                STATE_UNKNOWN => {}
+                STATE_DEAD => {
+                    fmtd.entry(&vb(b as usize), &"DEAD");
+                }
+                si => {
+                    fmtd.entry(&vb(b as usize), &si.to_string());
+                }
+            }
+        }
+        fmtd.finish()
     }
 }
 
@@ -1404,4 +1612,19 @@ fn usize_to_u32(n: usize) -> u32 {
         panic!("BUG: {} is too big to fit into u32", n)
     }
     n as u32
+}
+
+#[allow(dead_code)] // useful for debugging
+fn show_state_ptr(si: StatePtr) -> String {
+    let mut s = format!("{:?}", si & STATE_MAX);
+    if si & STATE_UNKNOWN > 0 {
+        s = format!("{} (unknown)", s);
+    }
+    if si & STATE_DEAD > 0 {
+        s = format!("{} (dead)", s);
+    }
+    if si & STATE_MATCH > 0 {
+        s = format!("{} (match)", s);
+    }
+    s
 }
