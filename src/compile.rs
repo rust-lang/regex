@@ -13,7 +13,10 @@ use std::iter;
 use std::result;
 use std::sync::Arc;
 
-use syntax::{Expr, Repeater, CharClass, ClassRange, ByteClass, ByteRange};
+use syntax::{
+    Expr, Repeater, CharClass, ClassRange, ByteClass, ByteRange,
+    is_word_byte,
+};
 use utf8_ranges::{Utf8Range, Utf8Sequence, Utf8Sequences};
 
 use prog::{
@@ -265,14 +268,20 @@ impl Compiler {
             EndText => {
                 self.c_empty_look(prog::EmptyLook::EndText)
             }
-            WordBoundary => self.c_empty_look(prog::EmptyLook::WordBoundary),
+            WordBoundary => {
+                self.byte_classes.set_word_boundary();
+                self.c_empty_look(prog::EmptyLook::WordBoundary)
+            }
             NotWordBoundary => {
+                self.byte_classes.set_word_boundary();
                 self.c_empty_look(prog::EmptyLook::NotWordBoundary)
             }
             WordBoundaryAscii => {
+                self.byte_classes.set_word_boundary();
                 self.c_empty_look(prog::EmptyLook::WordBoundaryAscii)
             }
             NotWordBoundaryAscii => {
+                self.byte_classes.set_word_boundary();
                 self.c_empty_look(prog::EmptyLook::NotWordBoundaryAscii)
             }
             Group { ref e, i: None, name: None } => self.c(e),
@@ -998,6 +1007,22 @@ impl ByteClassSet {
             self.0[start as usize - 1] = true;
         }
         self.0[end as usize] = true;
+    }
+
+    fn set_word_boundary(&mut self) {
+        // We need to mark all ranges of bytes whose pairs result in
+        // evaluating \b differently.
+        let iswb = is_word_byte;
+        let mut b1: u16 = 0;
+        let mut b2: u16;
+        while b1 <= 255 {
+            b2 = b1 + 1;
+            while b2 <= 255 && iswb(b1 as u8) == iswb(b2 as u8) {
+                b2 += 1;
+            }
+            self.set_range(b1 as u8, (b2 - 1) as u8);
+            b1 = b2;
+        }
     }
 
     fn byte_classes(&self) -> Vec<u8> {

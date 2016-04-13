@@ -416,7 +416,7 @@
 //! ```rust
 //! # extern crate regex; use regex::Regex;
 //! # fn main() {
-//! let re = Regex::new(r"\b.+\b").unwrap();
+//! let re = Regex::new(r"(?-u:\b).+(?-u:\b)").unwrap();
 //! let cap = re.captures("$$abc$$").unwrap();
 //! assert_eq!(cap.at(0), Some("abc"));
 //! # }
