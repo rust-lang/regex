@@ -3,7 +3,7 @@
 * Speculative support for Unicode word boundaries was added to the DFA. This
   should remove the last common case that disqualified use of the DFA.
 * An optimization that scanned for suffix literals and then matched the regular
-  expression in reverse was removed because it had worst cast quadratic time
+  expression in reverse was removed because it had worst case quadratic time
   complexity. It was replaced with a more limited optimization where, given any
   regex of the form `re$`, it will be matched in reverse from the end of the
   haystack.
