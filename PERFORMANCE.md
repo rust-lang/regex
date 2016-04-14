@@ -200,17 +200,19 @@ just by examing the first (or last) three bytes of the haystack.
 **Advice**: Literals can reduce the work that the regex engine needs to do. Use
 them if you can, especially as prefixes.
 
-## Unicode word boundaries prevent the DFA from being used
+## Unicode word boundaries may prevent the DFA from being used
 
-It's a sad state of the current implementation. It's not clear when or if
-Unicode word boundaries will be salvaged, but as it stands right now, using
-them automatically disqualifies use of the DFA, which can mean an order of
-magnitude slowdown in search time. There are two ways to ameliorate this:
+It's a sad state of the current implementation. At the moment, the DFA will try
+to interpret Unicode word boundaries as if they were ASCII word boundaries.
+If the DFA comes across any non-ASCII byte, it will quit and fall back to an
+alternative matching engine that can handle Unicode word boundaries correctly.
+The alternate matching engine is generally quite a bit slower (perhaps by an
+order of magnitude). If necessary, this can be ameliorated in two ways.
 
 The first way is to add some number of literal prefixes to your regular
-expression. Even though the DFA won't be used, specialized routines will still
-kick in to find prefix literals quickly, which limits how much work the NFA
-simulation will need to do.
+expression. Even though the DFA may not be used, specialized routines will
+still kick in to find prefix literals quickly, which limits how much work the
+NFA simulation will need to do.
 
 The second way is to give up on Unicode and use an ASCII word boundary instead.
 One can use an ASCII word boundary by disabling Unicode support. That is,
@@ -221,11 +223,18 @@ to a syntax error if the regex could match arbitrary bytes. For example, if one
 wrote `(?-u)\b.+\b`, then a syntax error would be returned because `.` matches
 any *byte* when the Unicode flag is disabled.
 
+The second way isn't appreciably different than just using a Unicode word
+boundary in the first place, since the DFA will speculatively interpret it as
+an ASCII word boundary anyway. The key difference is that if an ASCII word
+boundary is used explicitly, then the DFA won't quit in the presence of
+non-ASCII UTF-8 bytes. This results in giving up correctness in exchange for
+more consistent performance.
+
 N.B. When using `bytes::Regex`, Unicode support is disabled by default, so one
 can simply write `\b` to get an ASCII word boundary.
 
-**Advice**: Use `(?-u:\b)` instead of `\b` if you care about performance more
-than correctness.
+**Advice**: In most cases, `\b` should work well. If not, use `(?-u:\b)`
+instead of `\b` if you care about consistent performance more than correctness.
 
 ## Excessive counting can lead to exponential state blow up in the DFA
 

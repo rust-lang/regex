@@ -73,7 +73,6 @@ const CACHE_LIMIT: usize = 2 * (1<<20);
 /// of tracking multi-byte assertions in the DFA.
 pub fn can_exec(insts: &Program) -> bool {
     use prog::Inst::*;
-    use prog::EmptyLook::*;
     // If for some reason we manage to allocate a regex program with more
     // than STATE_MAX instructions, then we can't execute the DFA because we
     // use 32 bit pointers with some of the bits reserved for special use.
@@ -83,14 +82,7 @@ pub fn can_exec(insts: &Program) -> bool {
     for inst in insts {
         match *inst {
             Char(_) | Ranges(_) => return false,
-            EmptyLook(ref inst) => {
-                match inst.look {
-                    WordBoundary | NotWordBoundary => return false,
-                    WordBoundaryAscii | NotWordBoundaryAscii => {}
-                    StartLine | EndLine | StartText | EndText => {}
-                }
-            }
-            Match(_) | Save(_) | Split(_) | Bytes(_) => {}
+            EmptyLook(_) | Match(_) | Save(_) | Split(_) | Bytes(_) => {}
         }
     }
     true
@@ -296,17 +288,22 @@ const STATE_UNKNOWN: StatePtr = 1<<31;
 /// once it is entered, no match can ever occur.
 const STATE_DEAD: StatePtr = 1<<30;
 
+/// A quit state means that the DFA came across some input that it doesn't
+/// know how to process correctly. The DFA should quit and another matching
+/// engine should be run in its place.
+const STATE_QUIT: StatePtr = 1<<29;
+
 /// A start state is a state that the DFA can start in.
 ///
 /// Note that unlike unknown and dead states, start states have their lower
 /// bits set to a state pointer.
-const STATE_START: StatePtr = 1<<29;
+const STATE_START: StatePtr = 1<<28;
 
 /// A match state means that the regex has successfully matched.
 ///
 /// Note that unlike unknown and dead states, match states have their lower
 /// bits set to a state pointer.
-const STATE_MATCH: StatePtr = 1<<28;
+const STATE_MATCH: StatePtr = 1<<27;
 
 /// The maximum state pointer.
 const STATE_MAX: StatePtr = STATE_MATCH - 1;
@@ -591,7 +588,10 @@ impl<'a> Fsm<'a> {
                     None => return Result::NoMatch,
                     Some(i) => i,
                 };
-            } else if next_si >= STATE_DEAD {
+            } else if next_si >= STATE_QUIT {
+                if next_si & STATE_QUIT > 0 {
+                    return Result::Quit;
+                }
                 // Finally, this corresponds to the case where the transition
                 // entered a state that can never lead to a match or a state
                 // that hasn't been computed yet. The latter being the "slow"
@@ -697,7 +697,10 @@ impl<'a> Fsm<'a> {
                 if self.at < cur {
                     result = Result::Match(self.at + 2);
                 }
-            } else if next_si >= STATE_DEAD {
+            } else if next_si >= STATE_QUIT {
+                if next_si & STATE_QUIT > 0 {
+                    return Result::Quit;
+                }
                 let byte = Byte::byte(text[self.at]);
                 prev_si &= STATE_MAX;
                 next_si = match self.next_state(qcur, qnext, prev_si, byte) {
@@ -986,10 +989,15 @@ impl<'a> Fsm<'a> {
                         NotWordBoundaryAscii if flags.not_word_boundary => {
                             self.cache.stack.push(inst.goto as InstPtr);
                         }
+                        WordBoundary if flags.word_boundary => {
+                            self.cache.stack.push(inst.goto as InstPtr);
+                        }
+                        NotWordBoundary if flags.not_word_boundary => {
+                            self.cache.stack.push(inst.goto as InstPtr);
+                        }
                         StartLine | EndLine | StartText | EndText => {}
                         WordBoundaryAscii | NotWordBoundaryAscii => {}
-                        // The DFA doesn't support Unicode word boundaries. :-(
-                        WordBoundary | NotWordBoundary => unreachable!(),
+                        WordBoundary | NotWordBoundary => {}
                     }
                 }
                 Save(ref inst) => self.cache.stack.push(inst.goto as InstPtr),
@@ -1057,7 +1065,12 @@ impl<'a> Fsm<'a> {
 
         // OK, now there's enough room to push our new state.
         // We do this even if the cache size is set to 0!
-        let trans = Transitions::new(self.num_byte_classes());
+        let mut trans = Transitions::new(self.num_byte_classes());
+        if self.prog.has_unicode_word_boundary {
+            for b in 128..256 {
+                trans[self.byte_class(Byte::byte(b as u8))] = STATE_QUIT;
+            }
+        }
         let si = usize_to_u32(self.cache.states.len());
         self.cache.states.push(State {
             insts: key.insts.clone(),
@@ -1120,15 +1133,14 @@ impl<'a> Fsm<'a> {
                             state_flags.set_empty();
                             insts.push(ip);
                         }
-                        WordBoundaryAscii => {
+                        WordBoundary | WordBoundaryAscii => {
                             state_flags.set_empty();
                             insts.push(ip);
                         }
-                        NotWordBoundaryAscii => {
+                        NotWordBoundary | NotWordBoundaryAscii => {
                             state_flags.set_empty();
                             insts.push(ip);
                         }
-                        WordBoundary | NotWordBoundary => unreachable!(),
                     }
                 }
                 Match(_) => {
@@ -1226,7 +1238,12 @@ impl<'a> Fsm<'a> {
             return si;
         }
         let si = usize_to_u32(self.cache.states.len());
-        let trans = Transitions::new(self.num_byte_classes());
+        let mut trans = Transitions::new(self.num_byte_classes());
+        if self.prog.has_unicode_word_boundary {
+            for b in 128..256 {
+                trans[self.byte_class(Byte::byte(b as u8))] = STATE_QUIT;
+            }
+        }
         self.cache.states.push(state);
         self.cache.trans.push(trans);
         self.cache.compiled.insert(key, si);
@@ -1257,8 +1274,9 @@ impl<'a> Fsm<'a> {
         }
         match self.cache.trans[si as usize][self.byte_class(b)] {
             STATE_UNKNOWN => self.exec_byte(qcur, qnext, si, b),
-            STATE_DEAD => return Some(STATE_DEAD),
-            nsi => return Some(nsi),
+            STATE_QUIT => None,
+            STATE_DEAD => Some(STATE_DEAD),
+            nsi => Some(nsi),
         }
     }
 

@@ -269,10 +269,12 @@ impl Compiler {
                 self.c_empty_look(prog::EmptyLook::EndText)
             }
             WordBoundary => {
+                self.compiled.has_unicode_word_boundary = true;
                 self.byte_classes.set_word_boundary();
                 self.c_empty_look(prog::EmptyLook::WordBoundary)
             }
             NotWordBoundary => {
+                self.compiled.has_unicode_word_boundary = true;
                 self.byte_classes.set_word_boundary();
                 self.c_empty_look(prog::EmptyLook::NotWordBoundary)
             }
