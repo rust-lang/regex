@@ -8,13 +8,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![feature(test)]
 #![allow(non_snake_case)]
-
-#[macro_use] extern crate lazy_static;
-extern crate libc;
-extern crate libpcre_sys;
-extern crate test;
 
 use std::ffi::{CString, CStr};
 use std::fmt;
@@ -33,16 +27,12 @@ const PCRE_STUDY_JIT_COMPLETE: c_int = 0x0001;
 // We use libpcre-sys directly because the pcre crate has unavoidable
 // performance problems in its core matching routines. (e.g., It always
 // allocates an ovector.)
-struct Regex {
+pub struct Regex {
     code: *mut pcre,
     extra: *mut pcre_extra,
 }
 
-// Regex can't be used safely from multiple threads simultaneously, so this is
-// a lie and therefore unsafe. It is, however, convenient and fine for the
-// purposes of benchmarking where a Regex is only ever used in one thread.
 unsafe impl Send for Regex {}
-unsafe impl Sync for Regex {}
 
 impl Drop for Regex {
     fn drop(&mut self) {
@@ -53,19 +43,13 @@ impl Drop for Regex {
     }
 }
 
-struct Error {
+pub struct Error {
     msg: String,
     offset: c_int,
 }
 
-struct FindMatches<'r, 't> {
-    re: &'r Regex,
-    text: &'t str,
-    last_match_end: usize,
-}
-
 impl Regex {
-    fn new(pattern: &str) -> Result<Regex, Error> {
+    pub fn new(pattern: &str) -> Result<Regex, Error> {
         let pattern = CString::new(pattern.to_owned()).unwrap();
         let mut errptr: *const c_char = ptr::null();
         let mut erroffset: c_int = 0;
@@ -100,7 +84,19 @@ impl Regex {
         Ok(Regex { code: code, extra: extra })
     }
 
-    fn _match(&self, text: &str, start: usize) -> Option<(usize, usize)> {
+    pub fn is_match(&self, text: &str) -> bool {
+        self.find_at(text, 0).is_some()
+    }
+
+    pub fn find_iter<'r, 't>(&'r self, text: &'t str) -> FindMatches<'r, 't> {
+        FindMatches {
+            re: self,
+            text: text,
+            last_match_end: 0,
+        }
+    }
+
+    fn find_at(&self, text: &str, start: usize) -> Option<(usize, usize)> {
         const OVEC_SIZE: usize = 15 * 3; // hopefully enough for benchmarks?
         let mut ovec: [c_int; OVEC_SIZE] = [0; OVEC_SIZE];
         let err = unsafe { pcre_exec(
@@ -121,25 +117,19 @@ impl Regex {
             Some((ovec[0] as usize, ovec[1] as usize))
         }
     }
+}
 
-    fn is_match(&mut self, text: &str) -> bool {
-        self._match(text, 0).is_some()
-    }
-
-    fn find_iter<'r, 't>(&'r self, text: &'t str) -> FindMatches<'r, 't> {
-        FindMatches {
-            re: self,
-            text: text,
-            last_match_end: 0,
-        }
-    }
+pub struct FindMatches<'r, 't> {
+    re: &'r Regex,
+    text: &'t str,
+    last_match_end: usize,
 }
 
 impl<'r, 't> Iterator for FindMatches<'r, 't> {
     type Item = (usize, usize);
 
     fn next(&mut self) -> Option<(usize, usize)> {
-        match self.re._match(self.text, self.last_match_end) {
+        match self.re.find_at(self.text, self.last_match_end) {
             None => None,
             Some((s, e)) => {
                 self.last_match_end = e;
@@ -154,10 +144,3 @@ impl fmt::Debug for Error {
         write!(f, "PCRE error at {:?}: {}", self.offset, self.msg)
     }
 }
-
-macro_rules! regex(
-    ($re:expr) => { ::Regex::new($re).unwrap() }
-);
-
-mod misc;
-mod sherlock;

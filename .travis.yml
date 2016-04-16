@@ -20,8 +20,7 @@ script:
   - if [ "$TRAVIS_RUST_VERSION" = "nightly" ]; then
       travis_wait ./run-bench rust;
       travis_wait ./run-bench rust-bytes --no-run;
-      travis_wait ./run-bench rust-plugin --no-run;
-      travis_wait ./run-bench pcre --no-run;
+      travis_wait ./run-bench pcre1 --no-run;
       travis_wait ./run-bench onig --no-run;
       travis_wait cargo test --verbose --manifest-path=regex_macros/Cargo.toml;
     fi

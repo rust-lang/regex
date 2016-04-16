@@ -10,180 +10,167 @@
 
 use test::Bencher;
 
-use Regex;
+use {Regex, Text};
 
-#[cfg(not(feature = "re-rust-bytes"))]
-lazy_static! {
-    static ref SHERLOCK: String = {
-        include_str!("the-adventures-of-sherlock-holmes.txt").to_owned()
-    };
-}
 
-#[cfg(feature = "re-rust-bytes")]
-lazy_static! {
-    static ref SHERLOCK: Vec<u8> = {
-        include_bytes!("the-adventures-of-sherlock-holmes.txt")[..].to_owned()
-    };
-}
-
-macro_rules! bench_find {
-    ($name:ident, $re:expr, $count:expr) => {
-        #[bench]
-        fn $name(b: &mut Bencher) {
-            #![allow(unused_mut)]
-
-            use std::sync::Mutex;
-
-            lazy_static! {
-                static ref RE: Mutex<Regex> = Mutex::new($re);
-            };
-            let mut re = RE.lock().unwrap();
-            b.bytes = SHERLOCK.len() as u64;
-            b.iter(|| {
-                let count = re.find_iter(&SHERLOCK).count();
-                assert_eq!($count, count)
-            });
-        }
+// USAGE: sherlock!(name, pattern, count)
+//
+// This is same as bench_find, except it always uses the Sherlock haystack.
+macro_rules! sherlock {
+    ($name:ident, $pattern:expr, $count:expr) => {
+        bench_find!(
+            $name, $pattern, $count,
+            include_str!("data/sherlock.txt").to_owned()
+        );
     }
 }
 
 // These patterns are all single string literals that compile down to a variant
 // of Boyer-Moore w/ memchr. This also demonstrates the impact that the
 // frequency of a match has on performance.
-bench_find!(name_sherlock, regex!("Sherlock"), 97);
-bench_find!(name_holmes, regex!("Holmes"), 461);
-bench_find!(name_sherlock_holmes, regex!("Sherlock Holmes"), 91);
+sherlock!(name_sherlock, r"Sherlock", 97);
+sherlock!(name_holmes, r"Holmes", 461);
+sherlock!(name_sherlock_holmes, r"Sherlock Holmes", 91);
 
 // Like the above, except case insensitively. The prefix detector will extract
 // multiple *cut* prefix literals for each of the following before hitting its
 // limit. All of these should be able to use either memchr2 or memchr3.
-bench_find!(name_sherlock_nocase, regex!("(?i)Sherlock"), 102);
-bench_find!(name_holmes_nocase, regex!("(?i)Holmes"), 467);
-bench_find!(name_sherlock_holmes_nocase, regex!("(?i)Sherlock Holmes"), 96);
+sherlock!(name_sherlock_nocase, r"(?i)Sherlock", 102);
+sherlock!(name_holmes_nocase, r"(?i)Holmes", 467);
+sherlock!(name_sherlock_holmes_nocase, r"(?i)Sherlock Holmes", 96);
 
 // Will quickly find instances of 'Sherlock', but then needs to fall back to
 // the lazy DFA to process the Unicode aware `\s`.
-bench_find!(name_whitespace, regex!(r"Sherlock\s+Holmes"), 97);
+sherlock!(name_whitespace, r"Sherlock\s+Holmes", 97);
 
 // Now try more variations on name matching.
 // This one has two alternates that both start with 'S'. This should compile
 // to an Aho-Corasick automaton that uses memchr. Never enters lazy DFA.
-bench_find!(name_alt1, regex!("Sherlock|Street"), 158);
+sherlock!(name_alt1, r"Sherlock|Street", 158);
 // This one doesn't have a common byte, but should still use Aho-Corasick and
 // memchr2.
 // Never enters lazy DFA.
-bench_find!(name_alt2, regex!("Sherlock|Holmes"), 558);
+sherlock!(name_alt2, r"Sherlock|Holmes", 558);
 // Still using Aho-Corasick, but more patterns. Never enters lazy DFA but
 // also can't use any memchr variant.
-bench_find!(
-    name_alt3,
-    regex!("Sherlock|Holmes|Watson|Irene|Adler|John|Baker"), 740);
+sherlock!(name_alt3, r"Sherlock|Holmes|Watson|Irene|Adler|John|Baker", 740);
 // Still using Aho-Corasick, but needs the lazy DFA.
-bench_find!(
+sherlock!(
     name_alt3_nocase,
-    regex!("(?i)Sherlock|Holmes|Watson|Irene|Adler|John|Baker"), 753);
+    r"(?i)Sherlock|Holmes|Watson|Irene|Adler|John|Baker",
+    753);
 // Should still use Aho-Corasick for the prefixes in each alternate, but
 // we need to use the lazy DFA to complete it.
-bench_find!(name_alt4, regex!("Sher[a-z]+|Hol[a-z]+"), 582);
-bench_find!(name_alt4_nocase, regex!("(?i)Sher[a-z]+|Hol[a-z]+"), 697);
+sherlock!(name_alt4, r"Sher[a-z]+|Hol[a-z]+", 582);
+sherlock!(name_alt4_nocase, r"(?i)Sher[a-z]+|Hol[a-z]+", 697);
 // Uses Aho-Corasick, but can use memchr3 (unlike name_alt3).
-bench_find!(name_alt5, regex!("Sherlock|Holmes|Watson"), 639);
-bench_find!(name_alt5_nocase, regex!("(?i)Sherlock|Holmes|Watson"), 650);
+sherlock!(name_alt5, r"Sherlock|Holmes|Watson", 639);
+sherlock!(name_alt5_nocase, r"(?i)Sherlock|Holmes|Watson", 650);
 
 // How long does it take to discover that there's no match? In the first two
 // cases, we detect the rarest byte in the literal to run memchr on. In the
 // first, it's 'z' and in the second it's 'j'. The third case only has common
 // letters, and is therefore slower.
-bench_find!(no_match_uncommon, regex!("zqj"), 0);
-bench_find!(no_match_common, regex!("aqj"), 0);
-bench_find!(no_match_really_common, regex!("aei"), 0);
+sherlock!(no_match_uncommon, r"zqj", 0);
+sherlock!(no_match_common, r"aqj", 0);
+sherlock!(no_match_really_common, r"aei", 0);
 
 // Various twiddling on very common words. This tends to stress the constant
 // overhead of actually reporting a match. (None of these actually enter any
 // matching engines.)
-bench_find!(the_lower, regex!("the"), 7218);
-bench_find!(the_upper, regex!("The"), 741);
-bench_find!(the_nocase, regex!("(?i)the"), 7987);
+sherlock!(the_lower, r"the", 7218);
+sherlock!(the_upper, r"The", 741);
+sherlock!(the_nocase, r"(?i)the", 7987);
 
 // Process whitespace after a very common word.
 // Uses Boyer-Moore to find `the` and the lazy DFA for the rest.
-bench_find!(the_whitespace, regex!(r"the\s+\w+"), 5410);
+sherlock!(the_whitespace, r"the\s+\w+", 5410);
 
 // How fast can we match everything? This essentially defeats any clever prefix
 // tricks and just executes the DFA across the entire input.
-#[cfg(not(feature = "re-pcre"))]
+#[cfg(not(feature = "re-pcre1"))]
 #[cfg(not(feature = "re-pcre2"))]
-bench_find!(everything_greedy, regex!(".*"), 13053);
+#[cfg(not(feature = "re-tcl"))]
+sherlock!(everything_greedy, r".*", 13053);
 #[cfg(not(feature = "re-onig"))]
-#[cfg(not(feature = "re-pcre"))]
+#[cfg(not(feature = "re-pcre1"))]
 #[cfg(not(feature = "re-pcre2"))]
-bench_find!(everything_greedy_nl, regex!("(?s).*"), 1);
+#[cfg(not(feature = "re-tcl"))]
+sherlock!(everything_greedy_nl, r"(?s).*", 1);
 
 // How fast can we match every letter? This also defeats any clever prefix
-// tricks. Weird. Looks like PCRE2 diverges. Not clear who is right...
+// tricks.
+#[cfg(not(feature = "re-tcl"))]
 #[cfg(not(feature = "re-rust-bytes"))]
-bench_find!(letters, regex!(r"\p{L}"), 447160);
+sherlock!(letters, r"\p{L}", 447160);
+#[cfg(not(feature = "re-tcl"))]
 #[cfg(feature = "re-rust-bytes")]
-bench_find!(letters, regex!(r"(?u)\p{L}"), 447160);
+sherlock!(letters, r"(?u)\p{L}", 447160);
 
+#[cfg(not(feature = "re-tcl"))]
 #[cfg(not(feature = "re-rust-bytes"))]
-bench_find!(letters_upper, regex!(r"\p{Lu}"), 14180);
+sherlock!(letters_upper, r"\p{Lu}", 14180);
+#[cfg(not(feature = "re-tcl"))]
 #[cfg(feature = "re-rust-bytes")]
-bench_find!(letters_upper, regex!(r"(?u)\p{Lu}"), 14180);
+sherlock!(letters_upper, r"(?u)\p{Lu}", 14180);
 
+#[cfg(not(feature = "re-tcl"))]
 #[cfg(not(feature = "re-rust-bytes"))]
-bench_find!(letters_lower, regex!(r"\p{Ll}"), 432980);
+sherlock!(letters_lower, r"\p{Ll}", 432980);
+#[cfg(not(feature = "re-tcl"))]
 #[cfg(feature = "re-rust-bytes")]
-bench_find!(letters_lower, regex!(r"(?u)\p{Ll}"), 432980);
+sherlock!(letters_lower, r"(?u)\p{Ll}", 432980);
 
 // Similarly, for words.
 #[cfg(not(feature = "re-rust-bytes"))]
-bench_find!(words, regex!(r"\w+"), 109214);
+#[cfg(not(feature = "re-re2"))]
+sherlock!(words, r"\w+", 109214);
 #[cfg(feature = "re-rust-bytes")]
-bench_find!(words, regex!(r"(?u)\w+"), 109214);
+sherlock!(words, r"(?u)\w+", 109214);
+#[cfg(feature = "re-re2")]
+sherlock!(words, r"\w+", 109222); // hmm, why does RE2 diverge here?
 
 // Find complete words before Holmes. The `\w` defeats any prefix
-// optimizations, but 'Holmes' triggers the reverse suffix optimization.
-bench_find!(before_holmes, regex!(r"\w+\s+Holmes"), 319);
+// optimizations.
+sherlock!(before_holmes, r"\w+\s+Holmes", 319);
 
 // Find Holmes co-occuring with Watson in a particular window of characters.
 // This uses Aho-Corasick for the Holmes|Watson prefix, but the lazy DFA for
 // the rest.
-bench_find!(
-    holmes_cochar_watson,
-    regex!(r"Holmes.{0,25}Watson|Watson.{0,25}Holmes"), 7);
+sherlock!(holmes_cochar_watson, r"Holmes.{0,25}Watson|Watson.{0,25}Holmes", 7);
 
 // Find Holmes co-occuring with Watson in a particular window of words.
 // This uses Aho-Corasick for the Holmes|Watson prefix, but the lazy DFA for
 // the rest.
 #[cfg(not(feature = "re-onig"))]
-#[cfg(not(feature = "re-pcre"))]
+#[cfg(not(feature = "re-pcre1"))]
 #[cfg(not(feature = "re-pcre2"))]
-bench_find!(
+#[cfg(not(feature = "re-tcl"))]
+sherlock!(
     holmes_coword_watson,
-    regex!(r"Holmes(?:\s*.+\s*){0,10}Watson|Watson(?:\s*.+\s*){0,10}Holmes"),
+    r"Holmes(?:\s*.+\s*){0,10}Watson|Watson(?:\s*.+\s*){0,10}Holmes",
     51);
 
 // Find some subset of quotes in the text.
 // This does detect the `"` or `'` prefix literal and does a quick scan for
 // either byte before starting the lazy DFA.
-bench_find!(quotes, regex!(r#"["'][^"']{0,30}[?!.]["']"#), 767);
+sherlock!(quotes, r#"["'][^"']{0,30}[?!.]["']"#, 767);
 
 // Finds all occurrences of Sherlock Holmes at the beginning or end of a line.
 // The empty assertions defeat any detection of prefix literals, so it's the
 // lazy DFA the entire way.
-bench_find!(
+sherlock!(
     line_boundary_sherlock_holmes,
-    regex!(r"(?m)^Sherlock Holmes|Sherlock Holmes$"), 34);
+    r"(?m)^Sherlock Holmes|Sherlock Holmes$",
+    34);
 
-// All words ending in `n`.
-// This uses word boundaries, which the lazy DFA cannot handle. Since the word
-// boundary also defeats finding any literal prefixes, we have to use the
-// NFA algorithm the whole way, which is quite slow.
-//
-// Unless we're using bytes::Regex, which will use an ASCII word boundary,
-// which the DFA can indeed handle.
-bench_find!(word_ending_n, regex!(r"\b\w+n\b"), 8366);
+// All words ending in `n`. This uses Unicode word boundaries, which the DFA
+// can speculatively handle. Since this benchmark is on mostly ASCII text, it
+// performs well here. A different benchmark with non-Western text would be
+// more revealing since the search would be forced to fall back to an NFA
+// simulation.
+#[cfg(not(feature = "re-tcl"))]
+sherlock!(word_ending_n, r"\b\w+n\b", 8366);
 
 // This is a real bad one for Rust's engine. This particular expression
 // fills the state cache quite frequently, which results in a lot of churn.
@@ -192,11 +179,15 @@ bench_find!(word_ending_n, regex!(r"\b\w+n\b"), 8366);
 //
 // Its only salvation is that the DFA realizes it's executing slowly, gives up
 // quickly and falls back to the NFA algorithm.
-bench_find!(repeated_class_negation, regex!(r"[a-q][^u-z]{13}x"), 142);
+//
+// RE2 seems to do a worse job at this than Rust. So much so that it's slow
+// enough to be annoying, so we disable it.
+#[cfg(not(feature = "re-re2"))]
+sherlock!(repeated_class_negation, r"[a-q][^u-z]{13}x", 142);
 
 // This defeats any prefix optimizations but triggers the reverse suffix
 // optimization.
-bench_find!(ing_suffix, regex!(r"[a-zA-Z]+ing"), 2824);
+sherlock!(ing_suffix, r"[a-zA-Z]+ing", 2824);
 
 // Similar to ing_suffix, but a little more complex by limiting the length
 // of the word and making sure it's surrounded by whitespace. The trailing
@@ -208,4 +199,4 @@ bench_find!(ing_suffix, regex!(r"[a-zA-Z]+ing"), 2824);
 // Interestingly, this is slower in the rust-bytes benchmark, presumably
 // because scanning for one of the bytes in the Unicode *unaware* `\s` ends
 // up being slower than avoiding the prefix scan at all.
-bench_find!(ing_suffix_limited_space, regex!(r"\s[a-zA-Z]{0,12}ing\s"), 2081);
+sherlock!(ing_suffix_limited_space, r"\s[a-zA-Z]{0,12}ing\s", 2081);

@@ -253,7 +253,17 @@ impl<'c> RegularExpression for ExecNoSyncStr<'c> {
     fn slots_len(&self) -> usize { self.0.slots_len() }
 
     fn next_after_empty(&self, text: &str, i: usize) -> usize {
-        i + text[i..].chars().next().unwrap().len_utf8()
+        let b = text.as_bytes()[i];
+        let inc = if b <= 0x7F {
+            1
+        } else if b <= 0b110_11111 {
+            2
+        } else if b <= 0b1110_1111 {
+            3
+        } else {
+            4
+        };
+        i + inc
     }
 
     #[inline(always)] // reduces constant overhead

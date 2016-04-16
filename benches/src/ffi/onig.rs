@@ -8,44 +8,27 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![feature(test)]
-
-#[macro_use] extern crate lazy_static;
-extern crate onig;
-extern crate test;
-
-use std::ops::Deref;
+use onig;
 
 pub struct Regex(onig::Regex);
 
 unsafe impl Send for Regex {}
-unsafe impl Sync for Regex {}
-
-impl Deref for Regex {
-    type Target = onig::Regex;
-
-    fn deref(&self) -> &onig::Regex {
-        &self.0
-    }
-}
 
 impl Regex {
-    fn new(pattern: &str) -> Result<Self, onig::Error> {
+    pub fn new(pattern: &str) -> Result<Self, onig::Error> {
         onig::Regex::new(pattern).map(Regex)
     }
 
-    // Gah. onig's match function is anchored, but find is not.
-    fn is_match(&self, text: &str) -> bool {
-        self.search_with_options(
+    pub fn is_match(&self, text: &str) -> bool {
+        // Gah. onig's is_match function is anchored, but find is not.
+        self.0.search_with_options(
             text, 0, text.len(), onig::SEARCH_OPTION_NONE, None).is_some()
     }
+
+    pub fn find_iter<'r, 't>(
+        &'r self,
+        text: &'t str,
+    ) -> onig::FindMatches<'r, 't> {
+        self.0.find_iter(text)
+    }
 }
-
-macro_rules! regex(
-    ($re:expr) => {{
-        ::Regex::new($re).unwrap()
-    }}
-);
-
-mod misc;
-mod sherlock;

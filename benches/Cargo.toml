@@ -8,74 +8,58 @@ repository = "https://github.com/rust-lang/regex"
 documentation = "http://doc.rust-lang.org/regex/regex_syntax/index.html"
 homepage = "https://github.com/rust-lang/regex"
 description = "Regex benchmarks for Rust's and other engines."
-
 build = "build.rs"
 
 [dependencies]
+docopt = "0.6"
 lazy_static = "0.1"
 libc = "0.2"
 onig = { version = "0.4", optional = true }
 libpcre-sys = { version = "0.2", optional = true }
+memmap = "0.2"
 regex = { version = "0.1", path = ".." }
 regex_macros = { version = "0.1", path = "../regex_macros", optional = true }
 regex-syntax = { version = "0.3", path = "../regex-syntax" }
+rustc-serialize = "0.3"
 
 [build-dependencies]
+gcc = "0.3"
 pkg-config = "0.3"
+
+[[bin]]
+name = "regex-run-one"
+path = "src/main.rs"
+bench = false
 
 # Use features to conditionally compile benchmarked regexes, since not every
 # regex works on every engine. Additionally, it is useful to be able to build
 # each benchmark individually, so that not all dependencies are required to
 # run only one benchmark.
+#
+# Note that when running benchmarks, only ONE feature should be set at a time.
+# Doing anything else will probably result in weird "duplicate definition"
+# compiler errors.
+#
+# Tip: use the run-bench script in the root of this repository to run
+# benchmarks.
 [features]
-re-pcre = ["libpcre-sys"]
+re-pcre1 = ["libpcre-sys"]
 re-pcre2 = []
 re-onig = ["onig"]
+re-re2 = []
 re-rust = []
 re-rust-bytes = []
 re-rust-plugin = ["regex_macros"]
+re-tcl = []
 
-# Run the benchmarks on the default behavior of Regex::new.
 [[bench]]
-name = "rust"
-path = "src/bench_rust.rs"
+name = "bench"
+path = "src/bench.rs"
 test = false
 bench = true
 
-# Run the benchmarks on the default behavior of bytes::Regex::new.
-[[bench]]
-name = "rust-bytes"
-path = "src/bench_rust_bytes.rs"
-test = false
-bench = true
-
-# Run the benchmarks on the default behavior of the `regex!` compiler plugin.
-[[bench]]
-name = "rust-plugin"
-path = "src/bench_rust_plugin.rs"
-test = false
-bench = true
-
-# Run the benchmarks on PCRE.
-[[bench]]
-name = "pcre"
-path = "src/bench_pcre.rs"
-test = false
-bench = true
-
-# Run the benchmarks on PCRE2.
-[[bench]]
-name = "pcre2"
-path = "src/bench_pcre2.rs"
-test = false
-bench = true
-
-# Run the benchmarks on Oniguruma.
-[[bench]]
-name = "onig"
-path = "src/bench_onig.rs"
-test = false
-bench = true
+[profile.release]
+debug = true
 
 [profile.bench]
 debug = true
