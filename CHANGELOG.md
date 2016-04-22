@@ -1,3 +1,15 @@
+0.1.67
+======
+* [PR #201](https://github.com/rust-lang-nursery/regex/pull/201):
+  Fix undefined behavior in the `regex!` compiler plugin macro.
+* [PR #205](https://github.com/rust-lang-nursery/regex/pull/205):
+  More improvements to DFA performance. Competitive with RE2. See PR for
+  benchmarks.
+* [PR #209](https://github.com/rust-lang-nursery/regex/pull/209):
+  Release 0.1.66 was semver incompatible since it required a newer version
+  of Rust than previous releases. This PR fixes that. (And `0.1.66` was
+  yanked.)
+
 0.1.66
 ======
 * Speculative support for Unicode word boundaries was added to the DFA. This
