@@ -83,6 +83,7 @@ use self::Expr::*;
 use self::Repeater::*;
 
 use parser::{Flags, Parser};
+pub use parser::is_punct;
 
 /// A regular expression abstract syntax tree.
 ///
