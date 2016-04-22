@@ -12,7 +12,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use thread_local::CachedThreadLocal;
+use mempool::Pool;
 use syntax::{Expr, ExprBuilder, Literals};
 
 use backtrack;
@@ -33,11 +33,12 @@ use set;
 /// In particular, this manages the various compiled forms of a single regular
 /// expression and the choice of which matching engine to use to execute a
 /// regular expression.
+#[derive(Debug)]
 pub struct Exec {
     /// All read only state.
     ro: Arc<ExecReadOnly>,
     /// Caches for the various matching engines.
-    cache: CachedThreadLocal<ProgramCache>,
+    cache: Pool<ProgramCache>,
 }
 
 /// ExecNoSync is like Exec, except it embeds a reference to a cache. This
@@ -203,7 +204,8 @@ impl ExecBuilder {
                 suffixes: LiteralSearcher::empty(),
                 match_type: MatchType::Nothing,
             });
-            return Ok(Exec { ro: ro, cache: CachedThreadLocal::new() });
+            let ro_ = ro.clone();
+            return Ok(Exec { ro: ro, cache: create_pool(ro_) });
         }
         let parsed = try!(Parsed::parse(&self.res, self.only_utf8));
         let mut nfa = try!(
@@ -243,7 +245,8 @@ impl ExecBuilder {
         // println!("MATCH TYPE for '{:?}': {:?}", ro.res, ro.match_type);
 
         let ro = Arc::new(ro);
-        Ok(Exec { ro: ro, cache: CachedThreadLocal::new() })
+        let ro_ = ro.clone();
+        Ok(Exec { ro: ro, cache: create_pool(ro_) })
     }
 }
 
@@ -764,10 +767,9 @@ impl Exec {
     /// Get a searcher that isn't Sync.
     #[inline(always)] // reduces constant overhead
     pub fn searcher(&self) -> ExecNoSync {
-        let create = || Box::new(RefCell::new(ProgramCacheInner::new(&self.ro)));
         ExecNoSync {
             ro: &self.ro, // a clone is too expensive here! (and not needed)
-            cache: self.cache.get_or(create),
+            cache: self.cache.get(),
         }
     }
 
@@ -821,7 +823,7 @@ impl Clone for Exec {
     fn clone(&self) -> Exec {
         Exec {
             ro: self.ro.clone(),
-            cache: CachedThreadLocal::new(),
+            cache: create_pool(self.ro.clone()),
         }
     }
 }
@@ -930,6 +932,11 @@ pub struct ProgramCacheInner {
     pub backtrack: backtrack::Cache,
     pub dfa: dfa::Cache,
     pub dfa_reverse: dfa::Cache,
+}
+
+/// Creates a fresh pool.
+fn create_pool(ro: Arc<ExecReadOnly>) -> Pool<ProgramCache> {
+    Pool::new(Box::new(move || RefCell::new(ProgramCacheInner::new(&ro))))
 }
 
 impl ProgramCacheInner {
