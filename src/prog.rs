@@ -68,7 +68,7 @@ impl Program {
             captures: vec![],
             capture_name_idx: Arc::new(HashMap::new()),
             start: 0,
-            byte_classes: vec![],
+            byte_classes: vec![0; 256],
             only_utf8: true,
             is_bytes: false,
             is_dfa: false,
