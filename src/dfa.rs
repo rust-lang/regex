@@ -1319,7 +1319,19 @@ impl<'a> Fsm<'a> {
         empty_flags: EmptyFlags,
         state_flags: StateFlags,
     ) -> Option<StatePtr> {
-        let flagi = empty_flags.as_index();
+        // Compute an index into our cache of start states based on the set
+        // of empty/state flags set at the current position in the input. We
+        // don't use every flag since not all flags matter. For example, since
+        // matches are delayed by one byte, start states can never be match
+        // states.
+        let flagi = {
+            (((empty_flags.start as u8) << 0) |
+             ((empty_flags.end as u8) << 1) |
+             ((empty_flags.start_line as u8) << 2) |
+             ((empty_flags.end_line as u8) << 3) |
+             ((state_flags.is_word() as u8) << 4))
+            as usize
+        };
         match self.cache.start_states[flagi] {
             STATE_UNKNOWN => {}
             STATE_DEAD => return Some(STATE_DEAD),
@@ -1589,18 +1601,6 @@ impl Transitions {
         debug_assert!((si as usize) < self.table.len());
         debug_assert!(cls < self.num_byte_classes);
         *self.table.get_unchecked(si as usize + cls)
-    }
-}
-
-impl EmptyFlags {
-    fn as_index(&self) -> usize {
-        (((self.start as u8) << 0) |
-         ((self.end as u8) << 1) |
-         ((self.start_line as u8) << 2) |
-         ((self.end_line as u8) << 3) |
-         ((self.word_boundary as u8) << 4) |
-         ((self.not_word_boundary as u8) << 5))
-        as usize
     }
 }
 

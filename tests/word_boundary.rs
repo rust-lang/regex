@@ -40,6 +40,7 @@ matiter!(wb37, r"^^^^^\b.$$$$$", "x", (0, 1));
 matiter!(wb38, r"^^^^^\b$$$$$", "x");
 matiter!(wb39, r"^^^^^\b\b\b.\b\b\b$$$$$", "x", (0, 1));
 matiter!(wb40, r"\b.+\b", "$$abc$$", (2, 5));
+matiter!(wb41, r"\b", "a b c", (0, 0), (1, 1), (2, 2), (3, 3), (4, 4), (5, 5));
 
 matiter!(nb1, r"\Bfoo\B", "n foo xfoox that", (7, 10));
 matiter!(nb2, r"a\B", "faoa x", (1, 2));

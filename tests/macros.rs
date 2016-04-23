@@ -114,3 +114,14 @@ macro_rules! nomatset {
         }
     }
 }
+
+macro_rules! split {
+    ($name:ident, $re:expr, $text:expr, $expected:expr) => {
+        #[test]
+        fn $name() {
+            let re = regex!($re);
+            let splitted: Vec<_> = re.split(t!($text)).collect();
+            assert_eq!($expected, &*splitted);
+        }
+    }
+}
