@@ -14,7 +14,7 @@ use std::thread;
 macro_rules! regex { ($re:expr) => { ::regex::Regex::new($re).unwrap() } }
 
 fn main() {
-    let mut seq = String::with_capacity(50 * (1 << 20));
+    let mut seq = String::with_capacity(51 * (1 << 20));
     io::stdin().read_to_string(&mut seq).unwrap();
     let ilen = seq.len();
 

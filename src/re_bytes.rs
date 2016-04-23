@@ -445,11 +445,11 @@ impl Regex {
                 if limit > 0 && i >= limit {
                     break
                 }
-                new.extend(&text[last_match..s]);
-                new.extend(&*rep);
+                extend_from_slice(&mut new, &text[last_match..s]);
+                extend_from_slice(&mut new, &*rep);
                 last_match = e;
             }
-            new.extend(&text[last_match..]);
+            extend_from_slice(&mut new, &text[last_match..]);
             return new;
         }
 
@@ -463,11 +463,11 @@ impl Regex {
             }
             // unwrap on 0 is OK because captures only reports matches
             let (s, e) = cap.pos(0).unwrap();
-            new.extend(&text[last_match..s]);
+            extend_from_slice(&mut new, &text[last_match..s]);
             rep.replace_append(&cap, &mut new);
             last_match = e;
         }
-        new.extend(&text[last_match..]);
+        extend_from_slice(&mut new, &text[last_match..]);
         new
     }
 
@@ -928,7 +928,7 @@ impl<'a> Replacer for &'a [u8] {
 
 impl<F> Replacer for F where F: FnMut(&Captures) -> Vec<u8> {
     fn replace_append(&mut self, caps: &Captures, dst: &mut Vec<u8>) {
-        dst.extend((*self)(caps))
+        extend_from_slice(dst, &(*self)(caps));
     }
 }
 
@@ -944,10 +944,26 @@ pub struct NoExpand<'r>(pub &'r [u8]);
 
 impl<'a> Replacer for NoExpand<'a> {
     fn replace_append(&mut self, _: &Captures, dst: &mut Vec<u8>) {
-        dst.extend(self.0)
+        extend_from_slice(dst, self.0);
     }
 
     fn no_expansion<'r>(&'r mut self) -> Option<Cow<'r, [u8]>> {
         Some(Cow::Borrowed(self.0))
+    }
+}
+
+/// This hopefully has the same performance characteristics as
+/// Vec::extend_from_slice (which was introduced in Rust 1.6), but works on
+/// Rust 1.3.
+///
+/// N.B. Remove this once we do a semver bump. At that point, we'll bump
+/// required Rust version to at least 1.6.
+fn extend_from_slice(dst: &mut Vec<u8>, src: &[u8]) {
+    dst.reserve(src.len());
+    let dst_len = dst.len();
+    unsafe { dst.set_len(dst_len + src.len()); }
+    let mut dst = &mut dst[dst_len..dst_len + src.len()];
+    for i in 0..src.len() {
+        dst[i] = src[i];
     }
 }
