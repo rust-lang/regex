@@ -84,7 +84,10 @@ impl<'r, 't> Iterator for FindMatches<'r, 't> {
 
     fn next(&mut self) -> Option<(usize, usize)> {
         fn next_after_empty(text: &str, i: usize) -> usize {
-            let b = text.as_bytes()[i];
+            let b = match text.as_bytes().get(i) {
+                None => return text.len() + 1,
+                Some(&b) => b,
+            };
             let inc = if b <= 0x7F {
                 1
             } else if b <= 0b110_11111 {
@@ -105,14 +108,19 @@ impl<'r, 't> Iterator for FindMatches<'r, 't> {
             Some((s, e)) => (s, e),
         };
         assert!(s >= self.last_end);
-        if e == s && Some(self.last_end) == self.last_match {
-            if self.last_end >= self.text.len() {
-                return None;
+        if s == e {
+            // This is an empty match. To ensure we make progress, start
+            // the next search at the smallest possible starting position
+            // of the next match following this one.
+            self.last_end = next_after_empty(&self.text, e);
+            // Don't accept empty matches immediately following a match.
+            // Just move on to the next match.
+            if Some(e) == self.last_match {
+                return self.next();
             }
-            self.last_end = next_after_empty(self.text, self.last_end);
-            return self.next();
+        } else {
+            self.last_end = e;
         }
-        self.last_end = e;
         self.last_match = Some(self.last_end);
         Some((s, e))
     }

@@ -16,6 +16,7 @@ macro_rules! regex_new {
         use regex::internal::ExecBuilder;
         ExecBuilder::new($re)
             .bounded_backtracking()
+            .unicode(false)
             .only_utf8(false)
             .build()
             .map(|e| e.into_byte_regex())
@@ -33,6 +34,7 @@ macro_rules! regex_set_new {
         use regex::internal::ExecBuilder;
         ExecBuilder::new_many($re)
             .bounded_backtracking()
+            .unicode(false)
             .only_utf8(false)
             .build()
             .map(|e| e.into_byte_regex_set())

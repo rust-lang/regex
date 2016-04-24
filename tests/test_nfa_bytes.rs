@@ -16,7 +16,11 @@ macro_rules! regex_new {
     ($re:expr) => {{
         use regex::internal::ExecBuilder;
         ExecBuilder::new($re)
-            .nfa().only_utf8(false).build().map(|e| e.into_byte_regex())
+            .nfa()
+            .unicode(false)
+            .only_utf8(false)
+            .build()
+            .map(|e| e.into_byte_regex())
     }}
 }
 
@@ -30,7 +34,11 @@ macro_rules! regex_set_new {
     ($re:expr) => {{
         use regex::internal::ExecBuilder;
         ExecBuilder::new_many($re)
-            .nfa().only_utf8(false).build().map(|e| e.into_byte_regex_set())
+            .nfa()
+            .unicode(false)
+            .only_utf8(false)
+            .build()
+            .map(|e| e.into_byte_regex_set())
     }}
 }
 

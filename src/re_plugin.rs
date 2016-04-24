@@ -41,7 +41,20 @@ impl RegularExpression for Plugin {
     }
 
     fn next_after_empty(&self, text: &str, i: usize) -> usize {
-        i + text[i..].chars().next().unwrap().len_utf8()
+        let b = match text.as_bytes().get(i) {
+            None => return text.len() + 1,
+            Some(&b) => b,
+        };
+        let inc = if b <= 0x7F {
+            1
+        } else if b <= 0b110_11111 {
+            2
+        } else if b <= 0b1110_1111 {
+            3
+        } else {
+            4
+        };
+        i + inc
     }
 
     fn shortest_match_at(&self, text: &str, start: usize) -> Option<usize> {
@@ -54,15 +67,18 @@ impl RegularExpression for Plugin {
 
     fn find_at(&self, text: &str, start: usize) -> Option<(usize, usize)> {
         let mut slots = [None, None];
-        self.captures_at(&mut slots, text, start)
+        self.read_captures_at(&mut slots, text, start)
     }
 
-    fn captures_at<'t>(
+    fn read_captures_at<'t>(
         &self,
         slots: &mut [Slot],
         text: &'t str,
         start: usize,
     ) -> Option<(usize, usize)> {
+        for slot in slots.iter_mut() {
+            *slot = None;
+        }
         (self.prog)(slots, text, start);
         match (slots[0], slots[1]) {
             (Some(s), Some(e)) => Some((s, e)),

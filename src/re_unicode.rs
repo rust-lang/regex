@@ -17,10 +17,11 @@ use std::sync::Arc;
 
 use syntax;
 
-use exec::{Exec, ExecNoSyncStr, ExecBuilder};
 use error::Error;
+use exec::{Exec, ExecNoSyncStr};
+use re_builder::unicode::RegexBuilder;
 use re_plugin::Plugin;
-use re_trait::{self, RegularExpression};
+use re_trait::{self, RegularExpression, Slot};
 
 /// Escapes all regular expression meta characters in `text`.
 ///
@@ -169,7 +170,7 @@ impl Regex {
     /// If the data structure exceeds the size given, then an error is
     /// returned.
     pub fn with_size_limit(size: usize, re: &str) -> Result<Regex, Error> {
-        ExecBuilder::new(re).size_limit(size).build().map(Regex::from)
+        RegexBuilder::new(re).size_limit(size).compile()
     }
 
     /// Returns true if and only if the regex matches the string given.
@@ -191,7 +192,18 @@ impl Regex {
     /// # }
     /// ```
     pub fn is_match(&self, text: &str) -> bool {
-        self.shortest_match(text).is_some()
+        self.is_match_at(text, 0)
+    }
+
+    /// Returns the same as is_match, but starts the search at the given
+    /// offset.
+    ///
+    /// The significance of the starting point is that it takes the surrounding
+    /// context into consideration. For example, the `\A` anchor can only
+    /// match when `start == 0`.
+    #[doc(hidden)]
+    pub fn is_match_at(&self, text: &str, start: usize) -> bool {
+        self.shortest_match_at(text, start).is_some()
     }
 
     /// Returns the start and end byte range of the leftmost-first match in
@@ -215,11 +227,22 @@ impl Regex {
     /// # }
     /// ```
     pub fn find(&self, text: &str) -> Option<(usize, usize)> {
+        self.find_at(text, 0)
+    }
+
+    /// Returns the same as find, but starts the search at the given
+    /// offset.
+    ///
+    /// The significance of the starting point is that it takes the surrounding
+    /// context into consideration. For example, the `\A` anchor can only
+    /// match when `start == 0`.
+    #[doc(hidden)]
+    pub fn find_at(&self, text: &str, start: usize) -> Option<(usize, usize)> {
         match self.0 {
             _Regex::Dynamic(ref exec) => {
-                exec.searcher_str().find_at(text, 0)
+                exec.searcher_str().find_at(text, start)
             }
-            _Regex::Plugin(ref plug) => plug.find_at(text, 0),
+            _Regex::Plugin(ref plug) => plug.find_at(text, start),
         }
     }
 
@@ -324,17 +347,34 @@ impl Regex {
     /// accessed with `at(0)` or `[0]`.
     pub fn captures<'t>(&self, text: &'t str) -> Option<Captures<'t>> {
         let mut slots = vec![None; 2 * self.captures_len()];
-        let result = match self.0 {
-            _Regex::Dynamic(ref exec) => {
-                exec.searcher_str().captures_at(&mut slots, text, 0)
-            }
-            _Regex::Plugin(ref plug) => plug.captures_at(&mut slots, text, 0),
-        };
-        result.map(|_| Captures {
+        self.read_captures_at(&mut slots, text, 0).map(|_| Captures {
             text: text,
             slots: slots,
             named_groups: NamedGroups::from_regex(self)
         })
+    }
+
+    /// Returns the same as captures, but starts the search at the given
+    /// offset and populates the capture locations given.
+    ///
+    /// The significance of the starting point is that it takes the surrounding
+    /// context into consideration. For example, the `\A` anchor can only
+    /// match when `start == 0`.
+    #[doc(hidden)]
+    pub fn read_captures_at(
+        &self,
+        slots: &mut [Slot],
+        text: &str,
+        start: usize,
+    ) -> Option<(usize, usize)> {
+        match self.0 {
+            _Regex::Dynamic(ref exec) => {
+                exec.searcher_str().read_captures_at(slots, text, start)
+            }
+            _Regex::Plugin(ref plug) => {
+                plug.read_captures_at(slots, text, start)
+            }
+        }
     }
 
     /// Returns an iterator over all the non-overlapping capture groups matched
@@ -589,11 +629,26 @@ impl Regex {
     /// # }
     /// ```
     pub fn shortest_match(&self, text: &str) -> Option<usize> {
+        self.shortest_match_at(text, 0)
+    }
+
+    /// Returns the same as shortest_match, but starts the search at the given
+    /// offset.
+    ///
+    /// The significance of the starting point is that it takes the surrounding
+    /// context into consideration. For example, the `\A` anchor can only
+    /// match when `start == 0`.
+    #[doc(hidden)]
+    pub fn shortest_match_at(
+        &self,
+        text: &str,
+        start: usize,
+    ) -> Option<usize> {
         match self.0 {
             _Regex::Dynamic(ref exec) => {
-                exec.searcher_str().shortest_match_at(text, 0)
+                exec.searcher_str().shortest_match_at(text, start)
             }
-            _Regex::Plugin(ref plug) => plug.shortest_match_at(text, 0),
+            _Regex::Plugin(ref plug) => plug.shortest_match_at(text, start),
         }
     }
 

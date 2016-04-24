@@ -24,10 +24,11 @@ use input::{ByteInput, CharInput};
 use literals::LiteralSearcher;
 use pikevm;
 use prog::Program;
+use re_builder::RegexOptions;
 use re_bytes;
+use re_set;
 use re_trait::{RegularExpression, Slot};
 use re_unicode;
-use set;
 use utf8::next_utf8;
 
 /// Exec manages the execution of a regular expression.
@@ -92,11 +93,18 @@ struct ExecReadOnly {
 /// to control how a regex is executed and what kinds of resources it's
 /// permitted to use.
 pub struct ExecBuilder {
-    res: Vec<String>,
+    options: RegexOptions,
     match_type: Option<MatchType>,
-    size_limit: usize,
     bytes: bool,
     only_utf8: bool,
+}
+
+/// Parsed represents a set of parsed regular expressions and their detected
+/// literals.
+struct Parsed {
+    exprs: Vec<Expr>,
+    prefixes: Literals,
+    suffixes: Literals,
 }
 
 impl ExecBuilder {
@@ -116,10 +124,16 @@ impl ExecBuilder {
     /// wont work.)
     pub fn new_many<I, S>(res: I) -> Self
             where S: AsRef<str>, I: IntoIterator<Item=S> {
+        let mut opts = RegexOptions::default();
+        opts.pats = res.into_iter().map(|s| s.as_ref().to_owned()).collect();
+        Self::new_options(opts)
+    }
+
+    /// Create a regex execution builder.
+    pub fn new_options(opts: RegexOptions) -> Self {
         ExecBuilder {
-            res: res.into_iter().map(|s| s.as_ref().to_owned()).collect(),
+            options: opts,
             match_type: None,
-            size_limit: 10 * (1 << 20),
             bytes: false,
             only_utf8: true,
         }
@@ -160,17 +174,6 @@ impl ExecBuilder {
         self
     }
 
-    /// Sets the size limit on a single compiled regular expression program.
-    ///
-    /// The default is ~10MB.
-    ///
-    /// N.B. Typically, multiple programs are compiled for every regular
-    /// expression and this limit applies to *each* of them.
-    pub fn size_limit(mut self, bytes: usize) -> Self {
-        self.size_limit = bytes;
-        self
-    }
-
     /// Compiles byte based programs for use with the NFA matching engines.
     ///
     /// By default, the NFA engines match on Unicode scalar values. They can
@@ -194,9 +197,56 @@ impl ExecBuilder {
         self
     }
 
+    /// Set the Unicode flag.
+    pub fn unicode(mut self, yes: bool) -> Self {
+        self.options.unicode = yes;
+        self
+    }
+
+    /// Parse the current set of patterns into their AST and extract literals.
+    fn parse(&self) -> Result<Parsed, Error> {
+        let mut exprs = Vec::with_capacity(self.options.pats.len());
+        let mut prefixes = Some(Literals::empty());
+        let mut suffixes = Some(Literals::empty());
+        for pat in &self.options.pats {
+            let parser =
+                ExprBuilder::new()
+                    .case_insensitive(self.options.case_insensitive)
+                    .multi_line(self.options.multi_line)
+                    .dot_matches_new_line(self.options.dot_matches_new_line)
+                    .swap_greed(self.options.swap_greed)
+                    .ignore_whitespace(self.options.ignore_whitespace)
+                    .unicode(self.options.unicode)
+                    .allow_bytes(!self.only_utf8);
+            let expr = try!(parser.parse(pat));
+            prefixes = prefixes.and_then(|mut prefixes| {
+                if !prefixes.union_prefixes(&expr) {
+                    None
+                } else {
+                    Some(prefixes)
+                }
+            });
+            suffixes = suffixes.and_then(|mut suffixes| {
+                if !suffixes.union_suffixes(&expr) {
+                    None
+                } else {
+                    Some(suffixes)
+                }
+            });
+            exprs.push(expr);
+        }
+        Ok(Parsed {
+            exprs: exprs,
+            prefixes: prefixes.unwrap_or(Literals::empty()),
+            suffixes: suffixes.unwrap_or(Literals::empty()),
+        })
+    }
+
     /// Build an executor that can run a regular expression.
     pub fn build(self) -> Result<Exec, Error> {
-        if self.res.is_empty() {
+        // Special case when we have no patterns to compile.
+        // This can happen when compiling a regex set.
+        if self.options.pats.is_empty() {
             let ro = Arc::new(ExecReadOnly {
                 res: vec![],
                 nfa: Program::new(),
@@ -207,22 +257,22 @@ impl ExecBuilder {
             });
             return Ok(Exec { ro: ro, cache: CachedThreadLocal::new() });
         }
-        let parsed = try!(Parsed::parse(&self.res, self.only_utf8));
+        let parsed = try!(self.parse());
         let mut nfa = try!(
             Compiler::new()
-                     .size_limit(self.size_limit)
+                     .size_limit(self.options.size_limit)
                      .bytes(self.bytes)
                      .only_utf8(self.only_utf8)
                      .compile(&parsed.exprs));
         let mut dfa = try!(
             Compiler::new()
-                     .size_limit(self.size_limit)
+                     .size_limit(self.options.size_limit)
                      .dfa(true)
                      .only_utf8(self.only_utf8)
                      .compile(&parsed.exprs));
-        let dfa_reverse = try!(
+        let mut dfa_reverse = try!(
             Compiler::new()
-                     .size_limit(self.size_limit)
+                     .size_limit(self.options.size_limit)
                      .dfa(true)
                      .only_utf8(self.only_utf8)
                      .reverse(true)
@@ -232,9 +282,11 @@ impl ExecBuilder {
         let suffixes = parsed.suffixes.unambiguous_suffixes();
         nfa.prefixes = LiteralSearcher::prefixes(prefixes);
         dfa.prefixes = nfa.prefixes.clone();
+        dfa.dfa_size_limit = self.options.dfa_size_limit;
+        dfa_reverse.dfa_size_limit = self.options.dfa_size_limit;
 
         let mut ro = ExecReadOnly {
-            res: self.res,
+            res: self.options.pats,
             nfa: nfa,
             dfa: dfa,
             dfa_reverse: dfa_reverse,
@@ -274,13 +326,13 @@ impl<'c> RegularExpression for ExecNoSyncStr<'c> {
     }
 
     #[inline(always)] // reduces constant overhead
-    fn captures_at(
+    fn read_captures_at(
         &self,
         slots: &mut [Slot],
         text: &str,
         start: usize,
     ) -> Option<(usize, usize)> {
-        self.0.captures_at(slots, text.as_bytes(), start)
+        self.0.read_captures_at(slots, text.as_bytes(), start)
     }
 }
 
@@ -352,7 +404,6 @@ impl<'c> RegularExpression for ExecNoSync<'c> {
     /// shortest_match(...).is_some().
     #[inline(always)] // reduces constant overhead
     fn is_match_at(&self, text: &[u8], start: usize) -> bool {
-        use self::MatchType::*;
         if !self.is_anchor_end_match(text) {
             return false;
         }
@@ -360,12 +411,57 @@ impl<'c> RegularExpression for ExecNoSync<'c> {
         // filling in captures[1], but a RegexSet has no captures. In other
         // words, a RegexSet can't (currently) use shortest_match. ---AG
         match self.ro.match_type {
-            Literal(_) | Dfa | DfaAnchoredReverse | DfaMany | Nothing => {
-                self.shortest_match_at(text, start).is_some()
+            MatchType::Literal(ty) => {
+                self.exec_literals(ty, text, start).is_some()
             }
-            Nfa(ty) => {
+            MatchType::Dfa | MatchType::DfaMany => {
+                match dfa::Fsm::forward(
+                    &self.ro.dfa,
+                    &self.cache,
+                    true,
+                    text,
+                    start,
+                ) {
+                    dfa::Result::Match(_) => true,
+                    dfa::Result::NoMatch => false,
+                    dfa::Result::Quit => {
+                        return self.exec_nfa(
+                            MatchNfaType::Auto,
+                            &mut [false],
+                            &mut [],
+                            true,
+                            text,
+                            start,
+                        );
+                    }
+                }
+            }
+            MatchType::DfaAnchoredReverse => {
+                match dfa::Fsm::reverse(
+                    &self.ro.dfa_reverse,
+                    &self.cache,
+                    true,
+                    &text[start..],
+                    text.len(),
+                ) {
+                    dfa::Result::Match(_) => true,
+                    dfa::Result::NoMatch => false,
+                    dfa::Result::Quit => {
+                        return self.exec_nfa(
+                            MatchNfaType::Auto,
+                            &mut [false],
+                            &mut [],
+                            true,
+                            text,
+                            start,
+                        );
+                    }
+                }
+            }
+            MatchType::Nfa(ty) => {
                 self.exec_nfa(ty, &mut [false], &mut [], true, text, start)
             }
+            MatchType::Nothing => false,
         }
     }
 
@@ -414,12 +510,15 @@ impl<'c> RegularExpression for ExecNoSync<'c> {
     ///
     /// Note that the first two slots always correspond to the start and end
     /// locations of the overall match.
-    fn captures_at(
+    fn read_captures_at(
         &self,
         slots: &mut [Slot],
         text: &[u8],
         start: usize,
     ) -> Option<(usize, usize)> {
+        for slot in slots.iter_mut() {
+            *slot = None;
+        }
         if !self.is_anchor_end_match(text) {
             return None;
         }
@@ -799,8 +898,8 @@ impl Exec {
     }
 
     /// Build a RegexSet from this executor.
-    pub fn into_regex_set(self) -> set::RegexSet {
-        set::RegexSet::from(self)
+    pub fn into_regex_set(self) -> re_set::unicode::RegexSet {
+        re_set::unicode::RegexSet::from(self)
     }
 
     /// Build a Regex from this executor that can match arbitrary bytes.
@@ -809,8 +908,8 @@ impl Exec {
     }
 
     /// Build a RegexSet from this executor that can match arbitrary bytes.
-    pub fn into_byte_regex_set(self) -> re_bytes::RegexSet {
-        re_bytes::RegexSet::from(self)
+    pub fn into_byte_regex_set(self) -> re_set::bytes::RegexSet {
+        re_set::bytes::RegexSet::from(self)
     }
 
     /// The original regular expressions given by the caller that were
@@ -956,48 +1055,5 @@ impl ProgramCacheInner {
             dfa: dfa::Cache::new(&ro.dfa),
             dfa_reverse: dfa::Cache::new(&ro.dfa_reverse),
         }
-    }
-}
-
-/// An intermediate data structure for parsing a bunch of expressions and
-/// correctly extracting the prefixes and suffixes of all expressions.
-struct Parsed {
-    exprs: Vec<Expr>,
-    prefixes: Literals,
-    suffixes: Literals,
-}
-
-impl Parsed {
-    fn parse(res: &[String], only_utf8: bool) -> Result<Parsed, Error> {
-        let mut exprs = Vec::with_capacity(res.len());
-        let mut prefixes = Some(Literals::empty());
-        let mut suffixes = Some(Literals::empty());
-        for re in res {
-            let parser =
-                ExprBuilder::new()
-                    .allow_bytes(!only_utf8)
-                    .unicode(only_utf8);
-            let expr = try!(parser.parse(re));
-            prefixes = prefixes.and_then(|mut prefixes| {
-                if !prefixes.union_prefixes(&expr) {
-                    None
-                } else {
-                    Some(prefixes)
-                }
-            });
-            suffixes = suffixes.and_then(|mut suffixes| {
-                if !suffixes.union_suffixes(&expr) {
-                    None
-                } else {
-                    Some(suffixes)
-                }
-            });
-            exprs.push(expr);
-        }
-        Ok(Parsed {
-            exprs: exprs,
-            prefixes: prefixes.unwrap_or(Literals::empty()),
-            suffixes: suffixes.unwrap_or(Literals::empty()),
-        })
     }
 }

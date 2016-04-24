@@ -56,6 +56,22 @@ pub struct Program {
     pub has_unicode_word_boundary: bool,
     /// A possibly empty machine for very quickly matching prefix literals.
     pub prefixes: LiteralSearcher,
+    /// A limit on the size of the cache that the DFA is allowed to use while
+    /// matching.
+    ///
+    /// The cache limit specifies approximately how much space we're willing to
+    /// give to the state cache. Once the state cache exceeds the size, it is
+    /// wiped and all states must be re-computed.
+    ///
+    /// Note that this value does not impact correctness. It can be set to 0
+    /// and the DFA will run just fine. (It will only ever store exactly one
+    /// state in the cache, and will likely run very slowly, but it will work.)
+    ///
+    /// Also note that this limit is *per thread of execution*. That is,
+    /// if the same regex is used to search text across multiple threads
+    /// simultaneously, then the DFA cache is not shared. Instead, copies are
+    /// made.
+    pub dfa_size_limit: usize,
 }
 
 impl Program {
@@ -77,6 +93,7 @@ impl Program {
             is_anchored_end: false,
             has_unicode_word_boundary: false,
             prefixes: LiteralSearcher::empty(),
+            dfa_size_limit: 2 * (1<<20),
         }
     }
 
