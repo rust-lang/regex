@@ -1,3 +1,15 @@
+0.1.68
+======
+* [PR #210](https://github.com/rust-lang-nursery/regex/pull/210):
+  Fixed a performance bug in `bytes::Regex::replace` where `extend` was used
+  instead of `extend_from_slice`.
+* [PR #211](https://github.com/rust-lang-nursery/regex/pull/211):
+  Fixed a bug in the handling of word boundaries in the DFA.
+* [PR #213](https://github.com/rust-lang-nursery/regex/pull/213):
+  Added RE2 and Tcl to the benchmark harness. Also added a CLI utility from
+  running regexes using any of the following regex engines: PCRE1, PCRE2,
+  Oniguruma, RE2, Tcl and of course Rust's own regexes.
+
 0.1.67
 ======
 * [PR #201](https://github.com/rust-lang-nursery/regex/pull/201):
@@ -35,4 +47,3 @@
   fixed. This only affected use of `bytes::Regex`.
 * [#160](https://github.com/rust-lang-nursery/regex/issues/160):
   `Captures` now has a `Debug` impl.
-
