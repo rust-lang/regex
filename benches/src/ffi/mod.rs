@@ -8,21 +8,17 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![feature(test)]
+// We don't always use all of the method available to each regex engine because
+// of conditional compilation and such.
+#![allow(dead_code)]
 
-#[macro_use] extern crate lazy_static;
-extern crate regex;
-extern crate regex_syntax;
-extern crate test;
-
-pub use regex::bytes::Regex;
-
-// Due to macro scoping rules, this definition only applies for the modules
-// defined below. Effectively, it allows us to use the same tests for both
-// native and dynamic regexes.
-macro_rules! regex(
-    ($re:expr) => {{ ::Regex::new($re).unwrap() }}
-);
-
-mod misc;
-mod sherlock;
+#[cfg(feature = "re-onig")]
+pub mod onig;
+#[cfg(feature = "re-pcre1")]
+pub mod pcre1;
+#[cfg(feature = "re-pcre2")]
+pub mod pcre2;
+#[cfg(feature = "re-re2")]
+pub mod re2;
+#[cfg(feature = "re-tcl")]
+pub mod tcl;
