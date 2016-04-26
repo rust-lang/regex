@@ -31,23 +31,23 @@ use input::{Input, InputAt};
 use prog::{Program, InstPtr};
 use re_trait::Slot;
 
+type Bits = u32;
+
+const BIT_SIZE: usize = 32;
+const MAX_SIZE_BYTES: usize = 256 * (1 << 10); // 256 KB
+
 /// Returns true iff the given regex and input should be executed by this
 /// engine with reasonable memory usage.
 pub fn should_exec(num_insts: usize, text_len: usize) -> bool {
-    num_insts <= MAX_PROG_SIZE && text_len <= MAX_INPUT_SIZE
+    // Total memory usage in bytes is determined by:
+    //
+    //   ((len(insts) * (len(input) + 1) + bits - 1) / bits) * (size_of(u32))
+    //
+    // The actual limit picked is pretty much a heuristic.
+    // See: https://github.com/rust-lang-nursery/regex/issues/215
+    let size = ((num_insts * (text_len + 1) + BIT_SIZE - 1) / BIT_SIZE) * 4;
+    size <= MAX_SIZE_BYTES
 }
-
-// Total memory usage in bytes is determined by:
-//
-//   ((len(insts) * (len(input) + 1) + bits - 1) / bits) * (size_of(u32))
-//
-// With the constants below, this comes out to ~1.6MB. Mostly these numbers
-// were picked empirically with suspicious benchmarks.
-
-type Bits = u32;
-const BIT_SIZE: usize = 32;
-const MAX_PROG_SIZE: usize = 100;
-const MAX_INPUT_SIZE: usize = 128 * (1 << 10);
 
 /// A backtracking matching engine.
 #[derive(Debug)]
