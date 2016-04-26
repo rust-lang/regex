@@ -168,12 +168,13 @@ fn capture_iter_missing() {
 #[test]
 fn capture_iter_pos() {
     let re = regex!(r"(.)(?P<a>.)(.)(?P<b>.)");
-    let cap = re.captures(t!("abcd")).unwrap();
-
     let expected = vec![
         (0, 4), (0, 1), (1, 2), (2, 3), (3, 4),
     ].into_iter().map(Some).collect::<Vec<_>>();
-    let got = cap.iter_pos().collect::<Vec<_>>();
+    let got = {
+        let cap = re.captures(t!("abcd")).unwrap();
+        cap.iter_pos().collect::<Vec<_>>()
+    };
     assert_eq!(expected, got);
 }
 
@@ -192,15 +193,21 @@ fn capture_iter_pos_missing() {
 #[test]
 fn capture_iter_named() {
     let re = regex!(r"(.)(?P<a>.)(.)(?P<b>.)");
-    let cap = re.captures(t!("abcd")).unwrap();
-
     let expected1 = vec![
-        ("a", Some(t!("b"))), ("b", Some(t!("d"))),
+        (String::from("a"), Some(t!("b"))), (String::from("b"), Some(t!("d"))),
     ];
     let expected2 = vec![
-        ("b", Some(t!("d"))), ("a", Some(t!("b"))),
+        (String::from("b"), Some(t!("d"))), (String::from("a"), Some(t!("b"))),
     ];
-    let got = cap.iter_named().collect::<Vec<_>>();
+    let got = {
+        let cap = re.captures(t!("abcd")).unwrap();
+        // The names live as long as the captures object, so we clone them.
+        // The texts, on the other hand, must have the lifetime of the matched
+        // text (in this case, 'static).
+        cap.iter_named()
+           .map(|(name, text)| (name.to_owned(), text))
+           .collect::<Vec<_>>()
+    };
     assert!(got == expected1 || got == expected2);
 }
 
