@@ -10,6 +10,7 @@
 
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::cmp;
 use std::sync::Arc;
 
 use thread_local::CachedThreadLocal;
@@ -27,6 +28,7 @@ use re_bytes;
 use re_trait::{RegularExpression, Slot};
 use re_unicode;
 use set;
+use utf8::next_utf8;
 
 /// Exec manages the execution of a regular expression.
 ///
@@ -253,17 +255,7 @@ impl<'c> RegularExpression for ExecNoSyncStr<'c> {
     fn slots_len(&self) -> usize { self.0.slots_len() }
 
     fn next_after_empty(&self, text: &str, i: usize) -> usize {
-        let b = text.as_bytes()[i];
-        let inc = if b <= 0x7F {
-            1
-        } else if b <= 0b110_11111 {
-            2
-        } else if b <= 0b1110_1111 {
-            3
-        } else {
-            4
-        };
-        i + inc
+        next_utf8(text.as_bytes(), i)
     }
 
     #[inline(always)] // reduces constant overhead
@@ -433,15 +425,29 @@ impl<'c> RegularExpression for ExecNoSync<'c> {
         }
         match self.ro.match_type {
             MatchType::Literal(ty) => {
-                self.exec_literals(ty, text, start).and_then(|(s, _)| {
-                    self.captures_nfa(MatchNfaType::Auto, slots, text, s)
+                self.exec_literals(ty, text, start).and_then(|(s, e)| {
+                    // We need the +1 here to account for lookahead
+                    // operators.
+                    let e = if self.ro.nfa.uses_bytes() {
+                        cmp::min(e + 1, text.len())
+                    } else {
+                        cmp::min(next_utf8(text, e), text.len())
+                    };
+                    self.captures_nfa(MatchNfaType::Auto, slots, &text[..e], s)
                 })
             }
             MatchType::Dfa => {
                 match self.find_dfa_forward(text, start) {
-                    dfa::Result::Match((s, _)) => {
+                    dfa::Result::Match((s, e)) => {
+                        // We need the +1 here to account for lookahead
+                        // operators.
+                        let e = if self.ro.nfa.uses_bytes() {
+                            cmp::min(e + 1, text.len())
+                        } else {
+                            cmp::min(next_utf8(text, e), text.len())
+                        };
                         self.captures_nfa(
-                            MatchNfaType::Auto, slots, text, s)
+                            MatchNfaType::Auto, slots, &text[..e], s)
                     }
                     dfa::Result::NoMatch => None,
                     dfa::Result::Quit => {
