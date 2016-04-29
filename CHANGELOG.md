@@ -1,3 +1,12 @@
+0.1.69
+======
+* [PR #216](https://github.com/rust-lang-nursery/regex/pull/216):
+  Tweak the threshold for running backtracking.
+* [PR #217](https://github.com/rust-lang-nursery/regex/pull/217):
+  Add upper limit (from the DFA) to capture search (for the NFA).
+* [PR #218](https://github.com/rust-lang-nursery/regex/pull/218):
+  Add rure, a C API.
+
 0.1.68
 ======
 * [PR #210](https://github.com/rust-lang-nursery/regex/pull/210):
