@@ -18,10 +18,13 @@ script:
   - cargo test --verbose --manifest-path=regex-syntax/Cargo.toml
   - cargo doc --verbose --manifest-path=regex-syntax/Cargo.toml
   - if [ "$TRAVIS_RUST_VERSION" = "nightly" ]; then
-      travis_wait ./run-bench rust;
-      travis_wait ./run-bench rust-bytes --no-run;
-      travis_wait ./run-bench pcre1 --no-run;
-      travis_wait ./run-bench onig --no-run;
+      (cd regex-capi && cargo build --verbose);
+      (cd regex-capi/ctest && ./compile && LD_LIBRARY_PATH=../target/debug ./test);
+      (cd regex-capi/examples && ./compile && LD_LIBRARY_PATH=../target/release ./iter);
+      (cd bench && travis_wait ./run rust);
+      (cd bench && travis_wait ./run rust-bytes --no-run);
+      (cd bench && travis_wait ./run pcre1 --no-run);
+      (cd bench && travis_wait ./run onig --no-run);
       travis_wait cargo test --verbose --manifest-path=regex_macros/Cargo.toml;
     fi
 addons:

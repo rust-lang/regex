@@ -26,10 +26,12 @@ The promise of this crate is that *this pathological behavior can't happen*.
 With that said, just because we have protected ourselves against worst case
 exponential behavior doesn't mean we are immune from large constant factors
 or places where the current regex engine isn't quite optimal. This guide will
-detail those cases, among other general advice, and give advice on how to avoid
-them.
+detail those cases and provide guidance on how to avoid them, among other
+bits of general advice.
 
 ## Thou Shalt Not Compile Regular Expressions In A Loop
+
+**Advice**: Use `lazy_static` to amortize the cost of `Regex` compilation.
 
 Don't do it unless you really don't mind paying for it. Compiling a regular
 expression in this crate is quite expensive. It is conceivable that it may get
@@ -48,7 +50,7 @@ This means that in order to realize efficient regex matching, one must
 inside a loop, then make sure your call to `Regex::new` is *outside* that loop.
 
 In many programming languages, regular expressions can be conveniently defined
-and "compiled" in a global scope, and code can reach out and use them as if
+and compiled in a global scope, and code can reach out and use them as if
 they were global static variables. In Rust, there is really no concept of
 life-before-main, and therefore, one cannot utter this:
 
@@ -80,9 +82,13 @@ it's self contained and everything works exactly as you expect. In particular,
 `MY_REGEX` can be used from multiple threads without wrapping it in an `Arc` or
 a `Mutex`. On that note...
 
-**Advice**: Use `lazy_static` to amortize the cost of `Regex` compilation.
-
 ## Using a regex from multiple threads
+
+**Advice**: The performance impact from using a `Regex` from multiple threads
+is likely negligible. If necessary, clone the `Regex` so that each thread gets
+its own copy. Cloning a regex does not incur any additional memory overhead
+than what would be used by using a `Regex` from multiple threads
+simultaneously. *Its only cost is ergonomics.*
 
 It is supported and encouraged to define your regexes using `lazy_static!` as
 if they were global static values, and then use them to search text from
@@ -126,13 +132,9 @@ Then you may not suffer from contention since the cost of synchronization is
 amortized on *construction of the iterator*. That is, the mutable scratch space
 is obtained when the iterator is created and retained throughout its lifetime.
 
-**Advice**: The performance impact from using a `Regex` from multiple threads
-is likely negligible. If necessary, clone the `Regex` so that each thread gets
-its own copy. Cloning a regex does not incur any additional memory overhead
-than what would be used by using a `Regex` from multiple threads
-simultaneously. *Its only cost is ergonomics.*
-
 ## Only ask for what you need
+
+**Advice**: Prefer in this order: `is_match`, `find`, `captures`.
 
 There are three primary search methods on a `Regex`:
 
@@ -166,9 +168,10 @@ end location of when it discovered a match. For example, given the regex `a+`
 and the haystack `aaaaa`, `shortest_match` may return `1` as opposed to `5`,
 the latter of which being the correct end location of the leftmost-first match.
 
-**Advice**: Prefer in this order: `is_match`, `find`, `captures`.
-
 ## Literals in your regex may make it faster
+
+**Advice**: Literals can reduce the work that the regex engine needs to do. Use
+them if you can, especially as prefixes.
 
 In particular, if your regex starts with a prefix literal, the prefix is
 quickly searched before entering the (much slower) regex engine. For example,
@@ -197,10 +200,10 @@ Literals in anchored regexes can also be used for detecting non-matches very
 quickly. For example, `^foo\w+` and `\w+foo$` may be able to detect a non-match
 just by examing the first (or last) three bytes of the haystack.
 
-**Advice**: Literals can reduce the work that the regex engine needs to do. Use
-them if you can, especially as prefixes.
-
 ## Unicode word boundaries may prevent the DFA from being used
+
+**Advice**: In most cases, `\b` should work well. If not, use `(?-u:\b)`
+instead of `\b` if you care about consistent performance more than correctness.
 
 It's a sad state of the current implementation. At the moment, the DFA will try
 to interpret Unicode word boundaries as if they were ASCII word boundaries.
@@ -233,10 +236,10 @@ more consistent performance.
 N.B. When using `bytes::Regex`, Unicode support is disabled by default, so one
 can simply write `\b` to get an ASCII word boundary.
 
-**Advice**: In most cases, `\b` should work well. If not, use `(?-u:\b)`
-instead of `\b` if you care about consistent performance more than correctness.
-
 ## Excessive counting can lead to exponential state blow up in the DFA
+
+**Advice**: Don't write regexes that cause DFA state blow up if you care about
+match performance.
 
 Wait, didn't I say that this crate guards against exponential worst cases?
 Well, it turns out that the process of converting an NFA to a DFA can lead to
@@ -266,14 +269,11 @@ In the future, it may be possible to increase the bound that the DFA uses,
 which would allow the caller to choose how much memory they're willing to
 spend.
 
-**Advice**: Don't write regexes that cause DFA state blow up if you care about
-match performance.
-
 ## Resist the temptation to "optimize" regexes
+
+**Advice**: This ain't a backtracking engine.
 
 An entire book was written on how to optimize Perl-style regular expressions.
 Most of those techniques are not applicable for this library. For example,
 there is no problem with using non-greedy matching or having lots of
 alternations in your regex.
-
-**Advice**: This ain't a backtracking engine.

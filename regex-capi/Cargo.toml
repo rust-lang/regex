@@ -1,0 +1,20 @@
+[package]
+name = "rure"
+version = "0.1.0"  #:version
+authors = ["The Rust Project Developers"]
+license = "MIT/Apache-2.0"
+readme = "README.md"
+repository = "https://github.com/rust-lang/regex"
+documentation = "https://doc.rust-lang.org/regex"
+homepage = "https://github.com/rust-lang/regex"
+description = """
+A C API for Rust's regular expression library.
+"""
+
+[lib]
+name = "rure"
+crate-type = ["staticlib", "dylib"]
+
+[dependencies]
+libc = "0.2"
+regex = { version = "0.1", path = ".." }

@@ -63,7 +63,7 @@ pub trait RegularExpression: Sized {
 
     /// Returns the leftmost-first match location if one exists, and also
     /// fills in any matching capture slot locations.
-    fn captures_at(
+    fn read_captures_at(
         &self,
         slots: &mut [Slot],
         text: &Self::Text,
@@ -119,26 +119,27 @@ impl<'t, R> Iterator for FindMatches<'t, R>
     type Item = (usize, usize);
 
     fn next(&mut self) -> Option<(usize, usize)> {
-        let text_len = self.text.as_ref().len();
-        if self.last_end > text_len {
-            return None
+        if self.last_end > self.text.as_ref().len() {
+            return None;
         }
         let (s, e) = match self.re.find_at(self.text, self.last_end) {
             None => return None,
             Some((s, e)) => (s, e),
         };
-        // Don't accept empty matches immediately following a match.
-        // i.e., no infinite loops please.
-        if e == s && Some(self.last_end) == self.last_match {
-            if self.last_end >= text_len {
-                return None;
+        if s == e {
+            // This is an empty match. To ensure we make progress, start
+            // the next search at the smallest possible starting position
+            // of the next match following this one.
+            self.last_end = self.re.next_after_empty(&self.text, e);
+            // Don't accept empty matches immediately following a match.
+            // Just move on to the next match.
+            if Some(e) == self.last_match {
+                return self.next();
             }
-            self.last_end = self.re.next_after_empty(
-                &self.text, self.last_end);
-            return self.next();
+        } else {
+            self.last_end = e;
         }
-        self.last_end = e;
-        self.last_match = Some(self.last_end);
+        self.last_match = Some(e);
         Some((s, e))
     }
 }
@@ -165,13 +166,11 @@ impl<'t, R> Iterator for FindCaptures<'t, R>
     type Item = Vec<Slot>;
 
     fn next(&mut self) -> Option<Vec<Slot>> {
-        let text_len = self.0.text.as_ref().len();
-        if self.0.last_end > text_len {
+        if self.0.last_end > self.0.text.as_ref().len() {
             return None
         }
-
         let mut slots = vec![None; self.0.re.slots_len()];
-        let (s, e) = match self.0.re.captures_at(
+        let (s, e) = match self.0.re.read_captures_at(
             &mut slots,
             self.0.text,
             self.0.last_end,
@@ -179,19 +178,15 @@ impl<'t, R> Iterator for FindCaptures<'t, R>
             None => return None,
             Some((s, e)) => (s, e),
         };
-
-        // Don't accept empty matches immediately following a match.
-        // i.e., no infinite loops please.
-        if e == s && Some(self.0.last_end) == self.0.last_match {
-            if self.0.last_end >= text_len {
-                return None;
+        if s == e {
+            self.0.last_end = self.0.re.next_after_empty(&self.0.text, e);
+            if Some(e) == self.0.last_match {
+                return self.next();
             }
-            self.0.last_end = self.0.re.next_after_empty(
-                &self.0.text, self.0.last_end);
-            return self.next();
+        } else {
+            self.0.last_end = e;
         }
-        self.0.last_end = e;
-        self.0.last_match = Some(self.0.last_end);
+        self.0.last_match = Some(e);
         Some(slots)
     }
 }

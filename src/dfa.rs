@@ -55,22 +55,6 @@ use exec::ProgramCache;
 use prog::{Inst, Program};
 use sparse::SparseSet;
 
-/// The cache limit specifies approximately how much space we're willing to
-/// give to the state cache. Once the state cache exceeds the size, it is wiped
-/// and all states must be re-computed.
-///
-/// Note that this value does not impact correctness. It can be set to 0 and
-/// the DFA will run just fine. (It will only ever store exactly one state
-/// in the cache, and will likely run very slowly, but it will work.)
-///
-/// Also note that this limit is *per thread of execution*. That is, if the
-/// same regex is used to search text across multiple threads simultaneously,
-/// then the DFA cache is not shared. Instead, copies are made.
-///
-/// TODO(burntsushi): This feels like a knob that a caller ought to be able to
-/// configure.
-const CACHE_LIMIT: usize = 2 * (1<<20);
-
 /// Return true if and only if the given program can be executed by a DFA.
 ///
 /// Generally, a DFA is always possible. A pathological case where it is not
@@ -1099,7 +1083,7 @@ impl<'a> Fsm<'a> {
             return Some(si);
         }
         // If the cache has gotten too big, wipe it.
-        if self.approximate_size() > CACHE_LIMIT {
+        if self.approximate_size() > self.prog.dfa_size_limit {
             if !self.clear_cache_and_save(current_state) {
                 // Ooops. DFA is giving up.
                 return None;
@@ -1248,16 +1232,24 @@ impl<'a> Fsm<'a> {
 
         // OK, actually flush the cache.
         let start = self.state(self.start & !STATE_START).clone();
+        let last_match = if self.last_match_si <= STATE_MAX {
+            Some(self.state(self.last_match_si).clone())
+        } else {
+            None
+        };
         self.cache.trans.clear();
         self.cache.states.clear();
         self.cache.compiled.clear();
-        for start in self.cache.start_states.iter_mut() {
-            *start = STATE_UNKNOWN;
+        for s in self.cache.start_states.iter_mut() {
+            *s = STATE_UNKNOWN;
         }
-        // The unwrap is OK because we just cleared the cache and therefore
+        // The unwraps are OK because we just cleared the cache and therefore
         // know that the next state pointer won't exceed STATE_MAX.
-        let start = self.restore_state(start).unwrap();
-        self.start = self.start_ptr(start);
+        let start_ptr = self.restore_state(start).unwrap();
+        self.start = self.start_ptr(start_ptr);
+        if let Some(last_match) = last_match {
+            self.last_match_si = self.restore_state(last_match).unwrap();
+        }
         true
     }
 

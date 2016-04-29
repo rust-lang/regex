@@ -511,7 +511,8 @@ extern crate regex_syntax as syntax;
 extern crate utf8_ranges;
 
 pub use error::Error;
-pub use set::{RegexSet, SetMatches, SetMatchesIntoIter, SetMatchesIter};
+pub use re_builder::unicode::*;
+pub use re_set::unicode::*;
 pub use re_unicode::{
     Regex, Captures, SubCaptures, SubCapturesPos, SubCapturesNamed,
     CaptureNames, FindCaptures, FindMatches,
@@ -606,6 +607,8 @@ In general, one should expect performance on `&[u8]` to be roughly similar to
 performance on `&str`.
 */
 pub mod bytes {
+    pub use re_builder::bytes::*;
+    pub use re_set::bytes::*;
     pub use re_bytes::*;
 }
 
@@ -623,11 +626,12 @@ mod literals;
 mod pattern;
 mod pikevm;
 mod prog;
+mod re_builder;
 mod re_bytes;
 mod re_plugin;
+mod re_set;
 mod re_trait;
 mod re_unicode;
-mod set;
 mod sparse;
 
 /// The `internal` module exists to support the `regex!` macro and other
