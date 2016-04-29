@@ -17,4 +17,4 @@ crate-type = ["staticlib", "dylib"]
 
 [dependencies]
 libc = "0.2"
-regex = { version = "0.1", path = ".." }
+regex = { version = "0.1.69", path = ".." }
