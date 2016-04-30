@@ -833,7 +833,7 @@ impl<'a> Fsm<'a> {
         // Initialize a queue with the current DFA state's NFA states.
         qcur.clear();
         for &ip in self.state(si).insts.iter() {
-            qcur.add(ip as usize);
+            qcur.insert(ip as usize);
         }
 
         // Before inspecting the current byte, we may need to also inspect
@@ -900,10 +900,10 @@ impl<'a> Fsm<'a> {
                     if !self.continue_past_first_match() {
                         break;
                     } else if self.prog.matches.len() > 1
-                            && !qnext.contains_ip(ip as usize) {
+                            && !qnext.contains(ip as usize) {
                         // If we are continuing on to find other matches,
                         // then keep a record of the match states we've seen.
-                        qnext.add(ip);
+                        qnext.insert(ip);
                     }
                 }
                 Bytes(ref inst) => {
@@ -994,10 +994,10 @@ impl<'a> Fsm<'a> {
         self.cache.stack.push(ip);
         while let Some(ip) = self.cache.stack.pop() {
             // Don't visit states we've already added.
-            if q.contains_ip(ip as usize) {
+            if q.contains(ip as usize) {
                 continue;
             }
-            q.add(ip as usize);
+            q.insert(ip as usize);
             match self.prog[ip as usize] {
                 Char(_) | Ranges(_) => unreachable!(),
                 Match(_) | Bytes(_) => {}
