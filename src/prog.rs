@@ -132,7 +132,7 @@ impl Program {
     /// Returns true if this program uses Byte instructions instead of
     /// Char/Range instructions.
     pub fn uses_bytes(&self) -> bool {
-        self.is_bytes || self.is_dfa || !self.only_utf8
+        self.is_bytes || self.is_dfa
     }
 
     /// Returns true if this program exclusively matches valid UTF-8 bytes.

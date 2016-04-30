@@ -59,9 +59,19 @@ pub use ffi::tcl::Regex;
 // Due to macro scoping rules, this definition only applies for the modules
 // defined below. Effectively, it allows us to use the same tests for both
 // native and dynamic regexes.
+#[cfg(not(feature = "re-rust-bytes"))]
 #[cfg(not(feature = "re-rust-plugin"))]
 macro_rules! regex {
     ($re:expr) => { ::Regex::new($re).unwrap() }
+}
+
+#[cfg(feature = "re-rust-bytes")]
+#[cfg(not(feature = "re-rust-plugin"))]
+macro_rules! regex {
+    ($re:expr) => {{
+        use regex::bytes::RegexBuilder;
+        RegexBuilder::new($re).unicode(true).compile().unwrap()
+    }}
 }
 
 // Usage: text!(haystack)

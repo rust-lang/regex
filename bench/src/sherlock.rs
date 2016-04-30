@@ -101,32 +101,17 @@ sherlock!(everything_greedy_nl, r"(?s).*", 1);
 // How fast can we match every letter? This also defeats any clever prefix
 // tricks.
 #[cfg(not(feature = "re-tcl"))]
-#[cfg(not(feature = "re-rust-bytes"))]
 sherlock!(letters, r"\p{L}", 447160);
-#[cfg(not(feature = "re-tcl"))]
-#[cfg(feature = "re-rust-bytes")]
-sherlock!(letters, r"(?u)\p{L}", 447160);
 
 #[cfg(not(feature = "re-tcl"))]
-#[cfg(not(feature = "re-rust-bytes"))]
 sherlock!(letters_upper, r"\p{Lu}", 14180);
-#[cfg(not(feature = "re-tcl"))]
-#[cfg(feature = "re-rust-bytes")]
-sherlock!(letters_upper, r"(?u)\p{Lu}", 14180);
 
 #[cfg(not(feature = "re-tcl"))]
-#[cfg(not(feature = "re-rust-bytes"))]
 sherlock!(letters_lower, r"\p{Ll}", 432980);
-#[cfg(not(feature = "re-tcl"))]
-#[cfg(feature = "re-rust-bytes")]
-sherlock!(letters_lower, r"(?u)\p{Ll}", 432980);
 
 // Similarly, for words.
-#[cfg(not(feature = "re-rust-bytes"))]
 #[cfg(not(feature = "re-re2"))]
 sherlock!(words, r"\w+", 109214);
-#[cfg(feature = "re-rust-bytes")]
-sherlock!(words, r"(?u)\w+", 109214);
 #[cfg(feature = "re-re2")]
 sherlock!(words, r"\w+", 109222); // hmm, why does RE2 diverge here?
 
@@ -195,8 +180,4 @@ sherlock!(ing_suffix, r"[a-zA-Z]+ing", 2824);
 //
 // Onig does surprisingly well on this benchmark and yet does quite poorly on
 // the ing_suffix benchmark. That one has me stumped.
-//
-// Interestingly, this is slower in the rust-bytes benchmark, presumably
-// because scanning for one of the bytes in the Unicode *unaware* `\s` ends
-// up being slower than avoiding the prefix scan at all.
 sherlock!(ing_suffix_limited_space, r"\s[a-zA-Z]{0,12}ing\s", 2081);
