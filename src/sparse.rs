@@ -11,10 +11,6 @@ use std::slice;
 /// Note though that we don't actually use unitialized memory. We generally
 /// reuse allocations, so the initial allocation cost is bareable. However,
 /// its other properties listed above are extremely useful.
-///
-/// N.B. The type parameter is misleading. For the most part, this is only
-/// meant to work on instruction pointers. We use a touch of generics to
-/// support 32 bit instruction pointers.
 #[derive(Clone, Debug)]
 pub struct SparseSet {
     /// Dense contains the instruction pointers in the order in which they
@@ -50,16 +46,16 @@ impl SparseSet {
         self.dense.len()
     }
 
-    pub fn add(&mut self, ip: usize) {
+    pub fn insert(&mut self, value: usize) {
         let i = self.size;
-        self.dense[i] = ip;
-        self.sparse[ip] = i;
+        self.dense[i] = value;
+        self.sparse[value] = i;
         self.size += 1;
     }
 
-    pub fn contains_ip(&self, ip: usize) -> bool {
-        let i = self.sparse[ip];
-        i < self.size && self.dense[i] == ip
+    pub fn contains(&self, value: usize) -> bool {
+        let i = self.sparse[value];
+        i < self.size && self.dense[i] == value
     }
 
     pub fn clear(&mut self) {

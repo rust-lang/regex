@@ -316,10 +316,10 @@ impl<'r, I: Input> Fsm<'r, I> {
         use prog::Inst::*;
         loop {
             // Don't visit states we've already added.
-            if nlist.set.contains_ip(ip) {
+            if nlist.set.contains(ip) {
                 return;
             }
-            nlist.set.add(ip);
+            nlist.set.insert(ip);
             match self.prog[ip] {
                 EmptyLook(ref inst) => {
                     let prev = self.input.previous_char(at);
