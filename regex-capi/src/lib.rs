@@ -11,7 +11,7 @@ use std::ptr;
 use std::slice;
 use std::str;
 
-use libc::{abort, c_char, uint32_t};
+use libc::{abort, c_char, size_t};
 use regex::bytes;
 
 macro_rules! ffi_fn {
@@ -58,18 +58,18 @@ pub struct Options {
     dfa_size_limit: usize,
 }
 
-const RURE_FLAG_CASEI: uint32_t = 1 << 0;
-const RURE_FLAG_MULTI: uint32_t = 1 << 1;
-const RURE_FLAG_DOTNL: uint32_t = 1 << 2;
-const RURE_FLAG_SWAP_GREED: uint32_t = 1 << 3;
-const RURE_FLAG_SPACE: uint32_t = 1 << 4;
-const RURE_FLAG_UNICODE: uint32_t = 1 << 5;
-const RURE_DEFAULT_FLAGS: uint32_t = RURE_FLAG_UNICODE;
+const RURE_FLAG_CASEI: u32 = 1 << 0;
+const RURE_FLAG_MULTI: u32 = 1 << 1;
+const RURE_FLAG_DOTNL: u32 = 1 << 2;
+const RURE_FLAG_SWAP_GREED: u32 = 1 << 3;
+const RURE_FLAG_SPACE: u32 = 1 << 4;
+const RURE_FLAG_UNICODE: u32 = 1 << 5;
+const RURE_DEFAULT_FLAGS: u32 = RURE_FLAG_UNICODE;
 
 #[repr(C)]
 pub struct rure_match {
-    pub start: usize,
-    pub end: usize,
+    pub start: size_t,
+    pub end: size_t,
 }
 
 pub struct Captures(Vec<Option<usize>>);
@@ -153,12 +153,12 @@ ffi_fn! {
 ffi_fn! {
     fn rure_compile(
         pattern: *const u8,
-        length: usize,
-        flags: uint32_t,
+        length: size_t,
+        flags: u32,
         options: *const Options,
         error: *mut Error,
     ) -> *const Regex {
-        let pat = unsafe { slice::from_raw_parts(pattern, length) };
+        let pat = unsafe { slice::from_raw_parts(pattern, length as usize) };
         let pat = match str::from_utf8(pat) {
             Ok(pat) => pat,
             Err(err) => {
@@ -218,12 +218,12 @@ ffi_fn! {
     fn rure_is_match(
         re: *const Regex,
         haystack: *const u8,
-        len: usize,
-        start: usize,
+        len: size_t,
+        start: size_t,
     ) -> bool {
         let re = unsafe { &*re };
-        let haystack = unsafe { slice::from_raw_parts(haystack, len) };
-        re.is_match_at(haystack, start)
+        let haystack = unsafe { slice::from_raw_parts(haystack, len as usize) };
+        re.is_match_at(haystack, start as usize)
     }
 }
 
@@ -231,16 +231,16 @@ ffi_fn! {
     fn rure_find(
         re: *const Regex,
         haystack: *const u8,
-        len: usize,
-        start: usize,
+        len: size_t,
+        start: size_t,
         match_info: *mut rure_match,
     ) -> bool {
         let re = unsafe { &*re };
-        let haystack = unsafe { slice::from_raw_parts(haystack, len) };
-        re.find_at(haystack, start).map(|(s, e)| unsafe {
+        let haystack = unsafe { slice::from_raw_parts(haystack, len as usize) };
+        re.find_at(haystack, start as usize).map(|(s, e)| unsafe {
             if !match_info.is_null() {
-                (*match_info).start = s;
-                (*match_info).end = e;
+                (*match_info).start = s as size_t;
+                (*match_info).end = e as size_t;
             }
         }).is_some()
     }
@@ -250,14 +250,14 @@ ffi_fn! {
     fn rure_find_captures(
         re: *const Regex,
         haystack: *const u8,
-        len: usize,
-        start: usize,
+        len: size_t,
+        start: size_t,
         captures: *mut Captures,
     ) -> bool {
         let re = unsafe { &*re };
-        let haystack = unsafe { slice::from_raw_parts(haystack, len) };
+        let haystack = unsafe { slice::from_raw_parts(haystack, len as usize) };
         let slots = unsafe { &mut (*captures).0 };
-        re.read_captures_at(slots, haystack, start).is_some()
+        re.read_captures_at(slots, haystack, start as usize).is_some()
     }
 }
 
@@ -265,18 +265,18 @@ ffi_fn! {
     fn rure_shortest_match(
         re: *const Regex,
         haystack: *const u8,
-        len: usize,
-        start: usize,
+        len: size_t,
+        start: size_t,
         end: *mut usize,
     ) -> bool {
         let re = unsafe { &*re };
-        let haystack = unsafe { slice::from_raw_parts(haystack, len) };
-        match re.shortest_match_at(haystack, start) {
+        let haystack = unsafe { slice::from_raw_parts(haystack, len as usize) };
+        match re.shortest_match_at(haystack, start as usize) {
             None => false,
             Some(i) => {
                 if !end.is_null() {
                     unsafe {
-                        *end = i;
+                        *end = i as size_t;
                     }
                 }
                 true
@@ -322,7 +322,7 @@ ffi_fn! {
     fn rure_iter_next(
         it: *mut Iter,
         haystack: *const u8,
-        len: usize,
+        len: size_t,
         match_info: *mut rure_match,
     ) -> bool {
         let it = unsafe { &mut *it };
@@ -351,8 +351,8 @@ ffi_fn! {
         it.last_match = Some(e);
         if !match_info.is_null() {
             unsafe {
-                (*match_info).start = s;
-                (*match_info).end = e;
+                (*match_info).start = s as size_t;
+                (*match_info).end = e as size_t;
             }
         }
         true
@@ -363,13 +363,13 @@ ffi_fn! {
     fn rure_iter_next_captures(
         it: *mut Iter,
         haystack: *const u8,
-        len: usize,
+        len: size_t,
         captures: *mut Captures,
     ) -> bool {
         let it = unsafe { &mut *it };
         let re = unsafe { &*it.re };
         let slots = unsafe { &mut (*captures).0 };
-        let text = unsafe { slice::from_raw_parts(haystack, len) };
+        let text = unsafe { slice::from_raw_parts(haystack, len as usize) };
         if it.last_end > text.len() {
             return false;
         }
@@ -412,7 +412,7 @@ ffi_fn! {
 ffi_fn! {
     fn rure_captures_at(
         captures: *const Captures,
-        i: usize,
+        i: size_t,
         match_info: *mut rure_match,
     ) -> bool {
         let captures = unsafe { &(*captures).0 };
@@ -420,8 +420,8 @@ ffi_fn! {
             (Some(start), Some(end)) => {
                 if !match_info.is_null() {
                     unsafe {
-                        (*match_info).start = start;
-                        (*match_info).end = end;
+                        (*match_info).start = start as size_t;
+                        (*match_info).end = end as size_t;
                     }
                 }
                 true
@@ -432,8 +432,8 @@ ffi_fn! {
 }
 
 ffi_fn! {
-    fn rure_captures_len(captures: *const Captures) -> usize {
-        unsafe { (*captures).0.len() / 2 }
+    fn rure_captures_len(captures: *const Captures) -> size_t {
+        unsafe { ((*captures).0.len() / 2) as size_t }
     }
 }
 
@@ -450,16 +450,16 @@ ffi_fn! {
 }
 
 ffi_fn! {
-    fn rure_options_size_limit(options: *mut Options, limit: usize) {
+    fn rure_options_size_limit(options: *mut Options, limit: size_t) {
         let options = unsafe { &mut *options };
-        options.size_limit = limit;
+        options.size_limit = limit as usize;
     }
 }
 
 ffi_fn! {
-    fn rure_options_dfa_size_limit(options: *mut Options, limit: usize) {
+    fn rure_options_dfa_size_limit(options: *mut Options, limit: size_t) {
         let options = unsafe { &mut *options };
-        options.dfa_size_limit = limit;
+        options.dfa_size_limit = limit as usize;
     }
 }
 
