@@ -361,8 +361,8 @@ pub struct SingleSearch {
     /// The second rarest byte is used as a type of guard for quickly detecting
     /// a mismatch after memchr locates an instance of the rarest byte. This
     /// is a hedge against pathological cases where the pre-computed frequency
-    /// analysis may be off. (But of course, does not prevent pathological
-    /// cases.)
+    /// analysis may be off. (But of course, does not prevent *all*
+    /// pathological cases.)
     rare2: u8,
     /// The offset of the second rarest byte in `pat`.
     rare2i: usize,

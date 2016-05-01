@@ -69,6 +69,8 @@ macro_rules! regex {
 #[cfg(not(feature = "re-rust-plugin"))]
 macro_rules! regex {
     ($re:expr) => {{
+        // Always enable the Unicode flag for byte based regexes.
+        // Really, this should have been enabled by default. *sigh*
         use regex::bytes::RegexBuilder;
         RegexBuilder::new($re).unicode(true).compile().unwrap()
     }}
