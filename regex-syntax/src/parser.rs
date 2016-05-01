@@ -114,13 +114,7 @@ impl Parser {
                 '{' => try!(self.parse_counted_repeat()),
                 '[' => match self.maybe_parse_ascii() {
                     None => try!(self.parse_class()),
-                    Some(cls) => {
-                        Build::Expr(if self.flags.unicode {
-                            Expr::Class(cls)
-                        } else {
-                            Expr::ClassBytes(cls.to_byte_class())
-                        })
-                    }
+                    Some(cls) => Build::Expr(Expr::Class(cls)),
                 },
                 '^' => {
                     if self.flags.multi {
@@ -224,11 +218,7 @@ impl Parser {
             }
             'd'|'s'|'w'|'D'|'S'|'W' => {
                 self.bump();
-                Ok(Build::Expr(if self.flags.unicode {
-                    Expr::Class(self.parse_perl_class(c))
-                } else {
-                    Expr::ClassBytes(self.parse_perl_class(c).to_byte_class())
-                }))
+                Ok(Build::Expr(Expr::Class(self.parse_perl_class(c))))
             }
             c => Err(self.err(ErrorKind::UnrecognizedEscape(c))),
         }
@@ -1328,16 +1318,28 @@ mod tests {
         ByteClass::new(ranges)
     }
 
-    fn asciid() -> ByteClass {
-        ascii_class("digit").unwrap().to_byte_class()
+    fn asciid() -> CharClass {
+        ascii_class("digit").unwrap()
     }
 
-    fn asciis() -> ByteClass {
-        ascii_class("space").unwrap().to_byte_class()
+    fn asciis() -> CharClass {
+        ascii_class("space").unwrap()
     }
 
-    fn asciiw() -> ByteClass {
-        ascii_class("word").unwrap().to_byte_class()
+    fn asciiw() -> CharClass {
+        ascii_class("word").unwrap()
+    }
+
+    fn asciid_bytes() -> ByteClass {
+        asciid().to_byte_class()
+    }
+
+    fn asciis_bytes() -> ByteClass {
+        asciis().to_byte_class()
+    }
+
+    fn asciiw_bytes() -> ByteClass {
+        asciiw().to_byte_class()
     }
 
     #[test]
@@ -1905,55 +1907,55 @@ mod tests {
     #[test]
     fn escape_perl_d() {
         assert_eq!(p(r"\d"), Expr::Class(class(PERLD)));
-        assert_eq!(pb(r"(?-u)\d"), Expr::ClassBytes(asciid()));
+        assert_eq!(pb(r"(?-u)\d"), Expr::Class(asciid()));
     }
 
     #[test]
     fn escape_perl_s() {
         assert_eq!(p(r"\s"), Expr::Class(class(PERLS)));
-        assert_eq!(pb(r"(?-u)\s"), Expr::ClassBytes(asciis()));
+        assert_eq!(pb(r"(?-u)\s"), Expr::Class(asciis()));
     }
 
     #[test]
     fn escape_perl_w() {
         assert_eq!(p(r"\w"), Expr::Class(class(PERLW)));
-        assert_eq!(pb(r"(?-u)\w"), Expr::ClassBytes(asciiw()));
+        assert_eq!(pb(r"(?-u)\w"), Expr::Class(asciiw()));
     }
 
     #[test]
     fn escape_perl_d_negate() {
         assert_eq!(p(r"\D"), Expr::Class(class(PERLD).negate()));
-        assert_eq!(pb(r"(?-u)\D"), Expr::ClassBytes(asciid().negate()));
+        assert_eq!(pb(r"(?-u)\D"), Expr::Class(asciid().negate()));
     }
 
     #[test]
     fn escape_perl_s_negate() {
         assert_eq!(p(r"\S"), Expr::Class(class(PERLS).negate()));
-        assert_eq!(pb(r"(?-u)\S"), Expr::ClassBytes(asciis().negate()));
+        assert_eq!(pb(r"(?-u)\S"), Expr::Class(asciis().negate()));
     }
 
     #[test]
     fn escape_perl_w_negate() {
         assert_eq!(p(r"\W"), Expr::Class(class(PERLW).negate()));
-        assert_eq!(pb(r"(?-u)\W"), Expr::ClassBytes(asciiw().negate()));
+        assert_eq!(pb(r"(?-u)\W"), Expr::Class(asciiw().negate()));
     }
 
     #[test]
     fn escape_perl_d_case_fold() {
         assert_eq!(p(r"(?i)\d"), Expr::Class(class(PERLD).case_fold()));
-        assert_eq!(pb(r"(?i-u)\d"), Expr::ClassBytes(asciid().case_fold()));
+        assert_eq!(pb(r"(?i-u)\d"), Expr::Class(asciid().case_fold()));
     }
 
     #[test]
     fn escape_perl_s_case_fold() {
         assert_eq!(p(r"(?i)\s"), Expr::Class(class(PERLS).case_fold()));
-        assert_eq!(pb(r"(?i-u)\s"), Expr::ClassBytes(asciis().case_fold()));
+        assert_eq!(pb(r"(?i-u)\s"), Expr::Class(asciis().case_fold()));
     }
 
     #[test]
     fn escape_perl_w_case_fold() {
         assert_eq!(p(r"(?i)\w"), Expr::Class(class(PERLW).case_fold()));
-        assert_eq!(pb(r"(?i-u)\w"), Expr::ClassBytes(asciiw().case_fold()));
+        assert_eq!(pb(r"(?i-u)\w"), Expr::Class(asciiw().case_fold()));
     }
 
     #[test]
@@ -1961,7 +1963,7 @@ mod tests {
         assert_eq!(p(r"(?i)\D"),
                    Expr::Class(class(PERLD).case_fold().negate()));
         let bytes = asciid().case_fold().negate();
-        assert_eq!(pb(r"(?i-u)\D"), Expr::ClassBytes(bytes));
+        assert_eq!(pb(r"(?i-u)\D"), Expr::Class(bytes));
     }
 
     #[test]
@@ -1969,7 +1971,7 @@ mod tests {
         assert_eq!(p(r"(?i)\S"),
                    Expr::Class(class(PERLS).case_fold().negate()));
         let bytes = asciis().case_fold().negate();
-        assert_eq!(pb(r"(?i-u)\S"), Expr::ClassBytes(bytes));
+        assert_eq!(pb(r"(?i-u)\S"), Expr::Class(bytes));
     }
 
     #[test]
@@ -1977,7 +1979,7 @@ mod tests {
         assert_eq!(p(r"(?i)\W"),
                    Expr::Class(class(PERLW).case_fold().negate()));
         let bytes = asciiw().case_fold().negate();
-        assert_eq!(pb(r"(?i-u)\W"), Expr::ClassBytes(bytes));
+        assert_eq!(pb(r"(?i-u)\W"), Expr::Class(bytes));
     }
 
     #[test]
@@ -2039,11 +2041,11 @@ mod tests {
         assert_eq!(p(r"[^\w]"), Expr::Class(class(PERLW).negate()));
         assert_eq!(p(r"[^\s]"), Expr::Class(class(PERLS).negate()));
 
-        let bytes = asciid().negate();
+        let bytes = asciid_bytes().negate();
         assert_eq!(pb(r"(?-u)[^\d]"), Expr::ClassBytes(bytes));
-        let bytes = asciiw().negate();
+        let bytes = asciiw_bytes().negate();
         assert_eq!(pb(r"(?-u)[^\w]"), Expr::ClassBytes(bytes));
-        let bytes = asciis().negate();
+        let bytes = asciis_bytes().negate();
         assert_eq!(pb(r"(?-u)[^\s]"), Expr::ClassBytes(bytes));
     }
 
@@ -2053,9 +2055,9 @@ mod tests {
         assert_eq!(p(r"[^\W]"), Expr::Class(class(PERLW)));
         assert_eq!(p(r"[^\S]"), Expr::Class(class(PERLS)));
 
-        assert_eq!(pb(r"(?-u)[^\D]"), Expr::ClassBytes(asciid()));
-        assert_eq!(pb(r"(?-u)[^\W]"), Expr::ClassBytes(asciiw()));
-        assert_eq!(pb(r"(?-u)[^\S]"), Expr::ClassBytes(asciis()));
+        assert_eq!(pb(r"(?-u)[^\D]"), Expr::ClassBytes(asciid_bytes()));
+        assert_eq!(pb(r"(?-u)[^\W]"), Expr::ClassBytes(asciiw_bytes()));
+        assert_eq!(pb(r"(?-u)[^\S]"), Expr::ClassBytes(asciis_bytes()));
     }
 
     #[test]
@@ -2063,7 +2065,8 @@ mod tests {
         assert_eq!(p(r"(?i)[\d]"), Expr::Class(class(PERLD).case_fold()));
         assert_eq!(p(r"(?i)[\p{Yi}]"), Expr::Class(class(YI).case_fold()));
 
-        assert_eq!(pb(r"(?i-u)[\d]"), Expr::ClassBytes(asciid().case_fold()));
+        assert_eq!(pb(r"(?i-u)[\d]"),
+                   Expr::ClassBytes(asciid_bytes().case_fold()));
     }
 
     #[test]
@@ -2075,11 +2078,11 @@ mod tests {
         assert_eq!(p(r"(?i)[^\s]"),
                    Expr::Class(class(PERLS).case_fold().negate()));
 
-        let bytes = asciid().case_fold().negate();
+        let bytes = asciid_bytes().case_fold().negate();
         assert_eq!(pb(r"(?i-u)[^\d]"), Expr::ClassBytes(bytes));
-        let bytes = asciiw().case_fold().negate();
+        let bytes = asciiw_bytes().case_fold().negate();
         assert_eq!(pb(r"(?i-u)[^\w]"), Expr::ClassBytes(bytes));
-        let bytes = asciis().case_fold().negate();
+        let bytes = asciis_bytes().case_fold().negate();
         assert_eq!(pb(r"(?i-u)[^\s]"), Expr::ClassBytes(bytes));
     }
 
@@ -2089,9 +2092,12 @@ mod tests {
         assert_eq!(p(r"(?i)[^\W]"), Expr::Class(class(PERLW).case_fold()));
         assert_eq!(p(r"(?i)[^\S]"), Expr::Class(class(PERLS).case_fold()));
 
-        assert_eq!(pb(r"(?i-u)[^\D]"), Expr::ClassBytes(asciid().case_fold()));
-        assert_eq!(pb(r"(?i-u)[^\W]"), Expr::ClassBytes(asciiw().case_fold()));
-        assert_eq!(pb(r"(?i-u)[^\S]"), Expr::ClassBytes(asciis().case_fold()));
+        assert_eq!(pb(r"(?i-u)[^\D]"),
+                   Expr::ClassBytes(asciid_bytes().case_fold()));
+        assert_eq!(pb(r"(?i-u)[^\W]"),
+                   Expr::ClassBytes(asciiw_bytes().case_fold()));
+        assert_eq!(pb(r"(?i-u)[^\S]"),
+                   Expr::ClassBytes(asciis_bytes().case_fold()));
     }
 
     #[test]
@@ -2184,8 +2190,7 @@ mod tests {
         assert_eq!(p("[:upper:]"), Expr::Class(class(UPPER)));
         assert_eq!(p("[[:upper:]]"), Expr::Class(class(UPPER)));
 
-        assert_eq!(pb("(?-u)[:upper:]"),
-                   Expr::ClassBytes(class(UPPER).to_byte_class()));
+        assert_eq!(pb("(?-u)[:upper:]"), Expr::Class(class(UPPER)));
         assert_eq!(pb("(?-u)[[:upper:]]"),
                    Expr::ClassBytes(class(UPPER).to_byte_class()));
     }
@@ -2233,7 +2238,7 @@ mod tests {
                    Expr::Class(class(UPPER).case_fold()));
 
         assert_eq!(pb("(?i-u)[:upper:]"),
-                   Expr::ClassBytes(class(UPPER).to_byte_class().case_fold()));
+                   Expr::Class(class(UPPER).case_fold()));
         assert_eq!(pb("(?i-u)[[:upper:]]"),
                    Expr::ClassBytes(class(UPPER).to_byte_class().case_fold()));
     }

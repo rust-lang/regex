@@ -105,6 +105,7 @@ struct Parsed {
     exprs: Vec<Expr>,
     prefixes: Literals,
     suffixes: Literals,
+    bytes: bool,
 }
 
 impl ExecBuilder {
@@ -208,6 +209,7 @@ impl ExecBuilder {
         let mut exprs = Vec::with_capacity(self.options.pats.len());
         let mut prefixes = Some(Literals::empty());
         let mut suffixes = Some(Literals::empty());
+        let mut bytes = false;
         for pat in &self.options.pats {
             let parser =
                 ExprBuilder::new()
@@ -219,6 +221,7 @@ impl ExecBuilder {
                     .unicode(self.options.unicode)
                     .allow_bytes(!self.only_utf8);
             let expr = try!(parser.parse(pat));
+            bytes = bytes || expr.has_bytes();
             prefixes = prefixes.and_then(|mut prefixes| {
                 if !prefixes.union_prefixes(&expr) {
                     None
@@ -239,6 +242,7 @@ impl ExecBuilder {
             exprs: exprs,
             prefixes: prefixes.unwrap_or(Literals::empty()),
             suffixes: suffixes.unwrap_or(Literals::empty()),
+            bytes: bytes,
         })
     }
 
@@ -261,7 +265,7 @@ impl ExecBuilder {
         let mut nfa = try!(
             Compiler::new()
                      .size_limit(self.options.size_limit)
-                     .bytes(self.bytes)
+                     .bytes(self.bytes || parsed.bytes)
                      .only_utf8(self.only_utf8)
                      .compile(&parsed.exprs));
         let mut dfa = try!(

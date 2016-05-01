@@ -101,10 +101,10 @@ pub struct Cache {
     qnext: SparseSet,
 }
 
-#[derive(Clone, Debug)]
 /// CacheInner is logically just a part of Cache, but groups together fields
 /// that aren't passed as function parameters throughout search. (This split
 /// is mostly an artifact of the borrow checker. It is happily paid.)
+#[derive(Clone, Debug)]
 struct CacheInner {
     /// A cache of pre-compiled DFA states, keyed by the set of NFA states
     /// and the set of empty-width flags set at the byte in the input when the
@@ -114,7 +114,7 @@ struct CacheInner {
     /// things, we just pass indexes around manually. The performance impact of
     /// this is probably an instruction or two in the inner loop. However, on
     /// 64 bit, each StatePtr is half the size of a *State.
-    compiled: HashMap<StateKey, StatePtr>,
+    compiled: HashMap<State, StatePtr>,
     /// The transition table.
     ///
     /// The transition table is laid out in row-major order, where states are
@@ -230,7 +230,7 @@ impl<T> Result<T> {
 ///
 /// States don't carry their transitions. Instead, transitions are stored in
 /// a single row-major table.
-#[derive(Clone)]
+#[derive(Clone, Eq, Hash, PartialEq)]
 struct State {
     /// The set of NFA states in this DFA state, which are computed by
     /// following epsilon transitions from `insts[0]`. Note that not all
@@ -241,20 +241,6 @@ struct State {
     /// Flags for this state, which indicate whether it is a match state,
     /// observed an ASCII word byte and whether any instruction in `insts`
     /// is a zero-width assertion.
-    flags: StateFlags,
-}
-
-/// A state's key for identifying it in the cache. In particular, if two
-/// state's cache keys are equivalent, then they cannot be discriminatory in
-/// a match.
-///
-/// We capture two bits of information: an ordered set of NFA states for the
-/// DFA state and its flags.
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-struct StateKey {
-    /// An ordered set of NFA states.
-    insts: Box<[InstPtr]>,
-    /// The state's flags. (Match, word, empty assertions.)
     flags: StateFlags,
 }
 
@@ -1090,8 +1076,7 @@ impl<'a> Fsm<'a> {
             }
         }
         // Allocate room for our state and add it.
-        let state = State { insts: key.insts.clone(), flags: state_flags };
-        self.add_state(key, state)
+        self.add_state(key)
     }
 
     /// Produces a key suitable for describing a state in the DFA cache.
@@ -1108,7 +1093,7 @@ impl<'a> Fsm<'a> {
         &mut self,
         q: &SparseSet,
         state_flags: &mut StateFlags,
-    ) -> Option<StateKey> {
+    ) -> Option<State> {
         use prog::Inst::*;
         use prog::EmptyLook::*;
 
@@ -1171,7 +1156,7 @@ impl<'a> Fsm<'a> {
         if insts.len() == 0 && !state_flags.is_match() {
             None
         } else {
-            Some(StateKey {
+            Some(State {
                 insts: insts.into_boxed_slice(),
                 flags: *state_flags,
             })
@@ -1256,16 +1241,12 @@ impl<'a> Fsm<'a> {
     /// Restores the given state back into the cache, and returns a pointer
     /// to it.
     fn restore_state(&mut self, state: State) -> Option<StatePtr> {
-        let key = StateKey {
-            insts: state.insts.clone(),
-            flags: state.flags,
-        };
         // If we've already stored this state, just return a pointer to it.
         // None will be the wiser.
-        if let Some(&si) = self.cache.compiled.get(&key) {
+        if let Some(&si) = self.cache.compiled.get(&state) {
             return Some(si);
         }
-        self.add_state(key, state)
+        self.add_state(state)
     }
 
     /// Returns the next state given the current state si and current byte
@@ -1395,7 +1376,7 @@ impl<'a> Fsm<'a> {
     ///
     /// If None is returned, then the state limit was reached and the DFA
     /// should quit.
-    fn add_state(&mut self, key: StateKey, state: State) -> Option<StatePtr> {
+    fn add_state(&mut self, state: State) -> Option<StatePtr> {
         // This will fail if the next state pointer exceeds STATE_PTR. In
         // practice, the cache limit will prevent us from ever getting here,
         // but maybe callers will set the cache size to something ridiculous...
@@ -1415,8 +1396,8 @@ impl<'a> Fsm<'a> {
         }
         // Finally, put our actual state on to our heap of states and index it
         // so we can find it later.
-        self.cache.states.push(state);
-        self.cache.compiled.insert(key, si);
+        self.cache.states.push(state.clone());
+        self.cache.compiled.insert(state, si);
         // Transition table and set of states and map should all be in sync.
         debug_assert!(self.cache.states.len()
                       == self.cache.trans.num_states());
@@ -1505,7 +1486,7 @@ impl<'a> Fsm<'a> {
         // Estimate that there are about 16 instructions per state consuming
         // 64 = 16 * 4 bytes of space.
         let compiled =
-            (self.cache.compiled.len() * (size::<StateKey>() + 64))
+            (self.cache.compiled.len() * (size::<State>() + 64))
             + (self.cache.compiled.len() * size::<StatePtr>());
         let states =
             self.cache.states.len()
@@ -1522,7 +1503,7 @@ impl<'a> Fsm<'a> {
     fn actual_size(&self) -> usize {
         let mut compiled = 0;
         for k in self.cache.compiled.keys() {
-            compiled += mem::size_of::<StateKey>();
+            compiled += mem::size_of::<State>();
             compiled += mem::size_of::<StatePtr>();
             compiled += k.insts.len() * mem::size_of::<InstPtr>();
         }
