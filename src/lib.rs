@@ -94,56 +94,6 @@
 //! Specifically, in this example, the regex will be compiled when it is used for
 //! the first time. On subsequent uses, it will reuse the previous compilation.
 //!
-//! # The `regex!` macro
-//!
-//! Rust's compile-time meta-programming facilities provide a way to write a
-//! `regex!` macro which compiles regular expressions *when your program
-//! compiles*. Said differently, if you only use `regex!` to build regular
-//! expressions in your program, then your program cannot compile with an
-//! invalid regular expression. Moreover, the `regex!` macro compiles the
-//! given expression to native Rust code, which ideally makes it faster.
-//! Unfortunately (or fortunately), the dynamic implementation has had a lot
-//! more optimization work put into it currently, so it is faster than
-//! the `regex!` macro in almost every case.
-//!
-//! To use the `regex!` macro, you must add `regex_macros` to your dependencies
-//! in your project's `Cargo.toml`:
-//!
-//! ```toml
-//! [dependencies]
-//! regex = "0.1"
-//! regex_macros = "0.1"
-//! ```
-//!
-//! and then enable the `plugin` feature and import the `regex_macros` crate as
-//! a syntax extension:
-//!
-//! ```ignore
-//! #![feature(plugin)]
-//! #![plugin(regex_macros)]
-//! extern crate regex;
-//!
-//! fn main() {
-//!     let re = regex!(r"^\d{4}-\d{2}-\d{2}$");
-//!     assert!(re.is_match("2014-01-01"));
-//! }
-//! ```
-//!
-//! There are a few things worth mentioning about using the `regex!` macro.
-//! Firstly, the `regex!` macro *only* accepts string *literals*.
-//! Secondly, the `regex` crate *must* be linked with the name `regex` since
-//! the generated code depends on finding symbols in the `regex` crate.
-//!
-//! One downside of using the `regex!` macro is that it can increase the
-//! size of your program's binary since it generates specialized Rust code.
-//! The extra size probably won't be significant for a small number of
-//! expressions, but 100+ calls to `regex!` will probably result in a
-//! noticeably bigger binary.
-//!
-//! **NOTE**: This is implemented using a compiler plugin, which is not
-//! available on the Rust 1.0 beta/stable channels. Therefore, you'll only
-//! be able to use `regex!` on the nightly Rust releases.
-//!
 //! # Example: iterating over capture groups
 //!
 //! This crate provides convenient iterators for matching an expression
