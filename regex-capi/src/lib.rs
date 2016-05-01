@@ -158,7 +158,7 @@ ffi_fn! {
         options: *const Options,
         error: *mut Error,
     ) -> *const Regex {
-        let pat = unsafe { slice::from_raw_parts(pattern, length as usize) };
+        let pat = unsafe { slice::from_raw_parts(pattern, length) };
         let pat = match str::from_utf8(pat) {
             Ok(pat) => pat,
             Err(err) => {
@@ -222,8 +222,8 @@ ffi_fn! {
         start: size_t,
     ) -> bool {
         let re = unsafe { &*re };
-        let haystack = unsafe { slice::from_raw_parts(haystack, len as usize) };
-        re.is_match_at(haystack, start as usize)
+        let haystack = unsafe { slice::from_raw_parts(haystack, len) };
+        re.is_match_at(haystack, start)
     }
 }
 
@@ -236,11 +236,11 @@ ffi_fn! {
         match_info: *mut rure_match,
     ) -> bool {
         let re = unsafe { &*re };
-        let haystack = unsafe { slice::from_raw_parts(haystack, len as usize) };
-        re.find_at(haystack, start as usize).map(|(s, e)| unsafe {
+        let haystack = unsafe { slice::from_raw_parts(haystack, len) };
+        re.find_at(haystack, start).map(|(s, e)| unsafe {
             if !match_info.is_null() {
-                (*match_info).start = s as size_t;
-                (*match_info).end = e as size_t;
+                (*match_info).start = s;
+                (*match_info).end = e;
             }
         }).is_some()
     }
@@ -255,9 +255,9 @@ ffi_fn! {
         captures: *mut Captures,
     ) -> bool {
         let re = unsafe { &*re };
-        let haystack = unsafe { slice::from_raw_parts(haystack, len as usize) };
+        let haystack = unsafe { slice::from_raw_parts(haystack, len) };
         let slots = unsafe { &mut (*captures).0 };
-        re.read_captures_at(slots, haystack, start as usize).is_some()
+        re.read_captures_at(slots, haystack, start).is_some()
     }
 }
 
@@ -270,13 +270,13 @@ ffi_fn! {
         end: *mut usize,
     ) -> bool {
         let re = unsafe { &*re };
-        let haystack = unsafe { slice::from_raw_parts(haystack, len as usize) };
-        match re.shortest_match_at(haystack, start as usize) {
+        let haystack = unsafe { slice::from_raw_parts(haystack, len) };
+        match re.shortest_match_at(haystack, start) {
             None => false,
             Some(i) => {
                 if !end.is_null() {
                     unsafe {
-                        *end = i as size_t;
+                        *end = i;
                     }
                 }
                 true
@@ -351,8 +351,8 @@ ffi_fn! {
         it.last_match = Some(e);
         if !match_info.is_null() {
             unsafe {
-                (*match_info).start = s as size_t;
-                (*match_info).end = e as size_t;
+                (*match_info).start = s;
+                (*match_info).end = e;
             }
         }
         true
@@ -369,7 +369,7 @@ ffi_fn! {
         let it = unsafe { &mut *it };
         let re = unsafe { &*it.re };
         let slots = unsafe { &mut (*captures).0 };
-        let text = unsafe { slice::from_raw_parts(haystack, len as usize) };
+        let text = unsafe { slice::from_raw_parts(haystack, len) };
         if it.last_end > text.len() {
             return false;
         }
@@ -420,8 +420,8 @@ ffi_fn! {
             (Some(start), Some(end)) => {
                 if !match_info.is_null() {
                     unsafe {
-                        (*match_info).start = start as size_t;
-                        (*match_info).end = end as size_t;
+                        (*match_info).start = start;
+                        (*match_info).end = end;
                     }
                 }
                 true
@@ -433,7 +433,7 @@ ffi_fn! {
 
 ffi_fn! {
     fn rure_captures_len(captures: *const Captures) -> size_t {
-        unsafe { ((*captures).0.len() / 2) as size_t }
+        unsafe { (*captures).0.len() / 2 }
     }
 }
 
@@ -452,14 +452,14 @@ ffi_fn! {
 ffi_fn! {
     fn rure_options_size_limit(options: *mut Options, limit: size_t) {
         let options = unsafe { &mut *options };
-        options.size_limit = limit as usize;
+        options.size_limit = limit;
     }
 }
 
 ffi_fn! {
     fn rure_options_dfa_size_limit(options: *mut Options, limit: size_t) {
         let options = unsafe { &mut *options };
-        options.dfa_size_limit = limit as usize;
+        options.dfa_size_limit = limit;
     }
 }
 
