@@ -46,6 +46,7 @@ haystacks should be used to amortize the cost of compilation. (e.g., >1MB.)
 
 Usage:
     regex-run-one [options] [onig | pcre1 | pcre2 | re2 | rust | rust-bytes | tcl] <pattern> <file>
+    regex-run-one [options] (-h | --help)
 
 Options:
     -h, --help   Show this usage message.
