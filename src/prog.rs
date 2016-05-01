@@ -289,6 +289,16 @@ pub enum Inst {
     Bytes(InstBytes),
 }
 
+impl Inst {
+    /// Returns true if and only if this is a match instruction.
+    pub fn is_match(&self) -> bool {
+        match *self {
+            Inst::Match(_) => true,
+            _ => false,
+        }
+    }
+}
+
 /// Representation of the Save instruction.
 #[derive(Clone, Debug)]
 pub struct InstSave {

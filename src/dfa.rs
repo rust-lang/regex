@@ -581,6 +581,19 @@ impl<'a> Fsm<'a> {
                 self.last_match_si = next_si;
                 prev_si = next_si;
 
+                // This permits short-circuiting when matching a regex set.
+                // In particular, if this DFA state contains only match states,
+                // then it's impossible to extend the set of matches since
+                // match states are final. Therefore, we can quit.
+                if self.prog.matches.len() > 1 {
+                    let state = self.state(next_si);
+                    let just_matches = state.insts.iter()
+                         .all(|&ip| self.prog[ip as usize].is_match());
+                    if just_matches {
+                        return result;
+                    }
+                }
+
                 // Another inner loop! If the DFA stays in this particular
                 // match state, then we can rip through all of the input
                 // very quickly, and only recording the match location once
