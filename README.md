@@ -194,11 +194,13 @@ assert!(matches.matched(6));
 
 ### Usage: `regex!` compiler plugin
 
+**WARNING**: The `regex!` compiler plugin is orders of magnitude slower than
+the normal `Regex::new(...)` usage. You should not use the compiler plugin
+unless you have a very special reason for doing so. The performance difference
+may be the temporary, but the path forward at this point isn't clear.
+
 The `regex!` compiler plugin will compile your regexes at compile time. **This
 only works with a nightly compiler.**
-The
-[documentation explains the trade
-offs](https://doc.rust-lang.org/regex/regex/index.html#the-regex!-macro).
 
 Here is a small example:
 
@@ -221,10 +223,6 @@ fn main() {
 Notice that we never `unwrap` the result of `regex!`. This is because your
 *program* won't compile if the regex doesn't compile. (Try `regex!("(")`.)
 
-Due to recent optimizations in the `regex` crate, the normal "dynamic" regex
-created via `Regex::new(...)` is faster in almost all cases than `regex!(...)`.
-In theory, this should be temporary, but the path to fixing it isn't quite
-clear yet.
 
 ### Usage: a regular expression parser
 
