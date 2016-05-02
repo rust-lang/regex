@@ -25,9 +25,6 @@ macro_rules! show {
     }}
 }
 
-// N.B. The expansion API for &str and &[u8] APIs differs slightly for now,
-// but they should be unified in 1.0. Then we can move this macro back into
-// tests/api.rs where it is used. ---AG
 macro_rules! expand {
     ($name:ident, $re:expr, $text:expr, $expand:expr, $expected:expr) => {
         #[test]

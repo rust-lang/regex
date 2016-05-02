@@ -15,10 +15,12 @@ use std::ops::Index;
 use std::str::FromStr;
 use std::sync::Arc;
 
+use memchr::memchr;
 use syntax;
 
 use error::Error;
 use exec::{Exec, ExecNoSyncStr};
+use expand::expand_str;
 use re_builder::unicode::RegexBuilder;
 use re_plugin::Plugin;
 use re_trait::{self, RegularExpression, Slot};
@@ -478,6 +480,25 @@ impl Regex {
     ///
     /// If no match is found, then a copy of the string is returned unchanged.
     ///
+    /// # Replacement string syntax
+    ///
+    /// All instances of `$name` in the replacement text is replaced with the
+    /// corresponding capture group `name`.
+    ///
+    /// `name` may be an integer corresponding to the index of the
+    /// capture group (counted by order of opening parenthesis where `0` is the
+    /// entire match) or it can be a name (consisting of letters, digits or
+    /// underscores) corresponding to a named capture group.
+    ///
+    /// If `name` isn't a valid capture group (whether the name doesn't exist
+    /// or isn't a valid index), then it is replaced with the empty string.
+    ///
+    /// The longest possible name is used. e.g., `$1a` looks up the capture
+    /// group named `1a` and not the capture group at index `1`. To exert more
+    /// precise control over the name, use braces, e.g., `${1}a`.
+    ///
+    /// To write a literal `$` use `$$`.
+    ///
     /// # Examples
     ///
     /// Note that this function is polymorphic with respect to the replacement.
@@ -574,7 +595,7 @@ impl Regex {
         //   2) We don't need to look up all of the capture groups and do
         //      replacements inside the replacement string. We just push it
         //      at each match and be done with it.
-        if let Some(rep) = rep.no_expand() {
+        if let Some(rep) = rep.no_expansion() {
             let mut new = String::with_capacity(text.len());
             let mut last_match = 0;
             for (i, (s, e)) in self.find_iter(text).enumerate() {
@@ -600,7 +621,7 @@ impl Regex {
             // unwrap on 0 is OK because captures only reports matches
             let (s, e) = cap.pos(0).unwrap();
             new.push_str(&text[last_match..s]);
-            new.push_str(&rep.reg_replace(&cap));
+            rep.replace_append(&cap, &mut new);
             last_match = e;
         }
         new.push_str(&text[last_match..]);
@@ -711,58 +732,6 @@ impl<'r> Iterator for CaptureNames<'r> {
             _CaptureNames::Plugin(ref i)  => i.size_hint(),
             _CaptureNames::Dynamic(ref i) => i.size_hint(),
         }
-    }
-}
-
-/// NoExpand indicates literal string replacement.
-///
-/// It can be used with `replace` and `replace_all` to do a literal
-/// string replacement without expanding `$name` to their corresponding
-/// capture groups.
-///
-/// `'t` is the lifetime of the literal text.
-pub struct NoExpand<'t>(pub &'t str);
-
-/// Replacer describes types that can be used to replace matches in a string.
-pub trait Replacer {
-    /// Returns a possibly owned string that is used to replace the match
-    /// corresponding to the `caps` capture group.
-    ///
-    /// The `'a` lifetime refers to the lifetime of a borrowed string when
-    /// a new owned string isn't needed (e.g., for `NoExpand`).
-    fn reg_replace(&mut self, caps: &Captures) -> Cow<str>;
-
-    /// Returns a possibly owned string that never needs expansion.
-    fn no_expand(&mut self) -> Option<Cow<str>> { None }
-}
-
-impl<'t> Replacer for NoExpand<'t> {
-    fn reg_replace(&mut self, _: &Captures) -> Cow<str> {
-        self.0.into()
-    }
-
-    fn no_expand(&mut self) -> Option<Cow<str>> {
-        Some(self.0.into())
-    }
-}
-
-impl<'t> Replacer for &'t str {
-    fn reg_replace<'a>(&'a mut self, caps: &Captures) -> Cow<'a, str> {
-        caps.expand(*self).into()
-    }
-
-    fn no_expand(&mut self) -> Option<Cow<str>> {
-        // if there is a $ there may be an expansion
-        match self.find('$') {
-            Some(_) => None,
-            None => Some((*self).into()),
-        }
-    }
-}
-
-impl<F> Replacer for F where F: FnMut(&Captures) -> String {
-    fn reg_replace<'a>(&'a mut self, caps: &Captures) -> Cow<'a, str> {
-        (*self)(caps).into()
     }
 }
 
@@ -951,39 +920,23 @@ impl<'t> Captures<'t> {
     }
 
     /// Expands all instances of `$name` in `text` to the corresponding capture
-    /// group `name`.
+    /// group `name`, and writes them to the `dst` buffer given.
     ///
     /// `name` may be an integer corresponding to the index of the
     /// capture group (counted by order of opening parenthesis where `0` is the
     /// entire match) or it can be a name (consisting of letters, digits or
     /// underscores) corresponding to a named capture group.
     ///
-    /// If `name` isn't a valid capture group (whether the name doesn't exist or
-    /// isn't a valid index), then it is replaced with the empty string.
+    /// If `name` isn't a valid capture group (whether the name doesn't exist
+    /// or isn't a valid index), then it is replaced with the empty string.
+    ///
+    /// The longest possible name is used. e.g., `$1a` looks up the capture
+    /// group named `1a` and not the capture group at index `1`. To exert more
+    /// precise control over the name, use braces, e.g., `${1}a`.
     ///
     /// To write a literal `$` use `$$`.
-    pub fn expand(&self, text: &str) -> String {
-        const REPLACE_EXPAND: &'static str = r"(?x)
-          (?P<before>^|\b|[^$]) # Ignore `$$name`.
-          \$
-          (?P<name> # Match the actual capture name. Can be...
-            [0-9]+  # A sequence of digits (for indexed captures), or...
-            |
-            [_a-zA-Z][_0-9a-zA-Z]* # A name for named captures.
-          )
-        ";
-        // How evil can you get?
-        let re = Regex::new(REPLACE_EXPAND).unwrap();
-        let text = re.replace_all(text, |refs: &Captures| -> String {
-            let before = refs.name("before").unwrap_or("");
-            let name = refs.name("name").unwrap_or("");
-            format!("{}{}", before, match name.parse::<usize>() {
-                Err(_) => self.name(name).unwrap_or("").to_owned(),
-                Ok(i) => self.at(i).unwrap_or("").to_owned(),
-            })
-        });
-        let re = Regex::new(r"\$\$").unwrap();
-        re.replace_all(&text, NoExpand("$"))
+    pub fn expand(&self, replacement: &str, dst: &mut String) {
+        expand_str(self, replacement, dst)
     }
 
     /// Returns the number of captured groups.
@@ -1202,5 +1155,71 @@ impl<'r, 't> Iterator for FindMatches<'r, 't> {
             FindMatchesInner::Dynamic(ref mut it) => it.next(),
             FindMatchesInner::Plugin(ref mut it) => it.next(),
         }
+    }
+}
+
+/// Replacer describes types that can be used to replace matches in a string.
+///
+/// In general, users of this crate shouldn't need to implement this trait,
+/// since implementations are already provided for `&str` and
+/// `FnMut(&Captures) -> String`, which covers most use cases.
+pub trait Replacer {
+    /// Appends text to `dst` to replace the current match.
+    ///
+    /// The current match is represented by `caps`, which is guaranteed to
+    /// have a match at capture group `0`.
+    ///
+    /// For example, a no-op replacement would be
+    /// `dst.extend(caps.at(0).unwrap())`.
+    fn replace_append(&mut self, caps: &Captures, dst: &mut String);
+
+    /// Return a fixed unchanging replacement string.
+    ///
+    /// When doing replacements, if access to `Captures` is not needed (e.g.,
+    /// the replacement byte string does not need `$` expansion), then it can
+    /// be beneficial to avoid finding sub-captures.
+    ///
+    /// In general, this is called once for every call to `replacen`.
+    fn no_expansion<'r>(&'r mut self) -> Option<Cow<'r, str>> {
+        None
+    }
+}
+
+impl<'a> Replacer for &'a str {
+    fn replace_append(&mut self, caps: &Captures, dst: &mut String) {
+        caps.expand(*self, dst);
+    }
+
+    fn no_expansion<'r>(&'r mut self) -> Option<Cow<'r, str>> {
+        match memchr(b'$', self.as_bytes()) {
+            Some(_) => None,
+            None => Some(Cow::Borrowed(*self)),
+        }
+    }
+}
+
+impl<F> Replacer for F where F: FnMut(&Captures) -> String {
+    fn replace_append(&mut self, caps: &Captures, dst: &mut String) {
+        dst.push_str(&(*self)(caps));
+    }
+}
+
+/// NoExpand indicates literal string replacement.
+///
+/// It can be used with `replace` and `replace_all` to do a literal string
+/// replacement without expanding `$name` to their corresponding capture
+/// groups. This can be both convenient (to avoid escaping `$`, for example)
+/// and performant (since capture groups don't need to be found).
+///
+/// `'t` is the lifetime of the literal text.
+pub struct NoExpand<'r>(pub &'r str);
+
+impl<'a> Replacer for NoExpand<'a> {
+    fn replace_append(&mut self, _: &Captures, dst: &mut String) {
+        dst.push_str(self.0);
+    }
+
+    fn no_expansion<'r>(&'r mut self) -> Option<Cow<'r, str>> {
+        Some(Cow::Borrowed(self.0))
     }
 }
