@@ -1,4 +1,4 @@
-mat!(ascii_literal, u!(r"a"), "a", Some((0, 1)));
+mat!(ascii_literal, r"a", "a", Some((0, 1)));
 
 // Some crazy expressions from regular-expressions.info.
 mat!(match_ranges,

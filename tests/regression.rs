@@ -41,7 +41,7 @@ mat!(regression_alt_in_alt2, r"^(.*?)(\n|\r\n?|$)", "ab\rcd", Some((0, 3)));
 mat!(regression_leftmost_first_prefix, r"z*azb", "azb", Some((0, 3)));
 
 // See: https://github.com/rust-lang/regex/issues/76
-mat!(uni_case_lower_nocase_flag, u!(r"(?i)\p{Ll}+"), "ΛΘΓΔα", Some((0, 10)));
+mat!(uni_case_lower_nocase_flag, r"(?i)\p{Ll}+", "ΛΘΓΔα", Some((0, 10)));
 
 // See: https://github.com/rust-lang-nursery/regex/issues/191
 mat!(many_alternates, r"1|2|3|4|5|6|7|8|9|10|int", "int", Some((0, 3)));

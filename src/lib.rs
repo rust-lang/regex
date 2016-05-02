@@ -244,16 +244,11 @@
 //! # Opt out of Unicode support
 //!
 //! The `bytes` sub-module provides a `Regex` type that can be used to match
-//! on `&[u8]`. By default, text is interpreted as ASCII compatible text with
-//! all Unicode support disabled (e.g., `.` matches any byte instead of any
-//! Unicode codepoint). Unicode support can be selectively enabled with the
-//! `u` flag. See the `bytes` module documentation for more details.
-//!
-//! Unicode support can also be selectively *disabled* with the main `Regex`
-//! type that matches on `&str`. For example, `(?-u:\b)` will match an ASCII
-//! word boundary. Note though that invalid UTF-8 is not allowed to be matched
-//! even when the `u` flag is disabled. For example, `(?-u:.)` will return an
-//! error, since `.` matches *any byte* when Unicode support is disabled.
+//! on `&[u8]`. By default, text is interpreted as UTF-8 just like it is with
+//! the main `Regex` type. However, this behavior can be disabled by turning
+//! off the `u` flag, even if doing so could result in matching invalid UTF-8.
+//! For example, when the `u` flag is disabled, `.` will match any byte instead
+//! of any Unicode codepoint.
 //!
 //! # Syntax
 //!
@@ -480,11 +475,8 @@ top-level of this crate. There are two important differences:
 
 1. Matching is done on `&[u8]` instead of `&str`. Additionally, `Vec<u8>`
 is used where `String` would have been used.
-2. Regular expressions are compiled with Unicode support *disabled* by
-default. This means that while Unicode regular expressions can only match valid
-UTF-8, regular expressions in this module can match arbitrary bytes. Unicode
-support can be selectively enabled via the `u` flag in regular expressions
-provided by this sub-module.
+2. Unicode support can be disabled even when disabling it would result in
+matching invalid UTF-8 bytes.
 
 # Example: match null terminated string
 
@@ -492,7 +484,7 @@ This shows how to find all null-terminated strings in a slice of bytes:
 
 ```rust
 # use regex::bytes::Regex;
-let re = Regex::new(r"(?P<cstr>[^\x00]+)\x00").unwrap();
+let re = Regex::new(r"(?-u)(?P<cstr>[^\x00]+)\x00").unwrap();
 let text = b"foo\x00bar\x00baz\x00";
 
 // Extract all of the strings without the null terminator from each match.
@@ -512,7 +504,9 @@ string (e.g., to extract a title from a Matroska file):
 ```rust
 # use std::str;
 # use regex::bytes::Regex;
-let re = Regex::new(r"\x7b\xa9(?:[\x80-\xfe]|[\x40-\xff].)(?u:(.*))").unwrap();
+let re = Regex::new(
+    r"(?-u)\x7b\xa9(?:[\x80-\xfe]|[\x40-\xff].)(?u:(.*))"
+).unwrap();
 let text = b"\x12\xd0\x3b\x5f\x7b\xa9\x85\xe2\x98\x83\x80\x98\x54\x76\x68\x65";
 let caps = re.captures(text).unwrap();
 
@@ -536,9 +530,9 @@ The supported syntax is pretty much the same as the syntax for Unicode
 regular expressions with a few changes that make sense for matching arbitrary
 bytes:
 
-1. The `u` flag is *disabled* by default, but can be selectively enabled. (The
-opposite is true for the main `Regex` type.) Disabling the `u` flag is said to
-invoke "ASCII compatible" mode.
+1. The `u` flag can be disabled even when disabling it might cause the regex to
+match invalid UTF-8. When the `u` flag is disabled, the regex is said to be in
+"ASCII compatible" mode.
 2. In ASCII compatible mode, neither Unicode codepoints nor Unicode character
 classes are allowed.
 3. In ASCII compatible mode, Perl character classes (`\w`, `\d` and `\s`)
