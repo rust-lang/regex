@@ -26,7 +26,8 @@ macro_rules! expand {
             let re = regex!($re);
             let cap = re.captures(t!($text)).unwrap();
 
-            let got = cap.expand(t!($expand));
+            let mut got = String::new();
+            cap.expand(t!($expand), &mut got);
             assert_eq!(show!(t!($expected)), show!(&*got));
         }
     }

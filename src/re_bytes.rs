@@ -19,7 +19,7 @@ use std::sync::Arc;
 use memchr::memchr;
 
 use exec::{Exec, ExecNoSync};
-use expand::expand;
+use expand::expand_bytes;
 use error::Error;
 use re_builder::bytes::RegexBuilder;
 use re_trait::{self, RegularExpression, Slot};
@@ -374,6 +374,25 @@ impl Regex {
     ///
     /// If no match is found, then a copy of the byte string is returned
     /// unchanged.
+    ///
+    /// # Replacement string syntax
+    ///
+    /// All instances of `$name` in the replacement text is replaced with the
+    /// corresponding capture group `name`.
+    ///
+    /// `name` may be an integer corresponding to the index of the
+    /// capture group (counted by order of opening parenthesis where `0` is the
+    /// entire match) or it can be a name (consisting of letters, digits or
+    /// underscores) corresponding to a named capture group.
+    ///
+    /// If `name` isn't a valid capture group (whether the name doesn't exist
+    /// or isn't a valid index), then it is replaced with the empty string.
+    ///
+    /// The longest possible name is used. e.g., `$1a` looks up the capture
+    /// group named `1a` and not the capture group at index `1`. To exert more
+    /// precise control over the name, use braces, e.g., `${1}a`.
+    ///
+    /// To write a literal `$` use `$$`.
     ///
     /// # Examples
     ///
@@ -768,7 +787,7 @@ impl<'t> Captures<'t> {
     ///
     /// To write a literal `$` use `$$`.
     pub fn expand(&self, replacement: &[u8], dst: &mut Vec<u8>) {
-        expand(self, replacement, dst)
+        expand_bytes(self, replacement, dst)
     }
 
     /// Returns the number of captured groups.
