@@ -1,5 +1,5 @@
-RUst's REgex engine
-===================
+C API for RUst's REgex engine
+=============================
 rure is a C API to Rust's regex library, which guarantees linear time
 searching using finite automata. In exchange, it must give up some common
 regex features such as backreferences and arbitrary lookaround. It does
