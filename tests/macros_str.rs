@@ -5,7 +5,7 @@ macro_rules! t { ($text:expr) => { text!($text) } }
 macro_rules! bytes { ($text:expr) => { $text.as_bytes() } }
 macro_rules! b { ($text:expr) => { bytes!($text) } }
 
-macro_rules! u { ($re:expr) => { $re } }
+// macro_rules! u { ($re:expr) => { $re } }
 
 macro_rules! no_expand {
     ($text:expr) => {{

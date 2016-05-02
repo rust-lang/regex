@@ -40,7 +40,7 @@ impl Default for RegexOptions {
 }
 
 macro_rules! define_builder {
-    ($name:ident, $regex_mod:ident, $unicode:expr, $only_utf8:expr) => {
+    ($name:ident, $regex_mod:ident, $only_utf8:expr) => {
         pub mod $name {
             use error::Error;
             use exec::ExecBuilder;
@@ -63,7 +63,6 @@ impl RegexBuilder {
     pub fn new(pattern: &str) -> RegexBuilder {
         let mut builder = RegexBuilder(RegexOptions::default());
         builder.0.pats.push(pattern.to_owned());
-        builder.0.unicode = $unicode;
         builder
     }
 
@@ -151,5 +150,5 @@ impl RegexBuilder {
     }
 }
 
-define_builder!(bytes, re_bytes, false, false);
-define_builder!(unicode, re_unicode, true, true);
+define_builder!(bytes, re_bytes, false);
+define_builder!(unicode, re_unicode, true);
