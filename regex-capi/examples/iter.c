@@ -22,24 +22,38 @@
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <unistd.h>
 
 #include "rure.h"
 
 int main() {
     /* Open a file and mmap it. */
     int fd = open("sherlock.txt", O_RDONLY);
-    if (-1 == fd) {
+    if (fd == -1) {
         perror("failed to open sherlock.txt");
         exit(1);
     }
     struct stat status;
-    if (-1 == fstat(fd, &status)) {
+    if (fstat(fd, &status) == -1) {
         perror("failed to stat sherlock.txt");
+        exit(1);
+    }
+    if ((uintmax_t)status.st_size > SIZE_MAX) {
+        perror("file too big");
+        exit(1);
+    }
+    if (status.st_size == 0) {
+        perror("file empty");
         exit(1);
     }
     size_t sherlock_len = (size_t)status.st_size;
     const uint8_t *sherlock = (const uint8_t *)mmap(
         NULL, status.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+    close(fd);
+    if (sherlock == MAP_FAILED) {
+        perror("could not mmap file");
+        exit(1);
+    }
 
     /*
      * Compile the regular expression. A more convenient routine,
@@ -57,6 +71,7 @@ int main() {
         printf("compilation of %s failed: %s\n",
                pattern, rure_error_message(err));
         rure_error_free(err);
+        munmap((char*)sherlock, sherlock_len);
         exit(1);
     }
     rure_error_free(err);
@@ -88,6 +103,7 @@ int main() {
     }
 
     /* Free all our resources. */
+    munmap((char*)sherlock, sherlock_len);
     rure_captures_free(caps);
     rure_iter_free(it);
     rure_free(re);
