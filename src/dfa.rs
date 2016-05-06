@@ -228,20 +228,20 @@ impl<T> Result<T> {
 /// State is a DFA state. It contains an ordered set of NFA states (not
 /// necessarily complete) and a smattering of flags.
 ///
+/// The flags are packed into the first byte of data.
+///
 /// States don't carry their transitions. Instead, transitions are stored in
 /// a single row-major table.
+///
+/// Delta encoding is used to store the instruction pointers.
+/// The first instruction pointer is stored directly starting
+/// at data[1], and each following pointer is stored as an offset
+/// to the previous one. If a delta is in the range -127..127,
+/// it is packed into a single byte; Otherwise the byte 128 (-128 as an i8)
+/// is coded as a flag, followed by 4 bytes encoding the delta.
 #[derive(Clone, Eq, Hash, PartialEq)]
-struct State {
-    /// The set of NFA states in this DFA state, which are computed by
-    /// following epsilon transitions from `insts[0]`. Note that not all
-    /// epsilon transitions are necessarily followed! Namely, epsilon
-    /// transitions that correspond to empty assertions are only followed if
-    /// the flags set at the current byte satisfy the assertion.
-    insts: Box<[InstPtr]>,
-    /// Flags for this state, which indicate whether it is a match state,
-    /// observed an ASCII word byte and whether any instruction in `insts`
-    /// is a zero-width assertion.
-    flags: StateFlags,
+struct State{
+    data: Box<[u8]>,
 }
 
 /// InstPtr is a 32 bit pointer into a sequence of opcodes (i.e., it indexes
@@ -250,6 +250,74 @@ struct State {
 /// Throughout this library, this is usually set to `usize`, but we force a
 /// `u32` here for the DFA to save on space.
 type InstPtr = u32;
+
+// Used to construct new states.
+fn push_inst_ptr(data: &mut Vec<u8>, prev: &mut InstPtr, ip: InstPtr) {
+    let delta = (ip as i32) - (*prev as i32);
+    if delta.abs() <= 127 {
+        data.push(delta as u8);
+        *prev = ip;
+        return;
+    }
+    let delta = delta as u32;
+    // Write 4 bytes in little-endian format.
+    let a = (delta & (0xFF << 0 * 8)) >> 0 * 8;
+    let b = (delta & (0xFF << 1 * 8)) >> 1 * 8;
+    let c = (delta & (0xFF << 2 * 8)) >> 2 * 8;
+    let d = (delta & (0xFF << 3 * 8)) >> 3 * 8;
+    data.push(128);
+    data.push(a as u8);
+    data.push(b as u8);
+    data.push(c as u8);
+    data.push(d as u8);
+    *prev = ip;
+}
+
+struct InstPtrs<'a> {
+    base: usize,
+    data: &'a [u8],
+}
+
+impl <'a>Iterator for InstPtrs<'a> {
+    type Item = usize;
+
+    fn next(&mut self) -> Option<usize> {
+        let x = match self.data.get(0){
+            Some(&x) => x,
+            None => return None,
+        };
+        let delta = if x == 128 {
+            //Read 4 bytes in little-endian format.
+            let a = self.data[1] as u32;
+            let b = self.data[2] as u32;
+            let c = self.data[3] as u32;
+            let d = self.data[4] as u32;
+            self.data = &self.data[5..];
+            (a << 0 * 8 | b << 1 * 8 | c << 2 * 8 | d << 3 * 8) as i32 as isize
+        } else {
+            self.data = &self.data[1..];
+            x as i8 as isize
+        };
+        let base = self.base as isize + delta;
+        debug_assert!(base >= 0);
+        self.base = base as usize;
+        Some(self.base)
+    }
+}
+
+impl State {
+
+    fn flags(&self) -> StateFlags {
+        StateFlags(self.data[0])
+    }
+
+    fn inst_ptrs(&self) -> InstPtrs {
+        InstPtrs {
+            base: 0,
+            data: &self.data[1..],
+        }
+    }
+}
 
 /// StatePtr is a 32 bit pointer to the start of a row in the transition table.
 ///
@@ -472,8 +540,8 @@ impl<'a> Fsm<'a> {
             } else {
                 debug_assert!(dfa.last_match_si != STATE_UNKNOWN);
                 debug_assert!(dfa.last_match_si != STATE_DEAD);
-                for &ip in dfa.state(dfa.last_match_si).insts.iter() {
-                    if let Inst::Match(slot) = dfa.prog[ip as usize] {
+                for ip in dfa.state(dfa.last_match_si).inst_ptrs() {
+                    if let Inst::Match(slot) = dfa.prog[ip] {
                         matches[slot] = true;
                     }
                 }
@@ -587,8 +655,8 @@ impl<'a> Fsm<'a> {
                 // match states are final. Therefore, we can quit.
                 if self.prog.matches.len() > 1 {
                     let state = self.state(next_si);
-                    let just_matches = state.insts.iter()
-                         .all(|&ip| self.prog[ip as usize].is_match());
+                    let just_matches = state.inst_ptrs()
+                         .all(|ip| self.prog[ip].is_match());
                     if just_matches {
                         return result;
                     }
@@ -831,8 +899,8 @@ impl<'a> Fsm<'a> {
 
         // Initialize a queue with the current DFA state's NFA states.
         qcur.clear();
-        for &ip in self.state(si).insts.iter() {
-            qcur.insert(ip as usize);
+        for ip in self.state(si).inst_ptrs() {
+            qcur.insert(ip);
         }
 
         // Before inspecting the current byte, we may need to also inspect
@@ -841,9 +909,9 @@ impl<'a> Fsm<'a> {
         //
         // We only need to do this step if there are any empty assertions in
         // the current state.
-        let is_word_last = self.state(si).flags.is_word();
+        let is_word_last = self.state(si).flags().is_word();
         let is_word = b.is_ascii_word();
-        if self.state(si).flags.has_empty() {
+        if self.state(si).flags().has_empty() {
             // Compute the flags immediately preceding the current byte.
             // This means we only care about the "end" or "end line" flags.
             // (The "start" flags are computed immediately proceding the
@@ -941,10 +1009,10 @@ impl<'a> Fsm<'a> {
         if (self.start & !STATE_START) == next {
             // Start states can never be match states since all matches are
             // delayed by one byte.
-            debug_assert!(!self.state(next).flags.is_match());
+            debug_assert!(!self.state(next).flags().is_match());
             next = self.start_ptr(next);
         }
-        if next <= STATE_MAX && self.state(next).flags.is_match() {
+        if next <= STATE_MAX && self.state(next).flags().is_match() {
             next = STATE_MATCH | next;
         }
         debug_assert!(next != STATE_UNKNOWN);
@@ -1108,7 +1176,6 @@ impl<'a> Fsm<'a> {
         state_flags: &mut StateFlags,
     ) -> Option<State> {
         use prog::Inst::*;
-        use prog::EmptyLook::*;
 
         // We need to build up enough information to recognize pre-built states
         // in the DFA. Generally speaking, this includes every instruction
@@ -1118,44 +1185,23 @@ impl<'a> Fsm<'a> {
         // Empty width assertions are also epsilon transitions, but since they
         // are conditional, we need to make them part of a state's key in the
         // cache.
-        let mut insts = vec![];
+
+        // Reserve 1 byte for flags.
+        let mut insts = vec![0];
+        let mut prev = 0;
         for &ip in q {
             let ip = usize_to_u32(ip);
             match self.prog[ip as usize] {
                 Char(_) | Ranges(_) => unreachable!(),
                 Save(_) => {}
                 Split(_) => {}
-                Bytes(_) => insts.push(ip),
-                EmptyLook(ref inst) => {
-                    match inst.look {
-                        StartLine => {
-                            state_flags.set_empty();
-                            insts.push(ip);
-                        }
-                        EndLine => {
-                            state_flags.set_empty();
-                            insts.push(ip);
-                        }
-                        StartText => {
-                            state_flags.set_empty();
-                            insts.push(ip);
-                        }
-                        EndText => {
-                            state_flags.set_empty();
-                            insts.push(ip);
-                        }
-                        WordBoundary | WordBoundaryAscii => {
-                            state_flags.set_empty();
-                            insts.push(ip);
-                        }
-                        NotWordBoundary | NotWordBoundaryAscii => {
-                            state_flags.set_empty();
-                            insts.push(ip);
-                        }
-                    }
+                Bytes(_) => push_inst_ptr(&mut insts, &mut prev, ip),
+                EmptyLook(_) => {
+                    state_flags.set_empty();
+                    push_inst_ptr(&mut insts, &mut prev, ip)
                 }
                 Match(_) => {
-                    insts.push(ip);
+                    push_inst_ptr(&mut insts, &mut prev, ip);
                     if !self.continue_past_first_match() {
                         break;
                     }
@@ -1166,13 +1212,12 @@ impl<'a> Fsm<'a> {
         // see a match when expanding NFA states previously, then this is a
         // dead state and no amount of additional input can transition out
         // of this state.
-        if insts.len() == 0 && !state_flags.is_match() {
+        if insts.len() == 1 && !state_flags.is_match() {
             None
         } else {
-            Some(State {
-                insts: insts.into_boxed_slice(),
-                flags: *state_flags,
-            })
+            let StateFlags(f) = *state_flags;
+            insts[0] = f;
+            Some(State { data: insts.into_boxed_slice() })
         }
     }
 
@@ -1518,12 +1563,12 @@ impl<'a> Fsm<'a> {
         for k in self.cache.compiled.keys() {
             compiled += mem::size_of::<State>();
             compiled += mem::size_of::<StatePtr>();
-            compiled += k.insts.len() * mem::size_of::<InstPtr>();
+            compiled += k.data.len() * mem::size_of::<u8>();
         }
         let mut states = 0;
         for s in &self.cache.states {
             states += mem::size_of::<State>();
-            states += s.insts.len() * mem::size_of::<InstPtr>();
+            states += s.data.len() * mem::size_of::<u8>();
         }
         compiled
         + states
@@ -1643,9 +1688,10 @@ impl Byte {
 
 impl fmt::Debug for State {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let ips: Vec<usize> = self.inst_ptrs().collect();
         f.debug_struct("State")
-         .field("flags", &self.flags)
-         .field("insts", &self.insts)
+         .field("flags", &self.flags())
+         .field("insts", &ips)
          .finish()
     }
 }
@@ -1730,4 +1776,28 @@ fn show_state_ptr(si: StatePtr) -> String {
         s = format!("{} (match)", s);
     }
     s
+}
+
+#[cfg(test)]
+mod tests {
+    use quickcheck::quickcheck;
+    use super::{
+        StateFlags, State, push_inst_ptr,
+    };
+
+    #[test]
+    fn prop_state_encode_decode() {
+        fn p(ips: Vec<u32>, flags: u8) -> bool {
+            let mut data = vec![flags];
+            let mut prev = 0;
+            for &ip in ips.iter() {
+                push_inst_ptr(&mut data, &mut prev, ip);
+            }
+            let state = State { data: data.into_boxed_slice() };
+            state.inst_ptrs().zip(ips.iter()).all(|(x, &y)| x == y as usize)
+            &&
+            state.flags() == StateFlags(flags)
+        }
+        quickcheck(p as fn(Vec<u32>, u8) -> bool)
+    }
 }
