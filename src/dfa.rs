@@ -225,7 +225,6 @@ impl<T> Result<T> {
     }
 }
 
-
 /// State is a DFA state. It contains an ordered set of NFA states (not
 /// necessarily complete) and a smattering of flags.
 ///
