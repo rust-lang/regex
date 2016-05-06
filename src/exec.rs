@@ -363,22 +363,13 @@ impl<'c> RegularExpression for ExecNoSync<'c> {
         }
         match self.ro.match_type {
             MatchType::Literal(ty) => {
-                self.exec_literals(ty, text, start).map(|(_, e)| e)
+                self.find_literals(ty, text, start).map(|(_, e)| e)
             }
             MatchType::Dfa | MatchType::DfaMany => {
-                match dfa::Fsm::forward(
-                    &self.ro.dfa,
-                    &self.cache,
-                    true,
-                    text,
-                    start,
-                ) {
-                    dfa::Result::Match(e) => Some(start + e),
-                    dfa::Result::NoMatch => None,
-                    dfa::Result::Quit => {
-                        return self.shortest_match_nfa(
-                            MatchNfaType::Auto, text, start);
-                    }
+                match self.shortest_dfa(text, start) {
+                    dfa::Result::Match(end) => Some(end),
+                    dfa::Result::NoMatch(_) => None,
+                    dfa::Result::Quit => self.shortest_nfa(text, start),
                 }
             }
             MatchType::DfaAnchoredReverse => {
@@ -390,14 +381,18 @@ impl<'c> RegularExpression for ExecNoSync<'c> {
                     text.len(),
                 ) {
                     dfa::Result::Match(_) => Some(text.len()),
-                    dfa::Result::NoMatch => None,
-                    dfa::Result::Quit => {
-                        return self.shortest_match_nfa(
-                            MatchNfaType::Auto, text, start);
-                    }
+                    dfa::Result::NoMatch(_) => None,
+                    dfa::Result::Quit => self.shortest_nfa(text, start),
                 }
             }
-            MatchType::Nfa(ty) => self.shortest_match_nfa(ty, text, start),
+            MatchType::DfaSuffix => {
+                match self.shortest_dfa_reverse_suffix(text, start) {
+                    dfa::Result::Match(e) => Some(e),
+                    dfa::Result::NoMatch(_) => None,
+                    dfa::Result::Quit => self.shortest_nfa(text, start),
+                }
+            }
+            MatchType::Nfa(ty) => self.shortest_nfa_type(ty, text, start),
             MatchType::Nothing => None,
         }
     }
@@ -416,28 +411,13 @@ impl<'c> RegularExpression for ExecNoSync<'c> {
         // words, a RegexSet can't (currently) use shortest_match. ---AG
         match self.ro.match_type {
             MatchType::Literal(ty) => {
-                self.exec_literals(ty, text, start).is_some()
+                self.find_literals(ty, text, start).is_some()
             }
             MatchType::Dfa | MatchType::DfaMany => {
-                match dfa::Fsm::forward(
-                    &self.ro.dfa,
-                    &self.cache,
-                    true,
-                    text,
-                    start,
-                ) {
+                match self.shortest_dfa(text, start) {
                     dfa::Result::Match(_) => true,
-                    dfa::Result::NoMatch => false,
-                    dfa::Result::Quit => {
-                        return self.exec_nfa(
-                            MatchNfaType::Auto,
-                            &mut [false],
-                            &mut [],
-                            true,
-                            text,
-                            start,
-                        );
-                    }
+                    dfa::Result::NoMatch(_) => false,
+                    dfa::Result::Quit => self.match_nfa(text, start),
                 }
             }
             MatchType::DfaAnchoredReverse => {
@@ -449,22 +429,18 @@ impl<'c> RegularExpression for ExecNoSync<'c> {
                     text.len(),
                 ) {
                     dfa::Result::Match(_) => true,
-                    dfa::Result::NoMatch => false,
-                    dfa::Result::Quit => {
-                        return self.exec_nfa(
-                            MatchNfaType::Auto,
-                            &mut [false],
-                            &mut [],
-                            true,
-                            text,
-                            start,
-                        );
-                    }
+                    dfa::Result::NoMatch(_) => false,
+                    dfa::Result::Quit => self.match_nfa(text, start),
                 }
             }
-            MatchType::Nfa(ty) => {
-                self.exec_nfa(ty, &mut [false], &mut [], true, text, start)
+            MatchType::DfaSuffix => {
+                match self.shortest_dfa_reverse_suffix(text, start) {
+                    dfa::Result::Match(_) => true,
+                    dfa::Result::NoMatch(_) => false,
+                    dfa::Result::Quit => self.match_nfa(text, start),
+                }
             }
+            MatchType::Nfa(ty) => self.match_nfa_type(ty, text, start),
             MatchType::Nothing => false,
         }
     }
@@ -478,12 +454,12 @@ impl<'c> RegularExpression for ExecNoSync<'c> {
         }
         match self.ro.match_type {
             MatchType::Literal(ty) => {
-                self.exec_literals(ty, text, start)
+                self.find_literals(ty, text, start)
             }
             MatchType::Dfa => {
                 match self.find_dfa_forward(text, start) {
                     dfa::Result::Match((s, e)) => Some((s, e)),
-                    dfa::Result::NoMatch => None,
+                    dfa::Result::NoMatch(_) => None,
                     dfa::Result::Quit => {
                         self.find_nfa(MatchNfaType::Auto, text, start)
                     }
@@ -492,7 +468,16 @@ impl<'c> RegularExpression for ExecNoSync<'c> {
             MatchType::DfaAnchoredReverse => {
                 match self.find_dfa_anchored_reverse(text, start) {
                     dfa::Result::Match((s, e)) => Some((s, e)),
-                    dfa::Result::NoMatch => None,
+                    dfa::Result::NoMatch(_) => None,
+                    dfa::Result::Quit => {
+                        self.find_nfa(MatchNfaType::Auto, text, start)
+                    }
+                }
+            }
+            MatchType::DfaSuffix => {
+                match self.find_dfa_reverse_suffix(text, start) {
+                    dfa::Result::Match((s, e)) => Some((s, e)),
+                    dfa::Result::NoMatch(_) => None,
                     dfa::Result::Quit => {
                         self.find_nfa(MatchNfaType::Auto, text, start)
                     }
@@ -523,57 +508,57 @@ impl<'c> RegularExpression for ExecNoSync<'c> {
         for slot in slots.iter_mut() {
             *slot = None;
         }
+        // If the caller unnecessarily uses this, then we try to save them
+        // from themselves.
+        match slots.len() {
+            0 => return self.find_at(text, start),
+            2 => {
+                return self.find_at(text, start).map(|(s, e)| {
+                    slots[0] = Some(s);
+                    slots[1] = Some(e);
+                    (s, e)
+                });
+            }
+            _ => {} // fallthrough
+        }
         if !self.is_anchor_end_match(text) {
             return None;
         }
         match self.ro.match_type {
             MatchType::Literal(ty) => {
-                self.exec_literals(ty, text, start).and_then(|(s, e)| {
-                    // We need the +1 here to account for lookahead
-                    // operators.
-                    let e = if self.ro.nfa.uses_bytes() {
-                        cmp::min(e + 1, text.len())
-                    } else {
-                        cmp::min(next_utf8(text, e), text.len())
-                    };
-                    self.captures_nfa(MatchNfaType::Auto, slots, &text[..e], s)
+                self.find_literals(ty, text, start).and_then(|(s, e)| {
+                    self.captures_nfa_with_match(slots, text, s, e)
                 })
             }
             MatchType::Dfa => {
                 match self.find_dfa_forward(text, start) {
                     dfa::Result::Match((s, e)) => {
-                        // We need the +1 here to account for lookahead
-                        // operators.
-                        let e = if self.ro.nfa.uses_bytes() {
-                            cmp::min(e + 1, text.len())
-                        } else {
-                            cmp::min(next_utf8(text, e), text.len())
-                        };
-                        self.captures_nfa(
-                            MatchNfaType::Auto, slots, &text[..e], s)
+                        self.captures_nfa_with_match(slots, text, s, e)
                     }
-                    dfa::Result::NoMatch => None,
-                    dfa::Result::Quit => {
-                        self.captures_nfa(
-                            MatchNfaType::Auto, slots, text, start)
-                    }
+                    dfa::Result::NoMatch(_) => None,
+                    dfa::Result::Quit => self.captures_nfa(slots, text, start),
                 }
             }
             MatchType::DfaAnchoredReverse => {
                 match self.find_dfa_anchored_reverse(text, start) {
-                    dfa::Result::Match((s, _)) => {
-                        self.captures_nfa(
-                            MatchNfaType::Auto, slots, text, s)
+                    dfa::Result::Match((s, e)) => {
+                        self.captures_nfa_with_match(slots, text, s, e)
                     }
-                    dfa::Result::NoMatch => None,
-                    dfa::Result::Quit => {
-                        self.captures_nfa(
-                            MatchNfaType::Auto, slots, text, start)
+                    dfa::Result::NoMatch(_) => None,
+                    dfa::Result::Quit => self.captures_nfa(slots, text, start),
+                }
+            }
+            MatchType::DfaSuffix => {
+                match self.find_dfa_reverse_suffix(text, start) {
+                    dfa::Result::Match((s, e)) => {
+                        self.captures_nfa_with_match(slots, text, s, e)
                     }
+                    dfa::Result::NoMatch(_) => None,
+                    dfa::Result::Quit => self.captures_nfa(slots, text, start),
                 }
             }
             MatchType::Nfa(ty) => {
-                self.captures_nfa(ty, slots, text, start)
+                self.captures_nfa_type(ty, slots, text, start)
             }
             MatchType::Nothing => None,
             MatchType::DfaMany => {
@@ -584,67 +569,27 @@ impl<'c> RegularExpression for ExecNoSync<'c> {
 }
 
 impl<'c> ExecNoSync<'c> {
-    /// Finds which regular expressions match the given text.
-    ///
-    /// `matches` should have length equal to the number of regexes being
-    /// searched.
-    ///
-    /// This is only useful when one wants to know which regexes in a set
-    /// match some text.
-    pub fn many_matches_at(
+    /// Finds the leftmost-first match using only literal search.
+    #[inline(always)] // reduces constant overhead
+    fn find_literals(
         &self,
-        matches: &mut [bool],
+        ty: MatchLiteralType,
         text: &[u8],
         start: usize,
-    ) -> bool {
-        use self::MatchType::*;
-        if !self.is_anchor_end_match(text) {
-            return false;
-        }
-        match self.ro.match_type {
-            Literal(ty) => {
-                debug_assert!(matches.len() == 1);
-                matches[0] = self.exec_literals(ty, text, start).is_some();
-                matches[0]
+    ) -> Option<(usize, usize)> {
+        use self::MatchLiteralType::*;
+        match ty {
+            Unanchored => {
+                let lits = &self.ro.nfa.prefixes;
+                lits.find(&text[start..])
+                    .map(|(s, e)| (start + s, start + e))
             }
-            Dfa | DfaAnchoredReverse | DfaMany => {
-                match dfa::Fsm::forward_many(
-                    &self.ro.dfa,
-                    &self.cache,
-                    matches,
-                    text,
-                    start,
-                ) {
-                    dfa::Result::Match(_) => true,
-                    dfa::Result::NoMatch => false,
-                    dfa::Result::Quit => {
-                        self.exec_nfa(
-                            MatchNfaType::Auto,
-                            matches,
-                            &mut [],
-                            false,
-                            text,
-                            start)
-                    }
-                }
+            AnchoredStart => {
+                let lits = &self.ro.nfa.prefixes;
+                lits.find_start(&text[start..])
+                    .map(|(s, e)| (start + s, start + e))
             }
-            Nfa(ty) => self.exec_nfa(ty, matches, &mut [], false, text, start),
-            Nothing => false,
-        }
-    }
-
-    /// Like shortest_match, but executes an NFA engine.
-    fn shortest_match_nfa(
-        &self,
-        ty: MatchNfaType,
-        text: &[u8],
-        start: usize,
-    ) -> Option<usize> {
-        let mut slots = [None, None];
-        if self.exec_nfa(ty, &mut [false], &mut slots, true, text, start) {
-            slots[1]
-        } else {
-            None
+            AnchoredEnd => self.ro.suffixes.find_end(&text),
         }
     }
 
@@ -666,7 +611,7 @@ impl<'c> ExecNoSync<'c> {
             text,
             start,
         ) {
-            NoMatch => return NoMatch,
+            NoMatch(i) => return NoMatch(i),
             Quit => return Quit,
             Match(end) if start == end => return Match((start, start)),
             Match(end) => end,
@@ -680,7 +625,7 @@ impl<'c> ExecNoSync<'c> {
             end - start,
         ) {
             Match(s) => Match((start + s, end)),
-            NoMatch => NoMatch,
+            NoMatch(i) => NoMatch(i),
             Quit => Quit,
         }
     }
@@ -706,8 +651,157 @@ impl<'c> ExecNoSync<'c> {
             text.len() - start,
         ) {
             Match(s) => Match((start + s, text.len())),
-            NoMatch => NoMatch,
+            NoMatch(i) => NoMatch(i),
             Quit => Quit,
+        }
+    }
+
+    /// Finds the end of the shortest match using only the DFA.
+    #[inline(always)] // reduces constant overhead
+    fn shortest_dfa(&self, text: &[u8], start: usize) -> dfa::Result<usize> {
+        dfa::Fsm::forward(&self.ro.dfa, &self.cache, true, text, start)
+    }
+
+    /// Finds the end of the shortest match using only the DFA by scanning for
+    /// suffix literals.
+    ///
+    #[inline(always)] // reduces constant overhead
+    fn shortest_dfa_reverse_suffix(
+        &self,
+        text: &[u8],
+        start: usize,
+    ) -> dfa::Result<usize> {
+        match self.exec_dfa_reverse_suffix(text, start) {
+            None => self.shortest_dfa(text, start),
+            Some(r) => r.map(|(_, end)| end),
+        }
+    }
+
+    /// Finds the end of the shortest match using only the DFA by scanning for
+    /// suffix literals. It also reports the start of the match.
+    ///
+    /// Note that if None is returned, then the optimization gave up to avoid
+    /// worst case quadratic behavior. A forward scanning DFA should be tried
+    /// next.
+    ///
+    /// If a match is returned and the full leftmost-first match is desired,
+    /// then a forward scan starting from the beginning of the match must be
+    /// done.
+    ///
+    /// If the result returned indicates that the DFA quit, then another
+    /// matching engine should be used.
+    #[inline(always)] // reduces constant overhead
+    fn exec_dfa_reverse_suffix(
+        &self,
+        text: &[u8],
+        original_start: usize,
+    ) -> Option<dfa::Result<(usize, usize)>> {
+        use dfa::Result::*;
+
+        let lcs = self.ro.suffixes.lcs();
+        debug_assert!(lcs.len() >= 1);
+        let mut start = original_start;
+        let mut end = start;
+        while end <= text.len() {
+            start = end;
+            end = end + match lcs.find(&text[end..]) {
+                None => return Some(NoMatch(text.len())),
+                Some(start) => start + lcs.len(),
+            };
+            match dfa::Fsm::reverse(
+                &self.ro.dfa_reverse,
+                &self.cache,
+                false,
+                &text[start..end],
+                end - start,
+            ) {
+                Match(0) | NoMatch(0) => return None,
+                Match(s) => return Some(Match((s + start, end))),
+                NoMatch(_) => continue,
+                Quit => return Some(Quit),
+            };
+        }
+        Some(NoMatch(text.len()))
+    }
+
+    /// Finds the leftmost-first match (start and end) using only the DFA
+    /// by scanning for suffix literals.
+    ///
+    /// If the result returned indicates that the DFA quit, then another
+    /// matching engine should be used.
+    #[inline(always)] // reduces constant overhead
+    fn find_dfa_reverse_suffix(
+        &self,
+        text: &[u8],
+        start: usize,
+    ) -> dfa::Result<(usize, usize)> {
+        use dfa::Result::*;
+
+        let match_start = match self.exec_dfa_reverse_suffix(text, start) {
+            None => return self.find_dfa_forward(text, start),
+            Some(Match((start, _))) => start,
+            Some(r) => return r,
+        };
+        // At this point, we've found a match. The only way to quit now
+        // without a match is if the DFA gives up (seems unlikely).
+        //
+        // Now run the DFA forwards to find the proper end of the match.
+        // (The suffix literal match can only indicate the earliest
+        // possible end location, which may appear before the end of the
+        // leftmost-first match.)
+        match dfa::Fsm::forward(
+            &self.ro.dfa,
+            &self.cache,
+            false,
+            text,
+            match_start,
+        ) {
+            NoMatch(_) => panic!("BUG: reverse match implies forward match"),
+            Quit => Quit,
+            Match(e) => Match((match_start, e)),
+        }
+    }
+
+    /// Executes the NFA engine to return whether there is a match or not.
+    ///
+    /// Ideally, we could use shortest_nfa(...).is_some() and get the same
+    /// performance characteristics, but regex sets don't have captures, which
+    /// shortest_nfa depends on.
+    fn match_nfa(
+        &self,
+        text: &[u8],
+        start: usize,
+    ) -> bool {
+        self.match_nfa_type(MatchNfaType::Auto, text, start)
+    }
+
+    /// Like match_nfa, but allows specification of the type of NFA engine.
+    fn match_nfa_type(
+        &self,
+        ty: MatchNfaType,
+        text: &[u8],
+        start: usize,
+    ) -> bool {
+        self.exec_nfa(ty, &mut [false], &mut [], true, text, start)
+    }
+
+    /// Finds the shortest match using an NFA.
+    fn shortest_nfa(&self, text: &[u8], start: usize) -> Option<usize> {
+        self.shortest_nfa_type(MatchNfaType::Auto, text, start)
+    }
+
+    /// Like shortest_nfa, but allows specification of the type of NFA engine.
+    fn shortest_nfa_type(
+        &self,
+        ty: MatchNfaType,
+        text: &[u8],
+        start: usize,
+    ) -> Option<usize> {
+        let mut slots = [None, None];
+        if self.exec_nfa(ty, &mut [false], &mut slots, true, text, start) {
+            slots[1]
+        } else {
+            None
         }
     }
 
@@ -729,10 +823,41 @@ impl<'c> ExecNoSync<'c> {
         }
     }
 
+    /// Like find_nfa, but fills in captures and restricts the search space
+    /// using previously found match information.
+    ///
+    /// `slots` should have length equal to `2 * nfa.captures.len()`.
+    fn captures_nfa_with_match(
+        &self,
+        slots: &mut [Slot],
+        text: &[u8],
+        match_start: usize,
+        match_end: usize,
+    ) -> Option<(usize, usize)> {
+        // We can't use match_end directly, because we may need to examine
+        // one "character" after the end of a match for lookahead operators.
+        let e = if self.ro.nfa.uses_bytes() {
+            cmp::min(match_end + 1, text.len())
+        } else {
+            cmp::min(next_utf8(text, match_end), text.len())
+        };
+        self.captures_nfa(slots, &text[..e], match_start)
+    }
+
     /// Like find_nfa, but fills in captures.
     ///
     /// `slots` should have length equal to `2 * nfa.captures.len()`.
     fn captures_nfa(
+        &self,
+        slots: &mut [Slot],
+        text: &[u8],
+        start: usize,
+    ) -> Option<(usize, usize)> {
+        self.captures_nfa_type(MatchNfaType::Auto, slots, text, start)
+    }
+
+    /// Like captures_nfa, but allows specification of type of NFA engine.
+    fn captures_nfa_type(
         &self,
         ty: MatchNfaType,
         slots: &mut [Slot],
@@ -746,29 +871,6 @@ impl<'c> ExecNoSync<'c> {
             }
         } else {
             None
-        }
-    }
-
-    #[inline(always)] // reduces constant overhead
-    fn exec_literals(
-        &self,
-        ty: MatchLiteralType,
-        text: &[u8],
-        start: usize,
-    ) -> Option<(usize, usize)> {
-        use self::MatchLiteralType::*;
-        match ty {
-            Unanchored => {
-                let lits = &self.ro.nfa.prefixes;
-                lits.find(&text[start..])
-                    .map(|(s, e)| (start + s, start + e))
-            }
-            AnchoredStart => {
-                let lits = &self.ro.nfa.prefixes;
-                lits.find_start(&text[start..])
-                    .map(|(s, e)| (start + s, start + e))
-            }
-            AnchoredEnd => self.ro.suffixes.find_end(&text),
         }
     }
 
@@ -853,6 +955,55 @@ impl<'c> ExecNoSync<'c> {
                 slots,
                 CharInput::new(text),
                 start)
+        }
+    }
+
+    /// Finds which regular expressions match the given text.
+    ///
+    /// `matches` should have length equal to the number of regexes being
+    /// searched.
+    ///
+    /// This is only useful when one wants to know which regexes in a set
+    /// match some text.
+    pub fn many_matches_at(
+        &self,
+        matches: &mut [bool],
+        text: &[u8],
+        start: usize,
+    ) -> bool {
+        use self::MatchType::*;
+        if !self.is_anchor_end_match(text) {
+            return false;
+        }
+        match self.ro.match_type {
+            Literal(ty) => {
+                debug_assert!(matches.len() == 1);
+                matches[0] = self.find_literals(ty, text, start).is_some();
+                matches[0]
+            }
+            Dfa | DfaAnchoredReverse | DfaSuffix | DfaMany => {
+                match dfa::Fsm::forward_many(
+                    &self.ro.dfa,
+                    &self.cache,
+                    matches,
+                    text,
+                    start,
+                ) {
+                    dfa::Result::Match(_) => true,
+                    dfa::Result::NoMatch(_) => false,
+                    dfa::Result::Quit => {
+                        self.exec_nfa(
+                            MatchNfaType::Auto,
+                            matches,
+                            &mut [],
+                            false,
+                            text,
+                            start)
+                    }
+                }
+            }
+            Nfa(ty) => self.exec_nfa(ty, matches, &mut [], false, text, start),
+            Nothing => false,
         }
     }
 
@@ -956,7 +1107,7 @@ impl ExecReadOnly {
             return Nothing;
         }
         // If our set of prefixes is complete, then we can use it to find
-        // a match in lieu of a regex engine. This doesn't quit work well in
+        // a match in lieu of a regex engine. This doesn't quite work well in
         // the presence of multiple regexes, so only do it when there's one.
         if self.res.len() == 1 {
             if self.nfa.prefixes.complete() {
@@ -988,11 +1139,38 @@ impl ExecReadOnly {
             if !self.nfa.is_anchored_start && self.nfa.is_anchored_end {
                 return DfaAnchoredReverse;
             }
+            // If there's a longish suffix literal, then it might be faster
+            // to look for that first.
+            if self.should_suffix_scan() {
+                return DfaSuffix;
+            }
             // Fall back to your garden variety forward searching lazy DFA.
             return Dfa;
         }
         // We're so totally hosed.
         Nfa(MatchNfaType::Auto)
+    }
+
+    /// Returns true if the program is amenable to suffix scanning.
+    ///
+    /// When this is true, as a heuristic, we assume it is OK to quickly scan
+    /// for suffix literals and then do a *reverse* DFA match from any matches
+    /// produced by the literal scan. (And then followed by a forward DFA
+    /// search, since the previously found suffix literal maybe not actually be
+    /// the end of a match.)
+    ///
+    /// This is a bit of a specialized optimization, but can result in pretty
+    /// big performance wins if 1) there are no prefix literals and 2) the
+    /// suffix literals are pretty rare in the text. (1) is obviously easy to
+    /// account for but (2) is harder. As a proxy, we assume that longer
+    /// strings are generally rarer, so we only enable this optimization when
+    /// we have a meaty suffix.
+    fn should_suffix_scan(&self) -> bool {
+        if self.suffixes.is_empty() {
+            return false;
+        }
+        let lcs_len = self.suffixes.lcs().char_len();
+        lcs_len >= 3 && lcs_len > self.dfa.prefixes.lcp().char_len()
     }
 }
 
@@ -1005,6 +1183,8 @@ enum MatchType {
     Dfa,
     /// A reverse DFA search starting from the end of a haystack.
     DfaAnchoredReverse,
+    /// A reverse DFA search with suffix literal scanning.
+    DfaSuffix,
     /// Use the DFA on two or more regular expressions.
     DfaMany,
     /// An NFA variant.
