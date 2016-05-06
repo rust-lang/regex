@@ -241,7 +241,9 @@ impl<T> Result<T> {
 /// it is packed into a single byte; Otherwise the byte 128 (-128 as an i8)
 /// is coded as a flag, followed by 4 bytes encoding the delta.
 #[derive(Clone, Eq, Hash, PartialEq)]
-struct State{data: Box<[u8]>}
+struct State{
+    data: Box<[u8]>,
+}
 
 /// InstPtr is a 32 bit pointer into a sequence of opcodes (i.e., it indexes
 /// an NFA state).
@@ -250,12 +252,12 @@ struct State{data: Box<[u8]>}
 /// `u32` here for the DFA to save on space.
 type InstPtr = u32;
 
-//Used to construct new states.
+// Used to construct new states.
 fn push_inst_ptr(data: &mut Vec<u8>, prev: &mut InstPtr, ip: InstPtr) {
-	let delta = (ip as i32) - (*prev as i32);
+    let delta = (ip as i32) - (*prev as i32);
     if delta.abs() <= 127 {
         data.push(delta as u8);
-		*prev = ip;
+        *prev = ip;
         return;
     }
     let delta = delta as u32;
@@ -264,12 +266,12 @@ fn push_inst_ptr(data: &mut Vec<u8>, prev: &mut InstPtr, ip: InstPtr) {
     let b = (delta & (0xFF << 1 * 8)) >> 1 * 8;
     let c = (delta & (0xFF << 2 * 8)) >> 2 * 8;
     let d = (delta & (0xFF << 3 * 8)) >> 3 * 8;
-	data.push(128);
+    data.push(128);
     data.push(a as u8);
     data.push(b as u8);
     data.push(c as u8);
     data.push(d as u8);
-	*prev = ip;
+    *prev = ip;
 }
 
 struct InstPtrs<'a> {
@@ -1185,9 +1187,9 @@ impl<'a> Fsm<'a> {
         // are conditional, we need to make them part of a state's key in the
         // cache.
 
-		// Reserve 1 byte for flags.
+        // Reserve 1 byte for flags.
         let mut insts = vec![0];
-		let mut prev = 0;
+        let mut prev = 0;
         for &ip in q {
             let ip = usize_to_u32(ip);
             match self.prog[ip as usize] {
@@ -1196,11 +1198,11 @@ impl<'a> Fsm<'a> {
                 Split(_) => {}
                 Bytes(_) => push_inst_ptr(&mut insts, &mut prev, ip),
                 EmptyLook(_) => {
-					state_flags.set_empty();
-					push_inst_ptr(&mut insts, &mut prev, ip)
+                    state_flags.set_empty();
+                    push_inst_ptr(&mut insts, &mut prev, ip)
                 }
                 Match(_) => {
-					push_inst_ptr(&mut insts, &mut prev, ip);
+                    push_inst_ptr(&mut insts, &mut prev, ip);
                     if !self.continue_past_first_match() {
                         break;
                     }
@@ -1214,8 +1216,8 @@ impl<'a> Fsm<'a> {
         if insts.len() == 1 && !state_flags.is_match() {
             None
         } else {
-			let StateFlags(f) = *state_flags;
-			insts[0] = f;
+            let StateFlags(f) = *state_flags;
+            insts[0] = f;
             Some(State { data: insts.into_boxed_slice() })
         }
     }
@@ -1687,8 +1689,10 @@ impl Byte {
 
 impl fmt::Debug for State {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let ips: Vec<usize> = self.inst_ptrs().collect();
         f.debug_struct("State")
-         .field("data", &self.data)
+         .field("flags", &self.flags())
+         .field("insts", &ips)
          .finish()
     }
 }
