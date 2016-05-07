@@ -119,6 +119,10 @@ sherlock!(words, r"\w+", 109222); // hmm, why does RE2 diverge here?
 // optimizations.
 sherlock!(before_holmes, r"\w+\s+Holmes", 319);
 
+// Find complete words before Holmes. Both of the `\w`s defeat any prefix
+// and suffix optimizations.
+sherlock!(before_after_holmes, r"\w+\s+Holmes\s+\w+", 137);
+
 // Find Holmes co-occuring with Watson in a particular window of characters.
 // This uses Aho-Corasick for the Holmes|Watson prefix, but the lazy DFA for
 // the rest.

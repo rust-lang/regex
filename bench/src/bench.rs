@@ -62,7 +62,7 @@ pub use ffi::tcl::Regex;
 #[cfg(not(feature = "re-rust-bytes"))]
 #[cfg(not(feature = "re-rust-plugin"))]
 macro_rules! regex {
-    ($re:expr) => { ::Regex::new($re).unwrap() }
+    ($re:expr) => { ::Regex::new(&$re.to_owned()).unwrap() }
 }
 
 #[cfg(feature = "re-rust-bytes")]
@@ -72,7 +72,7 @@ macro_rules! regex {
         // Always enable the Unicode flag for byte based regexes.
         // Really, this should have been enabled by default. *sigh*
         use regex::bytes::RegexBuilder;
-        RegexBuilder::new($re).unicode(true).compile().unwrap()
+        RegexBuilder::new(&$re.to_owned()).unicode(true).compile().unwrap()
     }}
 }
 

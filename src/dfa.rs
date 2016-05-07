@@ -275,25 +275,12 @@ struct State{
 /// `u32` here for the DFA to save on space.
 type InstPtr = u32;
 
-// Used to construct new states.
+/// Adds ip to data using delta encoding with respect to prev.
+///
+/// After completion, `data` will contain `ip` and `prev` will be set to `ip`.
 fn push_inst_ptr(data: &mut Vec<u8>, prev: &mut InstPtr, ip: InstPtr) {
     let delta = (ip as i32) - (*prev as i32);
-    if delta.abs() <= 127 {
-        data.push(delta as u8);
-        *prev = ip;
-        return;
-    }
-    let delta = delta as u32;
-    // Write 4 bytes in little-endian format.
-    let a = (delta & (0xFF << 0 * 8)) >> 0 * 8;
-    let b = (delta & (0xFF << 1 * 8)) >> 1 * 8;
-    let c = (delta & (0xFF << 2 * 8)) >> 2 * 8;
-    let d = (delta & (0xFF << 3 * 8)) >> 3 * 8;
-    data.push(128);
-    data.push(a as u8);
-    data.push(b as u8);
-    data.push(c as u8);
-    data.push(d as u8);
+    write_vari32(data, delta);
     *prev = ip;
 }
 
@@ -306,31 +293,20 @@ impl <'a>Iterator for InstPtrs<'a> {
     type Item = usize;
 
     fn next(&mut self) -> Option<usize> {
-        let x = match self.data.get(0){
-            Some(&x) => x,
-            None => return None,
-        };
-        let delta = if x == 128 {
-            //Read 4 bytes in little-endian format.
-            let a = self.data[1] as u32;
-            let b = self.data[2] as u32;
-            let c = self.data[3] as u32;
-            let d = self.data[4] as u32;
-            self.data = &self.data[5..];
-            (a << 0 * 8 | b << 1 * 8 | c << 2 * 8 | d << 3 * 8) as i32 as isize
-        } else {
-            self.data = &self.data[1..];
-            x as i8 as isize
-        };
-        let base = self.base as isize + delta;
+        if self.data.is_empty() {
+            return None;
+        }
+        let (delta, nread) = read_vari32(self.data);
+        let base = self.base as i32 + delta;
         debug_assert!(base >= 0);
+        debug_assert!(nread > 0);
+        self.data = &self.data[nread..];
         self.base = base as usize;
         Some(self.base)
     }
 }
 
 impl State {
-
     fn flags(&self) -> StateFlags {
         StateFlags(self.data[0])
     }
@@ -1566,14 +1542,15 @@ impl<'a> Fsm<'a> {
     fn approximate_size(&self) -> usize {
         use std::mem::size_of as size;
         // Estimate that there are about 16 instructions per state consuming
-        // 64 = 16 * 4 bytes of space.
+        // 20 = 4 + (15 * 1) bytes of space (1 byte because of delta encoding).
+        const STATE_HEAP: usize = 20 + 1; // one extra byte for flags
         let compiled =
-            (self.cache.compiled.len() * (size::<State>() + 64))
+            (self.cache.compiled.len() * (size::<State>() + STATE_HEAP))
             + (self.cache.compiled.len() * size::<StatePtr>());
         let states =
             self.cache.states.len()
             * (size::<State>()
-               + 64
+               + STATE_HEAP
                + (self.num_byte_classes() * size::<StatePtr>()));
         let start_states = self.cache.start_states.len() * size::<StatePtr>();
         self.prog.approximate_size() + compiled + states + start_states
@@ -1802,11 +1779,56 @@ fn show_state_ptr(si: StatePtr) -> String {
     s
 }
 
+/// https://developers.google.com/protocol-buffers/docs/encoding#varints
+fn write_vari32(data: &mut Vec<u8>, n: i32) {
+    let mut un = (n as u32) << 1;
+    if n < 0 {
+        un = !un;
+    }
+    write_varu32(data, un)
+}
+
+/// https://developers.google.com/protocol-buffers/docs/encoding#varints
+fn read_vari32(data: &[u8]) -> (i32, usize) {
+    let (un, i) = read_varu32(data);
+    let mut n = (un >> 1) as i32;
+    if un & 1 != 0 {
+        n = !n;
+    }
+    (n, i)
+}
+
+/// https://developers.google.com/protocol-buffers/docs/encoding#varints
+fn write_varu32(data: &mut Vec<u8>, mut n: u32) {
+    while n >= 0b1000_0000 {
+        data.push((n as u8) | 0b1000_0000);
+        n >>= 7;
+    }
+    data.push(n as u8);
+}
+
+/// https://developers.google.com/protocol-buffers/docs/encoding#varints
+fn read_varu32(data: &[u8]) -> (u32, usize) {
+    let mut n: u32 = 0;
+    let mut shift: u32 = 0;
+    for (i, &b) in data.iter().enumerate() {
+        if b < 0b1000_0000 {
+            return (n | ((b as u32) << shift), i + 1);
+        }
+        n |= ((b as u32) & 0b0111_1111) << shift;
+        shift += 7;
+    }
+    (0, 0)
+}
+
 #[cfg(test)]
 mod tests {
-    use quickcheck::quickcheck;
+    extern crate rand;
+
+    use quickcheck::{QuickCheck, StdGen, quickcheck};
     use super::{
         StateFlags, State, push_inst_ptr,
+        write_varu32, read_varu32, write_vari32, read_vari32,
     };
 
     #[test]
@@ -1818,10 +1840,36 @@ mod tests {
                 push_inst_ptr(&mut data, &mut prev, ip);
             }
             let state = State { data: data.into_boxed_slice() };
-            state.inst_ptrs().zip(ips.iter()).all(|(x, &y)| x == y as usize)
-            &&
-            state.flags() == StateFlags(flags)
+
+            let expected: Vec<usize> =
+                ips.into_iter().map(|ip| ip as usize).collect();
+            let got: Vec<usize> = state.inst_ptrs().collect();
+            expected == got && state.flags() == StateFlags(flags)
         }
-        quickcheck(p as fn(Vec<u32>, u8) -> bool)
+        QuickCheck::new()
+            .gen(StdGen::new(self::rand::thread_rng(), 70_000))
+            .quickcheck(p as fn(Vec<u32>, u8) -> bool);
+    }
+
+    #[test]
+    fn prop_read_write_u32() {
+        fn p(n: u32) -> bool {
+            let mut buf = vec![];
+            write_varu32(&mut buf, n);
+            let (got, nread) = read_varu32(&buf);
+            nread == buf.len() && got == n
+        }
+        quickcheck(p as fn(u32) -> bool);
+    }
+
+    #[test]
+    fn prop_read_write_i32() {
+        fn p(n: i32) -> bool {
+            let mut buf = vec![];
+            write_vari32(&mut buf, n);
+            let (got, nread) = read_vari32(&buf);
+            nread == buf.len() && got == n
+        }
+        quickcheck(p as fn(i32) -> bool);
     }
 }
