@@ -33,17 +33,6 @@ pub fn quote(text: &str) -> String {
     syntax::quote(text)
 }
 
-/// Tests if the given regular expression matches somewhere in the text given.
-///
-/// If there was a problem compiling the regular expression, an error is
-/// returned.
-///
-/// To find submatches, split or replace text, you'll need to compile an
-/// expression first.
-pub fn is_match(regex: &str, text: &str) -> Result<bool, Error> {
-    Regex::new(regex).map(|r| r.is_match(text))
-}
-
 /// A compiled regular expression for matching Unicode strings.
 ///
 /// It is represented as either a sequence of bytecode instructions (dynamic)
