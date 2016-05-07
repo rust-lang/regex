@@ -464,7 +464,7 @@ pub use re_unicode::{
     Regex, Captures, SubCaptures, SubCapturesPos, SubCapturesNamed,
     CaptureNames, FindCaptures, FindMatches,
     Replacer, NoExpand, RegexSplits, RegexSplitsN,
-    quote, is_match,
+    quote,
 };
 
 /**
