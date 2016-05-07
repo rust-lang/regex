@@ -940,15 +940,12 @@ impl<'t> Captures<'t> {
     }
 
     /// Returns the number of captured groups.
+    ///
+    /// This is always at least `1`, since every regex has at least one capture
+    /// group that corresponds to the full match.
     #[inline]
     pub fn len(&self) -> usize {
         self.slots.len() / 2
-    }
-
-    /// Returns true if and only if there are no captured groups.
-    #[inline]
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
     }
 }
 
