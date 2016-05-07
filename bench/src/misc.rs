@@ -16,19 +16,16 @@ use test::Bencher;
 
 use {Regex, Text};
 
-/*
 #[cfg(not(feature = "re-onig"))]
 #[cfg(not(feature = "re-pcre1"))]
 #[cfg(not(feature = "re-pcre2"))]
 #[cfg(not(feature = "re-rust-plugin"))]
 bench_match!(no_exponential, {
-    let re = format!(
+    format!(
         "{}{}",
         repeat("a?").take(100).collect::<String>(),
-        repeat("a").take(100).collect::<String>());
-    regex!(&re)
+        repeat("a").take(100).collect::<String>())
 }, repeat("a").take(100).collect());
-*/
 
 bench_match!(literal, r"y", {
    format!("{}y", repeat("x").take(50).collect::<String>())
