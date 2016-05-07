@@ -460,8 +460,9 @@ extern crate utf8_ranges;
 pub use error::Error;
 pub use re_builder::unicode::*;
 pub use re_set::unicode::*;
+pub use re_trait::{Locations, SubCapturesPos};
 pub use re_unicode::{
-    Regex, Captures, SubCaptures, SubCapturesPos, SubCapturesNamed,
+    Regex, Captures, SubCaptures, SubCapturesNamed,
     CaptureNames, FindCaptures, FindMatches,
     Replacer, NoExpand, Splits, SplitsN,
     quote,
@@ -554,8 +555,9 @@ performance on `&str`.
 */
 pub mod bytes {
     pub use re_builder::bytes::*;
-    pub use re_set::bytes::*;
     pub use re_bytes::*;
+    pub use re_set::bytes::*;
+    pub use re_trait::{Locations, SubCapturesPos};
 }
 
 mod backtrack;

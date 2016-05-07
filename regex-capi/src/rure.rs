@@ -46,7 +46,7 @@ pub struct rure_match {
     pub end: size_t,
 }
 
-pub struct Captures(Vec<Option<usize>>);
+pub struct Captures(bytes::Locations);
 
 pub struct Iter {
     re: *const Regex,
@@ -404,7 +404,7 @@ ffi_fn! {
 ffi_fn! {
     fn rure_captures_new(re: *const Regex) -> *mut Captures {
         let re = unsafe { &*re };
-        let captures = Captures(vec![None; 2 * re.captures_len()]);
+        let captures = Captures(re.locations());
         Box::into_raw(Box::new(captures))
     }
 }
@@ -421,9 +421,9 @@ ffi_fn! {
         i: size_t,
         match_info: *mut rure_match,
     ) -> bool {
-        let captures = unsafe { &(*captures).0 };
-        match (captures[i * 2], captures[i * 2 + 1]) {
-            (Some(start), Some(end)) => {
+        let locs = unsafe { &(*captures).0 };
+        match locs.pos(i) {
+            Some((start, end)) => {
                 if !match_info.is_null() {
                     unsafe {
                         (*match_info).start = start;

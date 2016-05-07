@@ -23,7 +23,7 @@ use exec::{Exec, ExecNoSyncStr};
 use expand::expand_str;
 use re_builder::unicode::RegexBuilder;
 use re_plugin::Plugin;
-use re_trait::{self, RegularExpression, Slot};
+use re_trait::{self, RegularExpression, Locations, SubCapturesPos};
 
 /// Escapes all regular expression meta characters in `text`.
 ///
@@ -134,6 +134,7 @@ impl FromStr for Regex {
     }
 }
 
+/// Core regular expression methods.
 impl Regex {
     /// Compiles a regular expression. Once compiled, it can be used repeatedly
     /// to search, split or replace text in a string.
@@ -165,17 +166,6 @@ impl Regex {
         self.is_match_at(text, 0)
     }
 
-    /// Returns the same as is_match, but starts the search at the given
-    /// offset.
-    ///
-    /// The significance of the starting point is that it takes the surrounding
-    /// context into consideration. For example, the `\A` anchor can only
-    /// match when `start == 0`.
-    #[doc(hidden)]
-    pub fn is_match_at(&self, text: &str, start: usize) -> bool {
-        self.shortest_match_at(text, start).is_some()
-    }
-
     /// Returns the start and end byte range of the leftmost-first match in
     /// `text`. If no match exists, then `None` is returned.
     ///
@@ -198,22 +188,6 @@ impl Regex {
     /// ```
     pub fn find(&self, text: &str) -> Option<(usize, usize)> {
         self.find_at(text, 0)
-    }
-
-    /// Returns the same as find, but starts the search at the given
-    /// offset.
-    ///
-    /// The significance of the starting point is that it takes the surrounding
-    /// context into consideration. For example, the `\A` anchor can only
-    /// match when `start == 0`.
-    #[doc(hidden)]
-    pub fn find_at(&self, text: &str, start: usize) -> Option<(usize, usize)> {
-        match self.0 {
-            _Regex::Dynamic(ref exec) => {
-                exec.searcher_str().find_at(text, start)
-            }
-            _Regex::Plugin(ref plug) => plug.find_at(text, start),
-        }
     }
 
     /// Returns an iterator for each successive non-overlapping match in
@@ -316,35 +290,12 @@ impl Regex {
     /// The `0`th capture group is always unnamed, so it must always be
     /// accessed with `at(0)` or `[0]`.
     pub fn captures<'t>(&self, text: &'t str) -> Option<Captures<'t>> {
-        let mut slots = vec![None; 2 * self.captures_len()];
-        self.read_captures_at(&mut slots, text, 0).map(|_| Captures {
+        let mut locs = self.locations();
+        self.read_captures_at(&mut locs, text, 0).map(|_| Captures {
             text: text,
-            slots: slots,
+            locs: locs,
             named_groups: NamedGroups::from_regex(self)
         })
-    }
-
-    /// Returns the same as captures, but starts the search at the given
-    /// offset and populates the capture locations given.
-    ///
-    /// The significance of the starting point is that it takes the surrounding
-    /// context into consideration. For example, the `\A` anchor can only
-    /// match when `start == 0`.
-    #[doc(hidden)]
-    pub fn read_captures_at(
-        &self,
-        slots: &mut [Slot],
-        text: &str,
-        start: usize,
-    ) -> Option<(usize, usize)> {
-        match self.0 {
-            _Regex::Dynamic(ref exec) => {
-                exec.searcher_str().read_captures_at(slots, text, start)
-            }
-            _Regex::Plugin(ref plug) => {
-                plug.read_captures_at(slots, text, start)
-            }
-        }
     }
 
     /// Returns an iterator over all the non-overlapping capture groups matched
@@ -595,7 +546,10 @@ impl Regex {
         new.push_str(&text[last_match..]);
         new
     }
+}
 
+/// Advanced or "lower level" search methods.
+impl Regex {
     /// Returns the end location of a match in the text given.
     ///
     /// This method may have the same performance characteristics as
@@ -641,6 +595,59 @@ impl Regex {
         }
     }
 
+    /// Returns the same as is_match, but starts the search at the given
+    /// offset.
+    ///
+    /// The significance of the starting point is that it takes the surrounding
+    /// context into consideration. For example, the `\A` anchor can only
+    /// match when `start == 0`.
+    #[doc(hidden)]
+    pub fn is_match_at(&self, text: &str, start: usize) -> bool {
+        self.shortest_match_at(text, start).is_some()
+    }
+
+    /// Returns the same as find, but starts the search at the given
+    /// offset.
+    ///
+    /// The significance of the starting point is that it takes the surrounding
+    /// context into consideration. For example, the `\A` anchor can only
+    /// match when `start == 0`.
+    #[doc(hidden)]
+    pub fn find_at(&self, text: &str, start: usize) -> Option<(usize, usize)> {
+        match self.0 {
+            _Regex::Dynamic(ref exec) => {
+                exec.searcher_str().find_at(text, start)
+            }
+            _Regex::Plugin(ref plug) => plug.find_at(text, start),
+        }
+    }
+
+    /// Returns the same as captures, but starts the search at the given
+    /// offset and populates the capture locations given.
+    ///
+    /// The significance of the starting point is that it takes the surrounding
+    /// context into consideration. For example, the `\A` anchor can only
+    /// match when `start == 0`.
+    #[doc(hidden)]
+    pub fn read_captures_at(
+        &self,
+        locs: &mut Locations,
+        text: &str,
+        start: usize,
+    ) -> Option<(usize, usize)> {
+        match self.0 {
+            _Regex::Dynamic(ref exec) => {
+                exec.searcher_str().read_captures_at(locs, text, start)
+            }
+            _Regex::Plugin(ref plug) => {
+                plug.read_captures_at(locs, text, start)
+            }
+        }
+    }
+}
+
+/// Auxiliary methods.
+impl Regex {
     /// Returns the original string of this regex.
     pub fn as_str(&self) -> &str {
         match self.0 {
@@ -664,6 +671,18 @@ impl Regex {
         match self.0 {
             _Regex::Plugin(ref n) => n.names.len(),
             _Regex::Dynamic(ref d) => d.capture_names().len()
+        }
+    }
+
+    /// Returns an empty set of locations that can be reused in multiple calls
+    /// to `read_captures`.
+    #[doc(hidden)]
+    pub fn locations(&self) -> Locations {
+        match self.0 {
+            _Regex::Dynamic(ref exec) => {
+                exec.searcher_str().locations()
+            }
+            _Regex::Plugin(ref plug) => plug.locations(),
         }
     }
 }
@@ -830,7 +849,7 @@ impl<'n> Iterator for NamedGroupsIter<'n> {
 /// `'t` is the lifetime of the matched text.
 pub struct Captures<'t> {
     text: &'t str,
-    slots: Vec<Option<usize>>,
+    locs: Locations,
     named_groups: NamedGroups,
 }
 
@@ -840,11 +859,7 @@ impl<'t> Captures<'t> {
     /// not match anything. The positions returned are *always* byte indices
     /// with respect to the original string matched.
     pub fn pos(&self, i: usize) -> Option<(usize, usize)> {
-        let (s, e) = (i * 2, i * 2 + 1);
-        match (self.slots.get(s), self.slots.get(e)) {
-            (Some(&Some(s)), Some(&Some(e))) => Some((s, e)),
-            _ => None,
-        }
+        self.locs.pos(i)
     }
 
     /// Returns the matched string for the capture group `i`.  If `i` isn't
@@ -873,8 +888,8 @@ impl<'t> Captures<'t> {
     /// Creates an iterator of all the capture group positions in order of
     /// appearance in the regular expression. Positions are byte indices
     /// in terms of the original string matched.
-    pub fn iter_pos<'c>(&'c self) -> SubCapturesPos<'c> {
-        SubCapturesPos { idx: 0, slots: &self.slots }
+    pub fn iter_pos(&self) -> SubCapturesPos {
+        self.locs.iter()
     }
 
     /// Creates an iterator of all named groups as an tuple with the group
@@ -913,7 +928,7 @@ impl<'t> Captures<'t> {
     /// group that corresponds to the full match.
     #[inline]
     pub fn len(&self) -> usize {
-        self.slots.len() / 2
+        self.locs.len()
     }
 }
 
@@ -1005,34 +1020,6 @@ impl<'c, 't> Iterator for SubCaptures<'c, 't> {
     }
 }
 
-/// An iterator over capture group positions for a particular match of a
-/// regular expression.
-///
-/// Positions are byte indices in terms of the original string matched.
-///
-/// `'c` is the lifetime of the captures.
-pub struct SubCapturesPos<'c> {
-    idx: usize,
-    slots: &'c [Option<usize>]
-}
-
-impl<'c> Iterator for SubCapturesPos<'c> {
-    type Item = Option<(usize, usize)>;
-
-    fn next(&mut self) -> Option<Option<(usize, usize)>> {
-        if self.idx >= self.slots.len() {
-            return None
-        }
-        let r = match (self.slots[self.idx], self.slots[self.idx + 1]) {
-            (Some(s), Some(e)) => Some((s, e)),
-            (None, None) => None,
-            _ => unreachable!()
-        };
-        self.idx += 2;
-        Some(r)
-    }
-}
-
 /// An Iterator over named capture groups as a tuple with the group
 /// name and the value.
 ///
@@ -1071,16 +1058,16 @@ impl<'r, 't> Iterator for FindCaptures<'r, 't> {
         match self.0 {
             FindCapturesInner::Dynamic(ref mut it) => {
                 let named = it.regex().capture_name_idx().clone();
-                it.next().map(|slots| Captures {
+                it.next().map(|locs| Captures {
                     text: it.text(),
-                    slots: slots,
+                    locs: locs,
                     named_groups: NamedGroups::Dynamic(named),
                 })
             }
             FindCapturesInner::Plugin(ref mut it) => {
-                it.next().map(|slots| Captures {
+                it.next().map(|locs| Captures {
                     text: it.text(),
-                    slots: slots,
+                    locs: locs,
                     named_groups: NamedGroups::Plugin(it.regex().groups),
                 })
             }
