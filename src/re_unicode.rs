@@ -151,16 +151,7 @@ impl Regex {
     ///
     /// If an invalid expression is given, then an error is returned.
     pub fn new(re: &str) -> Result<Regex, Error> {
-        Regex::with_size_limit(10 * (1 << 20), re)
-    }
-
-    /// Compiles a regular expression with the given size limit.
-    ///
-    /// The size limit is applied to the size of the *compiled* data structure.
-    /// If the data structure exceeds the size given, then an error is
-    /// returned.
-    pub fn with_size_limit(size: usize, re: &str) -> Result<Regex, Error> {
-        RegexBuilder::new(re).size_limit(size).compile()
+        RegexBuilder::new(re).compile()
     }
 
     /// Returns true if and only if the regex matches the string given.
