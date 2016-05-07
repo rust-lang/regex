@@ -8,7 +8,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use re_trait::{RegularExpression, Slot};
+use re_trait::{RegularExpression, Slot, Locations, as_slots};
 
 /// Plugin is the compiler plugin's data structure. It declare some static
 /// data (like capture groups and the original regex string), but defines its
@@ -67,15 +67,20 @@ impl RegularExpression for Plugin {
 
     fn find_at(&self, text: &str, start: usize) -> Option<(usize, usize)> {
         let mut slots = [None, None];
-        self.read_captures_at(&mut slots, text, start)
+        (self.prog)(&mut slots, text, start);
+        match (slots[0], slots[1]) {
+            (Some(s), Some(e)) => Some((s, e)),
+            _ => None,
+        }
     }
 
     fn read_captures_at<'t>(
         &self,
-        slots: &mut [Slot],
+        locs: &mut Locations,
         text: &'t str,
         start: usize,
     ) -> Option<(usize, usize)> {
+        let slots = as_slots(locs);
         for slot in slots.iter_mut() {
             *slot = None;
         }
