@@ -70,7 +70,7 @@ fn main() {
                                        .unwrap_or_else(|e| e.exit());
 
     let mmap = Mmap::open_path(&args.arg_file, Protection::Read).unwrap();
-    let haystack = unsafe { str::from_utf8(mmap.as_slice()).unwrap() };
+    let haystack = unsafe { str::from_utf8_unchecked(mmap.as_slice()) };
 
     println!("{}", args.count(&haystack));
 }

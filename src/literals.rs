@@ -457,6 +457,10 @@ impl SingleSearch {
         self.pat.len()
     }
 
+    pub fn char_len(&self) -> usize {
+        self.char_len
+    }
+
     fn approximate_size(&self) -> usize {
         self.pat.len() * mem::size_of::<u8>()
     }

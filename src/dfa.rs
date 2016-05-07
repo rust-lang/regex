@@ -214,7 +214,7 @@ pub struct Fsm<'a> {
 #[derive(Clone, Debug)]
 pub enum Result<T> {
     Match(T),
-    NoMatch,
+    NoMatch(usize),
     Quit,
 }
 
@@ -223,7 +223,28 @@ impl<T> Result<T> {
     pub fn is_match(&self) -> bool {
         match *self {
             Result::Match(_) => true,
-            Result::NoMatch | Result::Quit => false,
+            Result::NoMatch(_) | Result::Quit => false,
+        }
+    }
+
+    /// Maps the given function onto T and returns the result.
+    ///
+    /// If this isn't a match, then this is a no-op.
+    pub fn map<U, F: FnMut(T) -> U>(self, mut f: F) -> Result<U> {
+        match self {
+            Result::Match(t) => Result::Match(f(t)),
+            Result::NoMatch(x) => Result::NoMatch(x),
+            Result::Quit => Result::Quit,
+        }
+    }
+
+    /// Sets the non-match position.
+    ///
+    /// If this isn't a non-match, then this is a no-op.
+    fn set_non_match(self, at: usize) -> Result<T> {
+        match self {
+            Result::NoMatch(_) => Result::NoMatch(at),
+            r => r,
         }
     }
 }
@@ -465,7 +486,7 @@ impl<'a> Fsm<'a> {
             state_flags,
         ) {
             None => return Result::Quit,
-            Some(STATE_DEAD) => return Result::NoMatch,
+            Some(STATE_DEAD) => return Result::NoMatch(at),
             Some(si) => si,
         };
         debug_assert!(dfa.start != STATE_UNKNOWN);
@@ -498,7 +519,7 @@ impl<'a> Fsm<'a> {
             state_flags,
         ) {
             None => return Result::Quit,
-            Some(STATE_DEAD) => return Result::NoMatch,
+            Some(STATE_DEAD) => return Result::NoMatch(at),
             Some(si) => si,
         };
         debug_assert!(dfa.start != STATE_UNKNOWN);
@@ -532,7 +553,7 @@ impl<'a> Fsm<'a> {
             state_flags,
         ) {
             None => return Result::Quit,
-            Some(STATE_DEAD) => return Result::NoMatch,
+            Some(STATE_DEAD) => return Result::NoMatch(at),
             Some(si) => si,
         };
         debug_assert!(dfa.start != STATE_UNKNOWN);
@@ -601,7 +622,7 @@ impl<'a> Fsm<'a> {
         // reported as an index to the most recent byte that resulted in a
         // transition to a match state and is always stored in capture slot `1`
         // when searching forwards. Its maximum value is `text.len()`.
-        let mut result = Result::NoMatch;
+        let mut result = Result::NoMatch(self.at);
         let (mut prev_si, mut next_si) = (self.start, self.start);
         let mut at = self.at;
         while at < text.len() {
@@ -690,7 +711,7 @@ impl<'a> Fsm<'a> {
                 next_si &= !STATE_START;
                 prev_si = next_si;
                 at = match self.prefix_at(text, at) {
-                    None => return Result::NoMatch,
+                    None => return Result::NoMatch(text.len()),
                     Some(i) => i,
                 };
             } else if next_si >= STATE_UNKNOWN {
@@ -711,7 +732,7 @@ impl<'a> Fsm<'a> {
                 self.at = at;
                 next_si = match self.next_state(qcur, qnext, prev_si, byte) {
                     None => return Result::Quit,
-                    Some(STATE_DEAD) => return result,
+                    Some(STATE_DEAD) => return result.set_non_match(at),
                     Some(si) => si,
                 };
                 debug_assert!(next_si != STATE_UNKNOWN);
@@ -735,7 +756,7 @@ impl<'a> Fsm<'a> {
         prev_si &= STATE_MAX;
         prev_si = match self.next_state(qcur, qnext, prev_si, Byte::eof()) {
             None => return Result::Quit,
-            Some(STATE_DEAD) => return result,
+            Some(STATE_DEAD) => return result.set_non_match(text.len()),
             Some(si) => si & !STATE_START,
         };
         debug_assert!(prev_si != STATE_UNKNOWN);
@@ -762,7 +783,7 @@ impl<'a> Fsm<'a> {
         // N.B. The code duplication here is regrettable. Efforts to improve
         // it without sacrificing performance are welcome. ---AG
         debug_assert!(self.prog.is_reverse);
-        let mut result = Result::NoMatch;
+        let mut result = Result::NoMatch(self.at);
         let (mut prev_si, mut next_si) = (self.start, self.start);
         let mut at = self.at;
         while at > 0 {
@@ -816,7 +837,7 @@ impl<'a> Fsm<'a> {
                 self.at = at;
                 next_si = match self.next_state(qcur, qnext, prev_si, byte) {
                     None => return Result::Quit,
-                    Some(STATE_DEAD) => return result,
+                    Some(STATE_DEAD) => return result.set_non_match(at),
                     Some(si) => si,
                 };
                 debug_assert!(next_si != STATE_UNKNOWN);
@@ -837,7 +858,7 @@ impl<'a> Fsm<'a> {
         // Run the DFA once more on the special EOF senitnel value.
         prev_si = match self.next_state(qcur, qnext, prev_si, Byte::eof()) {
             None => return Result::Quit,
-            Some(STATE_DEAD) => return result,
+            Some(STATE_DEAD) => return result.set_non_match(0),
             Some(si) => si,
         };
         debug_assert!(prev_si != STATE_UNKNOWN);

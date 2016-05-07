@@ -92,6 +92,14 @@ bench_match!(long_needle2, r"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbba", {
     repeat("b").take(100_000).collect::<String>() + "a"
 });
 
+// This benchmark specifically targets the "reverse suffix literal"
+// optimization. In particular, it is easy for a naive implementation to
+// take quadratic worst case time. This benchmark provides a case for such
+// a scenario.
+bench_not_match!(reverse_suffix_no_quadratic, r"[r-z].*bcdefghijklmnopq", {
+    repeat("bcdefghijklmnopq").take(500).collect::<String>()
+});
+
 #[cfg(feature = "re-rust")]
 #[bench]
 fn replace_all(b: &mut Bencher) {
