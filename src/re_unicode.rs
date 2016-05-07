@@ -406,8 +406,8 @@ impl Regex {
     /// assert_eq!(fields, vec!["a", "b", "c", "d", "e"]);
     /// # }
     /// ```
-    pub fn split<'r, 't>(&'r self, text: &'t str) -> RegexSplits<'r, 't> {
-        RegexSplits {
+    pub fn split<'r, 't>(&'r self, text: &'t str) -> Splits<'r, 't> {
+        Splits {
             finder: self.find_iter(text),
             last: 0,
         }
@@ -434,8 +434,8 @@ impl Regex {
     /// # }
     /// ```
     pub fn splitn<'r, 't>(&'r self, text: &'t str, limit: usize)
-                         -> RegexSplitsN<'r, 't> {
-        RegexSplitsN {
+                         -> SplitsN<'r, 't> {
+        SplitsN {
             splits: self.split(text),
             n: limit,
         }
@@ -707,12 +707,12 @@ impl<'r> Iterator for CaptureNames<'r> {
 ///
 /// `'r` is the lifetime of the compiled regular expression and `'t` is the
 /// lifetime of the string being split.
-pub struct RegexSplits<'r, 't> {
+pub struct Splits<'r, 't> {
     finder: FindMatches<'r, 't>,
     last: usize,
 }
 
-impl<'r, 't> Iterator for RegexSplits<'r, 't> {
+impl<'r, 't> Iterator for Splits<'r, 't> {
     type Item = &'t str;
 
     fn next(&mut self) -> Option<&'t str> {
@@ -742,12 +742,12 @@ impl<'r, 't> Iterator for RegexSplits<'r, 't> {
 ///
 /// `'r` is the lifetime of the compiled regular expression and `'t` is the
 /// lifetime of the string being split.
-pub struct RegexSplitsN<'r, 't> {
-    splits: RegexSplits<'r, 't>,
+pub struct SplitsN<'r, 't> {
+    splits: Splits<'r, 't>,
     n: usize,
 }
 
-impl<'r, 't> Iterator for RegexSplitsN<'r, 't> {
+impl<'r, 't> Iterator for SplitsN<'r, 't> {
     type Item = &'t str;
 
     fn next(&mut self) -> Option<&'t str> {
