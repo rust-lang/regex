@@ -749,21 +749,21 @@ impl<'t> Captures<'t> {
 
     /// Creates an iterator of all the capture groups in order of appearance
     /// in the regular expression.
-    pub fn iter<'a>(&'a self) -> SubCaptures<'a, 't> {
+    pub fn iter<'c>(&'c self) -> SubCaptures<'c, 't> {
         SubCaptures { idx: 0, caps: self }
     }
 
     /// Creates an iterator of all the capture group positions in order of
     /// appearance in the regular expression. Positions are byte indices
     /// in terms of the original string matched.
-    pub fn iter_pos(&'t self) -> SubCapturesPos<'t> {
+    pub fn iter_pos<'c>(&'c self) -> SubCapturesPos<'c> {
         SubCapturesPos { idx: 0, slots: &self.slots }
     }
 
     /// Creates an iterator of all named groups as an tuple with the group
     /// name and the value. The iterator returns these values in arbitrary
     /// order.
-    pub fn iter_named<'a>(&'a self) -> SubCapturesNamed<'a, 't> {
+    pub fn iter_named<'c>(&'c self) -> SubCapturesNamed<'c, 't> {
         SubCapturesNamed {
             caps: self,
             names: self.named_groups.iter()

@@ -886,21 +886,21 @@ impl<'t> Captures<'t> {
 
     /// Creates an iterator of all the capture groups in order of appearance
     /// in the regular expression.
-    pub fn iter(&'t self) -> SubCaptures<'t> {
+    pub fn iter<'c>(&'c self) -> SubCaptures<'c, 't> {
         SubCaptures { idx: 0, caps: self, }
     }
 
     /// Creates an iterator of all the capture group positions in order of
     /// appearance in the regular expression. Positions are byte indices
     /// in terms of the original string matched.
-    pub fn iter_pos(&'t self) -> SubCapturesPos<'t> {
+    pub fn iter_pos<'c>(&'c self) -> SubCapturesPos<'c> {
         SubCapturesPos { idx: 0, slots: &self.slots }
     }
 
     /// Creates an iterator of all named groups as an tuple with the group
     /// name and the value. The iterator returns these values in arbitrary
     /// order.
-    pub fn iter_named(&'t self) -> SubCapturesNamed<'t> {
+    pub fn iter_named<'c>(&'c self) -> SubCapturesNamed<'c, 't> {
         SubCapturesNamed {
             caps: self,
             names: self.named_groups.iter()
@@ -1007,15 +1007,15 @@ impl<'t, 'i> Index<&'i str> for Captures<'t> {
 /// expression.
 ///
 /// `'c` is the lifetime of the captures.
-pub struct SubCaptures<'c> {
+pub struct SubCaptures<'c, 't: 'c> {
     idx: usize,
-    caps: &'c Captures<'c>,
+    caps: &'c Captures<'t>,
 }
 
-impl<'c> Iterator for SubCaptures<'c> {
-    type Item = Option<&'c str>;
+impl<'c, 't> Iterator for SubCaptures<'c, 't> {
+    type Item = Option<&'t str>;
 
-    fn next(&mut self) -> Option<Option<&'c str>> {
+    fn next(&mut self) -> Option<Option<&'t str>> {
         if self.idx < self.caps.len() {
             self.idx += 1;
             Some(self.caps.at(self.idx - 1))
@@ -1057,15 +1057,15 @@ impl<'c> Iterator for SubCapturesPos<'c> {
 /// name and the value.
 ///
 /// `'c` is the lifetime of the captures.
-pub struct SubCapturesNamed<'c> {
-    caps: &'c Captures<'c>,
+pub struct SubCapturesNamed<'c, 't: 'c> {
+    caps: &'c Captures<'t>,
     names: NamedGroupsIter<'c>,
 }
 
-impl<'c> Iterator for SubCapturesNamed<'c> {
-    type Item = (&'c str, Option<&'c str>);
+impl<'c, 't> Iterator for SubCapturesNamed<'c, 't> {
+    type Item = (&'c str, Option<&'t str>);
 
-    fn next(&mut self) -> Option<(&'c str, Option<&'c str>)> {
+    fn next(&mut self) -> Option<(&'c str, Option<&'t str>)> {
         self.names.next().map(|(name, pos)| (name, self.caps.at(pos)))
     }
 }
