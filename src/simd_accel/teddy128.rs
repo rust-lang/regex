@@ -1,11 +1,12 @@
 /*!
 Teddy is a simd accelerated multiple substring matching algorithm. The name
-and the core ideas in the algorithm were learned from the Hyperscan[1]
+and the core ideas in the algorithm were learned from the [Hyperscan][1_u]
 project.
 
 
 Background
 ----------
+
 The key idea of Teddy is to do *packed* substring matching. In the literature,
 packed substring matching is the idea of examing multiple bytes in a haystack
 at a time to detect matches. Implementations of, for example, memchr (which
@@ -15,20 +16,20 @@ extended to substring matching. The PCMPESTRI instruction (and its relatives),
 for example, implements substring matching in hardware. It is, however, limited
 to substrings of length 16 bytes or fewer, but this restriction is fine in a
 regex engine, since we rarely care about the performance difference between
-searching for a 16 byte literal and a 16 + N literal---16 is already long
+searching for a 16 byte literal and a 16 + N literal—16 is already long
 enough. The key downside of the PCMPESTRI instruction, on current (2016) CPUs
 at least, is its latency and throughput. As a result, it is often faster to do
 substring search with a Boyer-Moore variant and a well placed memchr to quickly
 skip through the haystack.
 
 There are fewer results from the literature on packed substring matching,
-and even fewer for packed multiple substring matching. Ben-Kiki et al.[2]
+and even fewer for packed multiple substring matching. Ben-Kiki et al. [2]
 describes use of PCMPESTRI for substring matching, but is mostly theoretical
-and hand-waves performance. There is other theoretical work done by Bille[3]
+and hand-waves performance. There is other theoretical work done by Bille [3]
 as well.
 
 The rest of the work in the field, as far as I'm aware, is by Faro and Kulekci
-and is generally focused on multiple pattern search. Their first paper[4a]
+and is generally focused on multiple pattern search. Their first paper [4a]
 introduces the concept of a fingerprint, which is computed for every block of
 N bytes in every pattern. The haystack is then scanned N bytes at a time and
 a fingerprint is computed in the same way it was computed for blocks in the
@@ -44,13 +45,13 @@ presumably because of how the algorithm uses certain SIMD instructions. This
 essentially makes it useless for general purpose regex matching, where a small
 number of short patterns is far more likely.
 
-Faro and Kulekci published another paper[4b] that is conceptually very similar
+Faro and Kulekci published another paper [4b] that is conceptually very similar
 to [4a]. The key difference is that it uses the CRC32 instruction (introduced
 as part of SSE 4.2) to compute fingerprint values. This also enables the
 algorithm to work effectively on substrings as short as 7 bytes with 4 byte
 windows. 7 bytes is unfortunately still too long. The window could be
 technically shrunk to 2 bytes, thereby reducing minimum length to 3, but the
-small window size ends up negating most performance benefits---and it's likely
+small window size ends up negating most performance benefits—and it's likely
 the common case in a general purpose regex engine.
 
 Faro and Kulekci also published [4c] that appears to be intended as a
@@ -59,7 +60,7 @@ the high throughput/latency time of PCMPESTRI and therefore chooses other SIMD
 instructions that are faster. While this approach works for short substrings,
 I personally couldn't see a way to generalize it to multiple substring search.
 
-Faro and Kulekci have another paper[4d] that I haven't been able to read
+Faro and Kulekci have another paper [4d] that I haven't been able to read
 because it is behind a paywall.
 
 
@@ -70,8 +71,8 @@ Finally, we get to Teddy. If the above literature review is complete, then it
 appears that Teddy is a novel algorithm. More than that, in my experience, it
 completely blows away the competition for short substrings, which is exactly
 what we want in a general purpose regex engine. Again, the algorithm appears
-to be developed by the authors of Hyperscan[1]. Hyperscan was open sourced late
-2015, and no earlier history could be found. Therefore, tracking the exact
+to be developed by the authors of [Hyperscan][1_u]. Hyperscan was open sourced
+late 2015, and no earlier history could be found. Therefore, tracking the exact
 provenance of the algorithm with respect to the published literature seems
 difficult.
 
@@ -143,8 +144,8 @@ How do we perform lookup though? It turns out that SSSE3 introduced a very cool
 instruction called PSHUFB. The instruction takes two SIMD vectors, `A` and `B`,
 and returns a third vector `C`. All vectors are treated as 16 8-bit integers.
 `C` is formed by `C[i] = A[B[i]]`. (This is a bit of a simplification, but true
-for the purposes of this algorithm. For full details, see Intel's Intrinsics
-Guide[5].) This essentially lets us use the values in `B` to lookup values in
+for the purposes of this algorithm. For full details, see [Intel's Intrinsics
+Guide][5_u].) This essentially lets us use the values in `B` to lookup values in
 `A`.
 
 If we could somehow cause `B` to contain our 16 byte block from the haystack,
@@ -270,15 +271,52 @@ The way to extend it is:
 
 The implementation below is commented to fill in the nitty gritty details.
 
-[1] - https://github.com/01org/hyperscan
-[2a] - http://drops.dagstuhl.de/opus/volltexte/2011/3355/pdf/37.pdf
-[2b] - http://www.cs.haifa.ac.il/~oren/Publications/bpsm.pdf
-[3] - http://www.sciencedirect.com/science/article/pii/S1570866710000353
-[4a] - http://www.dmi.unict.it/~faro/papers/conference/faro32.pdf
-[4b] - https://pdfs.semanticscholar.org/fed7/ca62dc469314f3552017d0da7ebd669d4649.pdf
-[4c] - http://arxiv.org/pdf/1209.6449.pdf
-[4d] - http://www.sciencedirect.com/science/article/pii/S1570866714000471
-[5] - https://software.intel.com/sites/landingpage/IntrinsicsGuide
+References
+----------
+
+- **[1]** [Hyperscan on GitHub](https://github.com/01org/hyperscan),
+    [webpage](https://01.org/hyperscan)
+- **[2a]** Ben-Kiki, O., Bille, P., Breslauer, D., Gasieniec, L., Grossi, R.,
+    & Weimann, O. (2011).
+    _Optimal packed string matching_.
+    In LIPIcs-Leibniz International Proceedings in Informatics (Vol. 13).
+    Schloss Dagstuhl-Leibniz-Zentrum fuer Informatik.
+    DOI: 10.4230/LIPIcs.FSTTCS.2011.423.
+    [PDF](http://drops.dagstuhl.de/opus/volltexte/2011/3355/pdf/37.pdf).
+- **[2b]** Ben-Kiki, O., Bille, P., Breslauer, D., Ga̧sieniec, L., Grossi, R.,
+    & Weimann, O. (2014).
+    _Towards optimal packed string matching_.
+    Theoretical Computer Science, 525, 111-129.
+    DOI: 10.1016/j.tcs.2013.06.013.
+    [PDF](http://www.cs.haifa.ac.il/~oren/Publications/bpsm.pdf).
+- **[3]** Bille, P. (2011).
+    _Fast searching in packed strings_.
+    Journal of Discrete Algorithms, 9(1), 49-56.
+    DOI: 10.1016/j.jda.2010.09.003.
+    [PDF](http://www.sciencedirect.com/science/article/pii/S1570866710000353).
+- **[4a]** Faro, S., & Külekci, M. O. (2012, October).
+    _Fast multiple string matching using streaming SIMD extensions technology_.
+    In String Processing and Information Retrieval (pp. 217-228).
+    Springer Berlin Heidelberg.
+    DOI: 10.1007/978-3-642-34109-0_23.
+    [PDF](http://www.dmi.unict.it/~faro/papers/conference/faro32.pdf).
+- **[4b]** Faro, S., & Külekci, M. O. (2013, September).
+    _Towards a Very Fast Multiple String Matching Algorithm for Short Patterns_.
+    In Stringology (pp. 78-91).
+    [PDF](http://www.dmi.unict.it/~faro/papers/conference/faro36.pdf).
+- **[4c]** Faro, S., & Külekci, M. O. (2013, January).
+    _Fast packed string matching for short patterns_.
+    In Proceedings of the Meeting on Algorithm Engineering & Expermiments
+    (pp. 113-121).
+    Society for Industrial and Applied Mathematics.
+    [PDF](http://arxiv.org/pdf/1209.6449.pdf).
+- **[4d]** Faro, S., & Külekci, M. O. (2014).
+    _Fast and flexible packed string matching_.
+    Journal of Discrete Algorithms, 28, 61-72.
+    DOI: 10.1016/j.jda.2014.07.003.
+
+[1_u]: https://github.com/01org/hyperscan
+[5_u]: https://software.intel.com/sites/landingpage/IntrinsicsGuide
 */
 
 // TODO: Extend this to use AVX2 instructions.
