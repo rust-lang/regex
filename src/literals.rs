@@ -15,6 +15,7 @@ use memchr::{memchr, memchr2, memchr3};
 use syntax;
 
 use freqs::BYTE_FREQUENCIES;
+
 use simd_accel::teddy128::Teddy;
 
 /// A prefix extracted from a compiled regular expression.
