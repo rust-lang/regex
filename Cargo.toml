@@ -44,12 +44,6 @@ simd-accel = ["simd"]
 # There are no benchmarks in the library code itself
 bench = false
 
-# Runs unit tests defined inside the regex package.
-# Generally these tests specific pieces of the regex implementation.
-[[test]]
-path = "src/lib.rs"
-name = "regex-inline"
-
 # Run the test suite on the default behavior of Regex::new.
 # This includes a mish mash of NFAs and DFAs, which are chosen automatically
 # based on the regex. We test both of the NFA implementations by forcing their
