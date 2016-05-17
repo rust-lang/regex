@@ -16,7 +16,7 @@ fn main() {
     io::stdin().read_to_string(&mut seq).unwrap();
     let ilen = seq.len();
 
-    seq = regex!(">[^\n]*\n|\n").replace_all(&seq, "");
+    seq = regex!(">[^\n]*\n|\n").replace_all(&seq, "").into_owned();
     let clen = seq.len();
 
     let variants = vec![
@@ -49,7 +49,7 @@ fn main() {
     ];
     let mut seq = seq;
     for (re, replacement) in substs.into_iter() {
-        seq = re.replace_all(&seq, replacement);
+        seq = re.replace_all(&seq, replacement).into_owned();
     }
     println!("\n{}\n{}\n{}", ilen, clen, seq.len());
 }

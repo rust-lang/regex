@@ -353,7 +353,7 @@ impl Regex {
     /// # extern crate regex; use regex::bytes::Regex;
     /// # fn main() {
     /// let re = Regex::new("[^01]+").unwrap();
-    /// assert_eq!(re.replace(b"1078910", &b""[..]), b"1010");
+    /// assert_eq!(re.replace(b"1078910", &b""[..]), &b"1010"[..]);
     /// # }
     /// ```
     ///
@@ -372,7 +372,7 @@ impl Regex {
     ///     replacement.extend(&caps[1]);
     ///     replacement
     /// });
-    /// assert_eq!(result, b"Bruce Springsteen");
+    /// assert_eq!(result, &b"Bruce Springsteen"[..]);
     /// # }
     /// ```
     ///
@@ -386,7 +386,7 @@ impl Regex {
     /// # fn main() {
     /// let re = Regex::new(r"(?P<last>[^,\s]+),\s+(?P<first>\S+)").unwrap();
     /// let result = re.replace(b"Springsteen, Bruce", &b"$first $last"[..]);
-    /// assert_eq!(result, b"Bruce Springsteen");
+    /// assert_eq!(result, &b"Bruce Springsteen"[..]);
     /// # }
     /// ```
     ///
@@ -411,10 +411,14 @@ impl Regex {
     ///
     /// let re = Regex::new(r"(?P<last>[^,\s]+),\s+(\S+)").unwrap();
     /// let result = re.replace(b"Springsteen, Bruce", NoExpand(b"$2 $last"));
-    /// assert_eq!(result, b"$2 $last");
+    /// assert_eq!(result, &b"$2 $last"[..]);
     /// # }
     /// ```
-    pub fn replace<R: Replacer>(&self, text: &[u8], rep: R) -> Vec<u8> {
+    pub fn replace<'t, R: Replacer>(
+        &self,
+        text: &'t [u8],
+        rep: R,
+    ) -> Cow<'t, [u8]> {
         self.replacen(text, 1, rep)
     }
 
@@ -424,7 +428,11 @@ impl Regex {
     ///
     /// See the documentation for `replace` for details on how to access
     /// submatches in the replacement text.
-    pub fn replace_all<R: Replacer>(&self, text: &[u8], rep: R) -> Vec<u8> {
+    pub fn replace_all<'t, R: Replacer>(
+        &self,
+        text: &'t [u8],
+        rep: R,
+    ) -> Cow<'t, [u8]> {
         self.replacen(text, 0, rep)
     }
 
@@ -434,16 +442,20 @@ impl Regex {
     ///
     /// See the documentation for `replace` for details on how to access
     /// submatches in the replacement text.
-    pub fn replacen<R: Replacer>(
+    pub fn replacen<'t, R: Replacer>(
         &self,
-        text: &[u8],
+        text: &'t [u8],
         limit: usize,
         mut rep: R,
-    ) -> Vec<u8> {
+    ) -> Cow<'t, [u8]> {
         if let Some(rep) = rep.no_expansion() {
+            let mut it = self.find_iter(text).enumerate().peekable();
+            if it.peek().is_none() {
+                return Cow::Borrowed(text);
+            }
             let mut new = Vec::with_capacity(text.len());
             let mut last_match = 0;
-            for (i, (s, e)) in self.find_iter(text).enumerate() {
+            for (i, (s, e)) in it {
                 if limit > 0 && i >= limit {
                     break
                 }
@@ -452,14 +464,18 @@ impl Regex {
                 last_match = e;
             }
             extend_from_slice(&mut new, &text[last_match..]);
-            return new;
+            return Cow::Owned(new);
         }
 
         // The slower path, which we use if the replacement needs access to
         // capture groups.
+        let mut it = self.captures_iter(text).enumerate().peekable();
+        if it.peek().is_none() {
+            return Cow::Borrowed(text);
+        }
         let mut new = Vec::with_capacity(text.len());
         let mut last_match = 0;
-        for (i, cap) in self.captures_iter(text).enumerate() {
+        for (i, cap) in it {
             if limit > 0 && i >= limit {
                 break
             }
@@ -470,7 +486,7 @@ impl Regex {
             last_match = e;
         }
         extend_from_slice(&mut new, &text[last_match..]);
-        new
+        Cow::Owned(new)
     }
 }
 
