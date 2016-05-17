@@ -8,8 +8,6 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![cfg_attr(feature = "pattern", feature(pattern))]
-
 extern crate rand;
 extern crate regex;
 
@@ -57,6 +55,7 @@ mod multiline;
 mod noparse;
 mod regression;
 mod replace;
+mod searcher;
 mod set;
 mod suffix_reverse;
 mod unicode;

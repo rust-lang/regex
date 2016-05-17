@@ -22,7 +22,7 @@ use exec::{Exec, ExecNoSync};
 use expand::expand_bytes;
 use error::Error;
 use re_builder::bytes::RegexBuilder;
-use re_trait::{self, RegularExpression, Locations, SubCapturesPos};
+use re_trait::{self, RegularExpression, Locations, SubCapturesPosIter};
 
 /// A compiled regular expression for matching arbitrary bytes.
 ///
@@ -150,8 +150,8 @@ impl Regex {
     /// // (45, 58)
     /// # }
     /// ```
-    pub fn find_iter<'r, 't>(&'r self, text: &'t [u8]) -> FindMatches<'r, 't> {
-        FindMatches(self.0.searcher().find_iter(text))
+    pub fn find_iter<'r, 't>(&'r self, text: &'t [u8]) -> FindIter<'r, 't> {
+        FindIter(self.0.searcher().find_iter(text))
     }
 
     /// Returns the capture groups corresponding to the leftmost-first
@@ -255,8 +255,8 @@ impl Regex {
     pub fn captures_iter<'r, 't>(
         &'r self,
         text: &'t [u8],
-    ) -> FindCaptures<'r, 't> {
-        FindCaptures(self.0.searcher().captures_iter(text))
+    ) -> CapturesIter<'r, 't> {
+        CapturesIter(self.0.searcher().captures_iter(text))
     }
 
     /// Returns an iterator of substrings of `text` delimited by a match of the
@@ -279,8 +279,8 @@ impl Regex {
     /// ]);
     /// # }
     /// ```
-    pub fn split<'r, 't>(&'r self, text: &'t [u8]) -> Splits<'r, 't> {
-        Splits {
+    pub fn split<'r, 't>(&'r self, text: &'t [u8]) -> SplitsIter<'r, 't> {
+        SplitsIter {
             finder: self.find_iter(text),
             last: 0,
         }
@@ -310,8 +310,8 @@ impl Regex {
         &'r self,
         text: &'t [u8],
         limit: usize,
-    ) -> SplitsN<'r, 't> {
-        SplitsN {
+    ) -> SplitsNIter<'r, 't> {
+        SplitsNIter {
             splits: self.split(text),
             n: limit,
         }
@@ -592,9 +592,9 @@ impl Regex {
 ///
 /// `'r` is the lifetime of the compiled regular expression and `'t` is the
 /// lifetime of the matched byte string.
-pub struct FindMatches<'r, 't>(re_trait::FindMatches<'t, ExecNoSync<'r>>);
+pub struct FindIter<'r, 't>(re_trait::FindIter<'t, ExecNoSync<'r>>);
 
-impl<'r, 't> Iterator for FindMatches<'r, 't> {
+impl<'r, 't> Iterator for FindIter<'r, 't> {
     type Item = (usize, usize);
 
     fn next(&mut self) -> Option<(usize, usize)> {
@@ -609,9 +609,9 @@ impl<'r, 't> Iterator for FindMatches<'r, 't> {
 ///
 /// `'r` is the lifetime of the compiled regular expression and `'t` is the
 /// lifetime of the matched byte string.
-pub struct FindCaptures<'r, 't>(re_trait::FindCaptures<'t, ExecNoSync<'r>>);
+pub struct CapturesIter<'r, 't>(re_trait::CapturesIter<'t, ExecNoSync<'r>>);
 
-impl<'r, 't> Iterator for FindCaptures<'r, 't> {
+impl<'r, 't> Iterator for CapturesIter<'r, 't> {
     type Item = Captures<'t>;
 
     fn next(&mut self) -> Option<Captures<'t>> {
@@ -627,12 +627,12 @@ impl<'r, 't> Iterator for FindCaptures<'r, 't> {
 ///
 /// `'r` is the lifetime of the compiled regular expression and `'t` is the
 /// lifetime of the byte string being split.
-pub struct Splits<'r, 't> {
-    finder: FindMatches<'r, 't>,
+pub struct SplitsIter<'r, 't> {
+    finder: FindIter<'r, 't>,
     last: usize,
 }
 
-impl<'r, 't> Iterator for Splits<'r, 't> {
+impl<'r, 't> Iterator for SplitsIter<'r, 't> {
     type Item = &'t [u8];
 
     fn next(&mut self) -> Option<&'t [u8]> {
@@ -662,12 +662,12 @@ impl<'r, 't> Iterator for Splits<'r, 't> {
 ///
 /// `'r` is the lifetime of the compiled regular expression and `'t` is the
 /// lifetime of the byte string being split.
-pub struct SplitsN<'r, 't> {
-    splits: Splits<'r, 't>,
+pub struct SplitsNIter<'r, 't> {
+    splits: SplitsIter<'r, 't>,
     n: usize,
 }
 
-impl<'r, 't> Iterator for SplitsN<'r, 't> {
+impl<'r, 't> Iterator for SplitsNIter<'r, 't> {
     type Item = &'t [u8];
 
     fn next(&mut self) -> Option<&'t [u8]> {
@@ -750,22 +750,22 @@ impl<'t> Captures<'t> {
 
     /// Creates an iterator of all the capture groups in order of appearance
     /// in the regular expression.
-    pub fn iter<'c>(&'c self) -> SubCaptures<'c, 't> {
-        SubCaptures { idx: 0, caps: self }
+    pub fn iter<'c>(&'c self) -> SubCapturesIter<'c, 't> {
+        SubCapturesIter { idx: 0, caps: self }
     }
 
     /// Creates an iterator of all the capture group positions in order of
     /// appearance in the regular expression. Positions are byte indices
     /// in terms of the original string matched.
-    pub fn iter_pos(&self) -> SubCapturesPos {
+    pub fn iter_pos(&self) -> SubCapturesPosIter {
         self.locs.iter()
     }
 
     /// Creates an iterator of all named groups as an tuple with the group
     /// name and the value. The iterator returns these values in arbitrary
     /// order.
-    pub fn iter_named<'c>(&'c self) -> SubCapturesNamed<'c, 't> {
-        SubCapturesNamed {
+    pub fn iter_named<'c>(&'c self) -> SubCapturesNamedIter<'c, 't> {
+        SubCapturesNamedIter {
             caps: self,
             names: self.named_groups.iter()
         }
@@ -887,12 +887,12 @@ impl<'t, 'i> Index<&'i str> for Captures<'t> {
 ///
 /// `'c` is the lifetime of the captures and `'t` is the lifetime of the
 /// matched text.
-pub struct SubCaptures<'c, 't: 'c> {
+pub struct SubCapturesIter<'c, 't: 'c> {
     idx: usize,
     caps: &'c Captures<'t>,
 }
 
-impl<'c, 't> Iterator for SubCaptures<'c, 't> {
+impl<'c, 't> Iterator for SubCapturesIter<'c, 't> {
     type Item = Option<&'t [u8]>;
 
     fn next(&mut self) -> Option<Option<&'t [u8]>> {
@@ -910,12 +910,12 @@ impl<'c, 't> Iterator for SubCaptures<'c, 't> {
 ///
 /// `'c` is the lifetime of the captures and `'t` is the lifetime of the
 /// matched text.
-pub struct SubCapturesNamed<'c, 't: 'c> {
+pub struct SubCapturesNamedIter<'c, 't: 'c> {
     caps: &'c Captures<'t>,
     names: hash_map::Iter<'c, String, usize>,
 }
 
-impl<'c, 't> Iterator for SubCapturesNamed<'c, 't> {
+impl<'c, 't> Iterator for SubCapturesNamedIter<'c, 't> {
     type Item = (&'c str, Option<&'t [u8]>);
 
     fn next(&mut self) -> Option<(&'c str, Option<&'t [u8]>)> {

@@ -8,8 +8,6 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![cfg_attr(feature = "pattern", feature(pattern))]
-
 extern crate rand;
 extern crate regex;
 
@@ -45,11 +43,6 @@ macro_rules! regex_set {
         regex_set_new!($res).unwrap()
     }
 }
-
-#[cfg(feature = "pattern")]
-macro_rules! searcher_expr { ($e:expr) => ($e) }
-#[cfg(not(feature = "pattern"))]
-macro_rules! searcher_expr { ($e:expr) => ({}) }
 
 // Must come before other module definitions.
 include!("macros_str.rs");

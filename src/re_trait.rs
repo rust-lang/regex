@@ -36,8 +36,8 @@ impl Locations {
     /// Creates an iterator of all the capture group positions in order of
     /// appearance in the regular expression. Positions are byte indices
     /// in terms of the original string matched.
-    pub fn iter(&self) -> SubCapturesPos {
-        SubCapturesPos { idx: 0, locs: &self }
+    pub fn iter(&self) -> SubCapturesPosIter {
+        SubCapturesPosIter { idx: 0, locs: &self }
     }
 
     /// Returns the total number of capturing groups.
@@ -61,12 +61,12 @@ pub fn as_slots(locs: &mut Locations) -> &mut [Slot] {
 /// Positions are byte indices in terms of the original string matched.
 ///
 /// `'c` is the lifetime of the captures.
-pub struct SubCapturesPos<'c> {
+pub struct SubCapturesPosIter<'c> {
     idx: usize,
     locs: &'c Locations,
 }
 
-impl<'c> Iterator for SubCapturesPos<'c> {
+impl<'c> Iterator for SubCapturesPosIter<'c> {
     type Item = Option<(usize, usize)>;
 
     fn next(&mut self) -> Option<Option<(usize, usize)>> {
@@ -151,8 +151,8 @@ pub trait RegularExpression: Sized {
     fn find_iter<'t>(
         self,
         text: &'t Self::Text,
-    ) -> FindMatches<'t, Self> {
-        FindMatches {
+    ) -> FindIter<'t, Self> {
+        FindIter {
             re: self,
             text: text,
             last_end: 0,
@@ -165,20 +165,20 @@ pub trait RegularExpression: Sized {
     fn captures_iter<'t>(
         self,
         text: &'t Self::Text,
-    ) -> FindCaptures<'t, Self> {
-        FindCaptures(self.find_iter(text))
+    ) -> CapturesIter<'t, Self> {
+        CapturesIter(self.find_iter(text))
     }
 }
 
 /// An iterator over all non-overlapping successive leftmost-first matches.
-pub struct FindMatches<'t, R> where R: RegularExpression, R::Text: 't {
+pub struct FindIter<'t, R> where R: RegularExpression, R::Text: 't {
     re: R,
     text: &'t R::Text,
     last_end: usize,
     last_match: Option<usize>,
 }
 
-impl<'t, R> FindMatches<'t, R> where R: RegularExpression, R::Text: 't {
+impl<'t, R> FindIter<'t, R> where R: RegularExpression, R::Text: 't {
     /// Return the text being searched.
     pub fn text(&self) -> &'t R::Text {
         self.text
@@ -190,7 +190,7 @@ impl<'t, R> FindMatches<'t, R> where R: RegularExpression, R::Text: 't {
     }
 }
 
-impl<'t, R> Iterator for FindMatches<'t, R>
+impl<'t, R> Iterator for FindIter<'t, R>
         where R: RegularExpression, R::Text: 't + AsRef<[u8]> {
     type Item = (usize, usize);
 
@@ -222,10 +222,10 @@ impl<'t, R> Iterator for FindMatches<'t, R>
 
 /// An iterator over all non-overlapping successive leftmost-first matches with
 /// captures.
-pub struct FindCaptures<'t, R>(FindMatches<'t, R>)
+pub struct CapturesIter<'t, R>(FindIter<'t, R>)
     where R: RegularExpression, R::Text: 't;
 
-impl<'t, R> FindCaptures<'t, R> where R: RegularExpression, R::Text: 't {
+impl<'t, R> CapturesIter<'t, R> where R: RegularExpression, R::Text: 't {
     /// Return the text being searched.
     pub fn text(&self) -> &'t R::Text {
         self.0.text()
@@ -237,7 +237,7 @@ impl<'t, R> FindCaptures<'t, R> where R: RegularExpression, R::Text: 't {
     }
 }
 
-impl<'t, R> Iterator for FindCaptures<'t, R>
+impl<'t, R> Iterator for CapturesIter<'t, R>
         where R: RegularExpression, R::Text: 't + AsRef<[u8]> {
     type Item = Locations;
 
