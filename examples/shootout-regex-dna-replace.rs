@@ -14,6 +14,6 @@ fn main() {
     io::stdin().read_to_string(&mut seq).unwrap();
     let ilen = seq.len();
 
-    seq = regex!(">[^\n]*\n|\n").replace_all(&seq, "");
+    seq = regex!(">[^\n]*\n|\n").replace_all(&seq, "").into_owned();
     println!("original: {}, replaced: {}", ilen, seq.len());
 }
