@@ -1,3 +1,14 @@
+0.1.70
+======
+* [PR #231](https://github.com/rust-lang-nursery/regex/pull/231):
+  Add SIMD accelerated multiple pattern search.
+* [PR #228](https://github.com/rust-lang-nursery/regex/pull/228):
+  Reintroduce the reverse suffix literal optimization.
+* [PR #226](https://github.com/rust-lang-nursery/regex/pull/226):
+  Implements NFA state compression in the lazy DFA.
+* [PR #223](https://github.com/rust-lang-nursery/regex/pull/223):
+  A fully anchored RegexSet can now short-circuit.
+
 0.1.69
 ======
 * [PR #216](https://github.com/rust-lang-nursery/regex/pull/216):
