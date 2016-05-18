@@ -47,7 +47,7 @@ number of short patterns is far more likely.
 Faro and Kulekci published another paper[4b] that is conceptually very similar
 to [4a]. The key difference is that it uses the CRC32 instruction (introduced
 as part of SSE 4.2) to compute fingerprint values. This also enables the
-algorithm to work effectively on substrings as short at 7 bytes with 4 byte
+algorithm to work effectively on substrings as short as 7 bytes with 4 byte
 windows. 7 bytes is unfortunately still too long. The window could be
 technically shrunk to 2 bytes, thereby reducing minimum length to 3, but the
 small window size ends up negating most performance benefits---and it's likely
@@ -65,6 +65,7 @@ because it is behind a paywall.
 
 Teddy
 -----
+
 Finally, we get to Teddy. If the above literature review is complete, then it
 appears that Teddy is a novel algorithm. More than that, in my experience, it
 completely blows away the competition for short substrings, which is exactly
@@ -241,6 +242,7 @@ haystack.
 
 Implementation notes
 --------------------
+
 The problem with the algorithm as described above is that it uses a single byte
 for a fingerprint. This will work well if the fingerprints are rare in the
 haystack (e.g., capital letters or special characters in normal English text),
@@ -306,7 +308,7 @@ pub struct Match {
     pub pat: usize,
     /// The start byte offset of the match.
     pub start: usize,
-    /// The end byte offset of the match. This is always start + pat.len().
+    /// The end byte offset of the match. This is always `start + pat.len()`.
     pub end: usize,
 }
 
@@ -325,7 +327,7 @@ pub struct Teddy {
 }
 
 /// A list of masks. This has length equal to the length of the fingerprint.
-/// The length of the fingerprint is always `max(3, len(smallest substring))`.
+/// The length of the fingerprint is always `max(3, len(smallest_substring))`.
 #[derive(Debug, Clone)]
 struct Masks(Vec<Mask>);
 
@@ -339,9 +341,9 @@ struct Mask {
 }
 
 impl Teddy {
-    /// Create a new Teddy multi substring matcher.
+    /// Create a new `Teddy` multi substring matcher.
     ///
-    /// If a Teddy matcher could not be created (e.g., `pats` is empty or has
+    /// If a `Teddy` matcher could not be created (e.g., `pats` is empty or has
     /// an empty substring), then `None` is returned.
     pub fn new(pats: &syntax::Literals) -> Option<Teddy> {
         let pats: Vec<_> = pats.literals().iter().map(|p|p.to_vec()).collect();
@@ -369,7 +371,7 @@ impl Teddy {
         })
     }
 
-    /// Returns all of the substrings matched by this Teddy.
+    /// Returns all of the substrings matched by this `Teddy`.
     pub fn patterns(&self) -> &[Vec<u8>] {
         &self.pats
     }
@@ -384,7 +386,7 @@ impl Teddy {
         self.pats.iter().fold(0, |a, b| a + b.len())
     }
 
-    /// Searches `haystack` for the substrings in this Teddy. If a match was
+    /// Searches `haystack` for the substrings in this `Teddy`. If a match was
     /// found, then it is returned. Otherwise, `None` is returned.
     pub fn find(&self, haystack: &[u8]) -> Option<Match> {
         // If our haystack is smaller than the block size, then fall back to
@@ -403,7 +405,7 @@ impl Teddy {
         }
     }
 
-    /// find1 is used when there is only 1 mask. This is the easy case and is
+    /// `find1` is used when there is only 1 mask. This is the easy case and is
     /// pretty much as described in the module documentation.
     #[inline(always)]
     fn find1(&self, haystack: &[u8]) -> Option<Match> {
@@ -413,7 +415,7 @@ impl Teddy {
         debug_assert!(len >= BLOCK_SIZE);
         while pos <= len - BLOCK_SIZE {
             let h = unsafe { u8x16::load_unchecked(haystack, pos) };
-            // N.B. res0 is our `C` in the module documentation.
+            // N.B. `res0` is our `C` in the module documentation.
             let res0 = self.masks.members1(h);
             // Only do expensive verification if there are any non-zero bits.
             if res0.ne(zero).any() {
@@ -426,7 +428,7 @@ impl Teddy {
         self.slow(haystack, pos)
     }
 
-    /// find2 is used when there are 2 masks, e.g., the fingerprint is 2 bytes
+    /// `find2` is used when there are 2 masks, e.g., the fingerprint is 2 bytes
     /// long.
     #[inline(always)]
     fn find2(&self, haystack: &[u8]) -> Option<Match> {
@@ -440,12 +442,12 @@ impl Teddy {
         );
         let zero = u8x16::splat(0);
         let len = haystack.len();
-        // The previous value of C (from the module documentation) for the
+        // The previous value of `C` (from the module documentation) for the
         // *first* byte in the fingerprint. On subsequent iterations, we take
-        // the last bitset from the previous C and insert it into the first
-        // position of the current C, shifting all other bitsets to the right
-        // one lane. This causes C for the first byte to line up with C for the
-        // second byte, so that they can be AND'd together.
+        // the last bitset from the previous `C` and insert it into the first
+        // position of the current `C`, shifting all other bitsets to the right
+        // one lane. This causes `C` for the first byte to line up with `C` for
+        // the second byte, so that they can be `AND`'d together.
         let mut prev0 = u8x16::splat(0xFF);
         let mut pos = 1;
         debug_assert!(len >= BLOCK_SIZE);
@@ -455,17 +457,19 @@ impl Teddy {
 
             // The next three lines are essentially equivalent to
             //
-            //     (prev0 << 15) | (res0 >> 1)
+            // ```rust,ignore
+            // (prev0 << 15) | (res0 >> 1)
+            // ```
             //
             // ... if SIMD vectors could shift across lanes. There is the
-            // PALIGNR instruction, but apparently LLVM doesn't expose it as
+            // `PALIGNR` instruction, but apparently LLVM doesn't expose it as
             // a proper intrinsic. Thankfully, it appears the following
-            // sequence does indeed compile down to a PALIGNR.
+            // sequence does indeed compile down to a `PALIGNR`.
             let prev0byte0 = prev0.extract(15);
             let res0shiftr8 = res0.shuffle_bytes(res0shuffle);
             let res0prev0 = res0shiftr8.replace(0, prev0byte0);
 
-            // AND's our C values together.
+            // `AND`'s our `C` values together.
             let res = res0prev0 & res1;
             prev0 = res0;
             if res.ne(zero).any() {
@@ -482,12 +486,12 @@ impl Teddy {
         self.slow(haystack, pos.checked_sub(1).unwrap())
     }
 
-    /// find3 is used when there are 3 masks, e.g., the fingerprint is 3 bytes
+    /// `find3` is used when there are 3 masks, e.g., the fingerprint is 3 bytes
     /// long.
     ///
-    /// N.B. This is a straight-forward extrapolation of find2. The only
-    /// difference is that we need to keep track of two previous values of
-    /// C, since we now need to align for three bytes.
+    /// N.B. This is a straight-forward extrapolation of `find2`. The only
+    /// difference is that we need to keep track of two previous values of `C`,
+    /// since we now need to align for three bytes.
     #[inline(always)]
     fn find3(&self, haystack: &[u8]) -> Option<Match> {
         let zero = u8x16::splat(0);
@@ -571,7 +575,7 @@ impl Teddy {
     ///
     /// If a match exists, it returns the first one.
     ///
-    /// offset is an additional byte offset to add to the position before
+    /// `offset` is an additional byte offset to add to the position before
     /// substring match verification.
     #[inline(always)]
     fn verify_64(
@@ -673,7 +677,7 @@ impl Masks {
     }
 
     /// Adds the given pattern to the given bucket. The bucket should be a
-    /// power of 2 <= 2^7.
+    /// power of `2 <= 2^7`.
     fn add(&mut self, bucket: u8, pat: &[u8]) {
         for (i, mask) in self.0.iter_mut().enumerate() {
             mask.add(bucket, pat[i]);
@@ -681,9 +685,9 @@ impl Masks {
     }
 
     /// Finds the fingerprints that are in the given haystack block. i.e., this
-    /// returns C as described in the module documentation.
+    /// returns `C` as described in the module documentation.
     ///
-    /// More specifically, for i in 0..16 and j in 0..8, C[i][j] == 1 if and
+    /// More specifically, `for i in 0..16` and `j in 0..8, C[i][j] == 1` if and
     /// only if `haystack_block[i]` corresponds to a fingerprint that is part
     /// of a pattern in bucket `j`.
     #[inline(always)]
@@ -710,8 +714,8 @@ impl Masks {
         (res0, res1)
     }
 
-    /// Like members1, but computes C for the first, second and third bytes in
-    /// the fingerprint.
+    /// Like `members1`, but computes `C` for the first, second and third bytes
+    /// in the fingerprint.
     #[inline(always)]
     fn members3(&self, haystack_block: u8x16) -> (u8x16, u8x16, u8x16) {
         let masklo = u8x16::splat(0xF);
