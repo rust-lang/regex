@@ -9,7 +9,6 @@
 // except according to those terms.
 
 use quickcheck::{Arbitrary, Gen, Testable, QuickCheck, StdGen};
-use rand::Rng;
 
 use {
     Expr, ExprBuilder,

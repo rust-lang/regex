@@ -15,6 +15,7 @@ use memchr::{memchr, memchr2, memchr3};
 use syntax;
 
 use freqs::BYTE_FREQUENCIES;
+use simd_accel::teddy128::Teddy;
 
 /// A prefix extracted from a compiled regular expression.
 ///
@@ -51,6 +52,8 @@ enum Matcher {
     Single(SingleSearch),
     /// An Aho-Corasick automaton.
     AC(FullAcAutomaton<syntax::Lit>),
+    /// A simd accelerated multiple string matcher.
+    Teddy128(Teddy),
 }
 
 impl LiteralSearcher {
@@ -100,6 +103,7 @@ impl LiteralSearcher {
             Bytes(ref sset) => sset.find(haystack).map(|i| (i, i + 1)),
             Single(ref s) => s.find(haystack).map(|i| (i, i + s.len())),
             AC(ref aut) => aut.find(haystack).next().map(|m| (m.start, m.end)),
+            Teddy128(ref ted) => ted.find(haystack).map(|m| (m.start, m.end)),
         }
     }
 
@@ -136,6 +140,9 @@ impl LiteralSearcher {
             Matcher::Bytes(ref sset) => LiteralIter::Bytes(&sset.dense),
             Matcher::Single(ref s) => LiteralIter::Single(&s.pat),
             Matcher::AC(ref ac) => LiteralIter::AC(ac.patterns()),
+            Matcher::Teddy128(ref ted) => {
+                LiteralIter::Teddy128(ted.patterns())
+            }
         }
     }
 
@@ -162,6 +169,7 @@ impl LiteralSearcher {
             Bytes(ref sset) => sset.dense.len(),
             Single(_) => 1,
             AC(ref aut) => aut.len(),
+            Teddy128(ref ted) => ted.len(),
         }
     }
 
@@ -173,6 +181,7 @@ impl LiteralSearcher {
             Bytes(ref sset) => sset.approximate_size(),
             Single(ref single) => single.approximate_size(),
             AC(ref aut) => aut.heap_bytes(),
+            Teddy128(ref ted) => ted.approximate_size(),
         }
     }
 }
@@ -190,23 +199,34 @@ impl Matcher {
 
     fn new(lits: &syntax::Literals, sset: SingleByteSet) -> Self {
         if lits.literals().is_empty() {
-            Matcher::Empty
-        } else if sset.dense.len() >= 26 {
+            return Matcher::Empty;
+        }
+        if sset.dense.len() >= 26 {
             // Avoid trying to match a large number of single bytes.
             // This is *very* sensitive to a frequency analysis comparison
             // between the bytes in sset and the composition of the haystack.
             // No matter the size of sset, if its members all are rare in the
             // haystack, then it'd be worth using it. How to tune this... IDK.
             // ---AG
-            Matcher::Empty
-        } else if sset.complete {
-            Matcher::Bytes(sset)
-        } else if lits.literals().len() == 1 {
-            Matcher::Single(SingleSearch::new(lits.literals()[0].to_vec()))
-        } else {
-            let pats = lits.literals().to_owned();
-            Matcher::AC(AcAutomaton::new(pats).into_full())
+            return Matcher::Empty;
         }
+        if sset.complete {
+            return Matcher::Bytes(sset);
+        }
+        if lits.literals().len() == 1 {
+            let lit = lits.literals()[0].to_vec();
+            return Matcher::Single(SingleSearch::new(lit));
+        }
+        // Only try Teddy if Aho-Corasick can't use memchr.
+        // Also, in its current form, Teddy doesn't scale well to lots of
+        // literals.
+        if sset.dense.len() > 1 && lits.literals().len() <= 32 {
+            if let Some(ted) = Teddy::new(lits) {
+                return Matcher::Teddy128(ted);
+            }
+        }
+        let pats = lits.literals().to_owned();
+        Matcher::AC(AcAutomaton::new(pats).into_full())
     }
 }
 
@@ -215,6 +235,7 @@ pub enum LiteralIter<'a> {
     Bytes(&'a [u8]),
     Single(&'a [u8]),
     AC(&'a [syntax::Lit]),
+    Teddy128(&'a [Vec<u8>]),
 }
 
 impl<'a> Iterator for LiteralIter<'a> {
@@ -242,6 +263,15 @@ impl<'a> Iterator for LiteralIter<'a> {
                 }
             }
             LiteralIter::AC(ref mut lits) => {
+                if lits.is_empty() {
+                    None
+                } else {
+                    let next = &lits[0];
+                    *lits = &lits[1..];
+                    Some(&**next)
+                }
+            }
+            LiteralIter::Teddy128(ref mut lits) => {
                 if lits.is_empty() {
                     None
                 } else {
