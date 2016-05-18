@@ -16,15 +16,10 @@ use syntax;
 #[derive(Debug)]
 pub enum Error {
     /// A syntax error.
-    Syntax(syntax::Error),
+    Syntax(String),
     /// The compiled program exceeded the set size limit.
     /// The argument is the size limit imposed.
     CompiledTooBig(usize),
-    /// **DEPRECATED:** Will be removed on next major version bump.
-    ///
-    /// This error is no longer used. (A `RegexSet` can now contain zero or
-    /// more regular expressions.)
-    InvalidSet,
     /// Hints that destructuring should not be exhaustive.
     ///
     /// This enum may grow additional variants, so this makes sure clients
@@ -37,20 +32,14 @@ pub enum Error {
 impl ::std::error::Error for Error {
     fn description(&self) -> &str {
         match *self {
-            Error::Syntax(ref err) => err.description(),
+            Error::Syntax(ref err) => err,
             Error::CompiledTooBig(_) => "compiled program too big",
-            Error::InvalidSet => {
-                "sets must contain 2 or more regular expressions"
-            }
             Error::__Nonexhaustive => unreachable!(),
         }
     }
 
     fn cause(&self) -> Option<&::std::error::Error> {
-        match *self {
-            Error::Syntax(ref err) => Some(err),
-            _ => None,
-        }
+        None
     }
 }
 
@@ -62,9 +51,6 @@ impl fmt::Display for Error {
                 write!(f, "Compiled regex exceeds size limit of {} bytes.",
                        limit)
             }
-            Error::InvalidSet => {
-                write!(f, "Sets must contain 2 or more regular expressions.")
-            }
             Error::__Nonexhaustive => unreachable!(),
         }
     }
@@ -72,6 +58,6 @@ impl fmt::Display for Error {
 
 impl From<syntax::Error> for Error {
     fn from(err: syntax::Error) -> Error {
-        Error::Syntax(err)
+        Error::Syntax(err.to_string())
     }
 }
