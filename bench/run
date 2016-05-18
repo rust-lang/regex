@@ -9,6 +9,9 @@ if [ $# = 0 ] || [ $1 = '-h' ] || [ $1 = '--help' ]; then
   usage
 fi
 
+# Enable SIMD.
+export RUSTFLAGS="-C target-feature=+ssse3"
+
 which="$1"
 shift
 case $which in
