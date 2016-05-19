@@ -185,9 +185,15 @@ impl Parser {
             return Ok(try!(self.lit(c)));
         }
         match c {
-            '\n' => { self.bump(); Ok(Build::Expr(Expr::Empty)) }
+            '\n' => { self.bump();
+                while self.cur().is_whitespace() { self.bump(); };
+                Ok(Build::Expr(Expr::Empty))
+            }
             '\r' => { self.bump();
-                    if self.bump_if('\n') { Ok(Build::Expr(Expr::Empty)) }
+                    if self.bump_if('\n') {
+                        while self.cur().is_whitespace() { self.bump(); };
+                        Ok(Build::Expr(Expr::Empty))
+                    }
                     else { Err(self.err(ErrorKind::UnrecognizedEscape(c))) } },
             'a' => { self.bump(); Ok(try!(self.lit('\x07'))) }
             'f' => { self.bump(); Ok(try!(self.lit('\x0C'))) }
@@ -1276,8 +1282,8 @@ mod tests {
         ('\u{a000}', '\u{a48c}'), ('\u{a490}', '\u{a4c6}'),
     ];
 
-    fn p(s: &str) -> Expr { Parser::parse(s, Flags::default()).unwrap() }
-    fn pf(s: &str, flags: Flags) -> Expr { Parser::parse(s, flags).unwrap() }
+    fn p(s: &str) -> Expr { Parser::parse(s, Flags::default()).expect("does not parse") }
+    fn pf(s: &str, flags: Flags) -> Expr { Parser::parse(s, flags).expect("does not parse") }
     fn lit(c: char) -> Expr { Expr::Literal { chars: vec![c], casei: false } }
     fn liti(c: char) -> Expr { Expr::Literal { chars: vec![c], casei: true } }
     fn b<T>(v: T) -> Box<T> { Box::new(v) }
@@ -1819,18 +1825,39 @@ mod tests {
 
     #[test]
     fn escape_newline() {
-        assert_eq!(p(r"a\
-a"), c(&[lit('a'), lit('a')]));
+        assert_eq!(p(r"ab\
+cd"), c(&[lit('a'), lit('b'), lit('c'), lit('d')]));
+    }
+
+    #[test]
+    fn escape_newline_and_whitespace() {
+        assert_eq!(p(r"ab\
+    cd"), c(&[lit('a'), lit('b'), lit('c'), lit('d')]));
+    }
+
+    #[test]
+    fn escape_newline_and_whitespace_2_linux_osx() {
+        assert_eq!(p("ab\\\n \t cd"), c(&[lit('a'), lit('b'), lit('c'), lit('d')]));
+    }
+
+    #[test]
+    fn escape_newline_and_whitespace_2_windows() {
+        assert_eq!(p("ab\\\r\n \t cd"), c(&[lit('a'), lit('b'), lit('c'), lit('d')]));
+    }
+    #[test]
+    #[should_panic(expected = "does not parse")]
+    fn escape_newline_and_whitespace_2_windows_shouldfail() {
+        assert_eq!(p("ab\\\r \t cd"), c(&[lit('a'), lit('b'), lit('c'), lit('d')]));
     }
 
     #[test]
     fn escape_newline_linux_osx() {
-        assert_eq!(p("a\\\na"), c(&[lit('a'), lit('a')]));
+        assert_eq!(p("ab\\\ncd"), c(&[lit('a'), lit('b'), lit('c'), lit('d')]));
     }
 
     #[test]
     fn escape_newline_windows() {
-        assert_eq!(p("a\\\r\na"), c(&[lit('a'), lit('a')]));
+        assert_eq!(p("ab\\\r\ncd"), c(&[lit('a'), lit('b'), lit('c'), lit('d')]));
     }
 
     #[test]
