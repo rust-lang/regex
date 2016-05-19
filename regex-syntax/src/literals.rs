@@ -394,6 +394,18 @@ impl Literals {
     ///
     /// Returns false if the character class was too big to add.
     pub fn add_char_class(&mut self, cls: &CharClass) -> bool {
+        self._add_char_class(cls, false)
+    }
+
+    /// Extends each literal in this set with the character class given,
+    /// writing the bytes of each character in reverse.
+    ///
+    /// Returns false if the character class was too big to add.
+    fn add_char_class_reverse(&mut self, cls: &CharClass) -> bool {
+        self._add_char_class(cls, true)
+    }
+
+    fn _add_char_class(&mut self, cls: &CharClass, reverse: bool) -> bool {
         use std::char;
 
         if self.class_exceeds_limits(cls.num_chars()) {
@@ -407,7 +419,11 @@ impl Literals {
             let (s, e) = (r.start as u32, r.end as u32 + 1);
             for c in (s..e).filter_map(char::from_u32) {
                 for mut lit in base.clone() {
-                    lit.extend(c.to_string().as_bytes());
+                    let mut bytes = c.to_string().into_bytes();
+                    if reverse {
+                        bytes.reverse();
+                    }
+                    lit.extend(&bytes);
                     self.lits.push(lit);
                 }
             }
@@ -597,15 +613,17 @@ fn suffixes(expr: &Expr, lits: &mut Literals) {
     use Expr::*;
     match *expr {
         Literal { ref chars, casei: false } => {
-            let s: String = chars.iter().rev().cloned().collect();
-            lits.cross_add(s.as_bytes());
+            let s: String = chars.iter().cloned().collect();
+            let mut bytes = s.into_bytes();
+            bytes.reverse();
+            lits.cross_add(&bytes);
         }
         Literal { ref chars, casei: true } => {
             for &c in chars.iter().rev() {
                 let cls = CharClass::new(vec![
                     ClassRange { start: c, end: c },
                 ]).case_fold();
-                if !lits.add_char_class(&cls) {
+                if !lits.add_char_class_reverse(&cls) {
                     lits.cut();
                     return;
                 }
@@ -627,7 +645,7 @@ fn suffixes(expr: &Expr, lits: &mut Literals) {
             }
         }
         Class(ref cls) => {
-            if !lits.add_char_class(cls) {
+            if !lits.add_char_class_reverse(cls) {
                 lits.cut();
             }
         }
@@ -1023,8 +1041,15 @@ mod tests {
     // Elementary tests.
     test_lit!(pfx_one_lit1, prefixes, "a", M("a"));
     test_lit!(pfx_one_lit2, prefixes, "abc", M("abc"));
-    test_lit!(pfx_one_class, prefixes, "[1-4]",
+    test_lit!(pfx_one_lit3, prefixes, "(?u)☃", M("\\xe2\\x98\\x83"));
+    test_lit!(pfx_one_lit4, prefixes, "(?ui)☃", M("\\xe2\\x98\\x83"));
+    test_lit!(pfx_class1, prefixes, "[1-4]",
               M("1"), M("2"), M("3"), M("4"));
+    test_lit!(pfx_class2, prefixes, "(?u)[☃Ⅰ]",
+              M("\\xe2\\x85\\xa0"), M("\\xe2\\x98\\x83"));
+    test_lit!(pfx_class3, prefixes, "(?ui)[☃Ⅰ]",
+              M("\\xe2\\x85\\xa0"), M("\\xe2\\x85\\xb0"),
+              M("\\xe2\\x98\\x83"));
     test_lit!(pfx_one_lit_casei1, prefixes, "(?i)a",
               M("A"), M("a"));
     test_lit!(pfx_one_lit_casei2, prefixes, "(?i)abc",
@@ -1166,8 +1191,15 @@ mod tests {
     // Elementary tests.
     test_lit!(sfx_one_lit1, suffixes, "a", M("a"));
     test_lit!(sfx_one_lit2, suffixes, "abc", M("abc"));
-    test_lit!(sfx_one_class, suffixes, "[1-4]",
+    test_lit!(sfx_one_lit3, suffixes, "(?u)☃", M("\\xe2\\x98\\x83"));
+    test_lit!(sfx_one_lit4, suffixes, "(?ui)☃", M("\\xe2\\x98\\x83"));
+    test_lit!(sfx_class1, suffixes, "[1-4]",
               M("1"), M("2"), M("3"), M("4"));
+    test_lit!(sfx_class2, suffixes, "(?u)[☃Ⅰ]",
+              M("\\xe2\\x85\\xa0"), M("\\xe2\\x98\\x83"));
+    test_lit!(sfx_class3, suffixes, "(?ui)[☃Ⅰ]",
+              M("\\xe2\\x85\\xa0"), M("\\xe2\\x85\\xb0"),
+              M("\\xe2\\x98\\x83"));
     test_lit!(sfx_one_lit_casei1, suffixes, "(?i)a",
               M("A"), M("a"));
     test_lit!(sfx_one_lit_casei2, suffixes, "(?i)abc",

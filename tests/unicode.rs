@@ -1,4 +1,7 @@
 mat!(uni_literal, u!(r"☃"), "☃", Some((0, 3)));
+mat!(uni_literal_plus, u!(r"☃+"), "☃", Some((0, 3)));
+mat!(uni_literal_casei_plus, u!(r"(?i)☃+"), "☃", Some((0, 3)));
+mat!(uni_class_plus, u!(r"[☃Ⅰ]+"), "☃", Some((0, 3)));
 mat!(uni_one, u!(r"\pN"), "Ⅰ", Some((0, 3)));
 mat!(uni_mixed, u!(r"\pN+"), "Ⅰ1Ⅱ2", Some((0, 8)));
 mat!(uni_not, u!(r"\PN+"), "abⅠ", Some((0, 2)));
