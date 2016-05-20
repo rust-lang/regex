@@ -185,16 +185,6 @@ impl Parser {
             return Ok(try!(self.lit(c)));
         }
         match c {
-            '\n' => { self.bump();
-                while self.cur().is_whitespace() { self.bump(); };
-                Ok(Build::Expr(Expr::Empty))
-            }
-            '\r' => { self.bump();
-                    if self.bump_if('\n') {
-                        while self.cur().is_whitespace() { self.bump(); };
-                        Ok(Build::Expr(Expr::Empty))
-                    }
-                    else { Err(self.err(ErrorKind::UnrecognizedEscape(c))) } },
             'a' => { self.bump(); Ok(try!(self.lit('\x07'))) }
             'f' => { self.bump(); Ok(try!(self.lit('\x0C'))) }
             't' => { self.bump(); Ok(try!(self.lit('\t'))) }
@@ -203,6 +193,20 @@ impl Parser {
             'v' => { self.bump(); Ok(try!(self.lit('\x0B'))) }
             'A' => { self.bump(); Ok(Build::Expr(Expr::StartText)) }
             'z' => { self.bump(); Ok(Build::Expr(Expr::EndText)) }
+            '\n' => {
+                self.bump();
+                while self.cur().is_whitespace() { self.bump(); };
+                Ok(Build::Expr(Expr::Empty))
+            }
+            '\r' => {
+                self.bump();
+                if self.bump_if('\n') {
+                    while self.cur().is_whitespace() { self.bump(); };
+                    Ok(Build::Expr(Expr::Empty))
+                } else {
+                    Err(self.err(ErrorKind::UnrecognizedEscape(c)))
+                }
+            }
             'b' => {
                 self.bump();
                 Ok(Build::Expr(if self.flags.unicode {
@@ -1836,18 +1840,13 @@ cd"), c(&[lit('a'), lit('b'), lit('c'), lit('d')]));
     }
 
     #[test]
-    fn escape_newline_and_whitespace_2_linux_osx() {
+    fn escape_newline_and_whitespace_linux_osx() {
         assert_eq!(p("ab\\\n \t cd"), c(&[lit('a'), lit('b'), lit('c'), lit('d')]));
     }
 
     #[test]
-    fn escape_newline_and_whitespace_2_windows() {
+    fn escape_newline_and_whitespace_windows() {
         assert_eq!(p("ab\\\r\n \t cd"), c(&[lit('a'), lit('b'), lit('c'), lit('d')]));
-    }
-    #[test]
-    #[should_panic(expected = "does not parse")]
-    fn escape_newline_and_whitespace_2_windows_shouldfail() {
-        assert_eq!(p("ab\\\r \t cd"), c(&[lit('a'), lit('b'), lit('c'), lit('d')]));
     }
 
     #[test]
@@ -2639,6 +2638,11 @@ cd"), c(&[lit('a'), lit('b'), lit('c'), lit('d')]));
     #[test]
     fn error_newline_escape_unrecognized() {
         test_err!("\\\r", 2, ErrorKind::UnrecognizedEscape('\r'));
+    }
+
+    #[test]
+    fn escape_newline_and_whitespace_err_windows() {
+        test_err!("ab\\\r \t cd", 4, ErrorKind::UnrecognizedEscape('\r'));
     }
 
     #[test]
