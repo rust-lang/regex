@@ -1,3 +1,9 @@
+0.1.71
+======
+* [PR #236](https://github.com/rust-lang-nursery/regex/pull/236):
+  Fix a bug in how suffix literals were extracted, which could lead
+  to invalid match behavior in some cases.
+
 0.1.70
 ======
 * [PR #231](https://github.com/rust-lang-nursery/regex/pull/231):
