@@ -1286,8 +1286,8 @@ mod tests {
         ('\u{a000}', '\u{a48c}'), ('\u{a490}', '\u{a4c6}'),
     ];
 
-    fn p(s: &str) -> Expr { Parser::parse(s, Flags::default()).expect("does not parse") }
-    fn pf(s: &str, flags: Flags) -> Expr { Parser::parse(s, flags).expect("does not parse") }
+    fn p(s: &str) -> Expr { Parser::parse(s, Flags::default()).unwrap() }
+    fn pf(s: &str, flags: Flags) -> Expr { Parser::parse(s, flags).unwrap() }
     fn lit(c: char) -> Expr { Expr::Literal { chars: vec![c], casei: false } }
     fn liti(c: char) -> Expr { Expr::Literal { chars: vec![c], casei: true } }
     fn b<T>(v: T) -> Box<T> { Box::new(v) }
