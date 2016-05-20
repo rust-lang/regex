@@ -14,14 +14,13 @@ extern crate regex_syntax;
 extern crate quickcheck;
 
 use rand::Rng;
-use rand::distributions::{IndependentSample, Range};
 use rand::distributions::exponential::Exp1;
 use regex_syntax::{Expr, CharClass, ByteClass, ByteRange, ClassRange, Repeater};
 use quickcheck::{Arbitrary, Gen, StdGen, Testable, QuickCheck};
 
 /// TODO: implement unicode support
 fn randomize_case<G: Rng>(g: &mut G, c: char) -> char {
-    match g.gen::<u32>() % 3 {
+    match g.gen_range(0, 3) {
         0 => {
             c
         }
@@ -32,18 +31,19 @@ fn randomize_case<G: Rng>(g: &mut G, c: char) -> char {
                 c
             }
         }
-        _ => {
+        2 => {
             if 'A' <= c && c <= 'Z' {
                 (c as u8 - 'A' as u8 + 'a' as u8) as char
             } else {
                 c
             }
         }
+        _ => unreachable!(),
     }
 }
 
 ///Inclusive of both bounds.
-fn random_char_in_range(low: char, high: char) -> char {
+fn random_char_in_range<G: Rng>(g: &mut G, low: char, high: char) -> char {
     let (low, high) = (low as u32, high as u32);
     let l0 = low;
     let h0 = ::std::cmp::min(high, 0xD7FF);
@@ -51,11 +51,10 @@ fn random_char_in_range(low: char, high: char) -> char {
     let h1 = ::std::cmp::min(high, 0x10FFFF);
     let s0 = if h0 < l0 {0} else {h0 - l0 + 1};
     let s1 = if h1 < l1 {0} else {h1 - l1 + 1};
-    let mut rng = rand::thread_rng();
-    let x: u32 = if Range::new(0, s1 + s0).ind_sample(&mut rng) < s0 {
-        Range::new(l0, h0 + 1).ind_sample(&mut rng)
+    let x: u32 = if g.gen_range(0, s1 + s0) < s0 {
+        g.gen_range(l0, h0 + 1)
     } else {
-        Range::new(l1, h1 + 1).ind_sample(&mut rng)
+        g.gen_range(l1, h1 + 1)
     };
     assert!(low <= x && x <= high);
     ::std::char::from_u32(x).unwrap()
@@ -103,22 +102,23 @@ pub fn sample_language<G: Rng>(g: &mut G, acc: &mut Vec<char>, expr: &Expr) {
             }
         },
         &Expr::Class(CharClass { ref ranges } ) => {
-            let r = Range::new(0, ranges.len());
-            let ClassRange { start, end } = ranges[r.ind_sample(g)];
-            acc.push(random_char_in_range(start, end));
+            let ClassRange { start, end } = {
+                ranges[g.gen_range(0, ranges.len())]
+            };
+            acc.push(random_char_in_range(g, start, end));
         },
         &Expr::ClassBytes(ByteClass { ref ranges }) => {
-            let r = Range::new(0, ranges.len());
-            let ByteRange { start, end } = ranges[r.ind_sample(g)];
-            let r = Range::new(start, end + 1);
-            acc.push(r.ind_sample(g) as char);
+            let ByteRange { start, end } = {
+                ranges[g.gen_range(0, ranges.len())]
+            };
+            acc.push(g.gen_range(start, end + 1) as char);
         }
         &Expr::Group { ref e, i: _, name: _ } => {
             sample_language(g, acc, e.as_ref());
         },
         &Expr::Repeat { ref e, r, greedy: _, } => {
             let n = match r {
-                Repeater::ZeroOrOne => g.gen::<usize>() % 2,
+                Repeater::ZeroOrOne => g.gen_range(0, 2),
                 Repeater::ZeroOrMore => {let Exp1(x) = g.gen(); x as usize}
                 Repeater::OneOrMore => {let Exp1(x) = g.gen(); x as usize + 1}
                 Repeater::Range { min: a, max: None} => {
@@ -126,7 +126,7 @@ pub fn sample_language<G: Rng>(g: &mut G, acc: &mut Vec<char>, expr: &Expr) {
                     x as usize + a as usize
                 }
                 Repeater::Range { min: a, max: Some(b) } =>  {
-                    Range::new(a as usize, b as usize + 1).ind_sample(g)
+                    g.gen_range(a as usize, b as usize + 1)
                 }
             };
             for _ in 0..n {
@@ -139,7 +139,7 @@ pub fn sample_language<G: Rng>(g: &mut G, acc: &mut Vec<char>, expr: &Expr) {
             }
         },
         &Expr::Alternate(ref v) => {
-            let i = Range::new(0, v.len()).ind_sample(g);
+            let i = g.gen_range(0, v.len());
             sample_language(g, acc, &v[i])
         },
         _ => panic!("zero-width assertions unsupported"),
