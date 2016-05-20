@@ -20,7 +20,7 @@ memchr = "0.1.9"
 # For managing regex caches quickly across multiple threads.
 thread_local = "0.2.4"
 # For parsing regular expressions.
-regex-syntax = { path = "regex-syntax", version = "0.3.1" }
+regex-syntax = { path = "regex-syntax", version = "0.3.2" }
 # For accelerating text search.
 simd = { version = "0.1.0", optional = true }
 # For compiling UTF-8 decoding into automata.
