@@ -66,9 +66,14 @@ assert_eq!(err.kind(), &ErrorKind::UnclosedParen);
 #[cfg(test)] extern crate quickcheck;
 #[cfg(test)] extern crate rand;
 
+#[cfg(feature="export-qc")] extern crate quickcheck;
+#[cfg(feature="export-qc")] extern crate rand;
+
 mod literals;
 mod parser;
 mod unicode;
+
+#[cfg(feature="export-qc")] mod properties;
 
 use std::ascii;
 use std::char;
@@ -237,7 +242,8 @@ impl Repeater {
 /// automatically translated to `[a-cA-C]`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CharClass {
-    ranges: Vec<ClassRange>,
+    /// The set of inclusive ranges describing this class.
+    pub ranges: Vec<ClassRange>,
 }
 
 /// A single inclusive range in a character class.
@@ -282,7 +288,8 @@ pub struct ClassRange {
 /// `(?i)[a-c]` is automatically translated to `[a-cA-C]`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ByteClass {
-    ranges: Vec<ByteRange>,
+    /// The set of inclusive ranges describing this class.
+    pub ranges: Vec<ByteRange>,
 }
 
 /// A single inclusive range in a byte class.

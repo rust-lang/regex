@@ -1,0 +1,17 @@
+[package]
+name = "regex-fuzz"
+version = "0.1.0"
+authors = ["sean <burton.seanr@gmail.com>"]
+
+[dependencies]
+quickcheck = "0.2"
+rand = "0.3"
+
+[dependencies.regex]
+path = ".."
+version = "0.1.71"
+
+[dependencies.regex-syntax]
+path = "../regex-syntax"
+version = "0.3.2"
+features = ["export-qc"]

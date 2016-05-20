@@ -11,3 +11,10 @@ description = "A regular expression parser."
 [dev-dependencies]
 quickcheck = "0.2"
 rand = "0.3"
+
+[features]
+export-qc = ["quickcheck", "rand"]
+
+[dependencies]
+quickcheck = { version = "0.2", optional = true }
+rand = { version = "0.3", optional = true }

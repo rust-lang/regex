@@ -130,7 +130,10 @@ fn parser_never_panics() {
 
 impl Arbitrary for Expr {
     fn arbitrary<G: Gen>(g: &mut G) -> Expr {
-        let e = fix_capture_indices(gen_expr(g, 0, ExprType::Anything));
+        let size = { let s = g.size(); g.gen_range(0, s) };
+        let e = fix_capture_indices(
+            gen_expr(g, size as i32, ExprType::Anything)
+        );
         e.simplify(200).unwrap()
     }
 
@@ -215,12 +218,15 @@ enum ExprType {
     Anything,
 }
 
-fn gen_expr<G: Gen>(g: &mut G, depth: u32, ty: ExprType) -> Expr {
+fn gen_expr<G: Gen>(g: &mut G, size: i32, ty: ExprType) -> Expr {
     use Expr::*;
-    let ub = match (depth as usize >= g.size(), ty) {
-        (true, _) => 16,
-        (false, ExprType::NoSequences) => 18,
-        (false, ExprType::Anything) => 20,
+    let ub = if size <= 1 {
+        16
+    } else {
+        match ty {
+            ExprType::NoSequences => 18,
+            ExprType::Anything => 20,
+        }
     };
     match g.gen_range(1, ub) {
         0 => Empty,
@@ -245,25 +251,31 @@ fn gen_expr<G: Gen>(g: &mut G, depth: u32, ty: ExprType) -> Expr {
         13 => NotWordBoundary,
         14 => WordBoundaryAscii,
         15 => NotWordBoundaryAscii,
-        16 => gen_group_expr(g, depth + 1),
+        16 => gen_group_expr(g, size - 1),
         17 => Repeat {
-            e: Box::new(gen_repeatable_expr(g, depth + 1)),
+            e: Box::new(gen_repeatable_expr(g, size - 1)),
             r: Repeater::arbitrary(g),
             greedy: bool::arbitrary(g),
         },
         18 => {
-            let size = { let s = g.size(); g.gen_range(2, s) };
-            Concat((0..size)
+            let n = {
+                let s = g.size();
+                g.gen_range(2, ::std::cmp::max(3, s))
+            };
+            Concat((0..n)
                    .map(|_| {
-                       gen_expr(g, depth + 1, ExprType::NoSequences)
+                       gen_expr(g, size / n as i32, ExprType::NoSequences)
                     })
                    .collect())
         }
         19 => {
-            let size = { let s = g.size(); g.gen_range(2, s) };
-            Alternate((0..size)
+            let n = {
+                let s = g.size();
+                g.gen_range(2, ::std::cmp::max(3, s))
+            };
+            Alternate((0..n)
                       .map(|_| {
-                          gen_expr(g, depth + 1, ExprType::NoSequences)
+                          gen_expr(g, size / n as i32, ExprType::NoSequences)
                       })
                       .collect())
         }
@@ -271,7 +283,7 @@ fn gen_expr<G: Gen>(g: &mut G, depth: u32, ty: ExprType) -> Expr {
     }
 }
 
-fn gen_repeatable_expr<G: Gen>(g: &mut G, depth: u32) -> Expr {
+fn gen_repeatable_expr<G: Gen>(g: &mut G, size: i32) -> Expr {
     use Expr::*;
     match g.gen_range(1, 10) {
         0 => Empty,
@@ -289,12 +301,12 @@ fn gen_repeatable_expr<G: Gen>(g: &mut G, depth: u32) -> Expr {
         6 => AnyByteNoNL,
         7 => Class(CharClass::arbitrary(g)),
         8 => ClassBytes(ByteClass::arbitrary(g)),
-        9 => gen_group_expr(g, depth + 1),
+        9 => gen_group_expr(g, size - 1),
         _ => unreachable!(),
     }
 }
 
-fn gen_group_expr<G: Gen>(g: &mut G, depth: u32) -> Expr {
+fn gen_group_expr<G: Gen>(g: &mut G, size: i32) -> Expr {
     let (i, name) = if g.gen() {
         (None, None)
     } else {
@@ -305,7 +317,7 @@ fn gen_group_expr<G: Gen>(g: &mut G, depth: u32) -> Expr {
         })
     };
     Expr::Group {
-        e: Box::new(gen_expr(g, depth + 1, ExprType::Anything)),
+        e: Box::new(gen_expr(g, size - 1, ExprType::Anything)),
         i: i,
         name: name,
     }
