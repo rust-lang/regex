@@ -8,7 +8,7 @@ repository = "https://github.com/rust-lang/regex"
 documentation = "https://doc.rust-lang.org/regex"
 homepage = "https://github.com/rust-lang/regex"
 description = """
-A tests-only crate for fuzzing or the regex library.
+A tests-only crate for fuzzing of the regex library.
 """
 
 [dependencies]
