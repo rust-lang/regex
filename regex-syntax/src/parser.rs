@@ -1075,6 +1075,8 @@ impl Parser {
     //     expressions. This concatenation may be empty!
     //  2. An alternation is found. Pop the alternation and push
     //     a new arm. Return the alternation as the entire Regex.
+    //     After this, the stack must be empty, or else there is
+    //     an unclosed paren.
     //
     // If an opening parenthesis is popped, then an error is
     // returned since it indicates an unclosed parenthesis.
@@ -1093,7 +1095,16 @@ impl Parser {
                         return Err(self.err(ErrorKind::EmptyAlternate));
                     }
                     es.push(rev_concat(concat));
-                    return Ok(Expr::Alternate(es));
+                    // Make sure there are no opening parens remaining.
+                    match self.stack.pop() {
+                        None => return Ok(Expr::Alternate(es)),
+                        Some(Build::LeftParen{ chari, ..}) => {
+                            // e.g., (a|b
+                            return Err(self.errat(
+                                chari, ErrorKind::UnclosedParen));
+                        }
+                        e => unreachable!("{:?}", e),
+                    }
                 }
                 Some(Build::Expr(e)) => { concat.push(e); }
             }
@@ -2507,6 +2518,11 @@ mod tests {
     #[test]
     fn error_close_paren_unopened_with_alt() {
         test_err!("a|b)", 3, ErrorKind::UnopenedParen);
+    }
+
+    #[test]
+    fn error_close_paren_unclosed_with_alt() {
+        test_err!("(a|b", 0, ErrorKind::UnclosedParen);
     }
 
     #[test]
