@@ -443,7 +443,7 @@
 //! proportional to the size of the input. As a stopgap, the DFA is only
 //! allowed to store a fixed number of states. (When the limit is reached, its
 //! states are wiped and continues on, possibly duplicating previous work. If
-//! the limit is reached too frequently, it gives up and hands control of to
+//! the limit is reached too frequently, it gives up and hands control off to
 //! another matching engine with fixed memory requirements.)
 
 #![deny(missing_docs)]
