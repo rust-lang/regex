@@ -88,7 +88,7 @@ fn native(cx: &mut ExtCtxt, sp: codemap::Span, tts: &[ast::TokenTree])
     };
     let names = prog.captures.iter().cloned().collect();
     let mut gen = NfaGen {
-        cx: &*cx,
+        cx: cx,
         sp: sp,
         prog: prog,
         names: names,
@@ -97,15 +97,15 @@ fn native(cx: &mut ExtCtxt, sp: codemap::Span, tts: &[ast::TokenTree])
     MacEager::expr(gen.code())
 }
 
-struct NfaGen<'a> {
-    cx: &'a ExtCtxt<'a>,
+struct NfaGen<'cx, 'a: 'cx> {
+    cx: &'cx ExtCtxt<'a>,
     sp: codemap::Span,
     prog: Program,
     names: Vec<Option<String>>,
     original: String,
 }
 
-impl<'a> NfaGen<'a> {
+impl<'a, 'cx> NfaGen<'a, 'cx> {
     fn code(&mut self) -> P<ast::Expr> {
         // Most or all of the following things are used in the quasiquoted
         // expression returned.
