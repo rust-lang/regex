@@ -143,9 +143,6 @@ using the main API.
 This example shows how to find all null-terminated strings in a slice of bytes:
 
 ```rust
-This shows how to find all null-terminated strings in a slice of bytes:
-
-```rust
 use regex::bytes::Regex;
 
 let re = Regex::new(r"(?P<cstr>[^\x00]+)\x00").unwrap();
