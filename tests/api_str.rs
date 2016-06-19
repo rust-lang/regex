@@ -19,9 +19,3 @@ fn empty_match_unicode_captures_iter() {
                        .collect();
     assert_eq!(vec![(0, 0), (3, 3), (4, 4), (7, 7), (8, 8)], ms);
 }
-
-#[test]
-fn eq() {
-    use regex::Regex;
-    assert_eq!(regex!(r"[a-z]+"), Regex::new("[a-z]+").unwrap());
-}
