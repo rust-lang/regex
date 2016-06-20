@@ -66,7 +66,6 @@ macro_rules! regex {
 }
 
 #[cfg(feature = "re-rust-bytes")]
-#[cfg(not(feature = "re-rust-plugin"))]
 macro_rules! regex {
     ($re:expr) => {{
         // Always enable the Unicode flag for byte based regexes.
@@ -250,4 +249,5 @@ macro_rules! bench_find {
 
 mod ffi;
 mod misc;
+mod regexdna;
 mod sherlock;

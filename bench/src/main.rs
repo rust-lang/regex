@@ -45,7 +45,7 @@ Since this tool includes compilation of the <pattern>, sufficiently large
 haystacks should be used to amortize the cost of compilation. (e.g., >1MB.)
 
 Usage:
-    regex-run-one [options] [onig | pcre1 | pcre2 | re2 | rust | rust-bytes | tcl] <pattern> <file>
+    regex-run-one [options] [onig | pcre1 | pcre2 | re2 | rust | rust-bytes | tcl] <file> <pattern>
     regex-run-one [options] (-h | --help)
 
 Options:

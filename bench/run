@@ -10,7 +10,8 @@ if [ $# = 0 ] || [ $1 = '-h' ] || [ $1 = '--help' ]; then
 fi
 
 # Enable SIMD.
-export RUSTFLAGS="-C target-feature=+ssse3"
+# export RUSTFLAGS="-C target-feature=+ssse3"
+export RUSTFLAGS="-C target-cpu=native"
 
 which="$1"
 shift
