@@ -27,6 +27,7 @@ use std::usize;
 
 use syntax::ast;
 use syntax::codemap;
+use syntax::tokenstream;
 use syntax::ext::build::AstBuilder;
 use syntax::ext::base::{ExtCtxt, MacResult, MacEager, DummyResult};
 use syntax::parse::token;
@@ -63,7 +64,7 @@ pub fn plugin_registrar(reg: &mut Registry) {
 /// It is strongly recommended to read the dynamic implementation in vm.rs
 /// first before trying to understand the code generator. The implementation
 /// strategy is identical and vm.rs has comments and will be easier to follow.
-fn native(cx: &mut ExtCtxt, sp: codemap::Span, tts: &[ast::TokenTree])
+fn native(cx: &mut ExtCtxt, sp: codemap::Span, tts: &[tokenstream::TokenTree])
           -> Box<MacResult+'static> {
     let regex = match parse(cx, tts) {
         Some(r) => r,
@@ -564,7 +565,7 @@ fn exec<'t>(
 
 /// Looks for a single string literal and returns it.
 /// Otherwise, logs an error with cx.span_err and returns None.
-fn parse(cx: &mut ExtCtxt, tts: &[ast::TokenTree]) -> Option<String> {
+fn parse(cx: &mut ExtCtxt, tts: &[tokenstream::TokenTree]) -> Option<String> {
     let mut parser = cx.new_parser_from_tts(tts);
     if let Ok(expr) = parser.parse_expr() {
         let entry = cx.expander().fold_expr(expr);
