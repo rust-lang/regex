@@ -587,6 +587,9 @@ impl Parser {
             }
         }
         class = self.class_transform(negated, class).canonicalize();
+        if class.is_empty() {
+            return Err(self.err(ErrorKind::EmptyClass));
+        }
         Ok(Build::Expr(if self.flags.unicode {
             Expr::Class(class)
         } else {
@@ -1277,7 +1280,7 @@ mod tests {
         ErrorKind,
     };
     use unicode::regex::{PERLD, PERLS, PERLW};
-    use super::{LOWER, UPPER, Flags, Parser, ascii_class};
+    use super::{LOWER, UPPER, WORD, Flags, Parser, ascii_class};
 
     static YI: &'static [(char, char)] = &[
         ('\u{a000}', '\u{a48c}'), ('\u{a490}', '\u{a4c6}'),
@@ -2127,10 +2130,10 @@ mod tests {
 
     #[test]
     fn class_multiple_class_negate_negate() {
-        let nperld = class(PERLD).negate();
+        let nperlw = class(PERLW).negate();
         let nyi = class(YI).negate();
-        let cls = CharClass::empty().merge(nperld).merge(nyi);
-        assert_eq!(p(r"[^\D\P{Yi}]"), Expr::Class(cls.negate()));
+        let cls = CharClass::empty().merge(nperlw).merge(nyi);
+        assert_eq!(p(r"[^\W\P{Yi}]"), Expr::Class(cls.negate()));
     }
 
     #[test]
@@ -2149,10 +2152,10 @@ mod tests {
 
     #[test]
     fn class_multiple_class_negate_negate_casei() {
-        let nperld = class(PERLD).negate();
+        let nperlw = class(PERLW).negate();
         let nyi = class(YI).negate();
-        let class = CharClass::empty().merge(nperld).merge(nyi);
-        assert_eq!(p(r"(?i)[^\D\P{Yi}]"),
+        let class = CharClass::empty().merge(nperlw).merge(nyi);
+        assert_eq!(p(r"(?i)[^\W\P{Yi}]"),
                    Expr::Class(class.case_fold().negate()));
     }
 
@@ -2236,10 +2239,10 @@ mod tests {
 
     #[test]
     fn ascii_classes_negate_multiple() {
-        let (nlower, nupper) = (class(LOWER).negate(), class(UPPER).negate());
-        let cls = CharClass::empty().merge(nlower).merge(nupper);
-        assert_eq!(p("[[:^lower:][:^upper:]]"), Expr::Class(cls.clone()));
-        assert_eq!(p("[^[:^lower:][:^upper:]]"), Expr::Class(cls.negate()));
+        let (nlower, nword) = (class(LOWER).negate(), class(WORD).negate());
+        let cls = CharClass::empty().merge(nlower).merge(nword);
+        assert_eq!(p("[[:^lower:][:^word:]]"), Expr::Class(cls.clone()));
+        assert_eq!(p("[^[:^lower:][:^word:]]"), Expr::Class(cls.negate()));
     }
 
     #[test]
@@ -2725,6 +2728,7 @@ mod tests {
     fn error_class_empty_range() {
         test_err!("[]", 2, ErrorKind::UnexpectedClassEof);
         test_err!("[^]", 3, ErrorKind::UnexpectedClassEof);
+        test_err!(r"[^\d\D]", 7, ErrorKind::EmptyClass);
     }
 
     #[test]
