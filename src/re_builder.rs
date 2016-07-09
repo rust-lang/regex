@@ -67,6 +67,10 @@ impl RegexBuilder {
     }
 
     /// Consume the builder and compile the regular expression.
+    ///
+    /// Note that calling `as_str` on the resulting `Regex` will produce the
+    /// pattern given to `new` verbatim. Notably, it will not incorporate any
+    /// of the flags set on this builder.
     pub fn compile(self) -> Result<Regex, Error> {
         ExecBuilder::new_options(self.0)
             .only_utf8($only_utf8)
