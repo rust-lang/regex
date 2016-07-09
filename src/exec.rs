@@ -589,7 +589,11 @@ impl<'c> ExecNoSync<'c> {
                 lits.find_start(&text[start..])
                     .map(|(s, e)| (start + s, start + e))
             }
-            AnchoredEnd => self.ro.suffixes.find_end(&text),
+            AnchoredEnd => {
+                let lits = &self.ro.suffixes;
+                lits.find_end(&text[start..])
+                    .map(|(s, e)| (start + s, start + e))
+            }
         }
     }
 
