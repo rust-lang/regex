@@ -921,7 +921,7 @@ impl<'c> ExecNoSync<'c> {
                 matches,
                 slots,
                 quit_after_match,
-                ByteInput::new(text),
+                ByteInput::new(text, self.ro.nfa.only_utf8),
                 start)
         } else {
             pikevm::Fsm::exec(
@@ -949,7 +949,7 @@ impl<'c> ExecNoSync<'c> {
                 &self.cache,
                 matches,
                 slots,
-                ByteInput::new(text),
+                ByteInput::new(text, self.ro.nfa.only_utf8),
                 start)
         } else {
             backtrack::Bounded::exec(

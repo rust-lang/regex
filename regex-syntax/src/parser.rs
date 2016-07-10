@@ -581,6 +581,9 @@ impl Parser {
                     _ => unreachable!(),
                 },
                 start => {
+                    if !self.flags.unicode {
+                        let _ = try!(self.codepoint_to_one_byte(start));
+                    }
                     self.bump();
                     try!(self.parse_class_range(&mut class, start));
                 }
@@ -610,11 +613,6 @@ impl Parser {
     fn parse_class_range(&mut self, class: &mut CharClass, start: char)
                         -> Result<()> {
         if !self.bump_if('-') {
-            // Make sure we haven't parsed Unicode literals when we shouldn't have.
-            if !self.flags.unicode {
-                let _ = try!(self.codepoint_to_one_byte(start));
-            }
-
             // Not a range, so just push a singleton range.
             class.ranges.push(ClassRange::one(start));
             return Ok(());
@@ -647,7 +645,13 @@ impl Parser {
                 // Because `parse_escape` can never return `LeftParen`.
                 _ => unreachable!(),
             },
-            _ => self.bump(),
+            _ => {
+                let c = self.bump();
+                if !self.flags.unicode {
+                    let _ = try!(self.codepoint_to_one_byte(c));
+                }
+                c
+            }
         };
         if end < start {
             // e.g., [z-a]
@@ -655,11 +659,6 @@ impl Parser {
                 start: start,
                 end: end,
             }));
-        }
-        // Make sure we haven't parsed Unicode literals when we shouldn't have.
-        if !self.flags.unicode {
-            let _ = try!(self.codepoint_to_one_byte(start));
-            let _ = try!(self.codepoint_to_one_byte(end));
         }
         class.ranges.push(ClassRange::new(start, end));
         Ok(())
@@ -2015,6 +2014,8 @@ mod tests {
 
         assert_eq!(pb(r"(?-u)[a]"), Expr::ClassBytes(bclass(&[(b'a', b'a')])));
         assert_eq!(pb(r"(?-u)[\x00]"), Expr::ClassBytes(bclass(&[(0, 0)])));
+        assert_eq!(pb(r"(?-u)[\xFF]"),
+                   Expr::ClassBytes(bclass(&[(0xFF, 0xFF)])));
         assert_eq!(pb("(?-u)[\n]"),
                    Expr::ClassBytes(bclass(&[(b'\n', b'\n')])));
         assert_eq!(pb(r"(?-u)[\n]"),
@@ -2418,8 +2419,8 @@ mod tests {
     #[test]
     fn unicode_class_literal_not_allowed() {
         let flags = Flags { allow_bytes: true, .. Flags::default() };
-        test_err!(r"(?-u)[☃]", 7, ErrorKind::UnicodeNotAllowed, flags);
-        test_err!(r"(?-u)[☃-☃]", 9, ErrorKind::UnicodeNotAllowed, flags);
+        test_err!(r"(?-u)[☃]", 6, ErrorKind::UnicodeNotAllowed, flags);
+        test_err!(r"(?-u)[☃-☃]", 6, ErrorKind::UnicodeNotAllowed, flags);
     }
 
     #[test]

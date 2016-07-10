@@ -322,9 +322,7 @@ impl<'r, I: Input> Fsm<'r, I> {
             nlist.set.insert(ip);
             match self.prog[ip] {
                 EmptyLook(ref inst) => {
-                    let prev = self.input.previous_char(at);
-                    let next = self.input.next_char(at);
-                    if inst.matches(prev, next) {
+                    if self.input.is_empty_match(at, inst) {
                         ip = inst.goto;
                     }
                 }

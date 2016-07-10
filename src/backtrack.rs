@@ -242,9 +242,7 @@ impl<'a, 'm, 'r, 's, I: Input> Bounded<'a, 'm, 'r, 's, I> {
                     ip = inst.goto1;
                 }
                 EmptyLook(ref inst) => {
-                    let prev = self.input.previous_char(at);
-                    let next = self.input.next_char(at);
-                    if inst.matches(prev, next) {
+                    if self.input.is_empty_match(at, inst) {
                         ip = inst.goto;
                     } else {
                         return false;

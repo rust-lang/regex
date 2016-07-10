@@ -16,8 +16,9 @@ use std::u32;
 
 use syntax;
 
-use utf8::{decode_utf8, decode_last_utf8};
 use literals::LiteralSearcher;
+use prog::InstEmptyLook;
+use utf8::{decode_utf8, decode_last_utf8};
 
 /// Represents a location in the input.
 #[derive(Clone, Copy, Debug)]
@@ -83,6 +84,10 @@ pub trait Input {
     /// If no such character could be decoded, then `Char` is absent.
     fn previous_char(&self, at: InputAt) -> Char;
 
+    /// Return true if the given empty width instruction matches at the
+    /// input position given.
+    fn is_empty_match(&self, at: InputAt, empty: &InstEmptyLook) -> bool;
+
     /// Scan the input for a matching prefix.
     fn prefix_at(
         &self,
@@ -103,6 +108,10 @@ impl<'a, T: Input> Input for &'a T {
     fn next_char(&self, at: InputAt) -> Char { (**self).next_char(at) }
 
     fn previous_char(&self, at: InputAt) -> Char { (**self).previous_char(at) }
+
+    fn is_empty_match(&self, at: InputAt, empty: &InstEmptyLook) -> bool {
+        (**self).is_empty_match(at, empty)
+    }
 
     fn prefix_at(
         &self,
@@ -155,6 +164,38 @@ impl<'t> Input for CharInput<'t> {
         decode_last_utf8(&self[..at.pos()]).map(|(c, _)| c).into()
     }
 
+    fn is_empty_match(&self, at: InputAt, empty: &InstEmptyLook) -> bool {
+        use prog::EmptyLook::*;
+        match empty.look {
+            StartLine => {
+                let c = self.previous_char(at);
+                c.is_none() || c == '\n'
+            }
+            EndLine => {
+                let c = self.next_char(at);
+                c.is_none() || c == '\n'
+            }
+            StartText => self.previous_char(at).is_none(),
+            EndText => self.next_char(at).is_none(),
+            WordBoundary => {
+                let (c1, c2) = (self.previous_char(at), self.next_char(at));
+                c1.is_word_char() != c2.is_word_char()
+            }
+            NotWordBoundary => {
+                let (c1, c2) = (self.previous_char(at), self.next_char(at));
+                c1.is_word_char() == c2.is_word_char()
+            }
+            WordBoundaryAscii => {
+                let (c1, c2) = (self.previous_char(at), self.next_char(at));
+                c1.is_word_byte() != c2.is_word_byte()
+            }
+            NotWordBoundaryAscii => {
+                let (c1, c2) = (self.previous_char(at), self.next_char(at));
+                c1.is_word_byte() == c2.is_word_byte()
+            }
+        }
+    }
+
     fn prefix_at(
         &self,
         prefixes: &LiteralSearcher,
@@ -178,12 +219,18 @@ impl<'t> Input for CharInput<'t> {
 /// easy access to necessary Unicode decoding (used for word boundary look
 /// ahead/look behind).
 #[derive(Clone, Copy, Debug)]
-pub struct ByteInput<'t>(&'t [u8]);
+pub struct ByteInput<'t> {
+    text: &'t [u8],
+    only_utf8: bool,
+}
 
 impl<'t> ByteInput<'t> {
     /// Return a new byte-based input reader for the given string.
-    pub fn new(s: &'t [u8]) -> ByteInput<'t> {
-        ByteInput(s)
+    pub fn new(text: &'t [u8], only_utf8: bool) -> ByteInput<'t> {
+        ByteInput {
+            text: text,
+            only_utf8: only_utf8,
+        }
     }
 }
 
@@ -191,7 +238,7 @@ impl<'t> ops::Deref for ByteInput<'t> {
     type Target = [u8];
 
     fn deref(&self) -> &[u8] {
-        self.0
+        self.text
     }
 }
 
@@ -213,6 +260,58 @@ impl<'t> Input for ByteInput<'t> {
         decode_last_utf8(&self[..at.pos()]).map(|(c, _)| c).into()
     }
 
+    fn is_empty_match(&self, at: InputAt, empty: &InstEmptyLook) -> bool {
+        use prog::EmptyLook::*;
+        match empty.look {
+            StartLine => {
+                let c = self.previous_char(at);
+                c.is_none() || c == '\n'
+            }
+            EndLine => {
+                let c = self.next_char(at);
+                c.is_none() || c == '\n'
+            }
+            StartText => self.previous_char(at).is_none(),
+            EndText => self.next_char(at).is_none(),
+            WordBoundary => {
+                let (c1, c2) = (self.previous_char(at), self.next_char(at));
+                c1.is_word_char() != c2.is_word_char()
+            }
+            NotWordBoundary => {
+                let (c1, c2) = (self.previous_char(at), self.next_char(at));
+                c1.is_word_char() == c2.is_word_char()
+            }
+            WordBoundaryAscii => {
+                let (c1, c2) = (self.previous_char(at), self.next_char(at));
+                if self.only_utf8 {
+                    // If we must match UTF-8, then we can't match word
+                    // boundaries at invalid UTF-8.
+                    if c1.is_none() && !at.is_start() {
+                        return false;
+                    }
+                    if c2.is_none() && !at.is_end() {
+                        return false;
+                    }
+                }
+                c1.is_word_byte() != c2.is_word_byte()
+            }
+            NotWordBoundaryAscii => {
+                let (c1, c2) = (self.previous_char(at), self.next_char(at));
+                if self.only_utf8 {
+                    // If we must match UTF-8, then we can't match word
+                    // boundaries at invalid UTF-8.
+                    if c1.is_none() && !at.is_start() {
+                        return false;
+                    }
+                    if c2.is_none() && !at.is_end() {
+                        return false;
+                    }
+                }
+                c1.is_word_byte() == c2.is_word_byte()
+            }
+        }
+    }
+
     fn prefix_at(
         &self,
         prefixes: &LiteralSearcher,
@@ -222,11 +321,11 @@ impl<'t> Input for ByteInput<'t> {
     }
 
     fn len(&self) -> usize {
-        self.0.len()
+        self.text.len()
     }
 
     fn as_bytes(&self) -> &[u8] {
-        self.0
+        &self.text
     }
 }
 
@@ -276,7 +375,7 @@ impl Char {
     pub fn is_word_byte(self) -> bool {
         match char::from_u32(self.0) {
             None => false,
-            Some(c) if c <= '\u{FF}' => syntax::is_word_byte(c as u8),
+            Some(c) if c <= '\u{7F}' => syntax::is_word_byte(c as u8),
             Some(_) => false,
         }
     }
