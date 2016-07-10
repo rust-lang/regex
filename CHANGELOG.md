@@ -1,3 +1,8 @@
+0.1.72
+======
+* [PR #262](https://github.com/rust-lang-nursery/regex/pull/262):
+  Fixes a number of small bugs caught by fuzz testing (AFL).
+
 0.1.71
 ======
 * [PR #236](https://github.com/rust-lang-nursery/regex/pull/236):
