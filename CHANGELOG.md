@@ -1,3 +1,8 @@
+0.1.73
+======
+* Release `regex-syntax 0.3.4`.
+* Bump `regex-syntax` dependency version for `regex` to `0.3.4`.
+
 0.1.72
 ======
 * [PR #262](https://github.com/rust-lang-nursery/regex/pull/262):
