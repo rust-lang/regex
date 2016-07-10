@@ -589,7 +589,11 @@ impl<'c> ExecNoSync<'c> {
                 lits.find_start(&text[start..])
                     .map(|(s, e)| (start + s, start + e))
             }
-            AnchoredEnd => self.ro.suffixes.find_end(&text),
+            AnchoredEnd => {
+                let lits = &self.ro.suffixes;
+                lits.find_end(&text[start..])
+                    .map(|(s, e)| (start + s, start + e))
+            }
         }
     }
 
@@ -917,7 +921,7 @@ impl<'c> ExecNoSync<'c> {
                 matches,
                 slots,
                 quit_after_match,
-                ByteInput::new(text),
+                ByteInput::new(text, self.ro.nfa.only_utf8),
                 start)
         } else {
             pikevm::Fsm::exec(
@@ -945,7 +949,7 @@ impl<'c> ExecNoSync<'c> {
                 &self.cache,
                 matches,
                 slots,
-                ByteInput::new(text),
+                ByteInput::new(text, self.ro.nfa.only_utf8),
                 start)
         } else {
             backtrack::Bounded::exec(

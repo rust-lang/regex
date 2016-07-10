@@ -239,3 +239,4 @@ split!(split1, r"\s+", "a b\nc\td\n\t e",
        &[t!("a"), t!("b"), t!("c"), t!("d"), t!("e")]);
 split!(split2, r"\b", "a b c",
        &[t!(""), t!("a"), t!(" "), t!("b"), t!(" "), t!("c")]);
+split!(split3, r"a$", "a", &[t!("")]);

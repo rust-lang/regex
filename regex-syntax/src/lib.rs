@@ -1336,6 +1336,9 @@ pub enum ErrorKind {
     /// This never returned if the parser is permitted to allow expressions
     /// that match arbitrary bytes.
     InvalidUtf8,
+    /// A character class was constructed such that it is empty.
+    /// e.g., `[^\d\D]`.
+    EmptyClass,
     /// Hints that destructuring should not be exhaustive.
     ///
     /// This enum may grow additional variants, so this makes sure clients
@@ -1398,6 +1401,7 @@ impl ErrorKind {
             FlagNotAllowed(_) => "flag not allowed",
             UnicodeNotAllowed => "Unicode features not allowed",
             InvalidUtf8 => "matching arbitrary bytes is not allowed",
+            EmptyClass => "empty character class",
             __Nonexhaustive => unreachable!(),
         }
     }
@@ -1507,6 +1511,8 @@ impl fmt::Display for ErrorKind {
                            (u) flag is not set."),
             InvalidUtf8 =>
                 write!(f, "Matching arbitrary bytes is not allowed."),
+            EmptyClass =>
+                write!(f, "Empty character classes are not allowed."),
             __Nonexhaustive => unreachable!(),
         }
     }

@@ -1847,7 +1847,7 @@ mod tests {
             expected == got && state.flags() == StateFlags(flags)
         }
         QuickCheck::new()
-            .gen(StdGen::new(self::rand::thread_rng(), 70_000))
+            .gen(StdGen::new(self::rand::thread_rng(), 10_000))
             .quickcheck(p as fn(Vec<u32>, u8) -> bool);
     }
 
