@@ -1113,7 +1113,15 @@ impl ExecReadOnly {
         // If our set of prefixes is complete, then we can use it to find
         // a match in lieu of a regex engine. This doesn't quite work well in
         // the presence of multiple regexes, so only do it when there's one.
-        if self.res.len() == 1 {
+        //
+        // TODO(burntsushi): Also, don't try to match literals if the regex is
+        // partially anchored. We could technically do it, but we'd need to
+        // create two sets of literals: all of them and then the subset that
+        // aren't anchored. We would then only search for all of them when at
+        // the beginning of the input and use the subset in all other cases.
+        if self.res.len() == 1
+            && !self.nfa.has_anchored_start
+            && !self.nfa.has_anchored_end {
             if self.nfa.prefixes.complete() {
                 return if self.nfa.is_anchored_start {
                     Literal(MatchLiteralType::AnchoredStart)

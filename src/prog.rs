@@ -52,6 +52,12 @@ pub struct Program {
     pub is_anchored_start: bool,
     /// Whether the regex must match at the end of the input.
     pub is_anchored_end: bool,
+    /// Whether the regex has at least one matchable sub-expression that must
+    /// match from the start of the input.
+    pub has_anchored_start: bool,
+    /// Whether the regex has at least one matchable sub-expression that must
+    /// match at the end of the input.
+    pub has_anchored_end: bool,
     /// Whether this program contains a Unicode word boundary instruction.
     pub has_unicode_word_boundary: bool,
     /// A possibly empty machine for very quickly matching prefix literals.
@@ -91,6 +97,8 @@ impl Program {
             is_reverse: false,
             is_anchored_start: false,
             is_anchored_end: false,
+            has_anchored_start: false,
+            has_anchored_end: false,
             has_unicode_word_boundary: false,
             prefixes: LiteralSearcher::empty(),
             dfa_size_limit: 2 * (1<<20),
