@@ -1168,9 +1168,7 @@ impl<'a> Fsm<'a> {
         }
         // If the cache has gotten too big, wipe it.
         if self.approximate_size() > self.prog.dfa_size_limit {
-            println!("clearing cache (size: {:?})", self.approximate_size());
             if !self.clear_cache_and_save(current_state) {
-                println!("giving up");
                 // Ooops. DFA is giving up.
                 return None;
             }
