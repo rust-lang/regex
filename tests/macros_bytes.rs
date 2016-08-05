@@ -1,6 +1,7 @@
 // Macros for use in writing tests generic over &str/&[u8].
 macro_rules! text { ($text:expr) => { $text.as_bytes() } }
 macro_rules! t { ($re:expr) => { text!($re) } }
+macro_rules! match_text { ($text:expr) => { $text.as_bytes() } }
 
 macro_rules! bytes { ($text:expr) => { $text } }
 macro_rules! b { ($text:expr) => { bytes!($text) } }

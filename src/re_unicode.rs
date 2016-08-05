@@ -33,6 +33,46 @@ pub fn quote(text: &str) -> String {
     syntax::quote(text)
 }
 
+/// Match represents a single match of a regex in a haystack.
+///
+/// The lifetime parameter `'t` refers to the lifetime of the matched text.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub struct Match<'t> {
+    text: &'t str,
+    start: usize,
+    end: usize,
+}
+
+impl<'t> Match<'t> {
+    /// Returns the starting byte offset of the match in the haystack.
+    #[inline]
+    pub fn start(&self) -> usize {
+        self.start
+    }
+
+    /// Returns the ending byte offset of the match in the haystack.
+    #[inline]
+    pub fn end(&self) -> usize {
+        self.end
+    }
+
+    /// Returns the matched text.
+    #[inline]
+    pub fn as_str(&self) -> &'t str {
+        self.text
+    }
+
+    /// Creates a new match from the given haystack and byte offsets.
+    #[inline]
+    fn new(haystack: &'t str, start: usize, end: usize) -> Match<'t> {
+        Match {
+            text: &haystack[start..end],
+            start: start,
+            end: end,
+        }
+    }
+}
+
 /// A compiled regular expression for matching Unicode strings.
 ///
 /// It is represented as either a sequence of bytecode instructions (dynamic)
@@ -61,13 +101,14 @@ pub fn quote(text: &str) -> String {
 /// ```rust
 /// # use regex::Regex;
 /// let re = Regex::new("[0-9]{3}-[0-9]{3}-[0-9]{4}").unwrap();
-/// assert_eq!(re.find("phone: 111-222-3333"), Some((7, 19)));
+/// let mat = re.find("phone: 111-222-3333").unwrap();
+/// assert_eq!((mat.start(), mat.end()), (7, 19));
 /// ```
 ///
 /// # Using the `std::str::StrExt` methods with `Regex`
 ///
-/// > **Note**: This section requires that this crate is currently compiled with
-/// >           the `pattern` Cargo feature enabled.
+/// > **Note**: This section requires that this crate is currently compiled
+/// >           with the `pattern` Cargo feature enabled.
 ///
 /// Since `Regex` implements `Pattern`, you can use regexes with methods
 /// defined on `std::str::StrExt`. For example, `is_match`, `find`, `find_iter`
@@ -182,11 +223,12 @@ impl Regex {
     /// # extern crate regex; use regex::Regex;
     /// # fn main() {
     /// let text = "I categorically deny having triskaidekaphobia.";
-    /// let pos = Regex::new(r"\b\w{13}\b").unwrap().find(text);
-    /// assert_eq!(pos, Some((2, 15)));
+    /// let mat = Regex::new(r"\b\w{13}\b").unwrap().find(text).unwrap();
+    /// assert_eq!(mat.start(), 2);
+    /// assert_eq!(mat.end(), 15);
     /// # }
     /// ```
-    pub fn find(&self, text: &str) -> Option<(usize, usize)> {
+    pub fn find<'t>(&self, text: &'t str) -> Option<Match<'t>> {
         self.find_at(text, 0)
     }
 
@@ -203,14 +245,9 @@ impl Regex {
     /// # extern crate regex; use regex::Regex;
     /// # fn main() {
     /// let text = "Retroactively relinquishing remunerations is reprehensible.";
-    /// for pos in Regex::new(r"\b\w{13}\b").unwrap().find_iter(text) {
-    ///     println!("{:?}", pos);
+    /// for mat in Regex::new(r"\b\w{13}\b").unwrap().find_iter(text) {
+    ///     println!("{:?}", mat);
     /// }
-    /// // Output:
-    /// // (0, 13)
-    /// // (14, 27)
-    /// // (28, 41)
-    /// // (45, 58)
     /// # }
     /// ```
     pub fn find_iter<'r, 't>(&'r self, text: &'t str) -> FindIter<'r, 't> {
@@ -247,9 +284,9 @@ impl Regex {
     /// let re = Regex::new(r"'([^']+)'\s+\((\d{4})\)").unwrap();
     /// let text = "Not my favorite movie: 'Citizen Kane' (1941).";
     /// let caps = re.captures(text).unwrap();
-    /// assert_eq!(caps.at(1), Some("Citizen Kane"));
-    /// assert_eq!(caps.at(2), Some("1941"));
-    /// assert_eq!(caps.at(0), Some("'Citizen Kane' (1941)"));
+    /// assert_eq!(caps.get(1).unwrap().as_str(), "Citizen Kane");
+    /// assert_eq!(caps.get(2).unwrap().as_str(), "1941");
+    /// assert_eq!(caps.get(0).unwrap().as_str(), "'Citizen Kane' (1941)");
     /// // You can also access the groups by index using the Index notation.
     /// // Note that this will panic on an invalid index.
     /// assert_eq!(&caps[1], "Citizen Kane");
@@ -270,9 +307,9 @@ impl Regex {
     ///                .unwrap();
     /// let text = "Not my favorite movie: 'Citizen Kane' (1941).";
     /// let caps = re.captures(text).unwrap();
-    /// assert_eq!(caps.name("title"), Some("Citizen Kane"));
-    /// assert_eq!(caps.name("year"), Some("1941"));
-    /// assert_eq!(caps.at(0), Some("'Citizen Kane' (1941)"));
+    /// assert_eq!(&caps["title"], "Citizen Kane");
+    /// assert_eq!(&caps["year"], "1941");
+    /// assert_eq!(caps.get(0).unwrap().as_str(), "'Citizen Kane' (1941)");
     /// // You can also access the groups by name using the Index notation.
     /// // Note that this will panic on an invalid group name.
     /// assert_eq!(&caps["title"], "Citizen Kane");
@@ -315,7 +352,7 @@ impl Regex {
     /// let text = "'Citizen Kane' (1941), 'The Wizard of Oz' (1939), 'M' (1931).";
     /// for caps in re.captures_iter(text) {
     ///     println!("Movie: {:?}, Released: {:?}",
-    ///              caps.name("title"), caps.name("year"));
+    ///              &caps["title"], &caps["year"]);
     /// }
     /// // Output:
     /// // Movie: Citizen Kane, Released: 1941
@@ -441,7 +478,7 @@ impl Regex {
     /// # use regex::Captures; fn main() {
     /// let re = Regex::new(r"([^,\s]+),\s+(\S+)").unwrap();
     /// let result = re.replace("Springsteen, Bruce", |caps: &Captures| {
-    ///     format!("{} {}", caps.at(2).unwrap_or(""), caps.at(1).unwrap_or(""))
+    ///     format!("{} {}", &caps[2], &caps[1])
     /// });
     /// assert_eq!(result, "Bruce Springsteen");
     /// # }
@@ -528,13 +565,13 @@ impl Regex {
             }
             let mut new = String::with_capacity(text.len());
             let mut last_match = 0;
-            for (i, (s, e)) in it {
+            for (i, m) in it {
                 if limit > 0 && i >= limit {
                     break
                 }
-                new.push_str(&text[last_match..s]);
+                new.push_str(&text[last_match..m.start()]);
                 new.push_str(&rep);
-                last_match = e;
+                last_match = m.end();
             }
             new.push_str(&text[last_match..]);
             return Cow::Owned(new);
@@ -553,10 +590,10 @@ impl Regex {
                 break
             }
             // unwrap on 0 is OK because captures only reports matches
-            let (s, e) = cap.pos(0).unwrap();
-            new.push_str(&text[last_match..s]);
+            let m = cap.get(0).unwrap();
+            new.push_str(&text[last_match..m.start()]);
             rep.replace_append(&cap, &mut new);
-            last_match = e;
+            last_match = m.end();
         }
         new.push_str(&text[last_match..]);
         Cow::Owned(new)
@@ -628,12 +665,20 @@ impl Regex {
     /// context into consideration. For example, the `\A` anchor can only
     /// match when `start == 0`.
     #[doc(hidden)]
-    pub fn find_at(&self, text: &str, start: usize) -> Option<(usize, usize)> {
+    pub fn find_at<'t>(
+        &self,
+        text: &'t str,
+        start: usize,
+    ) -> Option<Match<'t>> {
         match self.0 {
             _Regex::Dynamic(ref exec) => {
-                exec.searcher_str().find_at(text, start)
+                exec.searcher_str().find_at(text, start).map(|(s, e)| {
+                    Match::new(text, s, e)
+                })
             }
-            _Regex::Plugin(ref plug) => plug.find_at(text, start),
+            _Regex::Plugin(ref plug) => {
+                plug.find_at(text, start).map(|(s, e)| Match::new(text, s, e))
+            }
         }
     }
 
@@ -644,18 +689,20 @@ impl Regex {
     /// context into consideration. For example, the `\A` anchor can only
     /// match when `start == 0`.
     #[doc(hidden)]
-    pub fn read_captures_at(
+    pub fn read_captures_at<'t>(
         &self,
         locs: &mut Locations,
-        text: &str,
+        text: &'t str,
         start: usize,
-    ) -> Option<(usize, usize)> {
+    ) -> Option<Match<'t>> {
         match self.0 {
             _Regex::Dynamic(ref exec) => {
                 exec.searcher_str().read_captures_at(locs, text, start)
+                    .map(|(s, e)| Match::new(text, s, e))
             }
             _Regex::Plugin(ref plug) => {
                 plug.read_captures_at(locs, text, start)
+                    .map(|(s, e)| Match::new(text, s, e))
             }
         }
     }
@@ -759,9 +806,9 @@ impl<'r, 't> Iterator for SplitsIter<'r, 't> {
                     Some(s)
                 }
             }
-            Some((s, e)) => {
-                let matched = &text[self.last..s];
-                self.last = e;
+            Some(m) => {
+                let matched = &text[self.last..m.start()];
+                self.last = m.end();
                 Some(matched)
             }
         }
@@ -867,29 +914,17 @@ pub struct Captures<'t> {
 }
 
 impl<'t> Captures<'t> {
-    /// Returns the start and end positions of the Nth capture group. Returns
-    /// `None` if `i` is not a valid capture group or if the capture group did
-    /// not match anything. The positions returned are *always* byte indices
-    /// with respect to the original string matched.
-    pub fn pos(&self, i: usize) -> Option<(usize, usize)> {
-        self.locs.pos(i)
+    /// Returns the match associated with the capture group at index `i`. If
+    /// `i` does not correspond to a capture group, or if the capture group
+    /// did not participate in the match, then `None` is returned.
+    pub fn get(&self, i: usize) -> Option<Match<'t>> {
+        self.locs.pos(i).map(|(s, e)| Match::new(self.text, s, e))
     }
 
-    /// Returns the matched string for the capture group `i`.  If `i` isn't
-    /// a valid capture group or didn't match anything, then `None` is
-    /// returned.
-    pub fn at(&self, i: usize) -> Option<&'t str> {
-        match self.pos(i) {
-            None => None,
-            Some((s, e)) => Some(&self.text[s..e])
-        }
-    }
-
-    /// Returns the matched string for the capture group named `name`.  If
-    /// `name` isn't a valid capture group or didn't match anything, then
-    /// `None` is returned.
-    pub fn name(&self, name: &str) -> Option<&'t str> {
-        self.named_groups.pos(name).and_then(|i| self.at(i))
+    /// Returns the match for the capture group named `name`. If `name` isn't a
+    /// valid capture group or didn't match anything, then `None` is returned.
+    pub fn name(&self, name: &str) -> Option<Match<'t>> {
+        self.named_groups.pos(name).and_then(|i| self.get(i))
     }
 
     /// Creates an iterator of all the capture groups in order of appearance
@@ -987,7 +1022,8 @@ impl<'t> Index<usize> for Captures<'t> {
     type Output = str;
 
     fn index(&self, i: usize) -> &str {
-        self.at(i).unwrap_or_else(|| panic!("no group at index '{}'", i))
+        self.get(i).map(|m| m.as_str())
+            .unwrap_or_else(|| panic!("no group at index '{}'", i))
     }
 }
 
@@ -1007,7 +1043,8 @@ impl<'t, 'i> Index<&'i str> for Captures<'t> {
     type Output = str;
 
     fn index<'a>(&'a self, name: &'i str) -> &'a str {
-        self.name(name).unwrap_or_else(|| panic!("no group named '{}'", name))
+        self.name(name).map(|m| m.as_str())
+            .unwrap_or_else(|| panic!("no group named '{}'", name))
     }
 }
 
@@ -1026,7 +1063,7 @@ impl<'c, 't> Iterator for SubCapturesIter<'c, 't> {
     fn next(&mut self) -> Option<Option<&'t str>> {
         if self.idx < self.caps.len() {
             self.idx += 1;
-            Some(self.caps.at(self.idx - 1))
+            Some(self.caps.get(self.idx - 1).map(|m| m.as_str()))
         } else {
             None
         }
@@ -1046,7 +1083,9 @@ impl<'c, 't> Iterator for SubCapturesNamedIter<'c, 't> {
     type Item = (&'c str, Option<&'t str>);
 
     fn next(&mut self) -> Option<(&'c str, Option<&'t str>)> {
-        self.names.next().map(|(name, pos)| (name, self.caps.at(pos)))
+        self.names.next().map(|(name, pos)| {
+            (name, self.caps.get(pos).map(|m| m.as_str()))
+        })
     }
 }
 
@@ -1090,8 +1129,7 @@ impl<'r, 't> Iterator for CapturesIter<'r, 't> {
 
 /// An iterator over all non-overlapping matches for a particular string.
 ///
-/// The iterator yields a tuple of integers corresponding to the start and end
-/// of the match. The indices are byte offsets. The iterator stops when no more
+/// The iterator yields a `Match` value. The iterator stops when no more
 /// matches can be found.
 ///
 /// `'r` is the lifetime of the compiled regular expression and `'t` is the
@@ -1113,12 +1151,17 @@ impl<'r, 't> FindIter<'r, 't> {
 }
 
 impl<'r, 't> Iterator for FindIter<'r, 't> {
-    type Item = (usize, usize);
+    type Item = Match<'t>;
 
-    fn next(&mut self) -> Option<(usize, usize)> {
+    fn next(&mut self) -> Option<Match<'t>> {
+        let text = self.text();
         match self.0 {
-            FindIterInner::Dynamic(ref mut it) => it.next(),
-            FindIterInner::Plugin(ref mut it) => it.next(),
+            FindIterInner::Dynamic(ref mut it) => {
+                it.next().map(|(s, e)| Match::new(text, s, e))
+            }
+            FindIterInner::Plugin(ref mut it) => {
+                it.next().map(|(s, e)| Match::new(text, s, e))
+            }
         }
     }
 }
@@ -1135,7 +1178,7 @@ pub trait Replacer {
     /// have a match at capture group `0`.
     ///
     /// For example, a no-op replacement would be
-    /// `dst.extend(caps.at(0).unwrap())`.
+    /// `dst.extend(caps.get(0).unwrap().as_str())`.
     fn replace_append(&mut self, caps: &Captures, dst: &mut String);
 
     /// Return a fixed unchanging replacement string.

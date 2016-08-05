@@ -34,8 +34,14 @@ pub fn expand_str(
         };
         replacement = &replacement[cap_ref.end..];
         match cap_ref.cap {
-            Ref::Number(i) => dst.push_str(caps.at(i).unwrap_or("")),
-            Ref::Named(name) => dst.push_str(caps.name(name).unwrap_or("")),
+            Ref::Number(i) => {
+                dst.push_str(
+                    caps.get(i).map(|m| m.as_str()).unwrap_or(""));
+            }
+            Ref::Named(name) => {
+                dst.push_str(
+                    caps.name(name).map(|m| m.as_str()).unwrap_or(""));
+            }
         }
     }
     dst.push_str(replacement);
@@ -70,8 +76,14 @@ pub fn expand_bytes(
         };
         replacement = &replacement[cap_ref.end..];
         match cap_ref.cap {
-            Ref::Number(i) => dst.extend(caps.at(i).unwrap_or(b"")),
-            Ref::Named(name) => dst.extend(caps.name(name).unwrap_or(b"")),
+            Ref::Number(i) => {
+                dst.extend(
+                    caps.get(i).map(|m| m.as_bytes()).unwrap_or(b""));
+            }
+            Ref::Named(name) => {
+                dst.extend(
+                    caps.name(name).map(|m| m.as_bytes()).unwrap_or(b""));
+            }
         }
     }
     dst.extend(replacement);

@@ -63,10 +63,10 @@ fn replace_all(text: &str, substs: Vec<(u8, &str)>) -> String {
     let re = regex!(&alternates.join("|"));
     let mut new = String::with_capacity(text.len());
     let mut last_match = 0;
-    for (s, e) in re.find_iter(text) {
-        new.push_str(&text[last_match..s]);
-        new.push_str(replacements[text.as_bytes()[s] as usize]);
-        last_match = e;
+    for m in re.find_iter(text) {
+        new.push_str(&text[last_match..m.start()]);
+        new.push_str(replacements[text.as_bytes()[m.start()] as usize]);
+        last_match = m.end();
     }
     new.push_str(&text[last_match..]);
     new
