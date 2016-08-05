@@ -45,7 +45,8 @@ unsafe impl<'r, 't> Searcher<'t> for RegexSearcher<'r, 't> {
                     SearchStep::Done
                 }
             }
-            Some((s, e)) => {
+            Some(m) => {
+                let (s, e) = (m.start(), m.end());
                 if s == self.last_step_end {
                     self.last_step_end = e;
                     SearchStep::Match(s, e)

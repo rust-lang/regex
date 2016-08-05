@@ -182,10 +182,10 @@ ffi_fn! {
     ) -> bool {
         let re = unsafe { &*re };
         let haystack = unsafe { slice::from_raw_parts(haystack, len) };
-        re.find_at(haystack, start).map(|(s, e)| unsafe {
+        re.find_at(haystack, start).map(|m| unsafe {
             if !match_info.is_null() {
-                (*match_info).start = s;
-                (*match_info).end = e;
+                (*match_info).start = m.start();
+                (*match_info).end = m.end();
             }
         }).is_some()
     }
@@ -339,7 +339,7 @@ ffi_fn! {
         }
         let (s, e) = match re.find_at(text, it.last_end) {
             None => return false,
-            Some((s, e)) => (s, e),
+            Some(m) => (m.start(), m.end()),
         };
         if s == e {
             // This is an empty match. To ensure we make progress, start
@@ -381,7 +381,7 @@ ffi_fn! {
         }
         let (s, e) = match re.read_captures_at(slots, text, it.last_end) {
             None => return false,
-            Some((s, e)) => (s, e),
+            Some(m) => (m.start(), m.end()),
         };
         if s == e {
             // This is an empty match. To ensure we make progress, start

@@ -31,7 +31,10 @@ macro_rules! mat(
                 Some(c) => {
                     assert!(r.is_match(text));
                     assert!(r.shortest_match(text).is_some());
-                    c.iter_pos().collect()
+                    r.capture_names()
+                     .enumerate()
+                     .map(|(i, _)| c.get(i).map(|m| (m.start(), m.end())))
+                     .collect()
                 }
                 None => vec![None],
             };
