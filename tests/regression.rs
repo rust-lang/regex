@@ -62,23 +62,23 @@ matiter!(word_boundary_dfa, r"\b", "a b c",
 matiter!(partial_anchor, r"^a|b", "ba", (0, 1));
 
 // See: https://github.com/rust-lang-nursery/regex/issues/264
-mat!(ascii_boundary_no_capture, u!(r"(?-u)\B"), "\u{28f3e}", Some((0, 0)));
-mat!(ascii_boundary_capture, u!(r"(?-u)(\B)"), "\u{28f3e}", Some((0, 0)));
+mat!(ascii_boundary_no_capture, r"(?-u)\B", "\u{28f3e}", Some((0, 0)));
+mat!(ascii_boundary_capture, r"(?-u)(\B)", "\u{28f3e}", Some((0, 0)));
 
 // See: https://github.com/rust-lang-nursery/regex/issues/280
-ismatch!(partial_anchor_alternate_begin, u!(r"^a|z"), "yyyyya", false);
-ismatch!(partial_anchor_alternate_end, u!(r"a$|z"), "ayyyyy", false);
+ismatch!(partial_anchor_alternate_begin, r"^a|z", "yyyyya", false);
+ismatch!(partial_anchor_alternate_end, r"a$|z", "ayyyyy", false);
 
 // See: https://github.com/rust-lang-nursery/regex/issues/289
-mat!(lits_unambiguous1, u!(r"(ABC|CDA|BC)X"), "CDAX", Some((0, 4)));
+mat!(lits_unambiguous1, r"(ABC|CDA|BC)X", "CDAX", Some((0, 4)));
 
 // See: https://github.com/rust-lang-nursery/regex/issues/291
-mat!(lits_unambiguous2, u!(r"((IMG|CAM|MG|MB2)_|(DSCN|CIMG))(?P<n>[0-9]+)$"),
+mat!(lits_unambiguous2, r"((IMG|CAM|MG|MB2)_|(DSCN|CIMG))(?P<n>[0-9]+)$",
      "CIMG2341", Some((0, 8)), Some((0, 4)), None, Some((0, 4)), Some((4, 8)));
 
 // See: https://github.com/rust-lang-nursery/regex/issues/271
-mat!(end_not_wb, u!(r"$(?-u:\B)"), "\u{5c124}\u{b576c}", Some((8, 8)));
-mat!(endl_or_wb, u!(r"(?m:$)|(?-u:\b)"), "\u{6084e}", Some((4, 4)));
-mat!(zero_or_end, u!(r"(?i-u:\x00)|$"), "\u{e682f}", Some((4, 4)));
-mat!(y_or_endl, u!(r"(?i-u:y)|(?m:$)"), "\u{b4331}", Some((4, 4)));
-mat!(wb_start_x, u!(r"(?u:\b)^(?-u:X)"), "X", Some((0, 1)));
+mat!(end_not_wb, r"$(?-u:\B)", "\u{5c124}\u{b576c}", Some((8, 8)));
+mat!(endl_or_wb, r"(?m:$)|(?-u:\b)", "\u{6084e}", Some((4, 4)));
+mat!(zero_or_end, r"(?i-u:\x00)|$", "\u{e682f}", Some((4, 4)));
+mat!(y_or_endl, r"(?i-u:y)|(?m:$)", "\u{b4331}", Some((4, 4)));
+mat!(wb_start_x, r"(?u:\b)^(?-u:X)", "X", Some((0, 1)));

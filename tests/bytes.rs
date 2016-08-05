@@ -43,20 +43,20 @@ mat!(null_bytes, r"(?-u)(?P<cstr>[^\x00]+)\x00",
 // Test that lookahead operators work properly in the face of invalid UTF-8.
 // See: https://github.com/rust-lang-nursery/regex/issues/277
 matiter!(invalidutf8_anchor1,
-         r"\xcc?^",
+         r"(?-u)\xcc?^",
          R(b"\x8d#;\x1a\xa4s3\x05foobarX\\\x0f0t\xe4\x9b\xa4"),
          (0, 0));
 matiter!(invalidutf8_anchor2,
-         r"^\xf7|4\xff\d\x8a\x8a\x8a\x8a\x8a\x8a\x8a\x8a\x8a\x8a\x8a\x8a\x8a##########[] d\x8a\x8a\x8a\x8a\x8a\x8a\x8a\x8a\x8a\x8a\x8a\x8a\x8a##########[] #####\x80\S7|$",
+         r"(?-u)^\xf7|4\xff\d\x8a\x8a\x8a\x8a\x8a\x8a\x8a\x8a\x8a\x8a\x8a\x8a\x8a##########[] d\x8a\x8a\x8a\x8a\x8a\x8a\x8a\x8a\x8a\x8a\x8a\x8a\x8a##########[] #####\x80\S7|$",
          R(b"\x8d#;\x1a\xa4s3\x05foobarX\\\x0f0t\xe4\x9b\xa4"),
          (22, 22));
 matiter!(invalidutf8_anchor3,
-         r"^|ddp\xff\xffdddddlQd@\x80",
+         r"(?-u)^|ddp\xff\xffdddddlQd@\x80",
          R(b"\x8d#;\x1a\xa4s3\x05foobarX\\\x0f0t\xe4\x9b\xa4"),
          (0, 0));
 
 // See https://github.com/rust-lang-nursery/regex/issues/303
 #[test]
 fn negated_full_byte_range() {
-     assert!(::regex::bytes::Regex::new(r#"[^\x00-\xff]"#).is_err());
+     assert!(::regex::bytes::Regex::new(r#"(?-u)[^\x00-\xff]"#).is_err());
 }
