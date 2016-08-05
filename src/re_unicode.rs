@@ -23,7 +23,7 @@ use exec::{Exec, ExecNoSyncStr};
 use expand::expand_str;
 use re_builder::unicode::RegexBuilder;
 use re_plugin::Plugin;
-use re_trait::{self, RegularExpression, Locations, SubCapturesPosIter};
+use re_trait::{self, RegularExpression, Locations};
 
 /// Escapes all regular expression meta characters in `text`.
 ///
@@ -927,29 +927,6 @@ impl<'t> Captures<'t> {
         self.named_groups.pos(name).and_then(|i| self.get(i))
     }
 
-    /// Creates an iterator of all the capture groups in order of appearance
-    /// in the regular expression.
-    pub fn iter<'c>(&'c self) -> SubCapturesIter<'c, 't> {
-        SubCapturesIter { idx: 0, caps: self, }
-    }
-
-    /// Creates an iterator of all the capture group positions in order of
-    /// appearance in the regular expression. Positions are byte indices
-    /// in terms of the original string matched.
-    pub fn iter_pos(&self) -> SubCapturesPosIter {
-        self.locs.iter()
-    }
-
-    /// Creates an iterator of all named groups as an tuple with the group
-    /// name and the value. The iterator returns these values in arbitrary
-    /// order.
-    pub fn iter_named<'c>(&'c self) -> SubCapturesNamedIter<'c, 't> {
-        SubCapturesNamedIter {
-            caps: self,
-            names: self.named_groups.iter()
-        }
-    }
-
     /// Expands all instances of `$name` in `text` to the corresponding capture
     /// group `name`, and writes them to the `dst` buffer given.
     ///
@@ -995,7 +972,7 @@ impl<'c, 't> fmt::Debug for CapturesDebug<'c, 't> {
         let slot_to_name: HashMap<usize, &str> =
             self.0.named_groups.iter().map(|(a, b)| (b, a)).collect();
         let mut map = f.debug_map();
-        for (slot, m) in self.0.iter_pos().enumerate() {
+        for (slot, m) in self.0.locs.iter().enumerate() {
             let m = m.map(|(s, e)| &self.0.text[s..e]);
             if let Some(ref name) = slot_to_name.get(&slot) {
                 map.entry(&name, &m);
@@ -1045,47 +1022,6 @@ impl<'t, 'i> Index<&'i str> for Captures<'t> {
     fn index<'a>(&'a self, name: &'i str) -> &'a str {
         self.name(name).map(|m| m.as_str())
             .unwrap_or_else(|| panic!("no group named '{}'", name))
-    }
-}
-
-/// An iterator over capture groups for a particular match of a regular
-/// expression.
-///
-/// `'c` is the lifetime of the captures.
-pub struct SubCapturesIter<'c, 't: 'c> {
-    idx: usize,
-    caps: &'c Captures<'t>,
-}
-
-impl<'c, 't> Iterator for SubCapturesIter<'c, 't> {
-    type Item = Option<&'t str>;
-
-    fn next(&mut self) -> Option<Option<&'t str>> {
-        if self.idx < self.caps.len() {
-            self.idx += 1;
-            Some(self.caps.get(self.idx - 1).map(|m| m.as_str()))
-        } else {
-            None
-        }
-    }
-}
-
-/// An Iterator over named capture groups as a tuple with the group
-/// name and the value.
-///
-/// `'c` is the lifetime of the captures.
-pub struct SubCapturesNamedIter<'c, 't: 'c> {
-    caps: &'c Captures<'t>,
-    names: NamedGroupsIter<'c>,
-}
-
-impl<'c, 't> Iterator for SubCapturesNamedIter<'c, 't> {
-    type Item = (&'c str, Option<&'t str>);
-
-    fn next(&mut self) -> Option<(&'c str, Option<&'t str>)> {
-        self.names.next().map(|(name, pos)| {
-            (name, self.caps.get(pos).map(|m| m.as_str()))
-        })
     }
 }
 
