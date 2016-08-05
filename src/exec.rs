@@ -840,11 +840,7 @@ impl<'c> ExecNoSync<'c> {
     ) -> Option<(usize, usize)> {
         // We can't use match_end directly, because we may need to examine
         // one "character" after the end of a match for lookahead operators.
-        let e = if self.ro.nfa.uses_bytes() {
-            cmp::min(match_end + 1, text.len())
-        } else {
-            cmp::min(next_utf8(text, match_end), text.len())
-        };
+        let e = cmp::min(next_utf8(text, match_end), text.len());
         self.captures_nfa(slots, &text[..e], match_start)
     }
 

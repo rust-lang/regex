@@ -60,3 +60,7 @@ matiter!(word_boundary_dfa, r"\b", "a b c",
 
 // See: https://github.com/rust-lang-nursery/regex/issues/268
 matiter!(partial_anchor, u!(r"^a|b"), "ba", (0, 1));
+
+// See: https://github.com/rust-lang-nursery/regex/issues/264
+mat!(ascii_boundary_no_capture, u!(r"(?-u)\B"), "\u{28f3e}", Some((0, 0)));
+mat!(ascii_boundary_capture, u!(r"(?-u)(\B)"), "\u{28f3e}", Some((0, 0)));
