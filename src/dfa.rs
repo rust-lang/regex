@@ -152,6 +152,9 @@ struct CacheInner {
     /// The total number of times this cache has been flushed by the DFA
     /// because of space constraints.
     flush_count: u64,
+    /// The total heap size of the DFA's cache. We use this to determine when
+    /// we should flush the cache.
+    size: usize,
 }
 
 /// The transition table.
@@ -420,18 +423,32 @@ impl Cache {
     pub fn new(prog: &Program) -> Self {
         // We add 1 to account for the special EOF byte.
         let num_byte_classes = (prog.byte_classes[255] as usize + 1) + 1;
-        Cache {
+        let starts = vec![STATE_UNKNOWN; 256];
+        let mut cache = Cache {
             inner: CacheInner {
                 compiled: HashMap::new(),
                 trans: Transitions::new(num_byte_classes),
                 states: vec![],
-                start_states: vec![STATE_UNKNOWN; 256],
+                start_states: starts,
                 stack: vec![],
                 flush_count: 0,
+                size: 0,
             },
             qcur: SparseSet::new(prog.insts.len()),
             qnext: SparseSet::new(prog.insts.len()),
-        }
+        };
+        cache.inner.reset_size();
+        cache
+    }
+}
+
+impl CacheInner {
+    /// Resets the cache size to account for fixed costs, such as the program
+    /// and stack sizes.
+    fn reset_size(&mut self) {
+        self.size =
+            (self.start_states.len() * mem::size_of::<StatePtr>())
+            + (self.stack.len() * mem::size_of::<InstPtr>());
     }
 }
 
@@ -1151,7 +1168,9 @@ impl<'a> Fsm<'a> {
         }
         // If the cache has gotten too big, wipe it.
         if self.approximate_size() > self.prog.dfa_size_limit {
+            println!("clearing cache (size: {:?})", self.approximate_size());
             if !self.clear_cache_and_save(current_state) {
+                println!("giving up");
                 // Ooops. DFA is giving up.
                 return None;
             }
@@ -1280,6 +1299,7 @@ impl<'a> Fsm<'a> {
         } else {
             None
         };
+        self.cache.reset_size();
         self.cache.trans.clear();
         self.cache.states.clear();
         self.cache.compiled.clear();
@@ -1454,6 +1474,11 @@ impl<'a> Fsm<'a> {
         }
         // Finally, put our actual state on to our heap of states and index it
         // so we can find it later.
+        self.cache.size +=
+            self.cache.trans.state_heap_size()
+            + (2 * state.data.len())
+            + (2 * mem::size_of::<State>())
+            + mem::size_of::<StatePtr>();
         self.cache.states.push(state.clone());
         self.cache.compiled.insert(state, si);
         // Transition table and set of states and map should all be in sync.
@@ -1536,51 +1561,8 @@ impl<'a> Fsm<'a> {
     /// be wiped. Namely, it is possible that for certain regexes on certain
     /// inputs, a new state could be created for every byte of input. (This is
     /// bad for memory use, so we bound it with a cache.)
-    ///
-    /// The approximation is guaranteed to be done in constant time (and
-    /// indeed, this requirement is why it's approximate).
     fn approximate_size(&self) -> usize {
-        use std::mem::size_of as size;
-        // Estimate that there are about 16 instructions per state consuming
-        // 20 = 4 + (15 * 1) bytes of space (1 byte because of delta encoding).
-        const STATE_HEAP: usize = 20 + 1; // one extra byte for flags
-        let compiled =
-            (self.cache.compiled.len() * (size::<State>() + STATE_HEAP))
-            + (self.cache.compiled.len() * size::<StatePtr>());
-        let states =
-            self.cache.states.len()
-            * (size::<State>()
-               + STATE_HEAP
-               + (self.num_byte_classes() * size::<StatePtr>()));
-        let start_states = self.cache.start_states.len() * size::<StatePtr>();
-        self.prog.approximate_size() + compiled + states + start_states
-    }
-
-    /// Returns the actual heap space of the DFA. This visits every state in
-    /// the DFA.
-    #[allow(dead_code)] // useful for debugging
-    fn actual_size(&self) -> usize {
-        let mut compiled = 0;
-        for k in self.cache.compiled.keys() {
-            compiled += mem::size_of::<State>();
-            compiled += mem::size_of::<StatePtr>();
-            compiled += k.data.len() * mem::size_of::<u8>();
-        }
-        let mut states = 0;
-        for s in &self.cache.states {
-            states += mem::size_of::<State>();
-            states += s.data.len() * mem::size_of::<u8>();
-        }
-        compiled
-        + states
-        + (self.cache.trans.num_states() *
-           mem::size_of::<StatePtr>() *
-           self.num_byte_classes())
-        + (self.cache.start_states.len() * mem::size_of::<StatePtr>())
-        + (self.cache.stack.len() * mem::size_of::<InstPtr>())
-        + mem::size_of::<Fsm>()
-        + mem::size_of::<CacheInner>()
-        + self.prog.approximate_size() // OK, not actual, but close enough
+        self.cache.size + self.prog.approximate_size()
     }
 }
 
@@ -1626,6 +1608,11 @@ impl Transitions {
     /// Returns the transition corresponding to (si, cls).
     fn next(&self, si: StatePtr, cls: usize) -> StatePtr {
         self.table[si as usize + cls]
+    }
+
+    /// The heap size, in bytes, of a single state in the transition table.
+    fn state_heap_size(&self) -> usize {
+        self.num_byte_classes * mem::size_of::<StatePtr>()
     }
 
     /// Like `next`, but uses unchecked access and is therefore unsafe.
