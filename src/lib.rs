@@ -107,9 +107,7 @@
 //! let re = Regex::new(r"(\d{4})-(\d{2})-(\d{2})").unwrap();
 //! let text = "2012-03-14, 2013-01-01 and 2014-07-05";
 //! for cap in re.captures_iter(text) {
-//!     println!("Month: {} Day: {} Year: {}",
-//!              cap.at(2).unwrap_or(""), cap.at(3).unwrap_or(""),
-//!              cap.at(1).unwrap_or(""));
+//!     println!("Month: {} Day: {} Year: {}", &cap[2], &cap[3], &cap[1]);
 //! }
 //! // Output:
 //! // Month: 03 Day: 14 Year: 2012
@@ -225,7 +223,8 @@
 //! # extern crate regex; use regex::Regex;
 //! # fn main() {
 //! let re = Regex::new(r"(?i)Δ+").unwrap();
-//! assert_eq!(re.find("ΔδΔ"), Some((0, 6)));
+//! let mat = re.find("ΔδΔ").unwrap();
+//! assert_eq!((mat.start(), mat.end()), (0, 6));
 //! # }
 //! ```
 //!
@@ -237,7 +236,8 @@
 //! # extern crate regex; use regex::Regex;
 //! # fn main() {
 //! let re = Regex::new(r"[\pN\p{Greek}\p{Cherokee}]+").unwrap();
-//! assert_eq!(re.find("abcΔᎠβⅠᏴγδⅡxyz"), Some((3, 23)));
+//! let mat = re.find("abcΔᎠβⅠᏴγδⅡxyz").unwrap();
+//! assert_eq!((mat.start(), mat.end()), (3, 23));
 //! # }
 //! ```
 //!
@@ -348,7 +348,7 @@
 //! # fn main() {
 //! let re = Regex::new(r"(?i)a+(?-i)b+").unwrap();
 //! let cap = re.captures("AaAaAbbBBBb").unwrap();
-//! assert_eq!(cap.at(0), Some("AaAaAbb"));
+//! assert_eq!(&cap[0], "AaAaAbb");
 //! # }
 //! ```
 //!
@@ -363,7 +363,7 @@
 //! # fn main() {
 //! let re = Regex::new(r"(?-u:\b).+(?-u:\b)").unwrap();
 //! let cap = re.captures("$$abc$$").unwrap();
-//! assert_eq!(cap.at(0), Some("abc"));
+//! assert_eq!(&cap[0], "abc");
 //! # }
 //! ```
 //!
@@ -462,7 +462,7 @@ pub use re_builder::unicode::*;
 pub use re_set::unicode::*;
 pub use re_trait::{Locations, SubCapturesPosIter};
 pub use re_unicode::{
-    Regex, Captures, SubCapturesIter, SubCapturesNamedIter,
+    Regex, Match, Captures, SubCapturesIter, SubCapturesNamedIter,
     CaptureNamesIter, CapturesIter, FindIter,
     Replacer, NoExpand, SplitsIter, SplitsNIter,
     quote,
@@ -492,7 +492,7 @@ let text = b"foo\x00bar\x00baz\x00";
 // The unwrap is OK here since a match requires the `cstr` capture to match.
 let cstrs: Vec<&[u8]> =
     re.captures_iter(text)
-      .map(|c| c.name("cstr").unwrap())
+      .map(|c| c.name("cstr").unwrap().as_bytes())
       .collect();
 assert_eq!(vec![&b"foo"[..], &b"bar"[..], &b"baz"[..]], cstrs);
 ```
@@ -514,10 +514,11 @@ let caps = re.captures(text).unwrap();
 // Notice that despite the `.*` at the end, it will only match valid UTF-8
 // because Unicode mode was enabled with the `u` flag. Without the `u` flag,
 // the `.*` would match the rest of the bytes.
-assert_eq!((7, 10), caps.pos(1).unwrap());
+let mat = caps.get(1).unwrap();
+assert_eq!((7, 10), (mat.start(), mat.end()));
 
 // If there was a match, Unicode mode guarantees that `title` is valid UTF-8.
-let title = str::from_utf8(caps.at(1).unwrap()).unwrap();
+let title = str::from_utf8(&caps[1]).unwrap();
 assert_eq!("☃", title);
 ```
 

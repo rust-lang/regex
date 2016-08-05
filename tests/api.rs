@@ -60,7 +60,8 @@ fn empty_match_find_iter() {
 fn empty_match_captures_iter() {
     let re = regex!(r".*?");
     let ms: Vec<_> = re.captures_iter(text!("abc"))
-                       .map(|c| c.pos(0).unwrap())
+                       .map(|c| c.get(0).unwrap())
+                       .map(|m| (m.start(), m.end()))
                        .collect();
     assert_eq!(ms, vec![(0, 0), (1, 1), (2, 2), (3, 3)]);
 }
@@ -127,16 +128,16 @@ fn capture_misc() {
 
     assert_eq!(5, cap.len());
 
-    assert_eq!(Some((0, 3)), cap.pos(0));
-    assert_eq!(None, cap.pos(2));
-    assert_eq!(Some((2, 3)), cap.pos(4));
+    assert_eq!((0, 3), { let m = cap.get(0).unwrap(); (m.start(), m.end()) });
+    assert_eq!(None, cap.get(2));
+    assert_eq!((2, 3), { let m = cap.get(4).unwrap(); (m.start(), m.end()) });
 
-    assert_eq!(Some(t!("abc")), cap.at(0));
-    assert_eq!(None, cap.at(2));
-    assert_eq!(Some(t!("c")), cap.at(4));
+    assert_eq!(t!("abc"), match_text!(cap.get(0).unwrap()));
+    assert_eq!(None, cap.get(2));
+    assert_eq!(t!("c"), match_text!(cap.get(4).unwrap()));
 
     assert_eq!(None, cap.name("a"));
-    assert_eq!(Some(t!("c")), cap.name("b"));
+    assert_eq!(t!("c"), match_text!(cap.name("b").unwrap()));
 }
 
 #[test]

@@ -15,7 +15,8 @@ fn empty_match_unicode_captures_iter() {
     // Same as empty_match_unicode_find_iter, but tests capture iteration.
     let re = regex!(r".*?");
     let ms: Vec<_> = re.captures_iter(text!("Ⅰ1Ⅱ2"))
-                       .map(|c| c.pos(0).unwrap())
+                       .map(|c| c.get(0).unwrap())
+                       .map(|m| (m.start(), m.end()))
                        .collect();
     assert_eq!(vec![(0, 0), (3, 3), (4, 4), (7, 7), (8, 8)], ms);
 }
