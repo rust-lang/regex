@@ -7,8 +7,8 @@ rust:
 sudo: false
 script:
   - cargo build --verbose
-  - cargo build --verbose --manifest-path=regex-debug/Cargo.toml
   - if [ "$TRAVIS_RUST_VERSION" = "nightly" ]; then
+      cargo build --verbose --manifest-path=regex-debug/Cargo.toml;
       RUSTFLAGS="-C target-feature=+ssse3" cargo test --verbose --features 'simd-accel pattern';
     else
       travis_wait cargo test --verbose;
