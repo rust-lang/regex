@@ -326,11 +326,10 @@ References
 // TODO: Make the inner loop do aligned loads.
 
 use std::cmp;
-use std::mem::transmute;
 use std::ptr;
 
 use simd::u8x16;
-use simd::x86::sse2::{Sse2Bool8ix16, u64x2};
+use simd::x86::sse2::Sse2Bool8ix16;
 use simd::x86::ssse3::Ssse3U8x16;
 
 use syntax;
