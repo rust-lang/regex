@@ -151,8 +151,8 @@ pub trait RegularExpression: Sized {
     fn find_iter<'t>(
         self,
         text: &'t Self::Text,
-    ) -> FindIter<'t, Self> {
-        FindIter {
+    ) -> Matches<'t, Self> {
+        Matches {
             re: self,
             text: text,
             last_end: 0,
@@ -165,20 +165,20 @@ pub trait RegularExpression: Sized {
     fn captures_iter<'t>(
         self,
         text: &'t Self::Text,
-    ) -> CapturesIter<'t, Self> {
-        CapturesIter(self.find_iter(text))
+    ) -> CaptureMatches<'t, Self> {
+        CaptureMatches(self.find_iter(text))
     }
 }
 
 /// An iterator over all non-overlapping successive leftmost-first matches.
-pub struct FindIter<'t, R> where R: RegularExpression, R::Text: 't {
+pub struct Matches<'t, R> where R: RegularExpression, R::Text: 't {
     re: R,
     text: &'t R::Text,
     last_end: usize,
     last_match: Option<usize>,
 }
 
-impl<'t, R> FindIter<'t, R> where R: RegularExpression, R::Text: 't {
+impl<'t, R> Matches<'t, R> where R: RegularExpression, R::Text: 't {
     /// Return the text being searched.
     pub fn text(&self) -> &'t R::Text {
         self.text
@@ -190,7 +190,7 @@ impl<'t, R> FindIter<'t, R> where R: RegularExpression, R::Text: 't {
     }
 }
 
-impl<'t, R> Iterator for FindIter<'t, R>
+impl<'t, R> Iterator for Matches<'t, R>
         where R: RegularExpression, R::Text: 't + AsRef<[u8]> {
     type Item = (usize, usize);
 
@@ -222,10 +222,10 @@ impl<'t, R> Iterator for FindIter<'t, R>
 
 /// An iterator over all non-overlapping successive leftmost-first matches with
 /// captures.
-pub struct CapturesIter<'t, R>(FindIter<'t, R>)
+pub struct CaptureMatches<'t, R>(Matches<'t, R>)
     where R: RegularExpression, R::Text: 't;
 
-impl<'t, R> CapturesIter<'t, R> where R: RegularExpression, R::Text: 't {
+impl<'t, R> CaptureMatches<'t, R> where R: RegularExpression, R::Text: 't {
     /// Return the text being searched.
     pub fn text(&self) -> &'t R::Text {
         self.0.text()
@@ -237,7 +237,7 @@ impl<'t, R> CapturesIter<'t, R> where R: RegularExpression, R::Text: 't {
     }
 }
 
-impl<'t, R> Iterator for CapturesIter<'t, R>
+impl<'t, R> Iterator for CaptureMatches<'t, R>
         where R: RegularExpression, R::Text: 't + AsRef<[u8]> {
     type Item = Locations;
 
