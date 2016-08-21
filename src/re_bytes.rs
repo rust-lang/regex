@@ -117,7 +117,7 @@ impl Regex {
     ///
     /// If an invalid expression is given, then an error is returned.
     pub fn new(re: &str) -> Result<Regex, Error> {
-        RegexBuilder::new(re).compile()
+        RegexBuilder::new(re).build()
     }
 
     /// Returns true if and only if the regex matches the string given.

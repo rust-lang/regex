@@ -70,21 +70,21 @@ impl RegexBuilder {
     /// Note that calling `as_str` on the resulting `Regex` will produce the
     /// pattern given to `new` verbatim. Notably, it will not incorporate any
     /// of the flags set on this builder.
-    pub fn compile(self) -> Result<Regex, Error> {
-        ExecBuilder::new_options(self.0)
+    pub fn build(&self) -> Result<Regex, Error> {
+        ExecBuilder::new_options(self.0.clone())
             .only_utf8($only_utf8)
             .build()
             .map(Regex::from)
     }
 
     /// Set the value for the case insensitive (`i`) flag.
-    pub fn case_insensitive(mut self, yes: bool) -> RegexBuilder {
+    pub fn case_insensitive(&mut self, yes: bool) -> &mut RegexBuilder {
         self.0.case_insensitive = yes;
         self
     }
 
     /// Set the value for the multi-line matching (`m`) flag.
-    pub fn multi_line(mut self, yes: bool) -> RegexBuilder {
+    pub fn multi_line(&mut self, yes: bool) -> &mut RegexBuilder {
         self.0.multi_line = yes;
         self
     }
@@ -96,19 +96,19 @@ impl RegexBuilder {
     /// N.B. "matches anything" means "any byte" for `regex::bytes::Regex`
     /// expressions and means "any Unicode codepoint" for `regex::Regex`
     /// expressions.
-    pub fn dot_matches_new_line(mut self, yes: bool) -> RegexBuilder {
+    pub fn dot_matches_new_line(&mut self, yes: bool) -> &mut RegexBuilder {
         self.0.dot_matches_new_line = yes;
         self
     }
 
     /// Set the value for the greedy swap (`U`) flag.
-    pub fn swap_greed(mut self, yes: bool) -> RegexBuilder {
+    pub fn swap_greed(&mut self, yes: bool) -> &mut RegexBuilder {
         self.0.swap_greed = yes;
         self
     }
 
     /// Set the value for the ignore whitespace (`x`) flag.
-    pub fn ignore_whitespace(mut self, yes: bool) -> RegexBuilder {
+    pub fn ignore_whitespace(&mut self, yes: bool) -> &mut RegexBuilder {
         self.0.ignore_whitespace = yes;
         self
     }
@@ -116,7 +116,7 @@ impl RegexBuilder {
     /// Set the value for the Unicode (`u`) flag.
     ///
     /// For byte based regular expressions, this is disabled by default.
-    pub fn unicode(mut self, yes: bool) -> RegexBuilder {
+    pub fn unicode(&mut self, yes: bool) -> &mut RegexBuilder {
         self.0.unicode = yes;
         self
     }
@@ -126,7 +126,7 @@ impl RegexBuilder {
     /// This roughly corresponds to the number of bytes occupied by a single
     /// compiled program. If the program exceeds this number, then a
     /// compilation error is returned.
-    pub fn size_limit(mut self, limit: usize) -> RegexBuilder {
+    pub fn size_limit(&mut self, limit: usize) -> &mut RegexBuilder {
         self.0.size_limit = limit;
         self
     }
@@ -140,7 +140,7 @@ impl RegexBuilder {
     /// limit. In particular, if a regex is used from multiple threads
     /// simulanteously, then each thread may use up to the number of bytes
     /// specified here.
-    pub fn dfa_size_limit(mut self, limit: usize) -> RegexBuilder {
+    pub fn dfa_size_limit(&mut self, limit: usize) -> &mut RegexBuilder {
         self.0.dfa_size_limit = limit;
         self
     }

@@ -71,7 +71,7 @@ macro_rules! regex {
         // Always enable the Unicode flag for byte based regexes.
         // Really, this should have been enabled by default. *sigh*
         use regex::bytes::RegexBuilder;
-        RegexBuilder::new(&$re.to_owned()).unicode(true).compile().unwrap()
+        RegexBuilder::new(&$re.to_owned()).unicode(true).build().unwrap()
     }}
 }
 
