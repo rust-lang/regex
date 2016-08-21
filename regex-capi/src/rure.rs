@@ -118,16 +118,16 @@ ffi_fn! {
         let mut builder = bytes::RegexBuilder::new(pat);
         if !options.is_null() {
             let options = unsafe { &*options };
-            builder = builder.size_limit(options.size_limit);
-            builder = builder.dfa_size_limit(options.dfa_size_limit);
+            builder.size_limit(options.size_limit);
+            builder.dfa_size_limit(options.dfa_size_limit);
         }
-        builder = builder.case_insensitive(flags & RURE_FLAG_CASEI > 0);
-        builder = builder.multi_line(flags & RURE_FLAG_MULTI > 0);
-        builder = builder.dot_matches_new_line(flags & RURE_FLAG_DOTNL > 0);
-        builder = builder.swap_greed(flags & RURE_FLAG_SWAP_GREED > 0);
-        builder = builder.ignore_whitespace(flags & RURE_FLAG_SPACE > 0);
-        builder = builder.unicode(flags & RURE_FLAG_UNICODE > 0);
-        match builder.compile() {
+        builder.case_insensitive(flags & RURE_FLAG_CASEI > 0);
+        builder.multi_line(flags & RURE_FLAG_MULTI > 0);
+        builder.dot_matches_new_line(flags & RURE_FLAG_DOTNL > 0);
+        builder.swap_greed(flags & RURE_FLAG_SWAP_GREED > 0);
+        builder.ignore_whitespace(flags & RURE_FLAG_SPACE > 0);
+        builder.unicode(flags & RURE_FLAG_UNICODE > 0);
+        match builder.build() {
             Ok(re) => {
                 let mut capture_names = HashMap::new();
                 for (i, name) in re.capture_names().enumerate() {
