@@ -184,8 +184,8 @@ impl Regex {
     /// }
     /// # }
     /// ```
-    pub fn find_iter<'r, 't>(&'r self, text: &'t [u8]) -> FindIter<'r, 't> {
-        FindIter(self.0.searcher().find_iter(text))
+    pub fn find_iter<'r, 't>(&'r self, text: &'t [u8]) -> Matches<'r, 't> {
+        Matches(self.0.searcher().find_iter(text))
     }
 
     /// Returns the capture groups corresponding to the leftmost-first
@@ -289,8 +289,8 @@ impl Regex {
     pub fn captures_iter<'r, 't>(
         &'r self,
         text: &'t [u8],
-    ) -> CapturesIter<'r, 't> {
-        CapturesIter(self.0.searcher().captures_iter(text))
+    ) -> CaptureMatches<'r, 't> {
+        CaptureMatches(self.0.searcher().captures_iter(text))
     }
 
     /// Returns an iterator of substrings of `text` delimited by a match of the
@@ -313,8 +313,8 @@ impl Regex {
     /// ]);
     /// # }
     /// ```
-    pub fn split<'r, 't>(&'r self, text: &'t [u8]) -> SplitsIter<'r, 't> {
-        SplitsIter {
+    pub fn split<'r, 't>(&'r self, text: &'t [u8]) -> Split<'r, 't> {
+        Split {
             finder: self.find_iter(text),
             last: 0,
         }
@@ -344,8 +344,8 @@ impl Regex {
         &'r self,
         text: &'t [u8],
         limit: usize,
-    ) -> SplitsNIter<'r, 't> {
-        SplitsNIter {
+    ) -> SplitN<'r, 't> {
+        SplitN {
             splits: self.split(text),
             n: limit,
         }
@@ -644,9 +644,9 @@ impl Regex {
 ///
 /// `'r` is the lifetime of the compiled regular expression and `'t` is the
 /// lifetime of the matched byte string.
-pub struct FindIter<'r, 't>(re_trait::FindIter<'t, ExecNoSync<'r>>);
+pub struct Matches<'r, 't>(re_trait::Matches<'t, ExecNoSync<'r>>);
 
-impl<'r, 't> Iterator for FindIter<'r, 't> {
+impl<'r, 't> Iterator for Matches<'r, 't> {
     type Item = Match<'t>;
 
     fn next(&mut self) -> Option<Match<'t>> {
@@ -662,9 +662,9 @@ impl<'r, 't> Iterator for FindIter<'r, 't> {
 ///
 /// `'r` is the lifetime of the compiled regular expression and `'t` is the
 /// lifetime of the matched byte string.
-pub struct CapturesIter<'r, 't>(re_trait::CapturesIter<'t, ExecNoSync<'r>>);
+pub struct CaptureMatches<'r, 't>(re_trait::CaptureMatches<'t, ExecNoSync<'r>>);
 
-impl<'r, 't> Iterator for CapturesIter<'r, 't> {
+impl<'r, 't> Iterator for CaptureMatches<'r, 't> {
     type Item = Captures<'t>;
 
     fn next(&mut self) -> Option<Captures<'t>> {
@@ -680,12 +680,12 @@ impl<'r, 't> Iterator for CapturesIter<'r, 't> {
 ///
 /// `'r` is the lifetime of the compiled regular expression and `'t` is the
 /// lifetime of the byte string being split.
-pub struct SplitsIter<'r, 't> {
-    finder: FindIter<'r, 't>,
+pub struct Split<'r, 't> {
+    finder: Matches<'r, 't>,
     last: usize,
 }
 
-impl<'r, 't> Iterator for SplitsIter<'r, 't> {
+impl<'r, 't> Iterator for Split<'r, 't> {
     type Item = &'t [u8];
 
     fn next(&mut self) -> Option<&'t [u8]> {
@@ -715,12 +715,12 @@ impl<'r, 't> Iterator for SplitsIter<'r, 't> {
 ///
 /// `'r` is the lifetime of the compiled regular expression and `'t` is the
 /// lifetime of the byte string being split.
-pub struct SplitsNIter<'r, 't> {
-    splits: SplitsIter<'r, 't>,
+pub struct SplitN<'r, 't> {
+    splits: Split<'r, 't>,
     n: usize,
 }
 
-impl<'r, 't> Iterator for SplitsNIter<'r, 't> {
+impl<'r, 't> Iterator for SplitN<'r, 't> {
     type Item = &'t [u8];
 
     fn next(&mut self) -> Option<&'t [u8]> {

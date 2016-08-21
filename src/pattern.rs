@@ -1,10 +1,10 @@
 use std::str::pattern::{Pattern, Searcher, SearchStep};
 
-use re_unicode::{Regex, FindIter};
+use re_unicode::{Regex, Matches};
 
 pub struct RegexSearcher<'r, 't> {
     haystack: &'t str,
-    it: FindIter<'r, 't>,
+    it: Matches<'r, 't>,
     last_step_end: usize,
     next_match: Option<(usize, usize)>,
 }

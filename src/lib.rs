@@ -463,8 +463,8 @@ pub use re_set::unicode::*;
 pub use re_trait::Locations;
 pub use re_unicode::{
     Regex, Match, Captures,
-    CaptureNamesIter, CapturesIter, FindIter,
-    Replacer, NoExpand, SplitsIter, SplitsNIter,
+    CaptureNames, Matches, CaptureMatches,
+    Replacer, NoExpand, Split, SplitN,
     quote,
 };
 

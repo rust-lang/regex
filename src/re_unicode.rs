@@ -250,15 +250,15 @@ impl Regex {
     /// }
     /// # }
     /// ```
-    pub fn find_iter<'r, 't>(&'r self, text: &'t str) -> FindIter<'r, 't> {
+    pub fn find_iter<'r, 't>(&'r self, text: &'t str) -> Matches<'r, 't> {
         match self.0 {
             _Regex::Dynamic(ref exec) => {
                 let it = exec.searcher_str().find_iter(text);
-                FindIter(FindIterInner::Dynamic(it))
+                Matches(MatchesInner::Dynamic(it))
             }
             _Regex::Plugin(ref plug) => {
                 let it = plug.find_iter(text);
-                FindIter(FindIterInner::Plugin(it))
+                Matches(MatchesInner::Plugin(it))
             }
         }
     }
@@ -363,15 +363,15 @@ impl Regex {
     pub fn captures_iter<'r, 't>(
         &'r self,
         text: &'t str,
-    ) -> CapturesIter<'r, 't> {
+    ) -> CaptureMatches<'r, 't> {
         match self.0 {
             _Regex::Dynamic(ref exec) => {
                 let it = exec.searcher_str().captures_iter(text);
-                CapturesIter(CapturesIterInner::Dynamic(it))
+                CaptureMatches(CaptureMatchesInner::Dynamic(it))
             }
             _Regex::Plugin(ref plug) => {
                 let it = plug.captures_iter(text);
-                CapturesIter(CapturesIterInner::Plugin(it))
+                CaptureMatches(CaptureMatchesInner::Plugin(it))
             }
         }
     }
@@ -394,8 +394,8 @@ impl Regex {
     /// assert_eq!(fields, vec!["a", "b", "c", "d", "e"]);
     /// # }
     /// ```
-    pub fn split<'r, 't>(&'r self, text: &'t str) -> SplitsIter<'r, 't> {
-        SplitsIter {
+    pub fn split<'r, 't>(&'r self, text: &'t str) -> Split<'r, 't> {
+        Split {
             finder: self.find_iter(text),
             last: 0,
         }
@@ -422,8 +422,8 @@ impl Regex {
     /// # }
     /// ```
     pub fn splitn<'r, 't>(&'r self, text: &'t str, limit: usize)
-                         -> SplitsNIter<'r, 't> {
-        SplitsNIter {
+                         -> SplitN<'r, 't> {
+        SplitN {
             splits: self.split(text),
             n: limit,
         }
@@ -719,11 +719,11 @@ impl Regex {
     }
 
     /// Returns an iterator over the capture names.
-    pub fn capture_names(&self) -> CaptureNamesIter {
-        CaptureNamesIter(match self.0 {
-            _Regex::Plugin(ref n) => _CaptureNamesIter::Plugin(n.names.iter()),
+    pub fn capture_names(&self) -> CaptureNames {
+        CaptureNames(match self.0 {
+            _Regex::Plugin(ref n) => _CaptureNames::Plugin(n.names.iter()),
             _Regex::Dynamic(ref d) => {
-                _CaptureNamesIter::Dynamic(d.capture_names().iter())
+                _CaptureNames::Dynamic(d.capture_names().iter())
             }
         })
     }
@@ -755,20 +755,20 @@ impl Regex {
 /// whole matched region) is always unnamed.
 ///
 /// `'r` is the lifetime of the compiled regular expression.
-pub struct CaptureNamesIter<'r>(_CaptureNamesIter<'r>);
+pub struct CaptureNames<'r>(_CaptureNames<'r>);
 
-enum _CaptureNamesIter<'r> {
+enum _CaptureNames<'r> {
     Plugin(::std::slice::Iter<'r, Option<&'static str>>),
     Dynamic(::std::slice::Iter<'r, Option<String>>)
 }
 
-impl<'r> Iterator for CaptureNamesIter<'r> {
+impl<'r> Iterator for CaptureNames<'r> {
     type Item = Option<&'r str>;
 
     fn next(&mut self) -> Option<Option<&'r str>> {
         match self.0 {
-            _CaptureNamesIter::Plugin(ref mut i) => i.next().cloned(),
-            _CaptureNamesIter::Dynamic(ref mut i) => {
+            _CaptureNames::Plugin(ref mut i) => i.next().cloned(),
+            _CaptureNames::Dynamic(ref mut i) => {
                 i.next().as_ref().map(|o| o.as_ref().map(|s| s.as_ref()))
             }
         }
@@ -776,8 +776,8 @@ impl<'r> Iterator for CaptureNamesIter<'r> {
 
     fn size_hint(&self) -> (usize, Option<usize>) {
         match self.0 {
-            _CaptureNamesIter::Plugin(ref i)  => i.size_hint(),
-            _CaptureNamesIter::Dynamic(ref i) => i.size_hint(),
+            _CaptureNames::Plugin(ref i)  => i.size_hint(),
+            _CaptureNames::Dynamic(ref i) => i.size_hint(),
         }
     }
 }
@@ -786,12 +786,12 @@ impl<'r> Iterator for CaptureNamesIter<'r> {
 ///
 /// `'r` is the lifetime of the compiled regular expression and `'t` is the
 /// lifetime of the string being split.
-pub struct SplitsIter<'r, 't> {
-    finder: FindIter<'r, 't>,
+pub struct Split<'r, 't> {
+    finder: Matches<'r, 't>,
     last: usize,
 }
 
-impl<'r, 't> Iterator for SplitsIter<'r, 't> {
+impl<'r, 't> Iterator for Split<'r, 't> {
     type Item = &'t str;
 
     fn next(&mut self) -> Option<&'t str> {
@@ -821,12 +821,12 @@ impl<'r, 't> Iterator for SplitsIter<'r, 't> {
 ///
 /// `'r` is the lifetime of the compiled regular expression and `'t` is the
 /// lifetime of the string being split.
-pub struct SplitsNIter<'r, 't> {
-    splits: SplitsIter<'r, 't>,
+pub struct SplitN<'r, 't> {
+    splits: Split<'r, 't>,
     n: usize,
 }
 
-impl<'r, 't> Iterator for SplitsNIter<'r, 't> {
+impl<'r, 't> Iterator for SplitN<'r, 't> {
     type Item = &'t str;
 
     fn next(&mut self) -> Option<&'t str> {
@@ -1032,19 +1032,19 @@ impl<'t, 'i> Index<&'i str> for Captures<'t> {
 ///
 /// `'r` is the lifetime of the compiled regular expression and `'t` is the
 /// lifetime of the matched string.
-pub struct CapturesIter<'r, 't>(CapturesIterInner<'r, 't>);
+pub struct CaptureMatches<'r, 't>(CaptureMatchesInner<'r, 't>);
 
-enum CapturesIterInner<'r, 't> {
-    Dynamic(re_trait::CapturesIter<'t, ExecNoSyncStr<'r>>),
-    Plugin(re_trait::CapturesIter<'t, Plugin>),
+enum CaptureMatchesInner<'r, 't> {
+    Dynamic(re_trait::CaptureMatches<'t, ExecNoSyncStr<'r>>),
+    Plugin(re_trait::CaptureMatches<'t, Plugin>),
 }
 
-impl<'r, 't> Iterator for CapturesIter<'r, 't> {
+impl<'r, 't> Iterator for CaptureMatches<'r, 't> {
     type Item = Captures<'t>;
 
     fn next(&mut self) -> Option<Captures<'t>> {
         match self.0 {
-            CapturesIterInner::Dynamic(ref mut it) => {
+            CaptureMatchesInner::Dynamic(ref mut it) => {
                 let named = it.regex().capture_name_idx().clone();
                 it.next().map(|locs| Captures {
                     text: it.text(),
@@ -1052,7 +1052,7 @@ impl<'r, 't> Iterator for CapturesIter<'r, 't> {
                     named_groups: NamedGroups::Dynamic(named),
                 })
             }
-            CapturesIterInner::Plugin(ref mut it) => {
+            CaptureMatchesInner::Plugin(ref mut it) => {
                 it.next().map(|locs| Captures {
                     text: it.text(),
                     locs: locs,
@@ -1070,32 +1070,32 @@ impl<'r, 't> Iterator for CapturesIter<'r, 't> {
 ///
 /// `'r` is the lifetime of the compiled regular expression and `'t` is the
 /// lifetime of the matched string.
-pub struct FindIter<'r, 't>(FindIterInner<'r, 't>);
+pub struct Matches<'r, 't>(MatchesInner<'r, 't>);
 
-enum FindIterInner<'r, 't> {
-    Dynamic(re_trait::FindIter<'t, ExecNoSyncStr<'r>>),
-    Plugin(re_trait::FindIter<'t, Plugin>),
+enum MatchesInner<'r, 't> {
+    Dynamic(re_trait::Matches<'t, ExecNoSyncStr<'r>>),
+    Plugin(re_trait::Matches<'t, Plugin>),
 }
 
-impl<'r, 't> FindIter<'r, 't> {
+impl<'r, 't> Matches<'r, 't> {
     fn text(&self) -> &'t str {
         match self.0 {
-            FindIterInner::Dynamic(ref it) => it.text(),
-            FindIterInner::Plugin(ref it) => it.text(),
+            MatchesInner::Dynamic(ref it) => it.text(),
+            MatchesInner::Plugin(ref it) => it.text(),
         }
     }
 }
 
-impl<'r, 't> Iterator for FindIter<'r, 't> {
+impl<'r, 't> Iterator for Matches<'r, 't> {
     type Item = Match<'t>;
 
     fn next(&mut self) -> Option<Match<'t>> {
         let text = self.text();
         match self.0 {
-            FindIterInner::Dynamic(ref mut it) => {
+            MatchesInner::Dynamic(ref mut it) => {
                 it.next().map(|(s, e)| Match::new(text, s, e))
             }
-            FindIterInner::Plugin(ref mut it) => {
+            MatchesInner::Plugin(ref mut it) => {
                 it.next().map(|(s, e)| Match::new(text, s, e))
             }
         }
