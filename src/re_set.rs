@@ -277,6 +277,18 @@ impl Iterator for SetMatchesIntoIter {
     }
 }
 
+impl DoubleEndedIterator for SetMatchesIntoIter {
+    fn next_back(&mut self) -> Option<usize> {
+        loop {
+            match self.0.next_back() {
+                None => return None,
+                Some((_, false)) => {}
+                Some((i, true)) => return Some(i),
+            }
+        }
+    }
+}
+
 /// A borrowed iterator over the set of matches from a regex set.
 ///
 /// The lifetime `'a` refers to the lifetime of a `SetMatches` value.
@@ -289,6 +301,18 @@ impl<'a> Iterator for SetMatchesIter<'a> {
     fn next(&mut self) -> Option<usize> {
         loop {
             match self.0.next() {
+                None => return None,
+                Some((_, &false)) => {}
+                Some((i, &true)) => return Some(i),
+            }
+        }
+    }
+}
+
+impl<'a> DoubleEndedIterator for SetMatchesIter<'a> {
+    fn next_back(&mut self) -> Option<usize> {
+        loop {
+            match self.0.next_back() {
                 None => return None,
                 Some((_, &false)) => {}
                 Some((i, &true)) => return Some(i),
