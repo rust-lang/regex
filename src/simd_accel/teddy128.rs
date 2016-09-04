@@ -328,6 +328,7 @@ References
 use std::cmp;
 use std::ptr;
 
+use aho_corasick::{Automaton, AcAutomaton, FullAcAutomaton};
 use simd::u8x16;
 use simd::x86::sse2::Sse2Bool8ix16;
 use simd::x86::ssse3::Ssse3U8x16;
@@ -354,6 +355,9 @@ pub struct Match {
 pub struct Teddy {
     /// A list of substrings to match.
     pats: Vec<Vec<u8>>,
+    /// An Aho-Corasick automaton of the patterns. We use this when we need to
+    /// search pieces smaller than the Teddy block size.
+    ac: FullAcAutomaton<Vec<u8>>,
     /// A set of 8 buckets. Each bucket corresponds to a single member of a
     /// bitset. A bucket contains zero or more substrings. This is useful
     /// when the number of substrings exceeds 8, since our bitsets cannot have
@@ -403,6 +407,7 @@ impl Teddy {
         }
         Some(Teddy {
             pats: pats.to_vec(),
+            ac: AcAutomaton::new(pats.to_vec()).into_full(),
             buckets: buckets,
             masks: masks,
         })
@@ -570,7 +575,7 @@ impl Teddy {
 
             prev0 = res0;
             prev1 = res1;
-            
+
             let bitfield = res.ne(zero).move_mask();
             if bitfield != 0 {
                 let pos = pos.checked_sub(2).unwrap();
@@ -659,27 +664,13 @@ impl Teddy {
     /// This is used when we don't have enough bytes in the haystack for our
     /// block based approach.
     fn slow(&self, haystack: &[u8], pos: usize) -> Option<Match> {
-        // TODO: Use Aho-Corasick, or otherwise adapt the block based approach
-        // to be capable of using smaller blocks.
-        let mut m = None;
-        for (pi, p) in self.pats.iter().enumerate() {
-            if let Some(i) = find_slow(p, &haystack[pos..]) {
-                let candidate = Match {
-                    pat: pi,
-                    start: pos + i,
-                    end: pos + i + p.len(),
-                };
-                match m {
-                    None => m = Some(candidate),
-                    Some(ref mut m) => {
-                        if candidate.start < m.start {
-                            *m = candidate;
-                        }
-                    }
-                }
+        self.ac.find(&haystack[pos..]).next().map(|m| {
+            Match {
+                pat: m.pati,
+                start: pos + m.start,
+                end: pos + m.end,
             }
-        }
-        m
+        })
     }
 }
 
@@ -801,18 +792,4 @@ impl UnsafeLoad for u8x16 {
             16);
         x
     }
-}
-
-/// Slow single-substring search use for naive brute force matching.
-#[cold]
-pub fn find_slow(pattern: &[u8], haystack: &[u8]) -> Option<usize> {
-    if pattern.len() > haystack.len() {
-        return None;
-    }
-    for i in 0..(haystack.len() - pattern.len() + 1) {
-        if pattern == &haystack[i..i + pattern.len()] {
-            return Some(i);
-        }
-    }
-    None
 }
