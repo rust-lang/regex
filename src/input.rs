@@ -169,14 +169,14 @@ impl<'t> Input for CharInput<'t> {
         match empty.look {
             StartLine => {
                 let c = self.previous_char(at);
-                c.is_none() || c == '\n'
+                at.pos() == 0 || c == '\n'
             }
             EndLine => {
                 let c = self.next_char(at);
-                c.is_none() || c == '\n'
+                at.pos() == self.len() || c == '\n'
             }
-            StartText => self.previous_char(at).is_none(),
-            EndText => self.next_char(at).is_none(),
+            StartText => at.pos() == 0,
+            EndText => at.pos() == self.len(),
             WordBoundary => {
                 let (c1, c2) = (self.previous_char(at), self.next_char(at));
                 c1.is_word_char() != c2.is_word_char()
@@ -265,14 +265,14 @@ impl<'t> Input for ByteInput<'t> {
         match empty.look {
             StartLine => {
                 let c = self.previous_char(at);
-                c.is_none() || c == '\n'
+                at.pos() == 0 || c == '\n'
             }
             EndLine => {
                 let c = self.next_char(at);
-                c.is_none() || c == '\n'
+                at.pos() == self.len() || c == '\n'
             }
-            StartText => self.previous_char(at).is_none(),
-            EndText => self.next_char(at).is_none(),
+            StartText => at.pos() == 0,
+            EndText => at.pos() == self.len(),
             WordBoundary => {
                 let (c1, c2) = (self.previous_char(at), self.next_char(at));
                 c1.is_word_char() != c2.is_word_char()

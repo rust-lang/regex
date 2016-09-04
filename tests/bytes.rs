@@ -38,3 +38,18 @@ mat!(dotstar_prefix_not_unicode, r"a", R(b"\xFFa"), Some((1, 2)));
 // Have fun with null bytes.
 mat!(null_bytes, r"(?P<cstr>[^\x00]+)\x00",
      R(b"foo\x00"), Some((0, 4)), Some((0, 3)));
+
+// Test that lookahead operators work properly in the face of invalid UTF-8.
+// See: https://github.com/rust-lang-nursery/regex/issues/277
+matiter!(invalidutf8_anchor1,
+         r"\xcc?^",
+         R(b"\x8d#;\x1a\xa4s3\x05foobarX\\\x0f0t\xe4\x9b\xa4"),
+         (0, 0));
+matiter!(invalidutf8_anchor2,
+         r"^\xf7|4\xff\d\x8a\x8a\x8a\x8a\x8a\x8a\x8a\x8a\x8a\x8a\x8a\x8a\x8a##########[] d\x8a\x8a\x8a\x8a\x8a\x8a\x8a\x8a\x8a\x8a\x8a\x8a\x8a##########[] #####\x80\S7|$",
+         R(b"\x8d#;\x1a\xa4s3\x05foobarX\\\x0f0t\xe4\x9b\xa4"),
+         (22, 22));
+matiter!(invalidutf8_anchor3,
+         r"^|ddp\xff\xffdddddlQd@\x80",
+         R(b"\x8d#;\x1a\xa4s3\x05foobarX\\\x0f0t\xe4\x9b\xa4"),
+         (0, 0));
