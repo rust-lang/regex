@@ -1528,7 +1528,7 @@ impl fmt::Display for ErrorKind {
                 write!(f, "Unrecognized escape sequence: '\\{}'.", c),
             UnrecognizedFlag(c) =>
                 write!(f, "Unrecognized flag: '{}'. \
-                           (Allowed flags: i, s, m, U, x.)", c),
+                           (Allowed flags: i, m, s, U, u, x.)", c),
             UnrecognizedUnicodeClass(ref s) =>
                 write!(f, "Unrecognized Unicode class name: '{}'.", s),
             StackExhausted =>
