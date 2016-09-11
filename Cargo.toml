@@ -14,7 +14,7 @@ finite automata and guarantees linear time matching on all inputs.
 
 [dependencies]
 # For very fast prefix literal matching.
-aho-corasick = "0.5.1"
+aho-corasick = "0.5.3"
 # For skipping along search text quickly when a leading byte is known.
 memchr = "0.1.9"
 # For managing regex caches quickly across multiple threads.
