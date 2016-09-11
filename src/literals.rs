@@ -16,7 +16,7 @@ use syntax;
 
 use freqs::BYTE_FREQUENCIES;
 
-use simd_accel::teddy128::Teddy;
+use simd_accel::teddy128::{Teddy, is_teddy_128_available};
 
 /// A prefix extracted from a compiled regular expression.
 ///
@@ -218,24 +218,24 @@ impl Matcher {
             let lit = lits.literals()[0].to_vec();
             return Matcher::Single(SingleSearch::new(lit));
         }
-        // Only try Teddy if Aho-Corasick can't use memchr on an ASCII byte.
-        // Also, in its current form, Teddy doesn't scale well to lots of
-        // literals.
-        //
-        // We impose the ASCII restriction since an alternation of non-ASCII
-        // string literals in the same language is likely to all start with
-        // the same byte. Even worse, the corpus being searched probably has
-        // a similar composition, which ends up completely negating the benefit
-        // of memchr.
-        //
-        // TODO(burntsushi): We should teach Aho-Corasick not to use memchr
-        // if it's a non-ASCII byte. Alternatively, be smarter and pick
-        // non-leading bytes, but that feels a bit too clever...
-        if lits.literals().len() <= 32
-            && (sset.dense.len() > 1 || !sset.all_ascii) {
-            if let Some(ted) = Teddy::new(lits) {
-                return Matcher::Teddy128(ted);
+        let is_aho_corasick_fast = sset.dense.len() == 1 && sset.all_ascii;
+        if is_teddy_128_available() && !is_aho_corasick_fast {
+            // Only try Teddy if Aho-Corasick can't use memchr on an ASCII
+            // byte. Also, in its current form, Teddy doesn't scale well to
+            // lots of literals.
+            //
+            // We impose the ASCII restriction since an alternation of
+            // non-ASCII string literals in the same language is likely to all
+            // start with the same byte. Even worse, the corpus being searched
+            // probably has a similar composition, which ends up completely
+            // negating the benefit of memchr.
+            const MAX_TEDDY_LITERALS: usize = 32;
+            if lits.literals().len() <= MAX_TEDDY_LITERALS {
+                if let Some(ted) = Teddy::new(lits) {
+                    return Matcher::Teddy128(ted);
+                }
             }
+            // Fallthrough to ol' reliable Aho-Corasick...
         }
         let pats = lits.literals().to_owned();
         Matcher::AC(AcAutomaton::new(pats).into_full())

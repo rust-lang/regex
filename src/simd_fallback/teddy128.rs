@@ -1,5 +1,9 @@
 use syntax;
 
+pub fn is_teddy_128_available() -> bool {
+    false
+}
+
 #[derive(Debug, Clone)]
 pub struct Teddy(());
 

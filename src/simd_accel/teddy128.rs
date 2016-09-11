@@ -338,6 +338,10 @@ use syntax;
 /// Corresponds to the number of bytes read at a time in the haystack.
 const BLOCK_SIZE: usize = 16;
 
+pub fn is_teddy_128_available() -> bool {
+    true
+}
+
 /// Match reports match information.
 #[derive(Debug, Clone)]
 pub struct Match {
@@ -607,15 +611,16 @@ impl Teddy {
         mut bitfield: u32,
     ) -> Option<Match> {
         while bitfield != 0 {
-            // The next offset, relative to pos, where some fingerprint matched.
+            // The next offset, relative to pos, where some fingerprint
+            // matched.
             let byte_pos = bitfield.trailing_zeros();
             bitfield &= !(1 << byte_pos);
 
             // Offset relative to the beginning of the haystack.
             let start = pos + byte_pos as usize;
 
-            // The bitfield telling us which patterns had fingerprints that match at this starting
-            // position.
+            // The bitfield telling us which patterns had fingerprints that
+            // match at this starting position.
             let mut patterns = res.extract(byte_pos);
             while patterns != 0 {
                 let bucket = patterns.trailing_zeros() as usize;
