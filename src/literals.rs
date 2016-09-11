@@ -218,10 +218,21 @@ impl Matcher {
             let lit = lits.literals()[0].to_vec();
             return Matcher::Single(SingleSearch::new(lit));
         }
-        // Only try Teddy if Aho-Corasick can't use memchr.
+        // Only try Teddy if Aho-Corasick can't use memchr on an ASCII byte.
         // Also, in its current form, Teddy doesn't scale well to lots of
         // literals.
-        if sset.dense.len() > 1 && lits.literals().len() <= 32 {
+        //
+        // We impose the ASCII restriction since an alternation of non-ASCII
+        // string literals in the same language is likely to all start with
+        // the same byte. Even worse, the corpus being searched probably has
+        // a similar composition, which ends up completely negating the benefit
+        // of memchr.
+        //
+        // TODO(burntsushi): We should teach Aho-Corasick not to use memchr
+        // if it's a non-ASCII byte. Alternatively, be smarter and pick
+        // non-leading bytes, but that feels a bit too clever...
+        if lits.literals().len() <= 32
+            && (sset.dense.len() > 1 || !sset.all_ascii) {
             if let Some(ted) = Teddy::new(lits) {
                 return Matcher::Teddy128(ted);
             }
@@ -290,6 +301,7 @@ struct SingleByteSet {
     sparse: Vec<bool>,
     dense: Vec<u8>,
     complete: bool,
+    all_ascii: bool,
 }
 
 impl SingleByteSet {
@@ -298,6 +310,7 @@ impl SingleByteSet {
             sparse: vec![false; 256],
             dense: vec![],
             complete: true,
+            all_ascii: true,
         }
     }
 
@@ -307,6 +320,9 @@ impl SingleByteSet {
             sset.complete = sset.complete && lit.len() == 1;
             if let Some(&b) = lit.get(0) {
                 if !sset.sparse[b as usize] {
+                    if b > 0x7F {
+                        sset.all_ascii = false;
+                    }
                     sset.dense.push(b);
                     sset.sparse[b as usize] = true;
                 }
@@ -321,6 +337,9 @@ impl SingleByteSet {
             sset.complete = sset.complete && lit.len() == 1;
             if let Some(&b) = lit.get(lit.len().checked_sub(1).unwrap()) {
                 if !sset.sparse[b as usize] {
+                    if b > 0x7F {
+                        sset.all_ascii = false;
+                    }
                     sset.dense.push(b);
                     sset.sparse[b as usize] = true;
                 }
