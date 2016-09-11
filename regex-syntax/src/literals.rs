@@ -99,6 +99,21 @@ impl Literals {
         &self.lits
     }
 
+    /// Returns the length of the smallest literal.
+    ///
+    /// Returns None is there are no literals in the set.
+    pub fn min_len(&self) -> Option<usize> {
+        let mut min = None;
+        for lit in &self.lits {
+            match min {
+                None => min = Some(lit.len()),
+                Some(m) if lit.len() < m => min = Some(lit.len()),
+                _ => {}
+            }
+        }
+        min
+    }
+
     /// Returns true if all members in this set are complete.
     pub fn all_complete(&self) -> bool {
         !self.lits.is_empty() && self.lits.iter().all(|l| !l.is_cut())
@@ -162,6 +177,30 @@ impl Literals {
                    .count());
         }
         &self.lits[0][self.lits[0].len() - len..]
+    }
+
+    /// Returns a new set of literals with the given number of bytes trimmed
+    /// from the suffix of each literal.
+    ///
+    /// If any literal would be cut out completely by trimming, then None is
+    /// returned.
+    ///
+    /// Any duplicates that are created as a result of this transformation are
+    /// removed.
+    pub fn trim_suffix(&self, num_bytes: usize) -> Option<Literals> {
+        if self.min_len().map(|len| len <= num_bytes).unwrap_or(true) {
+            return None;
+        }
+        let mut new = self.to_empty();
+        for mut lit in self.lits.iter().cloned() {
+            let new_len = lit.len() - num_bytes;
+            lit.truncate(new_len);
+            lit.cut();
+            new.lits.push(lit);
+        }
+        new.lits.sort();
+        new.lits.dedup();
+        Some(new)
     }
 
     /// Returns a new set of prefixes of this set of literals that are
@@ -1342,6 +1381,33 @@ mod tests {
     test_unamb!(unambiguous11,
                 vec![M("zazb"), M("azb")], vec![C("azb"), C("z")]);
     test_unamb!(unambiguous12, vec![M("foo"), C("foo")], vec![C("foo")]);
+
+    // ************************************************************************
+    // Tests for suffix trimming.
+    // ************************************************************************
+    macro_rules! test_trim {
+        ($name:ident, $trim:expr, $given:expr, $expected:expr) => {
+            #[test]
+            fn $name() {
+                let given: Vec<Lit> =
+                    $given
+                    .into_iter()
+                    .map(|ul| {
+                        let cut = ul.is_cut();
+                        Lit { v: ul.v.into_bytes(), cut: cut }
+                    })
+                    .collect();
+                let lits = create_lits(given);
+                let got = lits.trim_suffix($trim).unwrap();
+                assert_eq!($expected, escape_lits(got.literals()));
+            }
+        }
+    }
+
+    test_trim!(trim1, 1, vec![M("ab"), M("yz")], vec![C("a"), C("y")]);
+    test_trim!(trim2, 1, vec![M("abc"), M("abd")], vec![C("ab")]);
+    test_trim!(trim3, 2, vec![M("abc"), M("abd")], vec![C("a")]);
+    test_trim!(trim4, 2, vec![M("abc"), M("ghij")], vec![C("a"), C("gh")]);
 
     // ************************************************************************
     // Tests for longest common prefix.
