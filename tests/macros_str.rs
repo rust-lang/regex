@@ -1,11 +1,12 @@
 // Macros for use in writing tests generic over &str/&[u8].
 macro_rules! text { ($text:expr) => { $text } }
 macro_rules! t { ($text:expr) => { text!($text) } }
+macro_rules! match_text { ($text:expr) => { $text.as_str() } }
 
 macro_rules! bytes { ($text:expr) => { $text.as_bytes() } }
 macro_rules! b { ($text:expr) => { bytes!($text) } }
 
-macro_rules! u { ($re:expr) => { $re } }
+// macro_rules! u { ($re:expr) => { $re } }
 
 macro_rules! no_expand {
     ($text:expr) => {{
@@ -26,8 +27,14 @@ macro_rules! expand {
             let re = regex!($re);
             let cap = re.captures(t!($text)).unwrap();
 
-            let got = cap.expand(t!($expand));
+            let mut got = String::new();
+            cap.expand(t!($expand), &mut got);
             assert_eq!(show!(t!($expected)), show!(&*got));
         }
     }
 }
+
+#[cfg(feature = "pattern")]
+macro_rules! searcher_expr { ($e:expr) => ($e) }
+#[cfg(not(feature = "pattern"))]
+macro_rules! searcher_expr { ($e:expr) => ({}) }

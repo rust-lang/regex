@@ -10,7 +10,6 @@
 
 use std::borrow::Cow;
 use std::collections::HashMap;
-use std::collections::hash_map;
 use std::fmt;
 use std::ops::Index;
 use std::str::FromStr;
@@ -19,10 +18,50 @@ use std::sync::Arc;
 use memchr::memchr;
 
 use exec::{Exec, ExecNoSync};
-use expand::expand;
+use expand::expand_bytes;
 use error::Error;
 use re_builder::bytes::RegexBuilder;
-use re_trait::{self, RegularExpression, Slot};
+use re_trait::{self, RegularExpression, Locations};
+
+/// Match represents a single match of a regex in a haystack.
+///
+/// The lifetime parameter `'t` refers to the lifetime of the matched text.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub struct Match<'t> {
+    text: &'t [u8],
+    start: usize,
+    end: usize,
+}
+
+impl<'t> Match<'t> {
+    /// Returns the starting byte offset of the match in the haystack.
+    #[inline]
+    pub fn start(&self) -> usize {
+        self.start
+    }
+
+    /// Returns the ending byte offset of the match in the haystack.
+    #[inline]
+    pub fn end(&self) -> usize {
+        self.end
+    }
+
+    /// Returns the matched text.
+    #[inline]
+    pub fn as_bytes(&self) -> &'t [u8] {
+        self.text
+    }
+
+    /// Creates a new match from the given haystack and byte offsets.
+    #[inline]
+    fn new(haystack: &'t [u8], start: usize, end: usize) -> Match<'t> {
+        Match {
+            text: &haystack[start..end],
+            start: start,
+            end: end,
+        }
+    }
+}
 
 /// A compiled regular expression for matching arbitrary bytes.
 ///
@@ -71,22 +110,14 @@ impl FromStr for Regex {
     }
 }
 
+/// Core regular expression methods.
 impl Regex {
     /// Compiles a regular expression. Once compiled, it can be used repeatedly
     /// to search, split or replace text in a string.
     ///
     /// If an invalid expression is given, then an error is returned.
     pub fn new(re: &str) -> Result<Regex, Error> {
-        Regex::with_size_limit(10 * (1 << 20), re)
-    }
-
-    /// Compiles a regular expression with the given size limit.
-    ///
-    /// The size limit is applied to the size of the *compiled* data structure.
-    /// If the data structure exceeds the size given, then an error is
-    /// returned.
-    pub fn with_size_limit(size: usize, re: &str) -> Result<Regex, Error> {
-        RegexBuilder::new(re).size_limit(size).compile()
+        RegexBuilder::new(re).build()
     }
 
     /// Returns true if and only if the regex matches the string given.
@@ -111,17 +142,6 @@ impl Regex {
         self.is_match_at(text, 0)
     }
 
-    /// Returns the same as is_match, but starts the search at the given
-    /// offset.
-    ///
-    /// The significance of the starting point is that it takes the surrounding
-    /// context into consideration. For example, the `\A` anchor can only
-    /// match when `start == 0`.
-    #[doc(hidden)]
-    pub fn is_match_at(&self, text: &[u8], start: usize) -> bool {
-        self.shortest_match_at(text, start).is_some()
-    }
-
     /// Returns the start and end byte range of the leftmost-first match in
     /// `text`. If no match exists, then `None` is returned.
     ///
@@ -138,27 +158,12 @@ impl Regex {
     /// # extern crate regex; use regex::bytes::Regex;
     /// # fn main() {
     /// let text = b"I categorically deny having triskaidekaphobia.";
-    /// let pos = Regex::new(r"\b\w{13}\b").unwrap().find(text);
-    /// assert_eq!(pos, Some((2, 15)));
+    /// let mat = Regex::new(r"\b\w{13}\b").unwrap().find(text).unwrap();
+    /// assert_eq!((mat.start(), mat.end()), (2, 15));
     /// # }
     /// ```
-    pub fn find(&self, text: &[u8]) -> Option<(usize, usize)> {
+    pub fn find<'t>(&self, text: &'t [u8]) -> Option<Match<'t>> {
         self.find_at(text, 0)
-    }
-
-    /// Returns the same as find, but starts the search at the given
-    /// offset.
-    ///
-    /// The significance of the starting point is that it takes the surrounding
-    /// context into consideration. For example, the `\A` anchor can only
-    /// match when `start == 0`.
-    #[doc(hidden)]
-    pub fn find_at(
-        &self,
-        text: &[u8],
-        start: usize,
-    ) -> Option<(usize, usize)> {
-        self.0.searcher().find_at(text, start)
     }
 
     /// Returns an iterator for each successive non-overlapping match in
@@ -174,18 +179,13 @@ impl Regex {
     /// # extern crate regex; use regex::bytes::Regex;
     /// # fn main() {
     /// let text = b"Retroactively relinquishing remunerations is reprehensible.";
-    /// for pos in Regex::new(r"\b\w{13}\b").unwrap().find_iter(text) {
-    ///     println!("{:?}", pos);
+    /// for mat in Regex::new(r"\b\w{13}\b").unwrap().find_iter(text) {
+    ///     println!("{:?}", mat);
     /// }
-    /// // Output:
-    /// // (0, 13)
-    /// // (14, 27)
-    /// // (28, 41)
-    /// // (45, 58)
     /// # }
     /// ```
-    pub fn find_iter<'r, 't>(&'r self, text: &'t [u8]) -> FindMatches<'r, 't> {
-        FindMatches(self.0.searcher().find_iter(text))
+    pub fn find_iter<'r, 't>(&'r self, text: &'t [u8]) -> Matches<'r, 't> {
+        Matches(self.0.searcher().find_iter(text))
     }
 
     /// Returns the capture groups corresponding to the leftmost-first
@@ -209,9 +209,9 @@ impl Regex {
     /// let re = Regex::new(r"'([^']+)'\s+\((\d{4})\)").unwrap();
     /// let text = b"Not my favorite movie: 'Citizen Kane' (1941).";
     /// let caps = re.captures(text).unwrap();
-    /// assert_eq!(caps.at(1), Some(&b"Citizen Kane"[..]));
-    /// assert_eq!(caps.at(2), Some(&b"1941"[..]));
-    /// assert_eq!(caps.at(0), Some(&b"'Citizen Kane' (1941)"[..]));
+    /// assert_eq!(&caps[1], &b"Citizen Kane"[..]);
+    /// assert_eq!(&caps[2], &b"1941"[..]);
+    /// assert_eq!(&caps[0], &b"'Citizen Kane' (1941)"[..]);
     /// // You can also access the groups by index using the Index notation.
     /// // Note that this will panic on an invalid index.
     /// assert_eq!(&caps[1], b"Citizen Kane");
@@ -232,9 +232,9 @@ impl Regex {
     ///                .unwrap();
     /// let text = b"Not my favorite movie: 'Citizen Kane' (1941).";
     /// let caps = re.captures(text).unwrap();
-    /// assert_eq!(caps.name("title"), Some(&b"Citizen Kane"[..]));
-    /// assert_eq!(caps.name("year"), Some(&b"1941"[..]));
-    /// assert_eq!(caps.at(0), Some(&b"'Citizen Kane' (1941)"[..]));
+    /// assert_eq!(&caps["title"], &b"Citizen Kane"[..]);
+    /// assert_eq!(&caps["year"], &b"1941"[..]);
+    /// assert_eq!(&caps[0], &b"'Citizen Kane' (1941)"[..]);
     /// // You can also access the groups by name using the Index notation.
     /// // Note that this will panic on an invalid group name.
     /// assert_eq!(&caps["title"], b"Citizen Kane");
@@ -252,28 +252,12 @@ impl Regex {
     /// The `0`th capture group is always unnamed, so it must always be
     /// accessed with `at(0)` or `[0]`.
     pub fn captures<'t>(&self, text: &'t [u8]) -> Option<Captures<'t>> {
-        let mut slots = vec![None; 2 * self.captures_len()];
-        self.read_captures_at(&mut slots, text, 0).map(|_| Captures {
+        let mut locs = self.locations();
+        self.read_captures_at(&mut locs, text, 0).map(|_| Captures {
             text: text,
-            slots: slots,
+            locs: locs,
             named_groups: self.0.capture_name_idx().clone(),
         })
-    }
-
-    /// Returns the same as captures, but starts the search at the given
-    /// offset and populates the capture locations given.
-    ///
-    /// The significance of the starting point is that it takes the surrounding
-    /// context into consideration. For example, the `\A` anchor can only
-    /// match when `start == 0`.
-    #[doc(hidden)]
-    pub fn read_captures_at(
-        &self,
-        slots: &mut [Slot],
-        text: &[u8],
-        start: usize,
-    ) -> Option<(usize, usize)> {
-        self.0.searcher().read_captures_at(slots, text, start)
     }
 
     /// Returns an iterator over all the non-overlapping capture groups matched
@@ -305,8 +289,8 @@ impl Regex {
     pub fn captures_iter<'r, 't>(
         &'r self,
         text: &'t [u8],
-    ) -> FindCaptures<'r, 't> {
-        FindCaptures(self.0.searcher().captures_iter(text))
+    ) -> CaptureMatches<'r, 't> {
+        CaptureMatches(self.0.searcher().captures_iter(text))
     }
 
     /// Returns an iterator of substrings of `text` delimited by a match of the
@@ -329,8 +313,8 @@ impl Regex {
     /// ]);
     /// # }
     /// ```
-    pub fn split<'r, 't>(&'r self, text: &'t [u8]) -> Splits<'r, 't> {
-        Splits {
+    pub fn split<'r, 't>(&'r self, text: &'t [u8]) -> Split<'r, 't> {
+        Split {
             finder: self.find_iter(text),
             last: 0,
         }
@@ -360,8 +344,8 @@ impl Regex {
         &'r self,
         text: &'t [u8],
         limit: usize,
-    ) -> SplitsN<'r, 't> {
-        SplitsN {
+    ) -> SplitN<'r, 't> {
+        SplitN {
             splits: self.split(text),
             n: limit,
         }
@@ -375,6 +359,25 @@ impl Regex {
     /// If no match is found, then a copy of the byte string is returned
     /// unchanged.
     ///
+    /// # Replacement string syntax
+    ///
+    /// All instances of `$name` in the replacement text is replaced with the
+    /// corresponding capture group `name`.
+    ///
+    /// `name` may be an integer corresponding to the index of the
+    /// capture group (counted by order of opening parenthesis where `0` is the
+    /// entire match) or it can be a name (consisting of letters, digits or
+    /// underscores) corresponding to a named capture group.
+    ///
+    /// If `name` isn't a valid capture group (whether the name doesn't exist
+    /// or isn't a valid index), then it is replaced with the empty string.
+    ///
+    /// The longest possible name is used. e.g., `$1a` looks up the capture
+    /// group named `1a` and not the capture group at index `1`. To exert more
+    /// precise control over the name, use braces, e.g., `${1}a`.
+    ///
+    /// To write a literal `$` use `$$`.
+    ///
     /// # Examples
     ///
     /// Note that this function is polymorphic with respect to the replacement.
@@ -384,7 +387,7 @@ impl Regex {
     /// # extern crate regex; use regex::bytes::Regex;
     /// # fn main() {
     /// let re = Regex::new("[^01]+").unwrap();
-    /// assert_eq!(re.replace(b"1078910", &b""[..]), b"1010");
+    /// assert_eq!(re.replace(b"1078910", &b""[..]), &b"1010"[..]);
     /// # }
     /// ```
     ///
@@ -403,7 +406,7 @@ impl Regex {
     ///     replacement.extend(&caps[1]);
     ///     replacement
     /// });
-    /// assert_eq!(result, b"Bruce Springsteen");
+    /// assert_eq!(result, &b"Bruce Springsteen"[..]);
     /// # }
     /// ```
     ///
@@ -417,7 +420,7 @@ impl Regex {
     /// # fn main() {
     /// let re = Regex::new(r"(?P<last>[^,\s]+),\s+(?P<first>\S+)").unwrap();
     /// let result = re.replace(b"Springsteen, Bruce", &b"$first $last"[..]);
-    /// assert_eq!(result, b"Bruce Springsteen");
+    /// assert_eq!(result, &b"Bruce Springsteen"[..]);
     /// # }
     /// ```
     ///
@@ -442,10 +445,14 @@ impl Regex {
     ///
     /// let re = Regex::new(r"(?P<last>[^,\s]+),\s+(\S+)").unwrap();
     /// let result = re.replace(b"Springsteen, Bruce", NoExpand(b"$2 $last"));
-    /// assert_eq!(result, b"$2 $last");
+    /// assert_eq!(result, &b"$2 $last"[..]);
     /// # }
     /// ```
-    pub fn replace<R: Replacer>(&self, text: &[u8], rep: R) -> Vec<u8> {
+    pub fn replace<'t, R: Replacer>(
+        &self,
+        text: &'t [u8],
+        rep: R,
+    ) -> Cow<'t, [u8]> {
         self.replacen(text, 1, rep)
     }
 
@@ -455,7 +462,11 @@ impl Regex {
     ///
     /// See the documentation for `replace` for details on how to access
     /// submatches in the replacement text.
-    pub fn replace_all<R: Replacer>(&self, text: &[u8], rep: R) -> Vec<u8> {
+    pub fn replace_all<'t, R: Replacer>(
+        &self,
+        text: &'t [u8],
+        rep: R,
+    ) -> Cow<'t, [u8]> {
         self.replacen(text, 0, rep)
     }
 
@@ -465,45 +476,56 @@ impl Regex {
     ///
     /// See the documentation for `replace` for details on how to access
     /// submatches in the replacement text.
-    pub fn replacen<R: Replacer>(
+    pub fn replacen<'t, R: Replacer>(
         &self,
-        text: &[u8],
+        text: &'t [u8],
         limit: usize,
         mut rep: R,
-    ) -> Vec<u8> {
+    ) -> Cow<'t, [u8]> {
         if let Some(rep) = rep.no_expansion() {
+            let mut it = self.find_iter(text).enumerate().peekable();
+            if it.peek().is_none() {
+                return Cow::Borrowed(text);
+            }
             let mut new = Vec::with_capacity(text.len());
             let mut last_match = 0;
-            for (i, (s, e)) in self.find_iter(text).enumerate() {
+            for (i, m) in it {
                 if limit > 0 && i >= limit {
                     break
                 }
-                extend_from_slice(&mut new, &text[last_match..s]);
+                extend_from_slice(&mut new, &text[last_match..m.start()]);
                 extend_from_slice(&mut new, &*rep);
-                last_match = e;
+                last_match = m.end();
             }
             extend_from_slice(&mut new, &text[last_match..]);
-            return new;
+            return Cow::Owned(new);
         }
 
         // The slower path, which we use if the replacement needs access to
         // capture groups.
+        let mut it = self.captures_iter(text).enumerate().peekable();
+        if it.peek().is_none() {
+            return Cow::Borrowed(text);
+        }
         let mut new = Vec::with_capacity(text.len());
         let mut last_match = 0;
-        for (i, cap) in self.captures_iter(text).enumerate() {
+        for (i, cap) in it {
             if limit > 0 && i >= limit {
                 break
             }
             // unwrap on 0 is OK because captures only reports matches
-            let (s, e) = cap.pos(0).unwrap();
-            extend_from_slice(&mut new, &text[last_match..s]);
+            let m = cap.get(0).unwrap();
+            extend_from_slice(&mut new, &text[last_match..m.start()]);
             rep.replace_append(&cap, &mut new);
-            last_match = e;
+            last_match = m.end();
         }
         extend_from_slice(&mut new, &text[last_match..]);
-        new
+        Cow::Owned(new)
     }
+}
 
+/// Advanced or "lower level" search methods.
+impl Regex {
     /// Returns the end location of a match in the text given.
     ///
     /// This method may have the same performance characteristics as
@@ -544,6 +566,53 @@ impl Regex {
         self.0.searcher().shortest_match_at(text, start)
     }
 
+    /// Returns the same as is_match, but starts the search at the given
+    /// offset.
+    ///
+    /// The significance of the starting point is that it takes the surrounding
+    /// context into consideration. For example, the `\A` anchor can only
+    /// match when `start == 0`.
+    #[doc(hidden)]
+    pub fn is_match_at(&self, text: &[u8], start: usize) -> bool {
+        self.shortest_match_at(text, start).is_some()
+    }
+
+    /// Returns the same as find, but starts the search at the given
+    /// offset.
+    ///
+    /// The significance of the starting point is that it takes the surrounding
+    /// context into consideration. For example, the `\A` anchor can only
+    /// match when `start == 0`.
+    #[doc(hidden)]
+    pub fn find_at<'t>(
+        &self,
+        text: &'t [u8],
+        start: usize,
+    ) -> Option<Match<'t>> {
+        self.0.searcher().find_at(text, start)
+            .map(|(s, e)| Match::new(text, s, e))
+    }
+
+    /// Returns the same as captures, but starts the search at the given
+    /// offset and populates the capture locations given.
+    ///
+    /// The significance of the starting point is that it takes the surrounding
+    /// context into consideration. For example, the `\A` anchor can only
+    /// match when `start == 0`.
+    #[doc(hidden)]
+    pub fn read_captures_at<'t>(
+        &self,
+        locs: &mut Locations,
+        text: &'t [u8],
+        start: usize,
+    ) -> Option<Match<'t>> {
+        self.0.searcher().read_captures_at(locs, text, start)
+            .map(|(s, e)| Match::new(text, s, e))
+    }
+}
+
+/// Auxiliary methods.
+impl Regex {
     /// Returns the original string of this regex.
     pub fn as_str(&self) -> &str {
         &self.0.regex_strings()[0]
@@ -558,6 +627,13 @@ impl Regex {
     pub fn captures_len(&self) -> usize {
         self.0.capture_names().len()
     }
+
+    /// Returns an empty set of locations that can be reused in multiple calls
+    /// to `read_captures`.
+    #[doc(hidden)]
+    pub fn locations(&self) -> Locations {
+        self.0.searcher().locations()
+    }
 }
 
 /// An iterator over all non-overlapping matches for a particular string.
@@ -568,13 +644,14 @@ impl Regex {
 ///
 /// `'r` is the lifetime of the compiled regular expression and `'t` is the
 /// lifetime of the matched byte string.
-pub struct FindMatches<'r, 't>(re_trait::FindMatches<'t, ExecNoSync<'r>>);
+pub struct Matches<'r, 't>(re_trait::Matches<'t, ExecNoSync<'r>>);
 
-impl<'r, 't> Iterator for FindMatches<'r, 't> {
-    type Item = (usize, usize);
+impl<'r, 't> Iterator for Matches<'r, 't> {
+    type Item = Match<'t>;
 
-    fn next(&mut self) -> Option<(usize, usize)> {
-        self.0.next()
+    fn next(&mut self) -> Option<Match<'t>> {
+        let text = self.0.text();
+        self.0.next().map(|(s, e)| Match::new(text, s, e))
     }
 }
 
@@ -585,15 +662,15 @@ impl<'r, 't> Iterator for FindMatches<'r, 't> {
 ///
 /// `'r` is the lifetime of the compiled regular expression and `'t` is the
 /// lifetime of the matched byte string.
-pub struct FindCaptures<'r, 't>(re_trait::FindCaptures<'t, ExecNoSync<'r>>);
+pub struct CaptureMatches<'r, 't>(re_trait::CaptureMatches<'t, ExecNoSync<'r>>);
 
-impl<'r, 't> Iterator for FindCaptures<'r, 't> {
+impl<'r, 't> Iterator for CaptureMatches<'r, 't> {
     type Item = Captures<'t>;
 
     fn next(&mut self) -> Option<Captures<'t>> {
-        self.0.next().map(|slots| Captures {
+        self.0.next().map(|locs| Captures {
             text: self.0.text(),
-            slots: slots,
+            locs: locs,
             named_groups: self.0.regex().capture_name_idx().clone(),
         })
     }
@@ -603,12 +680,12 @@ impl<'r, 't> Iterator for FindCaptures<'r, 't> {
 ///
 /// `'r` is the lifetime of the compiled regular expression and `'t` is the
 /// lifetime of the byte string being split.
-pub struct Splits<'r, 't> {
-    finder: FindMatches<'r, 't>,
+pub struct Split<'r, 't> {
+    finder: Matches<'r, 't>,
     last: usize,
 }
 
-impl<'r, 't> Iterator for Splits<'r, 't> {
+impl<'r, 't> Iterator for Split<'r, 't> {
     type Item = &'t [u8];
 
     fn next(&mut self) -> Option<&'t [u8]> {
@@ -623,9 +700,9 @@ impl<'r, 't> Iterator for Splits<'r, 't> {
                     Some(s)
                 }
             }
-            Some((s, e)) => {
-                let matched = &text[self.last..s];
-                self.last = e;
+            Some(m) => {
+                let matched = &text[self.last..m.start()];
+                self.last = m.end();
                 Some(matched)
             }
         }
@@ -638,12 +715,12 @@ impl<'r, 't> Iterator for Splits<'r, 't> {
 ///
 /// `'r` is the lifetime of the compiled regular expression and `'t` is the
 /// lifetime of the byte string being split.
-pub struct SplitsN<'r, 't> {
-    splits: Splits<'r, 't>,
+pub struct SplitN<'r, 't> {
+    splits: Split<'r, 't>,
     n: usize,
 }
 
-impl<'r, 't> Iterator for SplitsN<'r, 't> {
+impl<'r, 't> Iterator for SplitN<'r, 't> {
     type Item = &'t [u8];
 
     fn next(&mut self) -> Option<&'t [u8]> {
@@ -694,61 +771,22 @@ impl<'r> Iterator for CaptureNames<'r> {
 /// `'t` is the lifetime of the matched text.
 pub struct Captures<'t> {
     text: &'t [u8],
-    slots: Vec<Option<usize>>,
+    locs: Locations,
     named_groups: Arc<HashMap<String, usize>>,
 }
 
 impl<'t> Captures<'t> {
-    /// Returns the start and end positions of the Nth capture group. Returns
-    /// `None` if `i` is not a valid capture group or if the capture group did
-    /// not match anything. The positions returned are *always* byte indices
-    /// with respect to the original byte string matched.
-    pub fn pos(&self, i: usize) -> Option<(usize, usize)> {
-        let (s, e) = (i * 2, i * 2 + 1);
-        match (self.slots.get(s), self.slots.get(e)) {
-            (Some(&Some(s)), Some(&Some(e))) => Some((s, e)),
-            _ => None,
-        }
+    /// Returns the match associated with the capture group at index `i`. If
+    /// `i` does not correspond to a capture group, or if the capture group
+    /// did not participate in the match, then `None` is returned.
+    pub fn get(&self, i: usize) -> Option<Match<'t>> {
+        self.locs.pos(i).map(|(s, e)| Match::new(self.text, s, e))
     }
 
-    /// Returns the matched string for the capture group `i`.  If `i` isn't
-    /// a valid capture group or didn't match anything, then `None` is
-    /// returned.
-    pub fn at(&self, i: usize) -> Option<&'t [u8]> {
-        match self.pos(i) {
-            None => None,
-            Some((s, e)) => Some(&self.text[s..e])
-        }
-    }
-
-    /// Returns the matched string for the capture group named `name`.  If
-    /// `name` isn't a valid capture group or didn't match anything, then
-    /// `None` is returned.
-    pub fn name(&self, name: &str) -> Option<&'t [u8]> {
-        self.named_groups.get(name).and_then(|&i| self.at(i))
-    }
-
-    /// Creates an iterator of all the capture groups in order of appearance
-    /// in the regular expression.
-    pub fn iter<'a>(&'a self) -> SubCaptures<'a, 't> {
-        SubCaptures { idx: 0, caps: self }
-    }
-
-    /// Creates an iterator of all the capture group positions in order of
-    /// appearance in the regular expression. Positions are byte indices
-    /// in terms of the original string matched.
-    pub fn iter_pos(&'t self) -> SubCapturesPos<'t> {
-        SubCapturesPos { idx: 0, slots: &self.slots }
-    }
-
-    /// Creates an iterator of all named groups as an tuple with the group
-    /// name and the value. The iterator returns these values in arbitrary
-    /// order.
-    pub fn iter_named<'a>(&'a self) -> SubCapturesNamed<'a, 't> {
-        SubCapturesNamed {
-            caps: self,
-            names: self.named_groups.iter()
-        }
+    /// Returns the match for the capture group named `name`. If `name` isn't a
+    /// valid capture group or didn't match anything, then `None` is returned.
+    pub fn name(&self, name: &str) -> Option<Match<'t>> {
+        self.named_groups.get(name).and_then(|&i| self.get(i))
     }
 
     /// Expands all instances of `$name` in `text` to the corresponding capture
@@ -768,19 +806,16 @@ impl<'t> Captures<'t> {
     ///
     /// To write a literal `$` use `$$`.
     pub fn expand(&self, replacement: &[u8], dst: &mut Vec<u8>) {
-        expand(self, replacement, dst)
+        expand_bytes(self, replacement, dst)
     }
 
     /// Returns the number of captured groups.
+    ///
+    /// This is always at least `1`, since every regex has at least one capture
+    /// group that corresponds to the full match.
     #[inline]
     pub fn len(&self) -> usize {
-        self.slots.len() / 2
-    }
-
-    /// Returns true if and only if there are no captured groups.
-    #[inline]
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
+        self.locs.len()
     }
 }
 
@@ -814,7 +849,7 @@ impl<'c, 't> fmt::Debug for CapturesDebug<'c, 't> {
         let slot_to_name: HashMap<&usize, &String> =
             self.0.named_groups.iter().map(|(a, b)| (b, a)).collect();
         let mut map = f.debug_map();
-        for (slot, m) in self.0.iter_pos().enumerate() {
+        for (slot, m) in self.0.locs.iter().enumerate() {
             let m = m.map(|(s, e)| escape_bytes(&self.0.text[s..e]));
             if let Some(ref name) = slot_to_name.get(&slot) {
                 map.entry(&name, &m);
@@ -841,7 +876,8 @@ impl<'t> Index<usize> for Captures<'t> {
     type Output = [u8];
 
     fn index(&self, i: usize) -> &[u8] {
-        self.at(i).unwrap_or_else(|| panic!("no group at index '{}'", i))
+        self.get(i).map(|m| m.as_bytes())
+            .unwrap_or_else(|| panic!("no group at index '{}'", i))
     }
 }
 
@@ -861,75 +897,8 @@ impl<'t, 'i> Index<&'i str> for Captures<'t> {
     type Output = [u8];
 
     fn index<'a>(&'a self, name: &'i str) -> &'a [u8] {
-        self.name(name).unwrap_or_else(|| panic!("no group named '{}'", name))
-    }
-}
-
-/// An iterator over capture groups for a particular match of a regular
-/// expression.
-///
-/// `'c` is the lifetime of the captures and `'t` is the lifetime of the
-/// matched text.
-pub struct SubCaptures<'c, 't: 'c> {
-    idx: usize,
-    caps: &'c Captures<'t>,
-}
-
-impl<'c, 't> Iterator for SubCaptures<'c, 't> {
-    type Item = Option<&'t [u8]>;
-
-    fn next(&mut self) -> Option<Option<&'t [u8]>> {
-        if self.idx < self.caps.len() {
-            self.idx += 1;
-            Some(self.caps.at(self.idx - 1))
-        } else {
-            None
-        }
-    }
-}
-
-/// An iterator over capture group positions for a particular match of a
-/// regular expression.
-///
-/// Positions are byte indices in terms of the original byte string matched.
-///
-/// `'c` is the lifetime of the captures.
-pub struct SubCapturesPos<'c> {
-    idx: usize,
-    slots: &'c [Option<usize>]
-}
-
-impl<'c> Iterator for SubCapturesPos<'c> {
-    type Item = Option<(usize, usize)>;
-
-    fn next(&mut self) -> Option<Option<(usize, usize)>> {
-        if self.idx >= self.slots.len() {
-            return None
-        }
-        let r = match (self.slots[self.idx], self.slots[self.idx + 1]) {
-            (Some(s), Some(e)) => Some((s, e)),
-            _ => None,
-        };
-        self.idx += 2;
-        Some(r)
-    }
-}
-
-/// An Iterator over named capture groups as a tuple with the group name and
-/// the value.
-///
-/// `'c` is the lifetime of the captures and `'t` is the lifetime of the
-/// matched text.
-pub struct SubCapturesNamed<'c, 't: 'c> {
-    caps: &'c Captures<'t>,
-    names: hash_map::Iter<'c, String, usize>,
-}
-
-impl<'c, 't> Iterator for SubCapturesNamed<'c, 't> {
-    type Item = (&'c str, Option<&'t [u8]>);
-
-    fn next(&mut self) -> Option<(&'c str, Option<&'t [u8]>)> {
-        self.names.next().map(|(name, &pos)| (&**name, self.caps.at(pos)))
+        self.name(name).map(|m| m.as_bytes())
+            .unwrap_or_else(|| panic!("no group named '{}'", name))
     }
 }
 
@@ -946,7 +915,7 @@ pub trait Replacer {
     /// have a match at capture group `0`.
     ///
     /// For example, a no-op replacement would be
-    /// `dst.extend(caps.at(0).unwrap())`.
+    /// `dst.extend(&caps[0])`.
     fn replace_append(&mut self, caps: &Captures, dst: &mut Vec<u8>);
 
     /// Return a fixed unchanging replacement byte string.

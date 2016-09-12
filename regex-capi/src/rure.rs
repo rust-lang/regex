@@ -36,7 +36,7 @@ pub struct rure_match {
     pub end: size_t,
 }
 
-pub struct Captures(Vec<Option<usize>>);
+pub struct Captures(bytes::Locations);
 
 pub struct Iter {
     re: *const Regex,
@@ -98,16 +98,16 @@ ffi_fn! {
         let mut builder = bytes::RegexBuilder::new(pat);
         if !options.is_null() {
             let options = unsafe { &*options };
-            builder = builder.size_limit(options.size_limit);
-            builder = builder.dfa_size_limit(options.dfa_size_limit);
+            builder.size_limit(options.size_limit);
+            builder.dfa_size_limit(options.dfa_size_limit);
         }
-        builder = builder.case_insensitive(flags & RURE_FLAG_CASEI > 0);
-        builder = builder.multi_line(flags & RURE_FLAG_MULTI > 0);
-        builder = builder.dot_matches_new_line(flags & RURE_FLAG_DOTNL > 0);
-        builder = builder.swap_greed(flags & RURE_FLAG_SWAP_GREED > 0);
-        builder = builder.ignore_whitespace(flags & RURE_FLAG_SPACE > 0);
-        builder = builder.unicode(flags & RURE_FLAG_UNICODE > 0);
-        match builder.compile() {
+        builder.case_insensitive(flags & RURE_FLAG_CASEI > 0);
+        builder.multi_line(flags & RURE_FLAG_MULTI > 0);
+        builder.dot_matches_new_line(flags & RURE_FLAG_DOTNL > 0);
+        builder.swap_greed(flags & RURE_FLAG_SWAP_GREED > 0);
+        builder.ignore_whitespace(flags & RURE_FLAG_SPACE > 0);
+        builder.unicode(flags & RURE_FLAG_UNICODE > 0);
+        match builder.build() {
             Ok(re) => {
                 let mut capture_names = HashMap::new();
                 for (i, name) in re.capture_names().enumerate() {
@@ -162,10 +162,10 @@ ffi_fn! {
     ) -> bool {
         let re = unsafe { &*re };
         let haystack = unsafe { slice::from_raw_parts(haystack, len) };
-        re.find_at(haystack, start).map(|(s, e)| unsafe {
+        re.find_at(haystack, start).map(|m| unsafe {
             if !match_info.is_null() {
-                (*match_info).start = s;
-                (*match_info).end = e;
+                (*match_info).start = m.start();
+                (*match_info).end = m.end();
             }
         }).is_some()
     }
@@ -258,7 +258,7 @@ ffi_fn! {
         }
         let (s, e) = match re.find_at(text, it.last_end) {
             None => return false,
-            Some((s, e)) => (s, e),
+            Some(m) => (m.start(), m.end()),
         };
         if s == e {
             // This is an empty match. To ensure we make progress, start
@@ -300,7 +300,7 @@ ffi_fn! {
         }
         let (s, e) = match re.read_captures_at(slots, text, it.last_end) {
             None => return false,
-            Some((s, e)) => (s, e),
+            Some(m) => (m.start(), m.end()),
         };
         if s == e {
             // This is an empty match. To ensure we make progress, start
@@ -323,7 +323,7 @@ ffi_fn! {
 ffi_fn! {
     fn rure_captures_new(re: *const Regex) -> *mut Captures {
         let re = unsafe { &*re };
-        let captures = Captures(vec![None; 2 * re.captures_len()]);
+        let captures = Captures(re.locations());
         Box::into_raw(Box::new(captures))
     }
 }
@@ -340,9 +340,9 @@ ffi_fn! {
         i: size_t,
         match_info: *mut rure_match,
     ) -> bool {
-        let captures = unsafe { &(*captures).0 };
-        match (captures[i * 2], captures[i * 2 + 1]) {
-            (Some(start), Some(end)) => {
+        let locs = unsafe { &(*captures).0 };
+        match locs.pos(i) {
+            Some((start, end)) => {
                 if !match_info.is_null() {
                     unsafe {
                         (*match_info).start = start;

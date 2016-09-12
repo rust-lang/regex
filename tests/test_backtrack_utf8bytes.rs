@@ -57,6 +57,7 @@ mod multiline;
 mod noparse;
 mod regression;
 mod replace;
+mod searcher;
 mod set;
 mod suffix_reverse;
 mod unicode;

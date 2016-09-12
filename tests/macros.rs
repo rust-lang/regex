@@ -2,7 +2,8 @@
 
 macro_rules! findall {
     ($re:expr, $text:expr) => {{
-        $re.find_iter(text!($text)).collect::<Vec<_>>()
+        $re.find_iter(text!($text))
+           .map(|m| (m.start(), m.end())).collect::<Vec<_>>()
     }}
 }
 
@@ -19,7 +20,10 @@ macro_rules! mat(
                 Some(c) => {
                     assert!(r.is_match(text));
                     assert!(r.shortest_match(text).is_some());
-                    c.iter_pos().collect()
+                    r.capture_names()
+                     .enumerate()
+                     .map(|(i, _)| c.get(i).map(|m| (m.start(), m.end())))
+                     .collect()
                 }
                 None => vec![None],
             };
@@ -45,14 +49,18 @@ macro_rules! matiter(
             let text = text!($text);
             let expected: Vec<(usize, usize)> = vec![];
             let r = regex!($re);
-            let got: Vec<_> = r.find_iter(text).collect();
+            let got: Vec<_> =
+                r.find_iter(text).map(|m| (m.start(), m.end())).collect();
             if expected != got {
                 panic!("For RE '{}' against '{:?}', \
                         expected '{:?}' but got '{:?}'",
                        $re, text, expected, got);
             }
             let captures_got: Vec<_> =
-                r.captures_iter(text).map(|c| c.pos(0).unwrap()).collect();
+                r.captures_iter(text)
+                 .map(|c| c.get(0).unwrap())
+                 .map(|m| (m.start(), m.end()))
+                 .collect();
             if captures_got != got {
                 panic!("For RE '{}' against '{:?}', \
                         got '{:?}' using find_iter but got '{:?}' \
@@ -67,14 +75,18 @@ macro_rules! matiter(
             let text = text!($text);
             let expected: Vec<_> = vec![$($loc)+];
             let r = regex!($re);
-            let got: Vec<_> = r.find_iter(text).collect();
+            let got: Vec<_> =
+                r.find_iter(text).map(|m| (m.start(), m.end())).collect();
             if expected != got {
                 panic!("For RE '{}' against '{:?}', \
                         expected '{:?}' but got '{:?}'",
                        $re, text, expected, got);
             }
             let captures_got: Vec<_> =
-                r.captures_iter(text).map(|c| c.pos(0).unwrap()).collect();
+                r.captures_iter(text)
+                 .map(|c| c.get(0).unwrap())
+                 .map(|m| (m.start(), m.end()))
+                 .collect();
             if captures_got != got {
                 panic!("For RE '{}' against '{:?}', \
                         got '{:?}' using find_iter but got '{:?}' \

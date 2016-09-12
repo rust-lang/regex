@@ -30,7 +30,7 @@ mat!(regression_ascii_word_underscore, r"[:word:]", "_", Some((0, 1)));
 fn regression_captures_rep() {
     let re = regex!(r"([a-f]){2}(?P<foo>[x-z])");
     let caps = re.captures(text!("abx")).unwrap();
-    assert_eq!(caps.name("foo").unwrap(), text!("x"));
+    assert_eq!(match_text!(caps.name("foo").unwrap()), text!("x"));
 }
 
 // See: https://github.com/rust-lang-nursery/regex/issues/153
@@ -41,7 +41,7 @@ mat!(regression_alt_in_alt2, r"^(.*?)(\n|\r\n?|$)", "ab\rcd", Some((0, 3)));
 mat!(regression_leftmost_first_prefix, r"z*azb", "azb", Some((0, 3)));
 
 // See: https://github.com/rust-lang/regex/issues/76
-mat!(uni_case_lower_nocase_flag, u!(r"(?i)\p{Ll}+"), "ΛΘΓΔα", Some((0, 10)));
+mat!(uni_case_lower_nocase_flag, r"(?i)\p{Ll}+", "ΛΘΓΔα", Some((0, 10)));
 
 // See: https://github.com/rust-lang-nursery/regex/issues/191
 mat!(many_alternates, r"1|2|3|4|5|6|7|8|9|10|int", "int", Some((0, 3)));
@@ -59,8 +59,8 @@ matiter!(word_boundary_dfa, r"\b", "a b c",
          (0, 0), (1, 1), (2, 2), (3, 3), (4, 4), (5, 5));
 
 // See: https://github.com/rust-lang-nursery/regex/issues/268
-matiter!(partial_anchor, u!(r"^a|b"), "ba", (0, 1));
+matiter!(partial_anchor, r"^a|b", "ba", (0, 1));
 
 // See: https://github.com/rust-lang-nursery/regex/issues/264
-mat!(ascii_boundary_no_capture, u!(r"(?-u)\B"), "\u{28f3e}", Some((0, 0)));
-mat!(ascii_boundary_capture, u!(r"(?-u)(\B)"), "\u{28f3e}", Some((0, 0)));
+mat!(ascii_boundary_no_capture, r"(?-u)\B", "\u{28f3e}", Some((0, 0)));
+mat!(ascii_boundary_capture, r"(?-u)(\B)", "\u{28f3e}", Some((0, 0)));

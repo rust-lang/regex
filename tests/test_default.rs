@@ -46,11 +46,6 @@ macro_rules! regex_set {
     }
 }
 
-#[cfg(feature = "pattern")]
-macro_rules! searcher_expr { ($e:expr) => ($e) }
-#[cfg(not(feature = "pattern"))]
-macro_rules! searcher_expr { ($e:expr) => ({}) }
-
 // Must come before other module definitions.
 include!("macros_str.rs");
 include!("macros.rs");

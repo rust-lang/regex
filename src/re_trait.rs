@@ -13,6 +13,77 @@
 /// of the capture).
 pub type Slot = Option<usize>;
 
+/// Locations represents the offsets of each capturing group in a regex for
+/// a single match.
+///
+/// Unlike `Captures`, a `Locations` value only stores offsets.
+#[doc(hidden)]
+pub struct Locations(Vec<Slot>);
+
+impl Locations {
+    /// Returns the start and end positions of the Nth capture group. Returns
+    /// `None` if `i` is not a valid capture group or if the capture group did
+    /// not match anything. The positions returned are *always* byte indices
+    /// with respect to the original string matched.
+    pub fn pos(&self, i: usize) -> Option<(usize, usize)> {
+        let (s, e) = (i * 2, i * 2 + 1);
+        match (self.0.get(s), self.0.get(e)) {
+            (Some(&Some(s)), Some(&Some(e))) => Some((s, e)),
+            _ => None,
+        }
+    }
+
+    /// Creates an iterator of all the capture group positions in order of
+    /// appearance in the regular expression. Positions are byte indices
+    /// in terms of the original string matched.
+    pub fn iter(&self) -> SubCapturesPosIter {
+        SubCapturesPosIter { idx: 0, locs: &self }
+    }
+
+    /// Returns the total number of capturing groups.
+    ///
+    /// This is always at least `1` since every regex has at least `1`
+    /// capturing group that corresponds to the entire match.
+    pub fn len(&self) -> usize {
+        self.0.len() / 2
+    }
+}
+
+/// This is a hack to make Locations -> &mut [Slot] be available internally
+/// without exposing it in the public API.
+pub fn as_slots(locs: &mut Locations) -> &mut [Slot] {
+    &mut locs.0
+}
+
+/// An iterator over capture group positions for a particular match of a
+/// regular expression.
+///
+/// Positions are byte indices in terms of the original string matched.
+///
+/// `'c` is the lifetime of the captures.
+pub struct SubCapturesPosIter<'c> {
+    idx: usize,
+    locs: &'c Locations,
+}
+
+impl<'c> Iterator for SubCapturesPosIter<'c> {
+    type Item = Option<(usize, usize)>;
+
+    fn next(&mut self) -> Option<Option<(usize, usize)>> {
+        if self.idx >= self.locs.len() {
+            return None;
+        }
+        let x = match self.locs.pos(self.idx) {
+            None => Some(None),
+            Some((s, e)) => {
+                Some(Some((s, e)))
+            }
+        };
+        self.idx += 1;
+        x
+    }
+}
+
 /// RegularExpression describes types that can implement regex searching.
 ///
 /// This trait is my attempt at reducing code duplication and to standardize
@@ -32,6 +103,11 @@ pub trait RegularExpression: Sized {
     /// The number of capture slots in the compiled regular expression. This is
     /// always two times the number of capture groups (two slots per group).
     fn slots_len(&self) -> usize;
+
+    /// Allocates fresh space for all capturing groups in this regex.
+    fn locations(&self) -> Locations {
+        Locations(vec![None; self.slots_len()])
+    }
 
     /// Returns the position of the next character after `i`.
     ///
@@ -65,7 +141,7 @@ pub trait RegularExpression: Sized {
     /// fills in any matching capture slot locations.
     fn read_captures_at(
         &self,
-        slots: &mut [Slot],
+        locs: &mut Locations,
         text: &Self::Text,
         start: usize,
     ) -> Option<(usize, usize)>;
@@ -75,8 +151,8 @@ pub trait RegularExpression: Sized {
     fn find_iter<'t>(
         self,
         text: &'t Self::Text,
-    ) -> FindMatches<'t, Self> {
-        FindMatches {
+    ) -> Matches<'t, Self> {
+        Matches {
             re: self,
             text: text,
             last_end: 0,
@@ -89,20 +165,20 @@ pub trait RegularExpression: Sized {
     fn captures_iter<'t>(
         self,
         text: &'t Self::Text,
-    ) -> FindCaptures<'t, Self> {
-        FindCaptures(self.find_iter(text))
+    ) -> CaptureMatches<'t, Self> {
+        CaptureMatches(self.find_iter(text))
     }
 }
 
 /// An iterator over all non-overlapping successive leftmost-first matches.
-pub struct FindMatches<'t, R> where R: RegularExpression, R::Text: 't {
+pub struct Matches<'t, R> where R: RegularExpression, R::Text: 't {
     re: R,
     text: &'t R::Text,
     last_end: usize,
     last_match: Option<usize>,
 }
 
-impl<'t, R> FindMatches<'t, R> where R: RegularExpression, R::Text: 't {
+impl<'t, R> Matches<'t, R> where R: RegularExpression, R::Text: 't {
     /// Return the text being searched.
     pub fn text(&self) -> &'t R::Text {
         self.text
@@ -114,7 +190,7 @@ impl<'t, R> FindMatches<'t, R> where R: RegularExpression, R::Text: 't {
     }
 }
 
-impl<'t, R> Iterator for FindMatches<'t, R>
+impl<'t, R> Iterator for Matches<'t, R>
         where R: RegularExpression, R::Text: 't + AsRef<[u8]> {
     type Item = (usize, usize);
 
@@ -146,10 +222,10 @@ impl<'t, R> Iterator for FindMatches<'t, R>
 
 /// An iterator over all non-overlapping successive leftmost-first matches with
 /// captures.
-pub struct FindCaptures<'t, R>(FindMatches<'t, R>)
+pub struct CaptureMatches<'t, R>(Matches<'t, R>)
     where R: RegularExpression, R::Text: 't;
 
-impl<'t, R> FindCaptures<'t, R> where R: RegularExpression, R::Text: 't {
+impl<'t, R> CaptureMatches<'t, R> where R: RegularExpression, R::Text: 't {
     /// Return the text being searched.
     pub fn text(&self) -> &'t R::Text {
         self.0.text()
@@ -161,17 +237,17 @@ impl<'t, R> FindCaptures<'t, R> where R: RegularExpression, R::Text: 't {
     }
 }
 
-impl<'t, R> Iterator for FindCaptures<'t, R>
+impl<'t, R> Iterator for CaptureMatches<'t, R>
         where R: RegularExpression, R::Text: 't + AsRef<[u8]> {
-    type Item = Vec<Slot>;
+    type Item = Locations;
 
-    fn next(&mut self) -> Option<Vec<Slot>> {
+    fn next(&mut self) -> Option<Locations> {
         if self.0.last_end > self.0.text.as_ref().len() {
             return None
         }
-        let mut slots = vec![None; self.0.re.slots_len()];
+        let mut locs = self.0.re.locations();
         let (s, e) = match self.0.re.read_captures_at(
-            &mut slots,
+            &mut locs,
             self.0.text,
             self.0.last_end,
         ) {
@@ -187,6 +263,6 @@ impl<'t, R> Iterator for FindCaptures<'t, R>
             self.0.last_end = e;
         }
         self.0.last_match = Some(e);
-        Some(slots)
+        Some(locs)
     }
 }
