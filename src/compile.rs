@@ -143,9 +143,7 @@ impl Compiler {
         // matching engine itself.
         let mut dotstar_patch = Patch { hole: Hole::None, entry: 0 };
         self.compiled.is_anchored_start = expr.is_anchored_start();
-        self.compiled.has_anchored_start = expr.has_anchored_start();
         self.compiled.is_anchored_end = expr.is_anchored_end();
-        self.compiled.has_anchored_end = expr.has_anchored_end();
         if self.compiled.needs_dotstar() {
             dotstar_patch = try!(self.c_dotstar());
             self.compiled.start = dotstar_patch.entry;
@@ -173,10 +171,6 @@ impl Compiler {
             exprs.iter().all(|e| e.is_anchored_start());
         self.compiled.is_anchored_end =
             exprs.iter().all(|e| e.is_anchored_end());
-        self.compiled.has_anchored_start =
-            exprs.iter().any(|e| e.has_anchored_start());
-        self.compiled.has_anchored_end =
-            exprs.iter().any(|e| e.has_anchored_end());
         let mut dotstar_patch = Patch { hole: Hole::None, entry: 0 };
         if self.compiled.needs_dotstar() {
             dotstar_patch = try!(self.c_dotstar());

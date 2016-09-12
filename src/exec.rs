@@ -222,6 +222,12 @@ impl ExecBuilder {
                     .allow_bytes(!self.only_utf8);
             let expr = try!(parser.parse(pat));
             bytes = bytes || expr.has_bytes();
+
+            if !expr.is_anchored_start() && expr.has_anchored_start() {
+                // Partial anchors unfortunately make it hard to use prefixes,
+                // so disable them.
+                prefixes = None;
+            }
             prefixes = prefixes.and_then(|mut prefixes| {
                 if !prefixes.union_prefixes(&expr) {
                     None
@@ -229,6 +235,12 @@ impl ExecBuilder {
                     Some(prefixes)
                 }
             });
+
+            if !expr.is_anchored_end() && expr.has_anchored_end() {
+                // Partial anchors unfortunately make it hard to use suffixes,
+                // so disable them.
+                suffixes = None;
+            }
             suffixes = suffixes.and_then(|mut suffixes| {
                 if !suffixes.union_suffixes(&expr) {
                     None
@@ -1114,9 +1126,7 @@ impl ExecReadOnly {
         // create two sets of literals: all of them and then the subset that
         // aren't anchored. We would then only search for all of them when at
         // the beginning of the input and use the subset in all other cases.
-        if self.res.len() == 1
-            && !self.nfa.has_anchored_start
-            && !self.nfa.has_anchored_end {
+        if self.res.len() == 1 {
             if self.nfa.prefixes.complete() {
                 return if self.nfa.is_anchored_start {
                     Literal(MatchLiteralType::AnchoredStart)

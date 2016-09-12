@@ -64,3 +64,7 @@ matiter!(partial_anchor, u!(r"^a|b"), "ba", (0, 1));
 // See: https://github.com/rust-lang-nursery/regex/issues/264
 mat!(ascii_boundary_no_capture, u!(r"(?-u)\B"), "\u{28f3e}", Some((0, 0)));
 mat!(ascii_boundary_capture, u!(r"(?-u)(\B)"), "\u{28f3e}", Some((0, 0)));
+
+// See: https://github.com/rust-lang-nursery/regex/issues/280
+ismatch!(partial_anchor_alternate_begin, u!(r"^a|z"), "yyyyya", false);
+ismatch!(partial_anchor_alternate_end, u!(r"a$|z"), "ayyyyy", false);
