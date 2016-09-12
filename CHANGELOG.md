@@ -1,3 +1,13 @@
+0.1.77
+======
+* [PR #281](https://github.com/rust-lang-nursery/regex/pull/281):
+  Fixes bug #280 by disabling all literal optimizations when a pattern
+  is partially anchored.
+
+0.1.76
+======
+* Tweak criteria for using the Teddy literal matcher.
+
 0.1.75
 ======
 * [PR #275](https://github.com/rust-lang-nursery/regex/pull/275):
