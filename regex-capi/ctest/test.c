@@ -195,6 +195,60 @@ done:
     return passed;
 }
 
+bool test_iter_capture_name(char *expect, char *given) {
+    bool passed = true;
+    if (strcmp(expect, given)) {
+        if (DEBUG) {
+            fprintf(stderr,
+                    "[test_iter_capture_name] expected first capture name '%s' "
+                    "got '%s'\n",
+                    expect, given);
+        }
+        passed = false;
+    }
+    return passed;
+}
+
+bool test_iter_capture_names() {
+    bool passed = true;
+
+    char *name;
+    rure *re = rure_compile_must("(?P<year>\\d{4})-(?P<month>\\d{2})-(?P<day>\\d{2})");
+    rure_iter_capture_names *it = rure_iter_capture_names_new(re);
+
+    bool result = rure_iter_capture_names_next(it, &name);
+    if (!result) {
+        if (DEBUG) {
+            fprintf(stderr,
+                    "[test_iter_capture_names] expected a second name, but got none\n");
+        }
+        passed = false;
+        goto done;
+    }
+
+    result = rure_iter_capture_names_next(it, &name);
+    passed = test_iter_capture_name("year", name);
+    if (!passed) {
+        goto done;
+    }
+
+    result = rure_iter_capture_names_next(it, &name);
+    passed = test_iter_capture_name("month", name);
+    if (!passed) {
+        goto done;
+    }
+
+    result = rure_iter_capture_names_next(it, &name);
+    passed = test_iter_capture_name("day", name);
+    if (!passed) {
+        goto done;
+    }
+done:
+    rure_iter_capture_names_free(it);
+    rure_free(re);
+    return passed;
+}
+
 /*
  * This tests whether we can set the flags correctly. In this case, we disable
  * all flags, which includes disabling Unicode mode. When we disable Unicode
@@ -294,6 +348,7 @@ int main() {
     run_test(test_find, "test_find", &passed);
     run_test(test_captures, "test_captures", &passed);
     run_test(test_iter, "test_iter", &passed);
+    run_test(test_iter_capture_names, "test_iter_capture_names", &passed);
     run_test(test_flags, "test_flags", &passed);
     run_test(test_compile_error, "test_compile_error", &passed);
     run_test(test_compile_error_size_limit, "test_compile_error_size_limit",
