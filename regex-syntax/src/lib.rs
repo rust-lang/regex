@@ -257,7 +257,7 @@ pub struct ClassRange {
 
     /// The end character of the range.
     ///
-    /// This must be greater than or equal to `end`.
+    /// This must be greater than or equal to `start`.
     pub end: char,
 }
 
