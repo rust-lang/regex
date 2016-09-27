@@ -99,6 +99,17 @@ typedef struct rure_captures rure_captures;
 typedef struct rure_iter rure_iter;
 
 /*
+ * rure_iter_capture_names is an iterator over the list of capture group names
+ * in this particular rure.
+ *
+ * An rure_iter_capture_names value may not outlive its corresponding rure,
+ * and should be freed before its corresponding rure is freed.
+ *
+ * It is not safe to use from multiple threads simultaneously.
+ */
+typedef struct rure_iter_capture_names rure_iter_capture_names;
+
+/*
  * rure_error is an error that caused compilation to fail.
  *
  * Most errors are syntax errors but an error can be returned if the compiled
@@ -267,6 +278,28 @@ bool rure_shortest_match(rure *re, const uint8_t *haystack, size_t length,
 int32_t rure_capture_name_index(rure *re, const char *name);
 
 /*
+ * rure_iter_capture_names_new creates a new capture_names iterator.
+ *
+ * An iterator will report all successive capture group names of re.
+ */
+rure_iter_capture_names *rure_iter_capture_names_new(rure *re);
+
+/*
+ * rure_iter_capture_names_free frees the iterator given.
+ *
+ * It must be called at most once.
+ */
+void rure_iter_capture_names_free(rure_iter_capture_names *it);
+
+/*
+ * rure_iter_capture_names_next advances the iterator and returns true
+ * if and only if another capture group name exists.
+ *
+ * The value of the capture group name is written to the provided pointer.
+ */
+bool rure_iter_capture_names_next(rure_iter_capture_names *it, char **name);
+
+/*
  * rure_iter_new creates a new iterator.
  *
  * An iterator will report all successive non-overlapping matches of re.
@@ -305,7 +338,7 @@ bool rure_iter_next(rure_iter *it, const uint8_t *haystack, size_t length,
                     rure_match *match);
 
 /*
- * rure_iter_next advances the iterator and returns true if and only if a
+ * rure_iter_next_captures advances the iterator and returns true if and only if a
  * match was found. If a match is found, then all of its capture locations are
  * stored in the captures pointer given.
  *

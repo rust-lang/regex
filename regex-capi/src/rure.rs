@@ -5,7 +5,7 @@ use ::libc::{c_char, size_t};
 
 use ::std::collections::HashMap;
 use ::std::ops::Deref;
-use ::std::ffi::CStr;
+use ::std::ffi::{CStr, CString};
 use ::std::ptr;
 use ::std::str;
 use ::std::slice;
@@ -42,6 +42,11 @@ pub struct Iter {
     re: *const Regex,
     last_end: usize,
     last_match: Option<usize>,
+}
+
+pub struct IterCaptureNames {
+    capture_names: bytes::CaptureNames<'static>,
+    name_ptrs: Vec<*mut c_char>,
 }
 
 impl Deref for Regex {
@@ -226,6 +231,67 @@ ffi_fn! {
 }
 
 ffi_fn! {
+    fn rure_iter_capture_names_new(
+        re: *const Regex,
+    ) -> *mut IterCaptureNames {
+        let re = unsafe { &*re };
+        Box::into_raw(Box::new(IterCaptureNames {
+            capture_names: re.re.capture_names(),
+            name_ptrs: Vec::new(),
+        }))
+    }
+}
+
+ffi_fn! {
+    fn rure_iter_capture_names_free(it: *mut IterCaptureNames) {
+        unsafe {
+            let it = &mut *it;
+            while let Some(ptr) = it.name_ptrs.pop(){
+                CString::from_raw(ptr);
+            }
+            Box::from_raw(it);
+        }
+    }
+}
+
+ffi_fn! {
+    fn rure_iter_capture_names_next(
+        it: *mut IterCaptureNames,
+        capture_name: *mut *mut c_char,
+    ) -> bool {
+        if capture_name.is_null() {
+            return false;
+        }
+
+        let it = unsafe { &mut *it };
+        let cn = match it.capture_names.next() {
+            // Top-level iterator ran out of capture groups
+            None => return false,
+            Some(val) => {
+                let name = match val {
+                    // inner Option didn't have a name
+                    None => "",
+                    Some(name) => name
+                };
+                name
+            }
+        };
+
+        unsafe {
+            let cs = match CString::new(cn.as_bytes()) {
+                Result::Ok(val) => val,
+                Result::Err(err) => return false
+            };
+            let ptr = cs.into_raw();
+            it.name_ptrs.push(ptr);
+            *capture_name = ptr;
+        }
+        true
+
+    }
+}
+
+ffi_fn! {
     fn rure_iter_new(
         re: *const Regex,
     ) -> *mut Iter {
@@ -387,5 +453,3 @@ ffi_fn! {
         options.dfa_size_limit = limit;
     }
 }
-
-
