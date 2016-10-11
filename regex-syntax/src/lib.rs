@@ -1230,6 +1230,22 @@ impl fmt::Display for CharClass {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         try!(write!(f, "(?u:["));
         for range in self.iter() {
+            if range.start == '-' || range.end == '-' {
+                try!(write!(f, "-"));
+                break;
+            }
+        }
+        for range in self.iter() {
+            let mut range = *range;
+            if range.start == '-' {
+                range.start = ((range.start as u8) + 1) as char;
+            }
+            if range.end == '-' {
+                range.end = ((range.end as u8) - 1) as char;
+            }
+            if range.start > range.end {
+                continue;
+            }
             try!(write!(f, "{}", range));
         }
         try!(write!(f, "])"));
@@ -1247,6 +1263,22 @@ impl fmt::Display for ByteClass {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         try!(write!(f, "(?-u:["));
         for range in self.iter() {
+            if range.start == b'-' || range.end == b'-' {
+                try!(write!(f, "-"));
+                break;
+            }
+        }
+        for range in self.iter() {
+            let mut range = *range;
+            if range.start == b'-' {
+                range.start += 1;
+            }
+            if range.end == b'-' {
+                range.start -= 1;
+            }
+            if range.start > range.end {
+                continue;
+            }
             try!(write!(f, "{}", range));
         }
         try!(write!(f, "])"));
@@ -1998,5 +2030,14 @@ mod tests {
         let cls = bclass(&[(b'@', b'@')]);
         assert_eq!(cls.clone().canonicalize(), bclass(&[(b'@', b'@')]));
         assert_eq!(cls.case_fold(), bclass(&[(b'@', b'@')]));
+    }
+
+    #[test]
+    fn roundtrip_class_hypen() {
+        let expr = e("[-./]");
+        assert_eq!("(?u:[-\\.-/])", expr.to_string());
+
+        let expr = e("(?-u)[-./]");
+        assert_eq!("(?-u:[-\\.-/])", expr.to_string());
     }
 }
