@@ -21,6 +21,11 @@ pub struct Options {
     dfa_size_limit: usize,
 }
 
+pub struct RegexSet {
+    re: bytes::RegexSet,
+    pattern_count: usize
+}
+
 const RURE_FLAG_CASEI: u32 = 1 << 0;
 const RURE_FLAG_MULTI: u32 = 1 << 1;
 const RURE_FLAG_DOTNL: u32 = 1 << 2;
@@ -52,6 +57,11 @@ pub struct IterCaptureNames {
 impl Deref for Regex {
     type Target = bytes::Regex;
     fn deref(&self) -> &bytes::Regex { &self.re }
+}
+
+impl Deref for RegexSet {
+    type Target = bytes::RegexSet;
+    fn deref(&self) -> &bytes::RegexSet { &self.re }
 }
 
 impl Default for Options {
@@ -280,7 +290,7 @@ ffi_fn! {
         unsafe {
             let cs = match CString::new(cn.as_bytes()) {
                 Result::Ok(val) => val,
-                Result::Err(err) => return false
+                Result::Err(_) => return false
             };
             let ptr = cs.into_raw();
             it.name_ptrs.push(ptr);
@@ -451,5 +461,96 @@ ffi_fn! {
     fn rure_options_dfa_size_limit(options: *mut Options, limit: size_t) {
         let options = unsafe { &mut *options };
         options.dfa_size_limit = limit;
+    }
+}
+
+ffi_fn! {
+    fn rure_compile_set(
+        patterns: *const *const u8,
+        patterns_lengths: *const size_t,
+        patterns_count: size_t,
+        error: *mut Error
+    ) -> *const RegexSet {
+        let (raw_pats, raw_patsl) = unsafe {
+            (
+                slice::from_raw_parts(patterns, patterns_count),
+                slice::from_raw_parts(patterns_lengths, patterns_count)
+            )
+        };
+
+        let mut pats = Vec::with_capacity(patterns_count);
+        for (&raw_pat, &raw_patl) in raw_pats.iter().zip(raw_patsl) {
+            let pat = unsafe { slice::from_raw_parts(raw_pat, raw_patl) };
+            pats.push(match str::from_utf8(pat) {
+                Ok(pat) => pat,
+                Err(err) => {
+                    unsafe {
+                        if !error.is_null() {
+                            *error = Error::new(ErrorKind::Str(err));
+                        }
+                        return ptr::null();
+                    }
+                }
+            });
+        }
+
+        match bytes::RegexSet::new(&pats) {
+            Ok(re) => {
+                let pat_count = re.len();
+                let re = RegexSet {
+                    re: re,
+                    pattern_count: pat_count
+                };
+                Box::into_raw(Box::new(re))
+            }
+            Err(err) => {
+                unsafe {
+                    if !error.is_null() {
+                        *error = Error::new(ErrorKind::Regex(err));
+                    }
+                    ptr::null()
+                }
+            }
+        }
+    }
+}
+
+ffi_fn! {
+    fn rure_set_free(re: *const RegexSet) {
+        unsafe { Box::from_raw(re as *mut RegexSet); }
+    }
+}
+
+ffi_fn! {
+    fn rure_set_is_match(
+        re: *const RegexSet,
+        haystack: *const u8,
+        len: size_t
+    ) -> bool {
+        let re = unsafe { &*re };
+        let haystack = unsafe { slice::from_raw_parts(haystack, len) };
+        re.is_match(haystack)
+    }
+}
+
+ffi_fn! {
+    fn rure_set_matches(
+        re: *const RegexSet,
+        haystack: *const u8,
+        len: size_t,
+        matches: *mut bool
+    ) -> bool {
+        let re = unsafe { &*re };
+        let mut results = unsafe {
+            slice::from_raw_parts_mut(matches, re.pattern_count)
+        };
+        let haystack = unsafe { slice::from_raw_parts(haystack, len) };
+        let matches = re.matches(haystack);
+
+        for i in 0..re.pattern_count {
+            results[i] = matches.matched(i);
+        }
+
+        matches.matched_any()
     }
 }

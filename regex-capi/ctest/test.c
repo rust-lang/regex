@@ -331,6 +331,64 @@ bool test_compile_error_size_limit() {
     return passed;
 }
 
+bool test_regex_set_matches() {
+
+#define PAT_COUNT 6
+
+    bool passed = true;
+    const char *patterns[] = {
+        "foo", "barfoo", "\\w+", "\\d+", "foobar", "bar"
+    };
+    const size_t patterns_lengths[] = {
+        3, 6, 3, 3, 6, 3
+    };
+
+    rure_error *err = rure_error_new();
+    rure_set *re = rure_compile_set((const uint8_t **) patterns,
+                                    patterns_lengths,
+                                    PAT_COUNT, err);
+    if (re == NULL) {
+        passed = false;
+        goto done2;
+    }
+
+    if (!rure_set_is_match(re, (const uint8_t *) "foobar", 6)) {
+        passed = false;
+        goto done1;
+    }
+
+    if (rure_set_is_match(re, (const uint8_t *) "", 0)) {
+        passed = false;
+        goto done1;
+    }
+
+    bool matches[PAT_COUNT];
+    if (!rure_set_matches(re, (const uint8_t *) "foobar", 6, matches)) {
+        passed = false;
+        goto done1;
+    }
+
+    const bool match_target[] = {
+        true, false, true, false, true, true
+    };
+
+    int i;
+    for (i = 0; i < PAT_COUNT; ++i) {
+        if (matches[i] != match_target[i]) {
+            passed = false;
+            goto done1;
+        }
+    }
+
+done1:
+    rure_set_free(re);
+done2:
+    rure_error_free(err);
+    return passed;
+
+#undef PAT_COUNT
+}
+
 void run_test(bool (test)(), const char *name, bool *passed) {
     if (!test()) {
         *passed = false;
@@ -353,6 +411,7 @@ int main() {
     run_test(test_compile_error, "test_compile_error", &passed);
     run_test(test_compile_error_size_limit, "test_compile_error_size_limit",
              &passed);
+    run_test(test_regex_set_matches, "test_regex_set_match", &passed);
 
     if (!passed) {
         exit(1);
