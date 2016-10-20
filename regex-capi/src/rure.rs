@@ -554,3 +554,10 @@ ffi_fn! {
         matches.matched_any()
     }
 }
+
+ffi_fn! {
+    fn rure_set_len(re: *const RegexSet) -> size_t {
+        let re = unsafe { &*re };
+        re.len()
+    }
+}

@@ -473,7 +473,7 @@ rure_set *rure_compile_set(const uint8_t **patterns,
 /*
  * rure_set_free frees the given compiled regular expression set.
  *
- * This must be called at most once.
+ * This must be called at most once for any rure_set.
  */
 void rure_set_free(rure_set *re);
 
@@ -490,8 +490,10 @@ bool rure_set_is_match(rure_set *re, const uint8_t *haystack, size_t length);
 
 /*
  * rure_set_matches compares each regex in the set against the haystack and
- * returns an array of bools which correspond to if a match was found for
- * the specified regex.
+ * modifies matches with the match result of each pattern. Match results are
+ * ordered in the same way as the rure_set was compiled. For example,
+ * index 0 of matches corresponds to the first pattern passed to
+ * `rure_compile_set`.
  *
  * haystack may contain arbitrary bytes, but ASCII compatible text is more
  * useful. UTF-8 is even more useful. Other text encodings aren't supported.
@@ -505,7 +507,12 @@ bool rure_set_is_match(rure_set *re, const uint8_t *haystack, size_t length);
  * caring which, use rure_set_is_match.
  */
 bool rure_set_matches(rure_set *re, const uint8_t *haystack, size_t length,
-                      const bool *matches);
+                      bool *matches);
+
+/*
+ * rure_set_len returns the number of patterns rure_set was compiled with.
+ */
+size_t rure_set_len(rure_set *re);
 
 /*
  * rure_error_new allocates space for an error.

@@ -352,6 +352,11 @@ bool test_regex_set_matches() {
         goto done2;
     }
 
+    if (rure_set_len(re) != PAT_COUNT) {
+        passed = false;
+        goto done1;
+    }
+
     if (!rure_set_is_match(re, (const uint8_t *) "foobar", 6)) {
         passed = false;
         goto done1;
