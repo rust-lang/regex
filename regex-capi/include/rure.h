@@ -462,6 +462,13 @@ void rure_options_dfa_size_limit(rure_options *options, size_t limit);
  * The number of patterns to compile is specified by patterns_count. patterns
  * must contain at least this many entries.
  *
+ * flags is a bitfield. Valid values are constants declared with prefix
+ * RURE_FLAG_.
+ *
+ * options contains non-flag configuration settings. If it's NULL, default
+ * settings are used. options may be freed immediately after a call to
+ * rure_compile.
+ *
  * error is set if there was a problem compiling the pattern.
  *
  * The compiled expression set returned may be used from multiple threads.
@@ -488,6 +495,12 @@ void rure_set_free(rure_set *re);
  * haystack may contain arbitrary bytes, but ASCII compatible text is more
  * useful. UTF-8 is even more useful. Other text encodings aren't supported.
  * length should be the number of bytes in haystack.
+ *
+ * start is the position at which to start searching. Note that setting the
+ * start position is distinct from incrementing the pointer, since the regex
+ * engine may look at bytes before the start position to determine match
+ * information. For example, if the start position is greater than 0, then the
+ * \A ("begin text") anchor can never match.
  */
 bool rure_set_is_match(rure_set *re, const uint8_t *haystack, size_t length,
                        size_t start);
@@ -502,6 +515,12 @@ bool rure_set_is_match(rure_set *re, const uint8_t *haystack, size_t length,
  * haystack may contain arbitrary bytes, but ASCII compatible text is more
  * useful. UTF-8 is even more useful. Other text encodings aren't supported.
  * length should be the number of bytes in haystack.
+ *
+ * start is the position at which to start searching. Note that setting the
+ * start position is distinct from incrementing the pointer, since the regex
+ * engine may look at bytes before the start position to determine match
+ * information. For example, if the start position is greater than 0, then the
+ * \A ("begin text") anchor can never match.
  *
  * matches must be greater than or equal to the number of patterns the
  * rure_set was compiled with.
