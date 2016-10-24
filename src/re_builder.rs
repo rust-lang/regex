@@ -7,10 +7,10 @@
 // <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-#![allow(missing_docs)]
 
 /// The set of user configurable options for compiling zero or more regexes.
 #[derive(Clone, Debug)]
+#[allow(missing_docs)]
 pub struct RegexOptions {
     pub pats: Vec<String>,
     pub size_limit: usize,
