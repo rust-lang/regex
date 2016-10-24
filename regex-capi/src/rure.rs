@@ -1,6 +1,7 @@
 use ::error::{Error, ErrorKind};
 
 use ::regex::bytes;
+use ::regex::internal::{Exec, ExecBuilder, RegexOptions};
 use ::libc::{c_char, size_t};
 
 use ::std::collections::HashMap;
@@ -469,6 +470,8 @@ ffi_fn! {
         patterns: *const *const u8,
         patterns_lengths: *const size_t,
         patterns_count: size_t,
+        flags: u32,
+        options: *const Options,
         error: *mut Error
     ) -> *const RegexSet {
         let (raw_pats, raw_patsl) = unsafe {
@@ -525,7 +528,8 @@ ffi_fn! {
     fn rure_set_is_match(
         re: *const RegexSet,
         haystack: *const u8,
-        len: size_t
+        len: size_t,
+        start: size_t
     ) -> bool {
         let re = unsafe { &*re };
         let haystack = unsafe { slice::from_raw_parts(haystack, len) };
@@ -538,6 +542,7 @@ ffi_fn! {
         re: *const RegexSet,
         haystack: *const u8,
         len: size_t,
+        start: size_t,
         matches: *mut bool
     ) -> bool {
         let re = unsafe { &*re };

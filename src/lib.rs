@@ -603,4 +603,5 @@ pub mod internal {
     pub use prog::{Program, Inst, EmptyLook, InstRanges};
     pub use re_plugin::Plugin;
     pub use re_unicode::_Regex;
+    pub use re_builder::RegexOptions;
 }

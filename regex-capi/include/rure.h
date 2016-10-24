@@ -468,7 +468,10 @@ void rure_options_dfa_size_limit(rure_options *options, size_t limit);
  */
 rure_set *rure_compile_set(const uint8_t **patterns,
                            const size_t *patterns_lengths,
-                           size_t patterns_count, rure_error *error);
+                           size_t patterns_count,
+                           uint32_t flags,
+                           rure_options *options,
+                           rure_error *error);
 
 /*
  * rure_set_free frees the given compiled regular expression set.
@@ -486,7 +489,8 @@ void rure_set_free(rure_set *re);
  * useful. UTF-8 is even more useful. Other text encodings aren't supported.
  * length should be the number of bytes in haystack.
  */
-bool rure_set_is_match(rure_set *re, const uint8_t *haystack, size_t length);
+bool rure_set_is_match(rure_set *re, const uint8_t *haystack, size_t length,
+                       size_t start);
 
 /*
  * rure_set_matches compares each regex in the set against the haystack and
@@ -507,7 +511,7 @@ bool rure_set_is_match(rure_set *re, const uint8_t *haystack, size_t length);
  * caring which, use rure_set_is_match.
  */
 bool rure_set_matches(rure_set *re, const uint8_t *haystack, size_t length,
-                      bool *matches);
+                      size_t start, bool *matches);
 
 /*
  * rure_set_len returns the number of patterns rure_set was compiled with.

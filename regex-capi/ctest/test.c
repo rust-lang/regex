@@ -346,7 +346,10 @@ bool test_regex_set_matches() {
     rure_error *err = rure_error_new();
     rure_set *re = rure_compile_set((const uint8_t **) patterns,
                                     patterns_lengths,
-                                    PAT_COUNT, err);
+                                    PAT_COUNT,
+                                    0,
+                                    NULL,
+                                    err);
     if (re == NULL) {
         passed = false;
         goto done2;
@@ -357,18 +360,18 @@ bool test_regex_set_matches() {
         goto done1;
     }
 
-    if (!rure_set_is_match(re, (const uint8_t *) "foobar", 6)) {
+    if (!rure_set_is_match(re, (const uint8_t *) "foobar", 6, 0)) {
         passed = false;
         goto done1;
     }
 
-    if (rure_set_is_match(re, (const uint8_t *) "", 0)) {
+    if (rure_set_is_match(re, (const uint8_t *) "", 0, 0)) {
         passed = false;
         goto done1;
     }
 
     bool matches[PAT_COUNT];
-    if (!rure_set_matches(re, (const uint8_t *) "foobar", 6, matches)) {
+    if (!rure_set_matches(re, (const uint8_t *) "foobar", 6, 0, matches)) {
         passed = false;
         goto done1;
     }
