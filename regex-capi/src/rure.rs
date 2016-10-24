@@ -2,6 +2,7 @@ use ::error::{Error, ErrorKind};
 
 use ::regex::bytes;
 use ::regex::internal::{Exec, ExecBuilder, RegexOptions};
+use ::regex::internal::RegularExpression;
 use ::libc::{c_char, size_t};
 
 use ::std::collections::HashMap;
@@ -22,8 +23,11 @@ pub struct Options {
     dfa_size_limit: usize,
 }
 
+// The `RegexSet` is not exposed with option support or matching at an
+// arbitrary position with a crate just yet. To circumvent this, we use
+// the `Exec` structure directly.
 pub struct RegexSet {
-    re: bytes::RegexSet,
+    re: Exec,
     pattern_count: usize
 }
 
@@ -61,8 +65,8 @@ impl Deref for Regex {
 }
 
 impl Deref for RegexSet {
-    type Target = bytes::RegexSet;
-    fn deref(&self) -> &bytes::RegexSet { &self.re }
+    type Target = Exec;
+    fn deref(&self) -> &Exec { &self.re }
 }
 
 impl Default for Options {
@@ -497,11 +501,34 @@ ffi_fn! {
             });
         }
 
-        match bytes::RegexSet::new(&pats) {
-            Ok(re) => {
-                let pat_count = re.len();
+        // Start with a default set and override values if present.
+        let mut opts = RegexOptions::default();
+        let pat_count = pats.len();
+        opts.pats = pats.into_iter().map(|s| s.to_owned()).collect();
+
+        if !options.is_null() {
+            let options = unsafe { &*options };
+            opts.size_limit = options.size_limit;
+            opts.dfa_size_limit = options.dfa_size_limit;
+        }
+
+        opts.case_insensitive = flags & RURE_FLAG_CASEI > 0;
+        opts.multi_line = flags & RURE_FLAG_MULTI > 0;
+        opts.dot_matches_new_line = flags & RURE_FLAG_DOTNL > 0;
+        opts.swap_greed = flags & RURE_FLAG_SWAP_GREED > 0;
+        opts.ignore_whitespace = flags & RURE_FLAG_SPACE > 0;
+        opts.unicode = flags & RURE_FLAG_UNICODE > 0;
+
+        // `Exec` does not expose a `new` function with appropriate arguments
+        // so we construct directly.
+        let builder = ExecBuilder::new_options(opts)
+                                    .bytes(true)
+                                    .only_utf8(false);
+
+        match builder.build() {
+            Ok(ex) => {
                 let re = RegexSet {
-                    re: re,
+                    re: ex,
                     pattern_count: pat_count
                 };
                 Box::into_raw(Box::new(re))
@@ -509,7 +536,7 @@ ffi_fn! {
             Err(err) => {
                 unsafe {
                     if !error.is_null() {
-                        *error = Error::new(ErrorKind::Regex(err));
+                        *error = Error::new(ErrorKind::Regex(err))
                     }
                     ptr::null()
                 }
@@ -533,7 +560,7 @@ ffi_fn! {
     ) -> bool {
         let re = unsafe { &*re };
         let haystack = unsafe { slice::from_raw_parts(haystack, len) };
-        re.is_match(haystack)
+        re.searcher().is_match_at(haystack, start)
     }
 }
 
@@ -546,23 +573,22 @@ ffi_fn! {
         matches: *mut bool
     ) -> bool {
         let re = unsafe { &*re };
-        let mut results = unsafe {
+        let mut matches = unsafe {
             slice::from_raw_parts_mut(matches, re.pattern_count)
         };
         let haystack = unsafe { slice::from_raw_parts(haystack, len) };
-        let matches = re.matches(haystack);
 
-        for i in 0..re.pattern_count {
-            results[i] = matches.matched(i);
+        // many_matches_at isn't guaranteed to set non-matches to false
+        for item in matches.iter_mut() {
+            *item = false;
         }
 
-        matches.matched_any()
+        re.searcher().many_matches_at(&mut matches, haystack, start)
     }
 }
 
 ffi_fn! {
     fn rure_set_len(re: *const RegexSet) -> size_t {
-        let re = unsafe { &*re };
-        re.len()
+        unsafe { (*re).pattern_count }
     }
 }
