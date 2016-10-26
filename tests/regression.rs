@@ -68,3 +68,6 @@ mat!(ascii_boundary_capture, u!(r"(?-u)(\B)"), "\u{28f3e}", Some((0, 0)));
 // See: https://github.com/rust-lang-nursery/regex/issues/280
 ismatch!(partial_anchor_alternate_begin, u!(r"^a|z"), "yyyyya", false);
 ismatch!(partial_anchor_alternate_end, u!(r"a$|z"), "ayyyyy", false);
+
+// See: https://github.com/rust-lang-nursery/regex/issues/289
+mat!(lits_unambiguous, u!(r"(ABC|CDA|BC)X"), "CDAX", Some((0, 4)));
