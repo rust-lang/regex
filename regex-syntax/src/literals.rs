@@ -1390,6 +1390,10 @@ mod tests {
     test_unamb!(unambiguous13,
                 vec![M("ABCX"), M("CDAX"), M("BCX")],
                 vec![C("A"), C("BCX"), C("CD")]);
+    test_unamb!(unambiguous14,
+                vec![M("IMGX"), M("MVIX"), M("MGX"), M("DSX")],
+                vec![M("DSX"), C("I"), C("MGX"), C("MV")]);
+
 
     // ************************************************************************
     // Tests for suffix trimming.
