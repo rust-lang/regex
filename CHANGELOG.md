@@ -1,3 +1,7 @@
+0.1.79
+======
+* Require regex-syntax 0.3.8.
+
 0.1.78
 ======
 * [PR #290](https://github.com/rust-lang-nursery/regex/pull/290):
