@@ -1,3 +1,8 @@
+0.1.80
+======
+* [PR #292](https://github.com/rust-lang-nursery/regex/pull/292):
+  Fixes bug #291, which was introduced by PR #290.
+
 0.1.79
 ======
 * Require regex-syntax 0.3.8.
