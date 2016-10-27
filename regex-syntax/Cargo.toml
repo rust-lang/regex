@@ -11,3 +11,6 @@ description = "A regular expression parser."
 [dev-dependencies]
 quickcheck = "0.2"
 rand = "0.3"
+
+[profile.test]
+codegen-units = 8
