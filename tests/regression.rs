@@ -70,4 +70,8 @@ ismatch!(partial_anchor_alternate_begin, u!(r"^a|z"), "yyyyya", false);
 ismatch!(partial_anchor_alternate_end, u!(r"a$|z"), "ayyyyy", false);
 
 // See: https://github.com/rust-lang-nursery/regex/issues/289
-mat!(lits_unambiguous, u!(r"(ABC|CDA|BC)X"), "CDAX", Some((0, 4)));
+mat!(lits_unambiguous1, u!(r"(ABC|CDA|BC)X"), "CDAX", Some((0, 4)));
+
+// See: https://github.com/rust-lang-nursery/regex/issues/291
+mat!(lits_unambiguous2, u!(r"((IMG|CAM|MG|MB2)_|(DSCN|CIMG))(?P<n>[0-9]+)$"),
+     "CIMG2341", Some((0, 8)), Some((0, 4)), None, Some((0, 4)), Some((4, 8)));

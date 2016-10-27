@@ -3,3 +3,4 @@ Cargo.lock
 bench-log
 .*.swp
 wiki
+tags
