@@ -1,0 +1,24 @@
+[package]
+name = "regex-fuzz"
+version = "0.1.0"  #:version
+authors = ["The Rust Project Developers"]
+license = "MIT/Apache-2.0"
+repository = "https://github.com/rust-lang/regex"
+documentation = "https://doc.rust-lang.org/regex"
+homepage = "https://github.com/rust-lang/regex"
+description = """
+A tests-only crate for fuzzing of the regex library.
+"""
+
+[dependencies]
+quickcheck = "0.2"
+rand = "0.3"
+
+[dependencies.regex]
+path = ".."
+version = "0.1.71"
+
+[dependencies.regex-syntax]
+path = "../regex-syntax"
+version = "0.3.2"
+features = ["export-qc"]
