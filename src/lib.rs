@@ -449,7 +449,6 @@
 #![deny(missing_docs)]
 #![cfg_attr(test, deny(warnings))]
 #![cfg_attr(feature = "pattern", feature(pattern))]
-#![cfg_attr(feature = "simd-accel", feature(cfg_target_feature))]
 #![doc(html_logo_url = "https://www.rust-lang.org/logos/rust-logo-128x128-blk-v2.png",
        html_favicon_url = "https://www.rust-lang.org/favicon.ico",
        html_root_url = "https://doc.rust-lang.org/regex/")]
@@ -459,7 +458,7 @@ extern crate memchr;
 extern crate thread_local;
 #[cfg(test)] extern crate quickcheck;
 extern crate regex_syntax as syntax;
-#[cfg(feature = "simd-accel")] extern crate simd;
+extern crate teddy;
 extern crate utf8_ranges;
 
 pub use error::Error;
@@ -584,11 +583,6 @@ mod re_plugin;
 mod re_set;
 mod re_trait;
 mod re_unicode;
-#[cfg(feature = "simd-accel")]
-mod simd_accel;
-#[cfg(not(feature = "simd-accel"))]
-#[path = "simd_fallback/mod.rs"]
-mod simd_accel;
 mod sparse;
 
 /// The `internal` module exists to support the `regex!` macro and other

@@ -16,7 +16,7 @@ use syntax;
 
 use freqs::BYTE_FREQUENCIES;
 
-use simd_accel::teddy128::{Teddy, is_teddy_128_available};
+use teddy::Teddy;
 
 /// A prefix extracted from a compiled regular expression.
 ///
@@ -54,7 +54,7 @@ enum Matcher {
     /// An Aho-Corasick automaton.
     AC(FullAcAutomaton<syntax::Lit>),
     /// A simd accelerated multiple string matcher.
-    Teddy128(Teddy),
+    Teddy(Teddy),
 }
 
 impl LiteralSearcher {
@@ -104,7 +104,7 @@ impl LiteralSearcher {
             Bytes(ref sset) => sset.find(haystack).map(|i| (i, i + 1)),
             Single(ref s) => s.find(haystack).map(|i| (i, i + s.len())),
             AC(ref aut) => aut.find(haystack).next().map(|m| (m.start, m.end)),
-            Teddy128(ref ted) => ted.find(haystack).map(|m| (m.start, m.end)),
+            Teddy(ref ted) => ted.find(haystack).map(|m| (m.start, m.end)),
         }
     }
 
@@ -141,8 +141,8 @@ impl LiteralSearcher {
             Matcher::Bytes(ref sset) => LiteralIter::Bytes(&sset.dense),
             Matcher::Single(ref s) => LiteralIter::Single(&s.pat),
             Matcher::AC(ref ac) => LiteralIter::AC(ac.patterns()),
-            Matcher::Teddy128(ref ted) => {
-                LiteralIter::Teddy128(ted.patterns())
+            Matcher::Teddy(ref ted) => {
+                LiteralIter::Teddy(ted.patterns())
             }
         }
     }
@@ -170,7 +170,7 @@ impl LiteralSearcher {
             Bytes(ref sset) => sset.dense.len(),
             Single(_) => 1,
             AC(ref aut) => aut.len(),
-            Teddy128(ref ted) => ted.len(),
+            Teddy(ref ted) => ted.patterns().len(),
         }
     }
 
@@ -182,7 +182,7 @@ impl LiteralSearcher {
             Bytes(ref sset) => sset.approximate_size(),
             Single(ref single) => single.approximate_size(),
             AC(ref aut) => aut.heap_bytes(),
-            Teddy128(ref ted) => ted.approximate_size(),
+            Teddy(ref ted) => ted.approximate_size(),
         }
     }
 }
@@ -219,7 +219,7 @@ impl Matcher {
             return Matcher::Single(SingleSearch::new(lit));
         }
         let is_aho_corasick_fast = sset.dense.len() == 1 && sset.all_ascii;
-        if is_teddy_128_available() && !is_aho_corasick_fast {
+        if Teddy::is_accelerated() && !is_aho_corasick_fast {
             // Only try Teddy if Aho-Corasick can't use memchr on an ASCII
             // byte. Also, in its current form, Teddy doesn't scale well to
             // lots of literals.
@@ -231,8 +231,8 @@ impl Matcher {
             // negating the benefit of memchr.
             const MAX_TEDDY_LITERALS: usize = 32;
             if lits.literals().len() <= MAX_TEDDY_LITERALS {
-                if let Some(ted) = Teddy::new(lits) {
-                    return Matcher::Teddy128(ted);
+                if let Some(ted) = Teddy::new(lits.literals().iter().map(|l| &l[..])) {
+                    return Matcher::Teddy(ted);
                 }
             }
             // Fallthrough to ol' reliable Aho-Corasick...
@@ -247,7 +247,7 @@ pub enum LiteralIter<'a> {
     Bytes(&'a [u8]),
     Single(&'a [u8]),
     AC(&'a [syntax::Lit]),
-    Teddy128(&'a [Vec<u8>]),
+    Teddy(&'a [Vec<u8>]),
 }
 
 impl<'a> Iterator for LiteralIter<'a> {
@@ -283,7 +283,7 @@ impl<'a> Iterator for LiteralIter<'a> {
                     Some(&**next)
                 }
             }
-            LiteralIter::Teddy128(ref mut lits) => {
+            LiteralIter::Teddy(ref mut lits) => {
                 if lits.is_empty() {
                     None
                 } else {
