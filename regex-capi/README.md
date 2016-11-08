@@ -99,7 +99,5 @@ There are a few things missing from the C API that are present in the Rust API.
 There's no particular (known) reason why they don't, they just haven't been
 implemented yet.
 
-* RegexSet, which permits matching multiple regular expressions simultaneously
-  in a single linear time search.
 * Splitting a string by a regex.
 * Replacing regex matches in a string with some other text.

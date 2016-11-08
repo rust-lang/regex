@@ -1,6 +1,8 @@
 use ::error::{Error, ErrorKind};
 
 use ::regex::bytes;
+use ::regex::internal::{Exec, ExecBuilder, RegexOptions};
+use ::regex::internal::RegularExpression;
 use ::libc::{c_char, size_t};
 
 use ::std::collections::HashMap;
@@ -19,6 +21,14 @@ pub struct Regex {
 pub struct Options {
     size_limit: usize,
     dfa_size_limit: usize,
+}
+
+// The `RegexSet` is not exposed with option support or matching at an
+// arbitrary position with a crate just yet. To circumvent this, we use
+// the `Exec` structure directly.
+pub struct RegexSet {
+    re: Exec,
+    pattern_count: usize
 }
 
 const RURE_FLAG_CASEI: u32 = 1 << 0;
@@ -52,6 +62,11 @@ pub struct IterCaptureNames {
 impl Deref for Regex {
     type Target = bytes::Regex;
     fn deref(&self) -> &bytes::Regex { &self.re }
+}
+
+impl Deref for RegexSet {
+    type Target = Exec;
+    fn deref(&self) -> &Exec { &self.re }
 }
 
 impl Default for Options {
@@ -280,7 +295,7 @@ ffi_fn! {
         unsafe {
             let cs = match CString::new(cn.as_bytes()) {
                 Result::Ok(val) => val,
-                Result::Err(err) => return false
+                Result::Err(_) => return false
             };
             let ptr = cs.into_raw();
             it.name_ptrs.push(ptr);
@@ -451,5 +466,129 @@ ffi_fn! {
     fn rure_options_dfa_size_limit(options: *mut Options, limit: size_t) {
         let options = unsafe { &mut *options };
         options.dfa_size_limit = limit;
+    }
+}
+
+ffi_fn! {
+    fn rure_compile_set(
+        patterns: *const *const u8,
+        patterns_lengths: *const size_t,
+        patterns_count: size_t,
+        flags: u32,
+        options: *const Options,
+        error: *mut Error
+    ) -> *const RegexSet {
+        let (raw_pats, raw_patsl) = unsafe {
+            (
+                slice::from_raw_parts(patterns, patterns_count),
+                slice::from_raw_parts(patterns_lengths, patterns_count)
+            )
+        };
+
+        let mut pats = Vec::with_capacity(patterns_count);
+        for (&raw_pat, &raw_patl) in raw_pats.iter().zip(raw_patsl) {
+            let pat = unsafe { slice::from_raw_parts(raw_pat, raw_patl) };
+            pats.push(match str::from_utf8(pat) {
+                Ok(pat) => pat,
+                Err(err) => {
+                    unsafe {
+                        if !error.is_null() {
+                            *error = Error::new(ErrorKind::Str(err));
+                        }
+                        return ptr::null();
+                    }
+                }
+            });
+        }
+
+        // Start with a default set and override values if present.
+        let mut opts = RegexOptions::default();
+        let pat_count = pats.len();
+        opts.pats = pats.into_iter().map(|s| s.to_owned()).collect();
+
+        if !options.is_null() {
+            let options = unsafe { &*options };
+            opts.size_limit = options.size_limit;
+            opts.dfa_size_limit = options.dfa_size_limit;
+        }
+
+        opts.case_insensitive = flags & RURE_FLAG_CASEI > 0;
+        opts.multi_line = flags & RURE_FLAG_MULTI > 0;
+        opts.dot_matches_new_line = flags & RURE_FLAG_DOTNL > 0;
+        opts.swap_greed = flags & RURE_FLAG_SWAP_GREED > 0;
+        opts.ignore_whitespace = flags & RURE_FLAG_SPACE > 0;
+        opts.unicode = flags & RURE_FLAG_UNICODE > 0;
+
+        // `Exec` does not expose a `new` function with appropriate arguments
+        // so we construct directly.
+        let builder = ExecBuilder::new_options(opts)
+                                    .bytes(true)
+                                    .only_utf8(false);
+
+        match builder.build() {
+            Ok(ex) => {
+                let re = RegexSet {
+                    re: ex,
+                    pattern_count: pat_count
+                };
+                Box::into_raw(Box::new(re))
+            }
+            Err(err) => {
+                unsafe {
+                    if !error.is_null() {
+                        *error = Error::new(ErrorKind::Regex(err))
+                    }
+                    ptr::null()
+                }
+            }
+        }
+    }
+}
+
+ffi_fn! {
+    fn rure_set_free(re: *const RegexSet) {
+        unsafe { Box::from_raw(re as *mut RegexSet); }
+    }
+}
+
+ffi_fn! {
+    fn rure_set_is_match(
+        re: *const RegexSet,
+        haystack: *const u8,
+        len: size_t,
+        start: size_t
+    ) -> bool {
+        let re = unsafe { &*re };
+        let haystack = unsafe { slice::from_raw_parts(haystack, len) };
+        re.searcher().is_match_at(haystack, start)
+    }
+}
+
+ffi_fn! {
+    fn rure_set_matches(
+        re: *const RegexSet,
+        haystack: *const u8,
+        len: size_t,
+        start: size_t,
+        matches: *mut bool
+    ) -> bool {
+        let re = unsafe { &*re };
+        let mut matches = unsafe {
+            slice::from_raw_parts_mut(matches, re.pattern_count)
+        };
+        let haystack = unsafe { slice::from_raw_parts(haystack, len) };
+
+        // many_matches_at isn't guaranteed to set non-matches to false
+        for item in matches.iter_mut() {
+            *item = false;
+        }
+
+        re.searcher().many_matches_at(&mut matches, haystack, start)
+    }
+}
+
+ffi_fn! {
+    fn rure_set_len(re: *const RegexSet) -> size_t {
+        unsafe { (*re).pattern_count }
     }
 }

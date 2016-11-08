@@ -10,6 +10,7 @@
 
 /// The set of user configurable options for compiling zero or more regexes.
 #[derive(Clone, Debug)]
+#[allow(missing_docs)]
 pub struct RegexOptions {
     pub pats: Vec<String>,
     pub size_limit: usize,
