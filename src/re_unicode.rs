@@ -29,8 +29,8 @@ use re_trait::{self, RegularExpression, Locations};
 ///
 /// The string returned may be safely used as a literal in a regular
 /// expression.
-pub fn quote(text: &str) -> String {
-    syntax::quote(text)
+pub fn escape(text: &str) -> String {
+    syntax::escape(text)
 }
 
 /// Match represents a single match of a regex in a haystack.
