@@ -1526,11 +1526,12 @@ impl fmt::Display for ErrorKind {
                 write!(f, "Number does not correspond to a Unicode scalar \
                            value: '{}'.", c),
             MissingBase10 =>
-                write!(f, "Missing maximum in counted reptition operator."),
+                write!(f, "Missing maximum in counted
+repetition operator."),
             RepeaterExpectsExpr =>
-                write!(f, "Missing expression for reptition operator."),
+                write!(f, "Missing expression for repetition operator."),
             RepeaterUnexpectedExpr(ref e) =>
-                write!(f, "Invalid application of reptition operator to: \
+                write!(f, "Invalid application of repetition operator to: \
                           '{}'.", e),
             UnclosedCaptureName(ref s) =>
                 write!(f, "Capture name group for '{}' is not closed. \
