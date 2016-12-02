@@ -13,7 +13,7 @@ A C API for Rust's regular expression library.
 
 [lib]
 name = "rure"
-crate-type = ["staticlib", "dylib"]
+crate-type = ["staticlib", "cdylib"]
 
 [dependencies]
 libc = "0.2"
