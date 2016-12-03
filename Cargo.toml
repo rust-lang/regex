@@ -18,7 +18,7 @@ aho-corasick = "0.5.3"
 # For skipping along search text quickly when a leading byte is known.
 memchr = "0.1.9"
 # For managing regex caches quickly across multiple threads.
-thread_local = "0.2.4"
+thread_local = "0.3"
 # For parsing regular expressions.
 regex-syntax = { path = "regex-syntax", version = "0.3.8" }
 # For accelerating text search.
