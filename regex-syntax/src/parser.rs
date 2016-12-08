@@ -596,7 +596,17 @@ impl Parser {
         Ok(Build::Expr(if self.flags.unicode {
             Expr::Class(class)
         } else {
-            Expr::ClassBytes(class.to_byte_class())
+            let byte_class = class.to_byte_class();
+
+            // If `class` was only non-empty due to multibyte characters, the 
+            // corresponding byte class will now be empty.
+            //
+            // See https://github.com/rust-lang-nursery/regex/issues/303
+            if byte_class.is_empty() {
+                return Err(self.err(ErrorKind::EmptyClass));
+            }
+
+            Expr::ClassBytes(byte_class)
         }))
     }
 
