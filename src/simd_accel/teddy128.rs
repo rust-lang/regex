@@ -93,7 +93,7 @@ better. Namely:
 2. Bitwise operations are performed on each chunk to discover if any region of
    it matches a set of precomputed fingerprints from the patterns. If there are
    matches, then a verification step is performed. In this implementation, our
-   verificiation step is a naive. This can be improved upon.
+   verification step is naive. This can be improved upon.
 
 The details to make this work are quite clever. First, we must choose how to
 pick our fingerprints. In Hyperscan's implementation, I *believe* they use the
@@ -154,7 +154,7 @@ this for `A`:
 
 ```ignore
     0x00 0x01 ... 0x62      ... 0x66      ... 0xFF
-A = 0    0        00000001      00000110      0
+A = 0    0        00000110      00000001      0
 ```
 
 And if `B` contains our window from our haystack, we could use shuffle to take
@@ -372,7 +372,7 @@ pub struct Teddy {
 }
 
 /// A list of masks. This has length equal to the length of the fingerprint.
-/// The length of the fingerprint is always `max(3, len(smallest_substring))`.
+/// The length of the fingerprint is always `min(3, len(smallest_substring))`.
 #[derive(Debug, Clone)]
 struct Masks(Vec<Mask>);
 
