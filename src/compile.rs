@@ -26,8 +26,6 @@ use prog::{
 
 use Error;
 
-type InstHoleIdx = InstPtr;
-
 type Result = result::Result<Patch, Error>;
 
 #[derive(Debug)]
