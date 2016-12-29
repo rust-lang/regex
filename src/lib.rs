@@ -281,7 +281,7 @@
 //! </pre>
 //!
 //! Any named character class may appear inside a bracketed `[...]` character
-//! class. For example, `[\p{Greek}\pN]` matches any Greek or numeral
+//! class. For example, `[\p{Greek}[:digit:]]` matches any Greek or digit
 //! character.
 //!
 //! ## Composites
