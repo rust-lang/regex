@@ -321,8 +321,6 @@ References
 
 // TODO: Extend this to use AVX2 instructions.
 // TODO: Extend this to use AVX512 instructions.
-// TODO: Extend this to cleverly use Aho-Corasick. Possibly to replace both
-//       "slow" searching and the verification step.
 // TODO: Make the inner loop do aligned loads.
 
 use std::cmp;
@@ -437,8 +435,6 @@ impl Teddy {
     pub fn find(&self, haystack: &[u8]) -> Option<Match> {
         // If our haystack is smaller than the block size, then fall back to
         // a naive brute force search.
-        //
-        // TODO: Use Aho-Corasick.
         if haystack.is_empty() || haystack.len() < (BLOCK_SIZE + 2) {
             return self.slow(haystack, 0);
         }
@@ -788,8 +784,6 @@ impl UnsafeLoad for u8x16 {
     type Elem = u8;
 
     unsafe fn load_unchecked(slice: &[u8], offset: usize) -> u8x16 {
-        // TODO: Can we just do pointer casting here? I don't think so, since
-        // this could be an unaligned load? Help me.
         let mut x = u8x16::splat(0);
         ptr::copy_nonoverlapping(
             slice.get_unchecked(offset),
