@@ -193,6 +193,20 @@ impl Parser {
             'v' => { self.bump(); Ok(try!(self.lit('\x0B'))) }
             'A' => { self.bump(); Ok(Build::Expr(Expr::StartText)) }
             'z' => { self.bump(); Ok(Build::Expr(Expr::EndText)) }
+            '\n' => {
+                self.bump();
+                while self.cur().is_whitespace() { self.bump(); };
+                Ok(Build::Expr(Expr::Empty))
+            }
+            '\r' => {
+                self.bump();
+                if self.bump_if('\n') {
+                    while self.cur().is_whitespace() { self.bump(); };
+                    Ok(Build::Expr(Expr::Empty))
+                } else {
+                    Err(self.err(ErrorKind::UnrecognizedEscape(c)))
+                }
+            }
             'b' => {
                 self.bump();
                 Ok(Build::Expr(if self.flags.unicode {
@@ -1849,6 +1863,38 @@ mod tests {
     }
 
     #[test]
+    fn escape_newline() {
+        assert_eq!(p(r"ab\
+cd"), c(&[lit('a'), lit('b'), lit('c'), lit('d')]));
+    }
+
+    #[test]
+    fn escape_newline_and_whitespace() {
+        assert_eq!(p(r"ab\
+    cd"), c(&[lit('a'), lit('b'), lit('c'), lit('d')]));
+    }
+
+    #[test]
+    fn escape_newline_and_whitespace_linux_osx() {
+        assert_eq!(p("ab\\\n \t cd"), c(&[lit('a'), lit('b'), lit('c'), lit('d')]));
+    }
+
+    #[test]
+    fn escape_newline_and_whitespace_windows() {
+        assert_eq!(p("ab\\\r\n \t cd"), c(&[lit('a'), lit('b'), lit('c'), lit('d')]));
+    }
+
+    #[test]
+    fn escape_newline_linux_osx() {
+        assert_eq!(p("ab\\\ncd"), c(&[lit('a'), lit('b'), lit('c'), lit('d')]));
+    }
+
+    #[test]
+    fn escape_newline_windows() {
+        assert_eq!(p("ab\\\r\ncd"), c(&[lit('a'), lit('b'), lit('c'), lit('d')]));
+    }
+
+    #[test]
     fn escape_octal() {
         assert_eq!(p(r"\123"), lit('S'));
         assert_eq!(p(r"\1234"), c(&[lit('S'), lit('4')]));
@@ -2636,6 +2682,16 @@ mod tests {
     #[test]
     fn error_escape_unrecognized() {
         test_err!(r"\m", 1, ErrorKind::UnrecognizedEscape('m'));
+    }
+
+    #[test]
+    fn error_newline_escape_unrecognized() {
+        test_err!("\\\r", 2, ErrorKind::UnrecognizedEscape('\r'));
+    }
+
+    #[test]
+    fn escape_newline_and_whitespace_err_windows() {
+        test_err!("ab\\\r \t cd", 4, ErrorKind::UnrecognizedEscape('\r'));
     }
 
     #[test]

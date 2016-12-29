@@ -376,6 +376,7 @@
 //!
 //! <pre class="rust">
 //! \*         literal *, works for any punctuation character: \.+*?()|[]{}^$
+//! \*         where * is newline, escapes off the newline
 //! \a         bell (\x07)
 //! \f         form feed (\x0C)
 //! \t         horizontal tab
