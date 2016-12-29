@@ -591,6 +591,7 @@ impl Parser {
         }
         class = self.class_transform(negated, class).canonicalize();
         if class.is_empty() {
+            // e.g., [^\d\D]
             return Err(self.err(ErrorKind::EmptyClass));
         }
         Ok(Build::Expr(if self.flags.unicode {
@@ -598,11 +599,12 @@ impl Parser {
         } else {
             let byte_class = class.to_byte_class();
 
-            // If `class` was only non-empty due to multibyte characters, the 
+            // If `class` was only non-empty due to multibyte characters, the
             // corresponding byte class will now be empty.
             //
             // See https://github.com/rust-lang-nursery/regex/issues/303
             if byte_class.is_empty() {
+                // e.g., (?-u)[^\x00-\xFF]
                 return Err(self.err(ErrorKind::EmptyClass));
             }
 
@@ -2757,6 +2759,9 @@ mod tests {
         test_err!("[]", 2, ErrorKind::UnexpectedClassEof);
         test_err!("[^]", 3, ErrorKind::UnexpectedClassEof);
         test_err!(r"[^\d\D]", 7, ErrorKind::EmptyClass);
+
+        let flags = Flags { allow_bytes: true, .. Flags::default() };
+        test_err!(r"(?-u)[^\x00-\xFF]", 17, ErrorKind::EmptyClass, flags);
     }
 
     #[test]
