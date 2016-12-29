@@ -1620,7 +1620,7 @@ fn binary_search<T, F>(xs: &[T], mut pred: F) -> usize
 ///
 /// The string returned may be safely used as a literal in a regular
 /// expression.
-pub fn quote(text: &str) -> String {
+pub fn escape(text: &str) -> String {
     let mut quoted = String::with_capacity(text.len());
     for c in text.chars() {
         if parser::is_punct(c) {
