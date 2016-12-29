@@ -1378,7 +1378,9 @@ impl<'a> Fsm<'a> {
              ((empty_flags.end as u8) << 1) |
              ((empty_flags.start_line as u8) << 2) |
              ((empty_flags.end_line as u8) << 3) |
-             ((state_flags.is_word() as u8) << 4))
+             ((empty_flags.word_boundary as u8) << 4) |
+             ((empty_flags.not_word_boundary as u8) << 5) |
+             ((state_flags.is_word() as u8) << 6))
             as usize
         };
         match self.cache.start_states[flagi] {
@@ -1412,8 +1414,16 @@ impl<'a> Fsm<'a> {
         empty_flags.end = text.len() == 0;
         empty_flags.start_line = at == 0 || text[at - 1] == b'\n';
         empty_flags.end_line = text.len() == 0;
-        if at > 0 && Byte::byte(text[at - 1]).is_ascii_word() {
+
+        let is_word_last = at > 0 && Byte::byte(text[at - 1]).is_ascii_word();
+        let is_word = at < text.len() && Byte::byte(text[at]).is_ascii_word();
+        if is_word_last {
             state_flags.set_word();
+        }
+        if is_word == is_word_last {
+            empty_flags.not_word_boundary = true;
+        } else {
+            empty_flags.word_boundary = true;
         }
         (empty_flags, state_flags)
     }
@@ -1433,8 +1443,17 @@ impl<'a> Fsm<'a> {
         empty_flags.end = text.len() == 0;
         empty_flags.start_line = at == text.len() || text[at] == b'\n';
         empty_flags.end_line = text.len() == 0;
-        if at < text.len() && Byte::byte(text[at]).is_ascii_word() {
+
+        let is_word_last =
+            at < text.len() && Byte::byte(text[at]).is_ascii_word();
+        let is_word = at > 0 && Byte::byte(text[at - 1]).is_ascii_word();
+        if is_word_last {
             state_flags.set_word();
+        }
+        if is_word == is_word_last {
+            empty_flags.not_word_boundary = true;
+        } else {
+            empty_flags.word_boundary = true;
         }
         (empty_flags, state_flags)
     }
