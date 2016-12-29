@@ -4,3 +4,4 @@ bench-log
 .*.swp
 wiki
 tags
+examples/debug.rs
