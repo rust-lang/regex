@@ -75,3 +75,10 @@ mat!(lits_unambiguous1, u!(r"(ABC|CDA|BC)X"), "CDAX", Some((0, 4)));
 // See: https://github.com/rust-lang-nursery/regex/issues/291
 mat!(lits_unambiguous2, u!(r"((IMG|CAM|MG|MB2)_|(DSCN|CIMG))(?P<n>[0-9]+)$"),
      "CIMG2341", Some((0, 8)), Some((0, 4)), None, Some((0, 4)), Some((4, 8)));
+
+// See: https://github.com/rust-lang-nursery/regex/issues/271
+mat!(end_not_wb, u!(r"$(?-u:\B)"), "\u{5c124}\u{b576c}", Some((8, 8)));
+mat!(endl_or_wb, u!(r"(?m:$)|(?-u:\b)"), "\u{6084e}", Some((4, 4)));
+mat!(zero_or_end, u!(r"(?i-u:\x00)|$"), "\u{e682f}", Some((4, 4)));
+mat!(y_or_endl, u!(r"(?i-u:y)|(?m:$)"), "\u{b4331}", Some((4, 4)));
+mat!(wb_start_x, u!(r"(?u:\b)^(?-u:X)"), "X", Some((0, 1)));
