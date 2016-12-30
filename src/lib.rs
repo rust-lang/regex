@@ -463,7 +463,7 @@ pub use re_set::unicode::*;
 pub use re_trait::Locations;
 pub use re_unicode::{
     Regex, Match, Captures,
-    CaptureNames, Matches, CaptureMatches,
+    CaptureNames, Matches, CaptureMatches, SubCaptureMatches,
     Replacer, NoExpand, Split, SplitN,
     escape,
 };

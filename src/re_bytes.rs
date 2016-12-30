@@ -21,7 +21,7 @@ use exec::{Exec, ExecNoSync};
 use expand::expand_bytes;
 use error::Error;
 use re_builder::bytes::RegexBuilder;
-use re_trait::{self, RegularExpression, Locations};
+use re_trait::{self, RegularExpression, Locations, SubCapturesPosIter};
 
 /// Match represents a single match of a regex in a haystack.
 ///
@@ -789,6 +789,18 @@ impl<'t> Captures<'t> {
         self.named_groups.get(name).and_then(|&i| self.get(i))
     }
 
+    /// An iterator that yields all capturing matches in the order in which
+    /// they appear in the regex. If a particular capture group didn't
+    /// participate in the match, then `None` is yielded for that capture.
+    ///
+    /// The first match always corresponds to the overall match of the regex.
+    pub fn iter<'c>(&'c self) -> SubCaptureMatches<'c, 't> {
+        SubCaptureMatches {
+            caps: self,
+            it: self.locs.iter(),
+        }
+    }
+
     /// Expands all instances of `$name` in `text` to the corresponding capture
     /// group `name`, and writes them to the `dst` buffer given.
     ///
@@ -899,6 +911,29 @@ impl<'t, 'i> Index<&'i str> for Captures<'t> {
     fn index<'a>(&'a self, name: &'i str) -> &'a [u8] {
         self.name(name).map(|m| m.as_bytes())
             .unwrap_or_else(|| panic!("no group named '{}'", name))
+    }
+}
+
+/// An iterator that yields all capturing matches in the order in which they
+/// appear in the regex.
+///
+/// If a particular capture group didn't participate in the match, then `None`
+/// is yielded for that capture. The first match always corresponds to the
+/// overall match of the regex.
+///
+/// The lifetime `'c` corresponds to the lifetime of the `Captures` value, and
+/// the lifetime `'t` corresponds to the originally matched text.
+pub struct SubCaptureMatches<'c, 't: 'c> {
+    caps: &'c Captures<'t>,
+    it: SubCapturesPosIter<'c>,
+}
+
+impl<'c, 't> Iterator for SubCaptureMatches<'c, 't> {
+    type Item = Option<Match<'t>>;
+
+    fn next(&mut self) -> Option<Option<Match<'t>>> {
+        self.it.next()
+            .map(|cap| cap.map(|(s, e)| Match::new(self.caps.text, s, e)))
     }
 }
 

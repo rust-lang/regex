@@ -140,6 +140,25 @@ fn capture_misc() {
     assert_eq!(t!("c"), match_text!(cap.name("b").unwrap()));
 }
 
+#[test]
+fn sub_capture_matches() {
+    let re = regex!(r"([a-z])(([a-z])|([0-9]))");
+    let cap = re.captures(t!("a5")).unwrap();
+    let subs: Vec<_> = cap.iter().collect();
+
+    assert_eq!(5, subs.len());
+    assert!(subs[0].is_some());
+    assert!(subs[1].is_some());
+    assert!(subs[2].is_some());
+    assert!(subs[3].is_none());
+    assert!(subs[4].is_some());
+
+    assert_eq!(t!("a5"), match_text!(subs[0].unwrap()));
+    assert_eq!(t!("a"), match_text!(subs[1].unwrap()));
+    assert_eq!(t!("5"), match_text!(subs[2].unwrap()));
+    assert_eq!(t!("5"), match_text!(subs[4].unwrap()));
+}
+
 expand!(expand1, r"(?P<foo>\w+)", "abc", "$foo", "abc");
 expand!(expand2, r"(?P<foo>\w+)", "abc", "$0", "abc");
 expand!(expand3, r"(?P<foo>\w+)", "abc", "$1", "abc");
