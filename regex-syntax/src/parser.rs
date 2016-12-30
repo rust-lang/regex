@@ -112,10 +112,7 @@ impl Parser {
                 '*' => try!(self.parse_simple_repeat(Repeater::ZeroOrMore)),
                 '+' => try!(self.parse_simple_repeat(Repeater::OneOrMore)),
                 '{' => try!(self.parse_counted_repeat()),
-                '[' => match self.maybe_parse_ascii() {
-                    None => try!(self.parse_class()),
-                    Some(cls) => Build::Expr(Expr::Class(cls)),
-                },
+                '[' => try!(self.parse_class()),
                 '^' => {
                     if self.flags.multi {
                         self.parse_one(Expr::StartLine)
@@ -2224,10 +2221,11 @@ mod tests {
 
     #[test]
     fn ascii_classes() {
-        assert_eq!(p("[:upper:]"), Expr::Class(class(UPPER)));
+        assert_eq!(p("[:blank:]"), Expr::Class(class(&[
+            (':', ':'), ('a', 'b'), ('k', 'l'), ('n', 'n'),
+        ])));
         assert_eq!(p("[[:upper:]]"), Expr::Class(class(UPPER)));
 
-        assert_eq!(pb("(?-u)[:upper:]"), Expr::Class(class(UPPER)));
         assert_eq!(pb("(?-u)[[:upper:]]"),
                    Expr::ClassBytes(class(UPPER).to_byte_class()));
     }
@@ -2270,12 +2268,9 @@ mod tests {
 
     #[test]
     fn ascii_classes_case_fold() {
-        assert_eq!(p("(?i)[:upper:]"), Expr::Class(class(UPPER).case_fold()));
         assert_eq!(p("(?i)[[:upper:]]"),
                    Expr::Class(class(UPPER).case_fold()));
 
-        assert_eq!(pb("(?i-u)[:upper:]"),
-                   Expr::Class(class(UPPER).case_fold()));
         assert_eq!(pb("(?i-u)[[:upper:]]"),
                    Expr::ClassBytes(class(UPPER).to_byte_class().case_fold()));
     }
