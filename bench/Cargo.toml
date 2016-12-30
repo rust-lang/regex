@@ -17,9 +17,9 @@ libc = "0.2"
 onig = { version = "0.4", optional = true }
 libpcre-sys = { version = "0.2", optional = true }
 memmap = "0.2"
-regex = { version = "0.1", path = "..", features = ["simd-accel"] }
-regex_macros = { version = "0.1", path = "../regex_macros", optional = true }
-regex-syntax = { version = "0.3", path = "../regex-syntax" }
+regex = { version = "0.2.0", path = "..", features = ["simd-accel"] }
+regex_macros = { version = "0.2.0", path = "../regex_macros", optional = true }
+regex-syntax = { version = "0.4.0", path = "../regex-syntax" }
 rustc-serialize = "0.3"
 
 [build-dependencies]

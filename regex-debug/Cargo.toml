@@ -11,8 +11,8 @@ description = "A tool useful for debugging regular expressions."
 
 [dependencies]
 docopt = "0.6"
-regex = { version = "0.1", path = ".." }
-regex-syntax = { version = "0.3", path = "../regex-syntax" }
+regex = { version = "0.2", path = ".." }
+regex-syntax = { version = "0.4.0", path = "../regex-syntax" }
 rustc-serialize = "0.3"
 
 [profile.release]

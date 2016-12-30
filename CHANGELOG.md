@@ -1,3 +1,98 @@
+0.2.0
+=====
+This is a new major release of the regex crate, and is an implementation of the
+[regex 1.0 RFC](https://github.com/rust-lang/rfcs/blob/master/text/1620-regex-1.0.md).
+We are releasing a `0.2` first, and if there are no major problems, we will
+release a `1.0` shortly. For `0.2`, the minimum *supported* Rust version is
+1.12.
+
+There are a number of **breaking changes** in `0.2`. They are split into two
+types. The first type correspond to breaking changes in regular expression
+syntax. The second type correspond to breaking changes in the API.
+
+Breaking changes for regex syntax:
+
+* POSIX character classes now require double bracketing. Previously, the regex
+  `[:upper:]` would parse as the `upper` POSIX character class. Now it parses
+  as the character class containing the characters `:upper:`. The fix to this
+  change is to use `[[:upper:]]` instead. Note that variants like
+  `[[:upper:][:blank:]]` continue to work.
+* The character `[` must always be escaped inside a character class.
+* The characters `&`, `-` and `~` must be escaped if any one of them are
+  repeated consecutively. For example, `[&]`, `[\&]`, `[\&\&]`, `[&-&]` are all
+  equivalent while `[&&]` is illegal. (The motivation for this and the prior
+  change is to provide a backwards compatible path for adding character class
+  set notation.)
+* A `bytes::Regex` now has Unicode mode enabled by default (like the main
+  `Regex` type). This means regexes compiled with `bytes::Regex::new` that
+  don't have the Unicode flag set should add `(?-u)` to recover the original
+  behavior.
+
+Breaking changes for the regex API:
+
+* `find` and `find_iter` now **return `Match` values instead of
+  `(usize, usize)`.** `Match` values have `start` and `end` methods, which
+  return the match offsets. `Match` values also have an `as_str` method,
+  which returns the text of the match itself.
+* The `Captures` type now only provides a single iterator over all capturing
+  matches, which should replace uses of `iter` and `iter_pos`. Uses of
+  `iter_named` should use the `capture_names` method on `Regex`.
+* The `at` method on the `Captures` type has been renamed to `get`, and it
+  now returns a `Match`. Similarly, the `name` method on `Captures` now returns
+  a `Match`.
+* The `replace` methods now return `Cow` values. The `Cow::Borrowed` variant
+  is returned when no replacements are made.
+* The `Replacer` trait has been completely overhauled. This should only
+  impact clients that implement this trait explicitly. Standard uses of
+  the `replace` methods should continue to work unchanged. If you implement
+  the `Replacer` trait, please consult the new documentation.
+* The `quote` free function has been renamed to `escape`.
+* The `Regex::with_size_limit` method has been removed. It is replaced by
+  `RegexBuilder::size_limit`.
+* The `RegexBuilder` type has switched from owned `self` method receivers to
+  `&mut self` method receivers. Most uses will continue to work unchanged, but
+  some code may require naming an intermediate variable to hold the builder.
+* The free `is_match` function has been removed. It is replaced by compiling
+  a `Regex` and calling its `is_match` method.
+* The `PartialEq` and `Eq` impls on `Regex` have been dropped. If you relied
+  on these impls, the fix is to define a wrapper type around `Regex`, impl
+  `Deref` on it and provide the necessary impls.
+* The `is_empty` method on `Captures` has been removed. This always returns
+  `false`, so its use is superfluous.
+* The `Syntax` variant of the `Error` type now contains a string instead of
+  a `regex_syntax::Error`. If you were examining syntax errors more closely,
+  you'll need to explicitly use the `regex_syntax` crate to re-parse the regex.
+* The `InvalidSet` variant of the `Error` type has been removed since it is
+  no longer used.
+* Most of the iterator types have been renamed to match conventions. If you
+  were using these iterator types explicitly, please consult the documentation
+  for its new name. For example, `RegexSplits` has been renamed to `Split`.
+
+A number of bugs have been fixed:
+
+* [BUG #151](https://github.com/rust-lang/regex/issues/151):
+  The `Replacer` trait has been changed to permit the caller to control
+  allocation.
+* [BUG #165](https://github.com/rust-lang/regex/issues/165):
+  Remove the free `is_match` function.
+* [BUG #166](https://github.com/rust-lang/regex/issues/166):
+  Expose more knobs (available in `0.1`) and remove `with_size_limit`.
+* [BUG #168](https://github.com/rust-lang/regex/issues/168):
+  Iterators produced by `Captures` now have the correct lifetime parameters.
+* [BUG #175](https://github.com/rust-lang/regex/issues/175):
+  Fix a corner case in the parsing of POSIX character classes.
+* [BUG #178](https://github.com/rust-lang/regex/issues/178):
+  Drop the `PartialEq` and `Eq` impls on `Regex`.
+* [BUG #179](https://github.com/rust-lang/regex/issues/179):
+  Remove `is_empty` from `Captures` since it always returns false.
+* [BUG #276](https://github.com/rust-lang/regex/issues/276):
+  Position of named capture can now be retrieved from a `Captures`.
+* [BUG #296](https://github.com/rust-lang/regex/issues/296):
+  Remove winapi/kernel32-sys dependency on UNIX.
+* [BUG #307](https://github.com/rust-lang/regex/issues/307):
+  Fix error on emscripten.
+
+
 0.1.80
 ======
 * [PR #292](https://github.com/rust-lang/regex/pull/292):

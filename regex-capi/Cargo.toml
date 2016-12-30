@@ -1,6 +1,6 @@
 [package]
 name = "rure"
-version = "0.1.1"  #:version
+version = "0.2.0"  #:version
 authors = ["The Rust Project Developers"]
 license = "MIT/Apache-2.0"
 readme = "README.md"
@@ -17,4 +17,4 @@ crate-type = ["staticlib", "cdylib"]
 
 [dependencies]
 libc = "0.2"
-regex = { version = "0.1.77", path = ".." }
+regex = { version = "0.2.0", path = ".." }
