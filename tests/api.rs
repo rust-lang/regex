@@ -40,7 +40,7 @@ fn quoted_bracket_set() {
 
 #[test]
 fn first_range_starts_with_left_bracket() {
-    let re = regex!(r"([[-z])");
+    let re = regex!(r"([\[-z])");
     assert_eq!(vec![(0, 1), (1, 2)], findall!(re, "[]"));
 }
 

@@ -23,7 +23,7 @@ mat!(regression_negated_char_class_1, r"(?i)[^x]", "x", None);
 mat!(regression_negated_char_class_2, r"(?i)[^x]", "X", None);
 
 // See: https://github.com/rust-lang/regex/issues/101
-mat!(regression_ascii_word_underscore, r"[:word:]", "_", Some((0, 1)));
+mat!(regression_ascii_word_underscore, r"[[:word:]]", "_", Some((0, 1)));
 
 // See: https://github.com/rust-lang-nursery/regex/issues/129
 #[test]

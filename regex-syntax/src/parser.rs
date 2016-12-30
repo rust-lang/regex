@@ -548,8 +548,8 @@ impl Parser {
                 '[' => match self.maybe_parse_ascii() {
                     Some(class2) => class.ranges.extend(class2),
                     None => {
-                        self.bump();
-                        try!(self.parse_class_range(&mut class, '['))
+                        return Err(self.err(
+                            ErrorKind::UnsupportedClassChar('[')));
                     }
                 },
                 '\\' => match try!(self.parse_escape()) {
@@ -582,6 +582,16 @@ impl Parser {
                         let _ = try!(self.codepoint_to_one_byte(start));
                     }
                     self.bump();
+                    match start {
+                        '&'|'~'|'-' => {
+                            // Only report an error if we see && or ~~ or --.
+                            if self.peek_is(start) {
+                                return Err(self.err(
+                                    ErrorKind::UnsupportedClassChar(start)));
+                            }
+                        }
+                        _ => {}
+                    }
                     try!(self.parse_class_range(&mut class, start));
                 }
             }
@@ -654,8 +664,11 @@ impl Parser {
                 // Because `parse_escape` can never return `LeftParen`.
                 _ => unreachable!(),
             },
-            _ => {
-                let c = self.bump();
+            c => {
+                self.bump();
+                if c == '-' {
+                    return Err(self.err(ErrorKind::UnsupportedClassChar('-')));
+                }
                 if !self.flags.unicode {
                     let _ = try!(self.codepoint_to_one_byte(c));
                 }
@@ -1212,7 +1225,7 @@ fn is_valid_capture_char(c: char) -> bool {
 pub fn is_punct(c: char) -> bool {
     match c {
         '\\' | '.' | '+' | '*' | '?' | '(' | ')' | '|' |
-        '[' | ']' | '{' | '}' | '^' | '$' | '#' => true,
+        '[' | ']' | '{' | '}' | '^' | '$' | '#' | '&' | '-' | '~' => true,
         _ => false,
     }
 }
@@ -2191,9 +2204,9 @@ mod tests {
 
     #[test]
     fn class_brackets() {
-        assert_eq!(p("[]]"), Expr::Class(class(&[(']', ']')])));
-        assert_eq!(p("[][]"), Expr::Class(class(&[('[', '['), (']', ']')])));
-        assert_eq!(p("[[]]"), Expr::Concat(vec![
+        assert_eq!(p(r"[]]"), Expr::Class(class(&[(']', ']')])));
+        assert_eq!(p(r"[]\[]"), Expr::Class(class(&[('[', '['), (']', ']')])));
+        assert_eq!(p(r"[\[]]"), Expr::Concat(vec![
             Expr::Class(class(&[('[', '[')])),
             lit(']'),
         ]));
@@ -2206,6 +2219,31 @@ mod tests {
             Expr::Class(class(&[('-', '-')])),
             lit(']'),
         ]));
+    }
+
+    #[test]
+    fn class_special_escaped_set_chars() {
+        // These tests ensure that some special characters require escaping
+        // for use in character classes. The intention is to use these
+        // characters to implement sets as described in UTC#18 RL1.3. Once
+        // that's done, these tests should be removed and replaced with others.
+        assert_eq!(p(r"[\[]"), Expr::Class(class(&[('[', '[')])));
+        assert_eq!(p(r"[&]"), Expr::Class(class(&[('&', '&')])));
+        assert_eq!(p(r"[\&]"), Expr::Class(class(&[('&', '&')])));
+        assert_eq!(p(r"[\&\&]"), Expr::Class(class(&[('&', '&')])));
+        assert_eq!(p(r"[\x00-&]"), Expr::Class(class(&[('\u{0}', '&')])));
+        assert_eq!(p(r"[&-\xFF]"), Expr::Class(class(&[('&', '\u{FF}')])));
+
+        assert_eq!(p(r"[~]"), Expr::Class(class(&[('~', '~')])));
+        assert_eq!(p(r"[\~]"), Expr::Class(class(&[('~', '~')])));
+        assert_eq!(p(r"[\~\~]"), Expr::Class(class(&[('~', '~')])));
+        assert_eq!(p(r"[\x00-~]"), Expr::Class(class(&[('\u{0}', '~')])));
+        assert_eq!(p(r"[~-\xFF]"), Expr::Class(class(&[('~', '\u{FF}')])));
+
+        assert_eq!(p(r"[+-\-]"), Expr::Class(class(&[('+', '-')])));
+        assert_eq!(p(r"[a-a\--\xFF]"), Expr::Class(class(&[
+            ('-', '\u{FF}'),
+        ])));
     }
 
     #[test]
@@ -2757,6 +2795,19 @@ mod tests {
 
         let flags = Flags { allow_bytes: true, .. Flags::default() };
         test_err!(r"(?-u)[^\x00-\xFF]", 17, ErrorKind::EmptyClass, flags);
+    }
+
+    #[test]
+    fn error_class_unsupported_char() {
+        // These tests ensure that some unescaped special characters are
+        // rejected in character classes. The intention is to use these
+        // characters to implement sets as described in UTC#18 RL1.3. Once
+        // that's done, these tests should be removed and replaced with others.
+        test_err!("[[]", 1, ErrorKind::UnsupportedClassChar('['));
+        test_err!("[&&]", 2, ErrorKind::UnsupportedClassChar('&'));
+        test_err!("[~~]", 2, ErrorKind::UnsupportedClassChar('~'));
+        test_err!("[+--]", 4, ErrorKind::UnsupportedClassChar('-'));
+        test_err!(r"[a-a--\xFF]", 5, ErrorKind::UnsupportedClassChar('-'));
     }
 
     #[test]

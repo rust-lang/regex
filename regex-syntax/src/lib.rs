@@ -1401,6 +1401,17 @@ pub enum ErrorKind {
     /// A character class was constructed such that it is empty.
     /// e.g., `[^\d\D]`.
     EmptyClass,
+    /// Indicates that unsupported notation was used in a character class.
+    ///
+    /// The char in this error corresponds to the illegal character.
+    ///
+    /// The intent of this error is to carve a path to support set notation
+    /// as described in UTS#18 RL1.3. We do this by rejecting regexes that
+    /// would use the notation.
+    ///
+    /// The work around for end users is to escape the character included in
+    /// this error message.
+    UnsupportedClassChar(char),
     /// Hints that destructuring should not be exhaustive.
     ///
     /// This enum may grow additional variants, so this makes sure clients
@@ -1464,6 +1475,7 @@ impl ErrorKind {
             UnicodeNotAllowed => "Unicode features not allowed",
             InvalidUtf8 => "matching arbitrary bytes is not allowed",
             EmptyClass => "empty character class",
+            UnsupportedClassChar(_) => "unsupported class notation",
             __Nonexhaustive => unreachable!(),
         }
     }
@@ -1576,6 +1588,9 @@ repetition operator."),
                 write!(f, "Matching arbitrary bytes is not allowed."),
             EmptyClass =>
                 write!(f, "Empty character classes are not allowed."),
+            UnsupportedClassChar(c) =>
+                write!(f, "Use of unescaped '{}' in character class is \
+                           not allowed.", c),
             __Nonexhaustive => unreachable!(),
         }
     }
