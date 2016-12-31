@@ -24,7 +24,7 @@ Assuming you have
 (and a C compiler), then this should work to run the `iter` example:
 
 ```
-$ git clone git://github.com/rust-lang-nursery/regex
+$ git clone git://github.com/rust-lang/regex
 $ cd regex/regex-capi/examples
 $ ./compile
 $ LD_LIBRARY_PATH=../target/release ./iter
@@ -42,7 +42,7 @@ All memory usage is bounded and all searching takes linear time with respect
 to the input string.
 
 For more details, see the PERFORMANCE guide:
-https://github.com/rust-lang-nursery/regex/blob/master/PERFORMANCE.md
+https://github.com/rust-lang/regex/blob/master/PERFORMANCE.md
 
 
 Text encoding

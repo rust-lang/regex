@@ -609,7 +609,7 @@ impl Parser {
             // If `class` was only non-empty due to multibyte characters, the
             // corresponding byte class will now be empty.
             //
-            // See https://github.com/rust-lang-nursery/regex/issues/303
+            // See https://github.com/rust-lang/regex/issues/303
             if byte_class.is_empty() {
                 // e.g., (?-u)[^\x00-\xFF]
                 return Err(self.err(ErrorKind::EmptyClass));

@@ -41,7 +41,7 @@ mat!(null_bytes, r"(?-u)(?P<cstr>[^\x00]+)\x00",
      R(b"foo\x00"), Some((0, 4)), Some((0, 3)));
 
 // Test that lookahead operators work properly in the face of invalid UTF-8.
-// See: https://github.com/rust-lang-nursery/regex/issues/277
+// See: https://github.com/rust-lang/regex/issues/277
 matiter!(invalidutf8_anchor1,
          r"(?-u)\xcc?^",
          R(b"\x8d#;\x1a\xa4s3\x05foobarX\\\x0f0t\xe4\x9b\xa4"),
@@ -55,7 +55,7 @@ matiter!(invalidutf8_anchor3,
          R(b"\x8d#;\x1a\xa4s3\x05foobarX\\\x0f0t\xe4\x9b\xa4"),
          (0, 0));
 
-// See https://github.com/rust-lang-nursery/regex/issues/303
+// See https://github.com/rust-lang/regex/issues/303
 #[test]
 fn negated_full_byte_range() {
      assert!(::regex::bytes::Regex::new(r#"(?-u)[^\x00-\xff]"#).is_err());

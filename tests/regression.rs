@@ -25,7 +25,7 @@ mat!(regression_negated_char_class_2, r"(?i)[^x]", "X", None);
 // See: https://github.com/rust-lang/regex/issues/101
 mat!(regression_ascii_word_underscore, r"[[:word:]]", "_", Some((0, 1)));
 
-// See: https://github.com/rust-lang-nursery/regex/issues/129
+// See: https://github.com/rust-lang/regex/issues/129
 #[test]
 fn regression_captures_rep() {
     let re = regex!(r"([a-f]){2}(?P<foo>[x-z])");
@@ -33,17 +33,17 @@ fn regression_captures_rep() {
     assert_eq!(match_text!(caps.name("foo").unwrap()), text!("x"));
 }
 
-// See: https://github.com/rust-lang-nursery/regex/issues/153
+// See: https://github.com/rust-lang/regex/issues/153
 mat!(regression_alt_in_alt1, r"ab?|$", "az", Some((0, 1)));
 mat!(regression_alt_in_alt2, r"^(.*?)(\n|\r\n?|$)", "ab\rcd", Some((0, 3)));
 
-// See: https://github.com/rust-lang-nursery/regex/issues/169
+// See: https://github.com/rust-lang/regex/issues/169
 mat!(regression_leftmost_first_prefix, r"z*azb", "azb", Some((0, 3)));
 
 // See: https://github.com/rust-lang/regex/issues/76
 mat!(uni_case_lower_nocase_flag, r"(?i)\p{Ll}+", "ΛΘΓΔα", Some((0, 10)));
 
-// See: https://github.com/rust-lang-nursery/regex/issues/191
+// See: https://github.com/rust-lang/regex/issues/191
 mat!(many_alternates, r"1|2|3|4|5|6|7|8|9|10|int", "int", Some((0, 3)));
 
 // burntsushi was bad and didn't create an issue for this bug.
@@ -51,32 +51,32 @@ mat!(anchored_prefix1, r"^a\S", "a ", None);
 mat!(anchored_prefix2, r"^a\S", "foo boo a ", None);
 mat!(anchored_prefix3, r"^-[a-z]", "r-f", None);
 
-// See: https://github.com/rust-lang-nursery/regex/issues/204
+// See: https://github.com/rust-lang/regex/issues/204
 split!(split_on_word_boundary, r"\b", r"Should this (work?)",
        &[t!(""), t!("Should"), t!(" "), t!("this"),
          t!(" ("), t!("work"), t!("?)")]);
 matiter!(word_boundary_dfa, r"\b", "a b c",
          (0, 0), (1, 1), (2, 2), (3, 3), (4, 4), (5, 5));
 
-// See: https://github.com/rust-lang-nursery/regex/issues/268
+// See: https://github.com/rust-lang/regex/issues/268
 matiter!(partial_anchor, r"^a|b", "ba", (0, 1));
 
-// See: https://github.com/rust-lang-nursery/regex/issues/264
+// See: https://github.com/rust-lang/regex/issues/264
 mat!(ascii_boundary_no_capture, r"(?-u)\B", "\u{28f3e}", Some((0, 0)));
 mat!(ascii_boundary_capture, r"(?-u)(\B)", "\u{28f3e}", Some((0, 0)));
 
-// See: https://github.com/rust-lang-nursery/regex/issues/280
+// See: https://github.com/rust-lang/regex/issues/280
 ismatch!(partial_anchor_alternate_begin, r"^a|z", "yyyyya", false);
 ismatch!(partial_anchor_alternate_end, r"a$|z", "ayyyyy", false);
 
-// See: https://github.com/rust-lang-nursery/regex/issues/289
+// See: https://github.com/rust-lang/regex/issues/289
 mat!(lits_unambiguous1, r"(ABC|CDA|BC)X", "CDAX", Some((0, 4)));
 
-// See: https://github.com/rust-lang-nursery/regex/issues/291
+// See: https://github.com/rust-lang/regex/issues/291
 mat!(lits_unambiguous2, r"((IMG|CAM|MG|MB2)_|(DSCN|CIMG))(?P<n>[0-9]+)$",
      "CIMG2341", Some((0, 8)), Some((0, 4)), None, Some((0, 4)), Some((4, 8)));
 
-// See: https://github.com/rust-lang-nursery/regex/issues/271
+// See: https://github.com/rust-lang/regex/issues/271
 mat!(end_not_wb, r"$(?-u:\B)", "\u{5c124}\u{b576c}", Some((8, 8)));
 mat!(endl_or_wb, r"(?m:$)|(?-u:\b)", "\u{6084e}", Some((4, 4)));
 mat!(zero_or_end, r"(?i-u:\x00)|$", "\u{e682f}", Some((4, 4)));

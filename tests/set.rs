@@ -20,7 +20,7 @@ nomatset!(nset1, &["a", "a"], "b");
 nomatset!(nset2, &["^foo", "bar$"], "bar foo");
 nomatset!(nset3, { let xs: &[&str] = &[]; xs }, "a");
 
-// See: https://github.com/rust-lang-nursery/regex/issues/187
+// See: https://github.com/rust-lang/regex/issues/187
 #[test]
 fn regression_subsequent_matches() {
     let set = regex_set!(&["ab", "b"]);
