@@ -112,10 +112,7 @@ impl Parser {
                 '*' => try!(self.parse_simple_repeat(Repeater::ZeroOrMore)),
                 '+' => try!(self.parse_simple_repeat(Repeater::OneOrMore)),
                 '{' => try!(self.parse_counted_repeat()),
-                '[' => match self.maybe_parse_ascii() {
-                    None => try!(self.parse_class()),
-                    Some(cls) => Build::Expr(Expr::Class(cls)),
-                },
+                '[' => try!(self.parse_class()),
                 '^' => {
                     if self.flags.multi {
                         self.parse_one(Expr::StartLine)
@@ -551,8 +548,8 @@ impl Parser {
                 '[' => match self.maybe_parse_ascii() {
                     Some(class2) => class.ranges.extend(class2),
                     None => {
-                        self.bump();
-                        try!(self.parse_class_range(&mut class, '['))
+                        return Err(self.err(
+                            ErrorKind::UnsupportedClassChar('[')));
                     }
                 },
                 '\\' => match try!(self.parse_escape()) {
@@ -585,6 +582,16 @@ impl Parser {
                         let _ = try!(self.codepoint_to_one_byte(start));
                     }
                     self.bump();
+                    match start {
+                        '&'|'~'|'-' => {
+                            // Only report an error if we see && or ~~ or --.
+                            if self.peek_is(start) {
+                                return Err(self.err(
+                                    ErrorKind::UnsupportedClassChar(start)));
+                            }
+                        }
+                        _ => {}
+                    }
                     try!(self.parse_class_range(&mut class, start));
                 }
             }
@@ -602,7 +609,7 @@ impl Parser {
             // If `class` was only non-empty due to multibyte characters, the
             // corresponding byte class will now be empty.
             //
-            // See https://github.com/rust-lang-nursery/regex/issues/303
+            // See https://github.com/rust-lang/regex/issues/303
             if byte_class.is_empty() {
                 // e.g., (?-u)[^\x00-\xFF]
                 return Err(self.err(ErrorKind::EmptyClass));
@@ -657,8 +664,11 @@ impl Parser {
                 // Because `parse_escape` can never return `LeftParen`.
                 _ => unreachable!(),
             },
-            _ => {
-                let c = self.bump();
+            c => {
+                self.bump();
+                if c == '-' {
+                    return Err(self.err(ErrorKind::UnsupportedClassChar('-')));
+                }
                 if !self.flags.unicode {
                     let _ = try!(self.codepoint_to_one_byte(c));
                 }
@@ -1215,7 +1225,7 @@ fn is_valid_capture_char(c: char) -> bool {
 pub fn is_punct(c: char) -> bool {
     match c {
         '\\' | '.' | '+' | '*' | '?' | '(' | ')' | '|' |
-        '[' | ']' | '{' | '}' | '^' | '$' | '#' => true,
+        '[' | ']' | '{' | '}' | '^' | '$' | '#' | '&' | '-' | '~' => true,
         _ => false,
     }
 }
@@ -2194,9 +2204,9 @@ mod tests {
 
     #[test]
     fn class_brackets() {
-        assert_eq!(p("[]]"), Expr::Class(class(&[(']', ']')])));
-        assert_eq!(p("[][]"), Expr::Class(class(&[('[', '['), (']', ']')])));
-        assert_eq!(p("[[]]"), Expr::Concat(vec![
+        assert_eq!(p(r"[]]"), Expr::Class(class(&[(']', ']')])));
+        assert_eq!(p(r"[]\[]"), Expr::Class(class(&[('[', '['), (']', ']')])));
+        assert_eq!(p(r"[\[]]"), Expr::Concat(vec![
             Expr::Class(class(&[('[', '[')])),
             lit(']'),
         ]));
@@ -2212,6 +2222,31 @@ mod tests {
     }
 
     #[test]
+    fn class_special_escaped_set_chars() {
+        // These tests ensure that some special characters require escaping
+        // for use in character classes. The intention is to use these
+        // characters to implement sets as described in UTC#18 RL1.3. Once
+        // that's done, these tests should be removed and replaced with others.
+        assert_eq!(p(r"[\[]"), Expr::Class(class(&[('[', '[')])));
+        assert_eq!(p(r"[&]"), Expr::Class(class(&[('&', '&')])));
+        assert_eq!(p(r"[\&]"), Expr::Class(class(&[('&', '&')])));
+        assert_eq!(p(r"[\&\&]"), Expr::Class(class(&[('&', '&')])));
+        assert_eq!(p(r"[\x00-&]"), Expr::Class(class(&[('\u{0}', '&')])));
+        assert_eq!(p(r"[&-\xFF]"), Expr::Class(class(&[('&', '\u{FF}')])));
+
+        assert_eq!(p(r"[~]"), Expr::Class(class(&[('~', '~')])));
+        assert_eq!(p(r"[\~]"), Expr::Class(class(&[('~', '~')])));
+        assert_eq!(p(r"[\~\~]"), Expr::Class(class(&[('~', '~')])));
+        assert_eq!(p(r"[\x00-~]"), Expr::Class(class(&[('\u{0}', '~')])));
+        assert_eq!(p(r"[~-\xFF]"), Expr::Class(class(&[('~', '\u{FF}')])));
+
+        assert_eq!(p(r"[+-\-]"), Expr::Class(class(&[('+', '-')])));
+        assert_eq!(p(r"[a-a\--\xFF]"), Expr::Class(class(&[
+            ('-', '\u{FF}'),
+        ])));
+    }
+
+    #[test]
     fn class_overlapping() {
         assert_eq!(p("[a-fd-h]"), Expr::Class(class(&[('a', 'h')])));
         assert_eq!(p("[a-fg-m]"), Expr::Class(class(&[('a', 'm')])));
@@ -2224,10 +2259,11 @@ mod tests {
 
     #[test]
     fn ascii_classes() {
-        assert_eq!(p("[:upper:]"), Expr::Class(class(UPPER)));
+        assert_eq!(p("[:blank:]"), Expr::Class(class(&[
+            (':', ':'), ('a', 'b'), ('k', 'l'), ('n', 'n'),
+        ])));
         assert_eq!(p("[[:upper:]]"), Expr::Class(class(UPPER)));
 
-        assert_eq!(pb("(?-u)[:upper:]"), Expr::Class(class(UPPER)));
         assert_eq!(pb("(?-u)[[:upper:]]"),
                    Expr::ClassBytes(class(UPPER).to_byte_class()));
     }
@@ -2270,12 +2306,9 @@ mod tests {
 
     #[test]
     fn ascii_classes_case_fold() {
-        assert_eq!(p("(?i)[:upper:]"), Expr::Class(class(UPPER).case_fold()));
         assert_eq!(p("(?i)[[:upper:]]"),
                    Expr::Class(class(UPPER).case_fold()));
 
-        assert_eq!(pb("(?i-u)[:upper:]"),
-                   Expr::Class(class(UPPER).case_fold()));
         assert_eq!(pb("(?i-u)[[:upper:]]"),
                    Expr::ClassBytes(class(UPPER).to_byte_class().case_fold()));
     }
@@ -2762,6 +2795,19 @@ mod tests {
 
         let flags = Flags { allow_bytes: true, .. Flags::default() };
         test_err!(r"(?-u)[^\x00-\xFF]", 17, ErrorKind::EmptyClass, flags);
+    }
+
+    #[test]
+    fn error_class_unsupported_char() {
+        // These tests ensure that some unescaped special characters are
+        // rejected in character classes. The intention is to use these
+        // characters to implement sets as described in UTC#18 RL1.3. Once
+        // that's done, these tests should be removed and replaced with others.
+        test_err!("[[]", 1, ErrorKind::UnsupportedClassChar('['));
+        test_err!("[&&]", 2, ErrorKind::UnsupportedClassChar('&'));
+        test_err!("[~~]", 2, ErrorKind::UnsupportedClassChar('~'));
+        test_err!("[+--]", 4, ErrorKind::UnsupportedClassChar('-'));
+        test_err!(r"[a-a--\xFF]", 5, ErrorKind::UnsupportedClassChar('-'));
     }
 
     #[test]

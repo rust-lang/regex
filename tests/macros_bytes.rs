@@ -1,11 +1,12 @@
 // Macros for use in writing tests generic over &str/&[u8].
 macro_rules! text { ($text:expr) => { $text.as_bytes() } }
 macro_rules! t { ($re:expr) => { text!($re) } }
+macro_rules! match_text { ($text:expr) => { $text.as_bytes() } }
 
 macro_rules! bytes { ($text:expr) => { $text } }
 macro_rules! b { ($text:expr) => { bytes!($text) } }
 
-macro_rules! u { ($re:expr) => { concat!("(?u)", $re) } }
+// macro_rules! u { ($re:expr) => { concat!("(?u)", $re) } }
 
 macro_rules! no_expand {
     ($text:expr) => {{
@@ -25,9 +26,6 @@ macro_rules! show {
     }}
 }
 
-// N.B. The expansion API for &str and &[u8] APIs differs slightly for now,
-// but they should be unified in 1.0. Then we can move this macro back into
-// tests/api.rs where it is used. ---AG
 macro_rules! expand {
     ($name:ident, $re:expr, $text:expr, $expand:expr, $expected:expr) => {
         #[test]

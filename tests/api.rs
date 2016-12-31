@@ -40,7 +40,7 @@ fn quoted_bracket_set() {
 
 #[test]
 fn first_range_starts_with_left_bracket() {
-    let re = regex!(r"([[-z])");
+    let re = regex!(r"([\[-z])");
     assert_eq!(vec![(0, 1), (1, 2)], findall!(re, "[]"));
 }
 
@@ -60,7 +60,8 @@ fn empty_match_find_iter() {
 fn empty_match_captures_iter() {
     let re = regex!(r".*?");
     let ms: Vec<_> = re.captures_iter(text!("abc"))
-                       .map(|c| c.pos(0).unwrap())
+                       .map(|c| c.get(0).unwrap())
+                       .map(|m| (m.start(), m.end()))
                        .collect();
     assert_eq!(ms, vec![(0, 0), (1, 1), (2, 2), (3, 3)]);
 }
@@ -127,96 +128,35 @@ fn capture_misc() {
 
     assert_eq!(5, cap.len());
 
-    assert_eq!(Some((0, 3)), cap.pos(0));
-    assert_eq!(None, cap.pos(2));
-    assert_eq!(Some((2, 3)), cap.pos(4));
+    assert_eq!((0, 3), { let m = cap.get(0).unwrap(); (m.start(), m.end()) });
+    assert_eq!(None, cap.get(2));
+    assert_eq!((2, 3), { let m = cap.get(4).unwrap(); (m.start(), m.end()) });
 
-    assert_eq!(Some(t!("abc")), cap.at(0));
-    assert_eq!(None, cap.at(2));
-    assert_eq!(Some(t!("c")), cap.at(4));
+    assert_eq!(t!("abc"), match_text!(cap.get(0).unwrap()));
+    assert_eq!(None, cap.get(2));
+    assert_eq!(t!("c"), match_text!(cap.get(4).unwrap()));
 
     assert_eq!(None, cap.name("a"));
-    assert_eq!(Some(t!("c")), cap.name("b"));
+    assert_eq!(t!("c"), match_text!(cap.name("b").unwrap()));
 }
 
 #[test]
-fn capture_iter() {
-    let re = regex!(r"(.)(?P<a>.)(.)(?P<b>.)");
-    let cap = re.captures(t!("abcd")).unwrap();
-    assert_eq!(5, cap.len());
+fn sub_capture_matches() {
+    let re = regex!(r"([a-z])(([a-z])|([0-9]))");
+    let cap = re.captures(t!("a5")).unwrap();
+    let subs: Vec<_> = cap.iter().collect();
 
-    let expected = vec![
-        t!("abcd"), t!("a"), t!("b"), t!("c"), t!("d"),
-    ].into_iter().map(Some).collect::<Vec<_>>();
-    let got = cap.iter().collect::<Vec<_>>();
-    assert_eq!(expected, got);
-}
+    assert_eq!(5, subs.len());
+    assert!(subs[0].is_some());
+    assert!(subs[1].is_some());
+    assert!(subs[2].is_some());
+    assert!(subs[3].is_none());
+    assert!(subs[4].is_some());
 
-#[test]
-fn capture_iter_missing() {
-    let re = regex!(r"(.)(?P<a>a)?(.)(?P<b>.)");
-    let cap = re.captures(t!("abc")).unwrap();
-    assert_eq!(5, cap.len());
-
-    let expected = vec![
-        Some(t!("abc")), Some(t!("a")), None, Some(t!("b")), Some(t!("c")),
-    ];
-    let got = cap.iter().collect::<Vec<_>>();
-    assert_eq!(expected, got);
-}
-
-#[test]
-fn capture_iter_pos() {
-    let re = regex!(r"(.)(?P<a>.)(.)(?P<b>.)");
-    let cap = re.captures(t!("abcd")).unwrap();
-
-    let expected = vec![
-        (0, 4), (0, 1), (1, 2), (2, 3), (3, 4),
-    ].into_iter().map(Some).collect::<Vec<_>>();
-    let got = cap.iter_pos().collect::<Vec<_>>();
-    assert_eq!(expected, got);
-}
-
-#[test]
-fn capture_iter_pos_missing() {
-    let re = regex!(r"(.)(?P<a>a)?(.)(?P<b>.)");
-    let cap = re.captures(t!("abc")).unwrap();
-
-    let expected = vec![
-        Some((0, 3)), Some((0, 1)), None, Some((1, 2)), Some((2, 3)),
-    ];
-    let got = cap.iter_pos().collect::<Vec<_>>();
-    assert_eq!(expected, got);
-}
-
-#[test]
-fn capture_iter_named() {
-    let re = regex!(r"(.)(?P<a>.)(.)(?P<b>.)");
-    let cap = re.captures(t!("abcd")).unwrap();
-
-    let expected1 = vec![
-        ("a", Some(t!("b"))), ("b", Some(t!("d"))),
-    ];
-    let expected2 = vec![
-        ("b", Some(t!("d"))), ("a", Some(t!("b"))),
-    ];
-    let got = cap.iter_named().collect::<Vec<_>>();
-    assert!(got == expected1 || got == expected2);
-}
-
-#[test]
-fn capture_iter_named_missing() {
-    let re = regex!(r"(.)(?P<a>.)?(.)(?P<b>.)");
-    let cap = re.captures(t!("abc")).unwrap();
-
-    let expected1 = vec![
-        ("a", None), ("b", Some(t!("c"))),
-    ];
-    let expected2 = vec![
-        ("b", Some(t!("c"))), ("a", None),
-    ];
-    let got = cap.iter_named().collect::<Vec<_>>();
-    assert!(got == expected1 || got == expected2);
+    assert_eq!(t!("a5"), match_text!(subs[0].unwrap()));
+    assert_eq!(t!("a"), match_text!(subs[1].unwrap()));
+    assert_eq!(t!("5"), match_text!(subs[2].unwrap()));
+    assert_eq!(t!("5"), match_text!(subs[4].unwrap()));
 }
 
 expand!(expand1, r"(?P<foo>\w+)", "abc", "$foo", "abc");

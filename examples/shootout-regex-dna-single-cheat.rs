@@ -16,7 +16,7 @@ fn main() {
     io::stdin().read_to_string(&mut seq).unwrap();
     let ilen = seq.len();
 
-    seq = regex!(">[^\n]*\n|\n").replace_all(&seq, "");
+    seq = regex!(">[^\n]*\n|\n").replace_all(&seq, "").into_owned();
     let clen = seq.len();
 
     let variants = vec![
@@ -63,10 +63,10 @@ fn replace_all(text: &str, substs: Vec<(u8, &str)>) -> String {
     let re = regex!(&alternates.join("|"));
     let mut new = String::with_capacity(text.len());
     let mut last_match = 0;
-    for (s, e) in re.find_iter(text) {
-        new.push_str(&text[last_match..s]);
-        new.push_str(replacements[text.as_bytes()[s] as usize]);
-        last_match = e;
+    for m in re.find_iter(text) {
+        new.push_str(&text[last_match..m.start()]);
+        new.push_str(replacements[text.as_bytes()[m.start()] as usize]);
+        last_match = m.end();
     }
     new.push_str(&text[last_match..]);
     new

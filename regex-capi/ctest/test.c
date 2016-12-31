@@ -200,8 +200,8 @@ bool test_iter_capture_name(char *expect, char *given) {
     if (strcmp(expect, given)) {
         if (DEBUG) {
             fprintf(stderr,
-                    "[test_iter_capture_name] expected first capture name '%s' "
-                    "got '%s'\n",
+                    "[test_iter_capture_name] expected first capture "
+                    "name '%s' got '%s'\n",
                     expect, given);
         }
         passed = false;
@@ -213,14 +213,16 @@ bool test_iter_capture_names() {
     bool passed = true;
 
     char *name;
-    rure *re = rure_compile_must("(?P<year>\\d{4})-(?P<month>\\d{2})-(?P<day>\\d{2})");
+    rure *re = rure_compile_must(
+        "(?P<year>\\d{4})-(?P<month>\\d{2})-(?P<day>\\d{2})");
     rure_iter_capture_names *it = rure_iter_capture_names_new(re);
 
     bool result = rure_iter_capture_names_next(it, &name);
     if (!result) {
         if (DEBUG) {
             fprintf(stderr,
-                    "[test_iter_capture_names] expected a second name, but got none\n");
+                    "[test_iter_capture_names] expected a second name, "
+                    "but got none\n");
         }
         passed = false;
         goto done;
@@ -426,14 +428,14 @@ bool test_regex_set_match_start() {
         goto done1;
     }
 
-    if (rure_set_is_match(re, (const uint8_t *) "foobiasdr", 7, 2)) {
+    if (rure_set_is_match(re, (const uint8_t *)"foobiasdr", 7, 2)) {
         passed = false;
         goto done1;
     }
 
     {
         bool matches[PAT_COUNT];
-        if (!rure_set_matches(re, (const uint8_t *) "fooobar", 8, 0, matches)) {
+        if (!rure_set_matches(re, (const uint8_t *)"fooobar", 8, 0, matches)) {
             passed = false;
             goto done1;
         }
@@ -453,7 +455,7 @@ bool test_regex_set_match_start() {
 
     {
         bool matches[PAT_COUNT];
-        if (!rure_set_matches(re, (const uint8_t *) "fooobar", 7, 1, matches)) {
+        if (!rure_set_matches(re, (const uint8_t *)"fooobar", 7, 1, matches)) {
             passed = false;
             goto done1;
         }
@@ -490,8 +492,8 @@ bool test_regex_set_options() {
     const char *patterns[] = { "\\w{100}" };
     const size_t patterns_lengths[] = { 8 };
 
-    rure_set *re = rure_compile_set((const uint8_t **) patterns, patterns_lengths,
-                                    1, 0, opts, err);
+    rure_set *re = rure_compile_set(
+        (const uint8_t **) patterns, patterns_lengths, 1, 0, opts, err);
     if (re != NULL) {
         if (DEBUG) {
             fprintf(stderr,
@@ -540,7 +542,8 @@ int main() {
              &passed);
     run_test(test_regex_set_matches, "test_regex_set_match", &passed);
     run_test(test_regex_set_options, "test_regex_set_options", &passed);
-    run_test(test_regex_set_match_start, "test_regex_set_match_start", &passed);
+    run_test(test_regex_set_match_start, "test_regex_set_match_start",
+             &passed);
 
     if (!passed) {
         exit(1);

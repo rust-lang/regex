@@ -1,6 +1,6 @@
 [package]
 name = "regex_macros"
-version = "0.1.38"
+version = "0.2.0"
 authors = ["The Rust Project Developers"]
 license = "MIT/Apache-2.0"
 repository = "https://github.com/rust-lang/regex"
@@ -19,16 +19,16 @@ plugin = true
 
 [dependencies.regex]
 path = ".."
-version = "0.1.63"
+version = "0.2.0"
 features = ["pattern"]
 
 [dependencies.regex-syntax]
 path = "../regex-syntax"
-version = "0.3.1"
+version = "0.4.0"
 
 [dev-dependencies]
 # For generating random test data.
-rand = "0.3"
+rand = "0.3.15"
 
 [[test]]
 path = "../tests/test_plugin.rs"

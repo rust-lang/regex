@@ -1,17 +1,14 @@
-#[cfg(feature = "pattern")]
 use std::str::pattern::{Pattern, Searcher, SearchStep};
 
-use re_unicode::{Regex, FindMatches};
+use re_unicode::{Regex, Matches};
 
-#[cfg(feature = "pattern")]
 pub struct RegexSearcher<'r, 't> {
     haystack: &'t str,
-    it: FindMatches<'r, 't>,
+    it: Matches<'r, 't>,
     last_step_end: usize,
     next_match: Option<(usize, usize)>,
 }
 
-#[cfg(feature = "pattern")]
 impl<'r, 't> Pattern<'t> for &'r Regex {
     type Searcher = RegexSearcher<'r, 't>;
 
@@ -25,7 +22,6 @@ impl<'r, 't> Pattern<'t> for &'r Regex {
     }
 }
 
-#[cfg(feature = "pattern")]
 unsafe impl<'r, 't> Searcher<'t> for RegexSearcher<'r, 't> {
     #[inline]
     fn haystack(&self) -> &'t str {
@@ -49,7 +45,8 @@ unsafe impl<'r, 't> Searcher<'t> for RegexSearcher<'r, 't> {
                     SearchStep::Done
                 }
             }
-            Some((s, e)) => {
+            Some(m) => {
+                let (s, e) = (m.start(), m.end());
                 if s == self.last_step_end {
                     self.last_step_end = e;
                     SearchStep::Match(s, e)
