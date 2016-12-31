@@ -95,7 +95,7 @@ impl RegexBuilder {
     /// it is not set (the default).
     ///
     /// N.B. "matches anything" means "any byte" for `regex::bytes::Regex`
-    /// expressions and means "any Unicode codepoint" for `regex::Regex`
+    /// expressions and means "any Unicode scalar value" for `regex::Regex`
     /// expressions.
     pub fn dot_matches_new_line(&mut self, yes: bool) -> &mut RegexBuilder {
         self.0.dot_matches_new_line = yes;
@@ -208,7 +208,7 @@ impl RegexSetBuilder {
     /// it is not set (the default).
     ///
     /// N.B. "matches anything" means "any byte" for `regex::bytes::RegexSet`
-    /// expressions and means "any Unicode codepoint" for `regex::RegexSet`
+    /// expressions and means "any Unicode scalar value" for `regex::RegexSet`
     /// expressions.
     pub fn dot_matches_new_line(&mut self, yes: bool) -> &mut RegexSetBuilder {
         self.0.dot_matches_new_line = yes;

@@ -105,15 +105,15 @@ impl<'t> Match<'t> {
 /// assert_eq!((mat.start(), mat.end()), (7, 19));
 /// ```
 ///
-/// # Using the `std::str::StrExt` methods with `Regex`
+/// # Using the `std::str::pattern` methods with `Regex`
 ///
-/// > **Note**: This section requires that this crate is currently compiled
-/// >           with the `pattern` Cargo feature enabled.
+/// > **Note**: This section requires that this crate is compiled with the
+/// > `pattern` Cargo feature enabled, which **requires nightly Rust**.
 ///
 /// Since `Regex` implements `Pattern`, you can use regexes with methods
-/// defined on `std::str::StrExt`. For example, `is_match`, `find`, `find_iter`
-/// and `split` can be replaced with `StrExt::contains`, `StrExt::find`,
-/// `StrExt::match_indices` and `StrExt::split`.
+/// defined on `&str`. For example, `is_match`, `find`, `find_iter`
+/// and `split` can be replaced with `str::contains`, `str::find`,
+/// `str::match_indices` and `str::split`.
 ///
 /// Here are some examples:
 ///
@@ -137,7 +137,7 @@ pub enum _Regex {
     // The representation of `Regex` is exported to support the `regex!`
     // syntax extension. Do not rely on it.
     //
-    // See the comments for the `program` module in `lib.rs` for a more
+    // See the comments for the `internal` module in `lib.rs` for a more
     // detailed explanation for what `regex!` requires.
     #[doc(hidden)]
     Dynamic(Exec),
@@ -267,9 +267,9 @@ impl Regex {
     /// match in `text`. Capture group `0` always corresponds to the entire
     /// match. If no match is found, then `None` is returned.
     ///
-    /// You should only use `captures` if you need access to submatches.
-    /// Otherwise, `find` is faster for discovering the location of the overall
-    /// match.
+    /// You should only use `captures` if you need access to the location of
+    /// capturing group matches. Otherwise, `find` is faster for discovering
+    /// the location of the overall match.
     ///
     /// # Examples
     ///
@@ -337,7 +337,7 @@ impl Regex {
 
     /// Returns an iterator over all the non-overlapping capture groups matched
     /// in `text`. This is operationally the same as `find_iter`, except it
-    /// yields information about submatches.
+    /// yields information about capturing group matches.
     ///
     /// # Example
     ///
@@ -471,7 +471,7 @@ impl Regex {
     /// But anything satisfying the `Replacer` trait will work. For example,
     /// a closure of type `|&Captures| -> String` provides direct access to the
     /// captures corresponding to a match. This allows one to access
-    /// submatches easily:
+    /// capturing group matches easily:
     ///
     /// ```rust
     /// # extern crate regex; use regex::Regex;
@@ -502,8 +502,8 @@ impl Regex {
     /// would produce the same result. To write a literal `$` use `$$`.
     ///
     /// Finally, sometimes you just want to replace a literal string with no
-    /// submatch expansion. This can be done by wrapping a string with
-    /// `NoExpand`:
+    /// regard for capturing group expansion. This can be done by wrapping a
+    /// byte string with `NoExpand`:
     ///
     /// ```rust
     /// # extern crate regex; use regex::Regex;
@@ -528,7 +528,7 @@ impl Regex {
     /// `0`.
     ///
     /// See the documentation for `replace` for details on how to access
-    /// submatches in the replacement string.
+    /// capturing group matches in the replacement string.
     pub fn replace_all<'t, R: Replacer>(
         &self,
         text: &'t str,
@@ -542,7 +542,7 @@ impl Regex {
     /// are replaced.
     ///
     /// See the documentation for `replace` for details on how to access
-    /// submatches in the replacement string.
+    /// capturing group matches in the replacement string.
     pub fn replacen<'t, R: Replacer>(
         &self,
         text: &'t str,

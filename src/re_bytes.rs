@@ -192,9 +192,9 @@ impl Regex {
     /// match in `text`. Capture group `0` always corresponds to the entire
     /// match. If no match is found, then `None` is returned.
     ///
-    /// You should only use `captures` if you need access to submatches.
-    /// Otherwise, `find` is faster for discovering the location of the overall
-    /// match.
+    /// You should only use `captures` if you need access to the location of
+    /// capturing group matches. Otherwise, `find` is faster for discovering
+    /// the location of the overall match.
     ///
     /// # Examples
     ///
@@ -262,7 +262,7 @@ impl Regex {
 
     /// Returns an iterator over all the non-overlapping capture groups matched
     /// in `text`. This is operationally the same as `find_iter`, except it
-    /// yields information about submatches.
+    /// yields information about capturing group matches.
     ///
     /// # Example
     ///
@@ -393,8 +393,8 @@ impl Regex {
     ///
     /// But anything satisfying the `Replacer` trait will work. For example, a
     /// closure of type `|&Captures| -> Vec<u8>` provides direct access to the
-    /// captures corresponding to a match. This allows one to access submatches
-    /// easily:
+    /// captures corresponding to a match. This allows one to access capturing
+    /// group matches easily:
     ///
     /// ```rust
     /// # extern crate regex; use regex::bytes::Regex;
@@ -435,8 +435,8 @@ impl Regex {
     /// precise control over the name, use braces, e.g., `${1}a`.
     ///
     /// Finally, sometimes you just want to replace a literal string with no
-    /// submatch expansion. This can be done by wrapping a byte string with
-    /// `NoExpand`:
+    /// regard for capturing group expansion. This can be done by wrapping a
+    /// byte string with `NoExpand`:
     ///
     /// ```rust
     /// # extern crate regex; use regex::bytes::Regex;
@@ -461,7 +461,7 @@ impl Regex {
     /// `0`.
     ///
     /// See the documentation for `replace` for details on how to access
-    /// submatches in the replacement text.
+    /// capturing group matches in the replacement text.
     pub fn replace_all<'t, R: Replacer>(
         &self,
         text: &'t [u8],
@@ -475,7 +475,7 @@ impl Regex {
     /// are replaced.
     ///
     /// See the documentation for `replace` for details on how to access
-    /// submatches in the replacement text.
+    /// capturing group matches in the replacement text.
     pub fn replacen<'t, R: Replacer>(
         &self,
         text: &'t [u8],

@@ -1,11 +1,10 @@
 regex
 =====
-
-A Rust library for parsing, compiling, and executing regular expressions.
-This particular implementation of regular expressions guarantees execution
-in linear time with respect to the size of the regular expression and
-search text by using finite automata. In particular, it makes use of both
-NFAs and DFAs when matching. Much of the syntax and implementation is inspired
+A Rust library for parsing, compiling, and executing regular expressions. Its
+syntax is similar to Perl-style regular expressions, but lacks a few features
+like look around and backreferences. In exchange, all searches execute in
+linear time with respect to the size of the regular expression and search text.
+Much of the syntax and implementation is inspired
 by [RE2](https://github.com/google/re2).
 
 [![Build Status](https://travis-ci.org/rust-lang-nursery/regex.svg?branch=master)](https://travis-ci.org/rust-lang-nursery/regex)
@@ -29,7 +28,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-regex = "0.1"
+regex = "0.2"
 ```
 
 and this to your crate root:
@@ -56,9 +55,9 @@ fn main() {
 ").unwrap();
     let caps = re.captures("2010-03-14").unwrap();
 
-    assert_eq!("2010", caps.name("year").unwrap());
-    assert_eq!("03", caps.name("month").unwrap());
-    assert_eq!("14", caps.name("day").unwrap());
+    assert_eq!("2010", caps["year"]);
+    assert_eq!("03", caps["month"]);
+    assert_eq!("14", caps["day"]);
 }
 ```
 
@@ -82,9 +81,9 @@ fn main() {
         // because the only way for the regex to match is if all of the
         // capture groups match. This is not true in general though!
         println!("year: {}, month: {}, day: {}",
-                 caps.at(1).unwrap(),
-                 caps.at(2).unwrap(),
-                 caps.at(3).unwrap());
+                 caps.get(1).unwrap().as_str(),
+                 caps.get(2).unwrap().as_str(),
+                 caps.get(3).unwrap().as_str());
     }
 }
 ```
@@ -137,8 +136,8 @@ means the main API can't be used for searching arbitrary bytes.
 To match on arbitrary bytes, use the `regex::bytes::Regex` API. The API
 is identical to the main API, except that it takes an `&[u8]` to search
 on instead of an `&str`. By default, `.` will match any *byte* using
-`regex::bytes::Regex`, while `.` will match any encoded Unicode *codepoint*
-using the main API.
+`regex::bytes::Regex`, while `.` will match any *UTF-8 encoded Unicode scalar
+value* using the main API.
 
 This example shows how to find all null-terminated strings in a slice of bytes:
 
@@ -152,7 +151,7 @@ let text = b"foo\x00bar\x00baz\x00";
 // The unwrap is OK here since a match requires the `cstr` capture to match.
 let cstrs: Vec<&[u8]> =
     re.captures_iter(text)
-      .map(|c| c.name("cstr").unwrap())
+      .map(|c| c.name("cstr").unwrap().as_bytes())
       .collect();
 assert_eq!(vec![&b"foo"[..], &b"bar"[..], &b"baz"[..]], cstrs);
 ```
@@ -211,9 +210,9 @@ fn main() {
     let re = regex!(r"(\d{4})-(\d{2})-(\d{2})");
     let caps = re.captures("2010-03-14").unwrap();
 
-    assert_eq!("2010", caps.at(1).unwrap());
-    assert_eq!("03", caps.at(2).unwrap());
-    assert_eq!("14", caps.at(3).unwrap());
+    assert_eq!("2010", caps[1]);
+    assert_eq!("03", caps[2]);
+    assert_eq!("14", caps[3]);
 }
 ```
 
