@@ -59,14 +59,14 @@ impl<'t> Match<'t> {
     /// Returns the matched text.
     #[inline]
     pub fn as_str(&self) -> &'t str {
-        self.text
+        &self.text[self.start..self.end]
     }
 
     /// Creates a new match from the given haystack and byte offsets.
     #[inline]
     fn new(haystack: &'t str, start: usize, end: usize) -> Match<'t> {
         Match {
-            text: &haystack[start..end],
+            text: haystack,
             start: start,
             end: end,
         }
@@ -559,19 +559,18 @@ impl Regex {
         //      replacements inside the replacement string. We just push it
         //      at each match and be done with it.
         if let Some(rep) = rep.no_expansion() {
-            let mut it = self.find_iter(text).enumerate().peekable();
-            if it.peek().is_none() {
-                return Cow::Borrowed(text);
-            }
             let mut new = String::with_capacity(text.len());
             let mut last_match = 0;
-            for (i, m) in it {
+            for (i, m) in self.find_iter(text).enumerate() {
                 if limit > 0 && i >= limit {
                     break
                 }
                 new.push_str(&text[last_match..m.start()]);
                 new.push_str(&rep);
                 last_match = m.end();
+            }
+            if new.is_empty() {
+                return Cow::Borrowed(text);
             }
             new.push_str(&text[last_match..]);
             return Cow::Owned(new);

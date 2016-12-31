@@ -49,14 +49,14 @@ impl<'t> Match<'t> {
     /// Returns the matched text.
     #[inline]
     pub fn as_bytes(&self) -> &'t [u8] {
-        self.text
+        &self.text[self.start..self.end]
     }
 
     /// Creates a new match from the given haystack and byte offsets.
     #[inline]
     fn new(haystack: &'t [u8], start: usize, end: usize) -> Match<'t> {
         Match {
-            text: &haystack[start..end],
+            text: haystack,
             start: start,
             end: end,
         }
@@ -483,19 +483,18 @@ impl Regex {
         mut rep: R,
     ) -> Cow<'t, [u8]> {
         if let Some(rep) = rep.no_expansion() {
-            let mut it = self.find_iter(text).enumerate().peekable();
-            if it.peek().is_none() {
-                return Cow::Borrowed(text);
-            }
             let mut new = Vec::with_capacity(text.len());
             let mut last_match = 0;
-            for (i, m) in it {
+            for (i, m) in self.find_iter(text).enumerate() {
                 if limit > 0 && i >= limit {
                     break
                 }
                 new.extend_from_slice(&text[last_match..m.start()]);
                 new.extend_from_slice(&rep);
                 last_match = m.end();
+            }
+            if new.is_empty() {
+                return Cow::Borrowed(text);
             }
             new.extend_from_slice(&text[last_match..]);
             return Cow::Owned(new);
