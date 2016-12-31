@@ -459,6 +459,7 @@ extern crate utf8_ranges;
 
 pub use error::Error;
 pub use re_builder::unicode::*;
+pub use re_builder::set_unicode::*;
 pub use re_set::unicode::*;
 pub use re_trait::Locations;
 pub use re_unicode::{
@@ -556,6 +557,7 @@ performance on `&str`.
 */
 pub mod bytes {
     pub use re_builder::bytes::*;
+    pub use re_builder::set_bytes::*;
     pub use re_bytes::*;
     pub use re_set::bytes::*;
     pub use re_trait::Locations;
@@ -600,6 +602,4 @@ pub mod internal {
     pub use prog::{Program, Inst, EmptyLook, InstRanges};
     pub use re_plugin::Plugin;
     pub use re_unicode::_Regex;
-    pub use re_trait::RegularExpression;
-    pub use re_builder::RegexOptions;
 }
