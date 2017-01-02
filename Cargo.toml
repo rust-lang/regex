@@ -30,7 +30,7 @@ utf8-ranges = "1"
 # For examples.
 lazy_static = "0.2.2"
 # For property based tests.
-quickcheck = "0.4.1"
+quickcheck = { version = "0.4.1", default-features = false }
 # For generating random test data.
 rand = "0.3.15"
 

@@ -1,32 +1,12 @@
+dist: trusty
+sudo: false
 language: rust
 rust:
   - 1.12.0
   - stable
   - beta
   - nightly
-sudo: false
-script:
-  - cargo build --verbose
-  - if [ "$TRAVIS_RUST_VERSION" = "nightly" ]; then
-      cargo build --verbose --manifest-path=regex-debug/Cargo.toml;
-      RUSTFLAGS="-C target-feature=+ssse3" cargo test --verbose --features 'simd-accel pattern' --jobs 2;
-    else
-      travis_wait cargo test --verbose --jobs 2;
-    fi
-  - ./run-shootout-test
-  - cargo doc --verbose
-  - cargo test --verbose --manifest-path=regex-syntax/Cargo.toml
-  - cargo doc --verbose --manifest-path=regex-syntax/Cargo.toml
-  - if [ "$TRAVIS_RUST_VERSION" = "nightly" ]; then
-      (cd regex-capi && cargo build --verbose);
-      (cd regex-capi/ctest && ./compile && LD_LIBRARY_PATH=../target/debug ./test);
-      (cd regex-capi/examples && ./compile && LD_LIBRARY_PATH=../target/release ./iter);
-      (cd bench && travis_wait ./run rust);
-      (cd bench && travis_wait ./run rust-bytes --no-run);
-      (cd bench && travis_wait ./run pcre1 --no-run);
-      (cd bench && travis_wait ./run onig --no-run);
-      travis_wait cargo test --verbose --manifest-path=regex_macros/Cargo.toml;
-    fi
+script: ci/script.sh
 addons:
   apt:
     packages:
@@ -34,20 +14,15 @@ addons:
       - libelf-dev
       - libdw-dev
       - binutils-dev
-after_success: |
-  [ $TRAVIS_BRANCH = master ] &&
-  [ $TRAVIS_PULL_REQUEST = false ] &&
-  [ $TRAVIS_RUST_VERSION = nightly ] &&
-  echo '<meta http-equiv=refresh content=0;url=regex/index.html>' > target/doc/index.html &&
-  pip install ghp-import --user $USER &&
-  $HOME/.local/bin/ghp-import -n target/doc &&
-  git push -qf https://${TOKEN}@github.com/${TRAVIS_REPO_SLUG}.git gh-pages &&
-  wget https://github.com/SimonKagstrom/kcov/archive/master.tar.gz &&
-    tar xzf master.tar.gz && mkdir kcov-master/build && cd kcov-master/build && cmake .. && make && make install DESTDIR=../tmp && cd ../.. &&
-  PATH="./kcov-master/tmp/usr/local/bin:$PATH" ./run-kcov --coveralls-id $TRAVIS_JOB_ID
+      - wget
+      - clang-3.6
+      - cmake
+      - python
+      - python-virtualenv
+after_success: ci/after_success.sh
 env:
   global:
-    secure: "ii5NwZiArNTxFuVnjXDHrYutkp82116hqBbzsCv/v53O5gCn1GKbCRyusFYHjr+ytymEPKH171cAQ7doGt3QPyFs2jdzK6+xz4obwCBfAPwgbtuFu9P/lIasG1ja2i/2T61g12DSlzAVTCkLnHNTLad4FWsyDyqJLpY4I4JFvcE="
+    secure: "GdGE0kFYiJGccVZligur7JlWRCy49eH6uWPl71mrnaaW8jLHmkva0jVb0LB9e5ol3YMaMCgrwM2pcj3Uk2C08YcGIoEKOLlDVho351KaD6XfclZ29CQTAPMz4Xut2IcB4YeuZlDrOnM26guTIOtn2NAjeQgOhpM/ErzVBgkB+wQ="
 notifications:
   email:
     on_success: never
