@@ -493,7 +493,7 @@ impl Regex {
                 new.extend_from_slice(&rep);
                 last_match = m.end();
             }
-            if new.is_empty() {
+            if last_match == 0 {
                 return Cow::Borrowed(text);
             }
             new.extend_from_slice(&text[last_match..]);
