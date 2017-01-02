@@ -1,3 +1,18 @@
+0.2.1
+=====
+One major bug with `replace_all` has been fixed along with a couple of other
+touchups.
+
+* [BUG #312](https://github.com/rust-lang/regex/issues/312):
+  Fix documentation for `NoExpand` to reference correct lifetime parameter.
+* [BUG #314](https://github.com/rust-lang/regex/issues/314):
+  Fix a bug with `replace_all` when replacing a match with the empty string.
+* [BUG #316](https://github.com/rust-lang/regex/issues/316):
+  Note a missing breaking change from the `0.2.0` CHANGELOG entry.
+  (`RegexBuilder::compile` was renamed to `RegexBuilder::build`.)
+* [BUG #324](https://github.com/rust-lang/regex/issues/324):
+  Compiling `regex` should only require one version of `memchr` crate.
+
 0.2.0
 =====
 This is a new major release of the regex crate, and is an implementation of the
