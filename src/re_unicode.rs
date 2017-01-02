@@ -1190,9 +1190,9 @@ impl<F> Replacer for F where F: FnMut(&Captures) -> String {
 /// and performant (since capture groups don't need to be found).
 ///
 /// `'t` is the lifetime of the literal text.
-pub struct NoExpand<'r>(pub &'r str);
+pub struct NoExpand<'t>(pub &'t str);
 
-impl<'a> Replacer for NoExpand<'a> {
+impl<'t> Replacer for NoExpand<'t> {
     fn replace_append(&mut self, _: &Captures, dst: &mut String) {
         dst.push_str(self.0);
     }

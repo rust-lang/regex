@@ -52,6 +52,7 @@ Breaking changes for the regex API:
 * The `RegexBuilder` type has switched from owned `self` method receivers to
   `&mut self` method receivers. Most uses will continue to work unchanged, but
   some code may require naming an intermediate variable to hold the builder.
+* The `compile` method on `RegexBuilder` has been renamed to `build`.
 * The free `is_match` function has been removed. It is replaced by compiling
   a `Regex` and calling its `is_match` method.
 * The `PartialEq` and `Eq` impls on `Regex` have been dropped. If you relied
