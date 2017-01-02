@@ -47,7 +47,7 @@ after_success: |
   PATH="./kcov-master/tmp/usr/local/bin:$PATH" ./run-kcov --coveralls-id $TRAVIS_JOB_ID
 env:
   global:
-    secure: VvIrYRW/a8FmBA61hn1bDrqWwR92tANOT6PCeLYd9A9ViQrN07PE6uGsnd9iwr8itck10Ctl1mThZYUkK8BDFEmlvSxOFJ/Po5eRe6A1CYuFF40zizJ+3NllVkN20kwoQDe0kxwZVDGO9Yi1icHUrbRPWDfS+1tfobO/UT8Dlng=
+    secure: "ii5NwZiArNTxFuVnjXDHrYutkp82116hqBbzsCv/v53O5gCn1GKbCRyusFYHjr+ytymEPKH171cAQ7doGt3QPyFs2jdzK6+xz4obwCBfAPwgbtuFu9P/lIasG1ja2i/2T61g12DSlzAVTCkLnHNTLad4FWsyDyqJLpY4I4JFvcE="
 notifications:
   email:
     on_success: never
