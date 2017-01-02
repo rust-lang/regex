@@ -569,7 +569,7 @@ impl Regex {
                 new.push_str(&rep);
                 last_match = m.end();
             }
-            if new.is_empty() {
+            if last_match == 0 {
                 return Cow::Borrowed(text);
             }
             new.push_str(&text[last_match..]);
