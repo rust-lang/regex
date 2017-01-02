@@ -14,7 +14,7 @@ build = "build.rs"
 docopt = "0.6"
 lazy_static = "0.1"
 libc = "0.2"
-onig = { version = "0.4", optional = true }
+onig = { version = "1.2", optional = true }
 libpcre-sys = { version = "0.2", optional = true }
 memmap = "0.2"
 regex = { version = "0.2.0", path = "..", features = ["simd-accel"] }
