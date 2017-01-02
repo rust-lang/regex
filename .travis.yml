@@ -9,9 +9,9 @@ script:
   - cargo build --verbose
   - if [ "$TRAVIS_RUST_VERSION" = "nightly" ]; then
       cargo build --verbose --manifest-path=regex-debug/Cargo.toml;
-      RUSTFLAGS="-C target-feature=+ssse3" cargo test --verbose --features 'simd-accel pattern';
+      RUSTFLAGS="-C target-feature=+ssse3" cargo test --verbose --features 'simd-accel pattern' --jobs 2;
     else
-      travis_wait cargo test --verbose;
+      travis_wait cargo test --verbose --jobs 2;
     fi
   - ./run-shootout-test
   - cargo doc --verbose
