@@ -991,9 +991,9 @@ impl<F> Replacer for F where F: FnMut(&Captures) -> Vec<u8> {
 /// and performant (since capture groups don't need to be found).
 ///
 /// `'t` is the lifetime of the literal text.
-pub struct NoExpand<'r>(pub &'r [u8]);
+pub struct NoExpand<'t>(pub &'t [u8]);
 
-impl<'a> Replacer for NoExpand<'a> {
+impl<'t> Replacer for NoExpand<'t> {
     fn replace_append(&mut self, _: &Captures, dst: &mut Vec<u8>) {
         dst.extend_from_slice(self.0);
     }
