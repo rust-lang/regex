@@ -11,6 +11,7 @@ description = """
 An implementation of regular expressions for Rust. This implementation uses
 finite automata and guarantees linear time matching on all inputs.
 """
+categories = ["text-processing"]
 
 [dependencies]
 # For very fast prefix literal matching.
