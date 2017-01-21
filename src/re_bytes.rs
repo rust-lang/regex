@@ -878,7 +878,7 @@ impl<'c, 't> fmt::Debug for CapturesDebug<'c, 't> {
 ///
 /// The text can't outlive the `Captures` object if this method is
 /// used, because of how `Index` is defined (normally `a[i]` is part
-/// of `a` and can't outlive it); to do that, use `at()` instead.
+/// of `a` and can't outlive it); to do that, use `get()` instead.
 ///
 /// # Panics
 ///
