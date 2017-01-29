@@ -246,7 +246,7 @@ impl Regex {
     ///
     /// Here we name the capture groups, which we can access with the `name`
     /// method or the `Index` notation with a `&str`. Note that the named
-    /// capture groups are still accessible with `at` or the `Index` notation
+    /// capture groups are still accessible with `get` or the `Index` notation
     /// with a `usize`.
     ///
     /// The `0`th capture group is always unnamed, so it must always be
@@ -763,7 +763,7 @@ impl<'r> Iterator for CaptureNames<'r> {
 /// index corresponds to the next capture group in the regex. If a capture
 /// group is named, then the matched byte string is *also* available via the
 /// `name` method. (Note that the 0th capture is always unnamed and so must be
-/// accessed with the `at` method.)
+/// accessed with the `get` method.)
 ///
 /// Positions returned from a capture group are always byte indices.
 ///
