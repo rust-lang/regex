@@ -9,8 +9,6 @@
 // except according to those terms.
 
 extern crate docopt;
-#[macro_use]
-extern crate lazy_static;
 extern crate libc;
 #[cfg(feature = "re-pcre1")]
 extern crate libpcre_sys;
