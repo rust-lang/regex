@@ -2225,7 +2225,7 @@ mod tests {
     fn class_special_escaped_set_chars() {
         // These tests ensure that some special characters require escaping
         // for use in character classes. The intention is to use these
-        // characters to implement sets as described in UTC#18 RL1.3. Once
+        // characters to implement sets as described in UTS#18 RL1.3. Once
         // that's done, these tests should be removed and replaced with others.
         assert_eq!(p(r"[\[]"), Expr::Class(class(&[('[', '[')])));
         assert_eq!(p(r"[&]"), Expr::Class(class(&[('&', '&')])));
@@ -2801,7 +2801,7 @@ mod tests {
     fn error_class_unsupported_char() {
         // These tests ensure that some unescaped special characters are
         // rejected in character classes. The intention is to use these
-        // characters to implement sets as described in UTC#18 RL1.3. Once
+        // characters to implement sets as described in UTS#18 RL1.3. Once
         // that's done, these tests should be removed and replaced with others.
         test_err!("[[]", 1, ErrorKind::UnsupportedClassChar('['));
         test_err!("[&&]", 2, ErrorKind::UnsupportedClassChar('&'));
