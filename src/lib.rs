@@ -430,7 +430,7 @@ These classes are based on the definitions provided in
 [[:graph:]]    graphical ([!-~])
 [[:lower:]]    lower case ([a-z])
 [[:print:]]    printable ([ -~])
-[[:punct:]]    punctuation ([!-/:-@[-`{-~])
+[[:punct:]]    punctuation ([!-/:-@\[-`{-~])
 [[:space:]]    whitespace ([\t\n\v\f\r ])
 [[:upper:]]    upper case ([A-Z])
 [[:word:]]     word characters ([0-9A-Za-z_])
