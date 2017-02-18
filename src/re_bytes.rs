@@ -427,12 +427,23 @@ impl Regex {
     /// Note that using `$2` instead of `$first` or `$1` instead of `$last`
     /// would produce the same result. To write a literal `$` use `$$`.
     ///
-    /// If `$name` isn't a valid capture group (whether the name doesn't exist
-    /// or isn't a valid index), then it is replaced with the empty string.
+    /// Sometimes the replacement string requires use of curly braces to
+    /// delineate a capture group replacement and surrounding literal text.
+    /// For example, if we wanted to join two words together with an
+    /// underscore:
     ///
-    /// The longest possible name is used. e.g., `$1a` looks up the capture
-    /// group named `1a` and not the capture group at index `1`. To exert more
-    /// precise control over the name, use braces, e.g., `${1}a`.
+    /// ```rust
+    /// # extern crate regex; use regex::bytes::Regex;
+    /// # fn main() {
+    /// let re = Regex::new(r"(?P<first>\w+)\s+(?P<second>\w+)").unwrap();
+    /// let result = re.replace(b"deep fried", &b"${first}_$second"[..]);
+    /// assert_eq!(result, &b"deep_fried"[..]);
+    /// # }
+    /// ```
+    ///
+    /// Without the curly braces, the capture group name `first_` would be
+    /// used, and since it doesn't exist, it would be replaced with the empty
+    /// string.
     ///
     /// Finally, sometimes you just want to replace a literal string with no
     /// regard for capturing group expansion. This can be done by wrapping a

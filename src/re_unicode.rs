@@ -501,6 +501,24 @@ impl Regex {
     /// Note that using `$2` instead of `$first` or `$1` instead of `$last`
     /// would produce the same result. To write a literal `$` use `$$`.
     ///
+    /// Sometimes the replacement string requires use of curly braces to
+    /// delineate a capture group replacement and surrounding literal text.
+    /// For example, if we wanted to join two words together with an
+    /// underscore:
+    ///
+    /// ```rust
+    /// # extern crate regex; use regex::Regex;
+    /// # fn main() {
+    /// let re = Regex::new(r"(?P<first>\w+)\s+(?P<second>\w+)").unwrap();
+    /// let result = re.replace("deep fried", "${first}_$second");
+    /// assert_eq!(result, "deep_fried");
+    /// # }
+    /// ```
+    ///
+    /// Without the curly braces, the capture group name `first_` would be
+    /// used, and since it doesn't exist, it would be replaced with the empty
+    /// string.
+    ///
     /// Finally, sometimes you just want to replace a literal string with no
     /// regard for capturing group expansion. This can be done by wrapping a
     /// byte string with `NoExpand`:
