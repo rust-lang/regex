@@ -789,6 +789,22 @@ impl<'t> Captures<'t> {
     /// Returns the match associated with the capture group at index `i`. If
     /// `i` does not correspond to a capture group, or if the capture group
     /// did not participate in the match, then `None` is returned.
+    ///
+    /// # Examples
+    ///
+    /// Get the text of the match with a default of an empty string if this
+    /// group didn't participate in the match:
+    ///
+    /// ```rust
+    /// # use regex::bytes::Regex;
+    /// let re = Regex::new(r"[a-z]+(?:([0-9]+)|([A-Z]+))").unwrap();
+    /// let caps = re.captures(b"abc123").unwrap();
+    ///
+    /// let text1 = caps.get(1).map_or(&b""[..], |m| m.as_bytes());
+    /// let text2 = caps.get(2).map_or(&b""[..], |m| m.as_bytes());
+    /// assert_eq!(text1, &b"123"[..]);
+    /// assert_eq!(text2, &b""[..]);
+    /// ```
     pub fn get(&self, i: usize) -> Option<Match<'t>> {
         self.locs.pos(i).map(|(s, e)| Match::new(self.text, s, e))
     }
