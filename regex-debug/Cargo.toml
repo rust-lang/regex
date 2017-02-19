@@ -14,5 +14,6 @@ workspace = ".."
 docopt = "0.8"
 regex = { version = "0.2", path = ".." }
 regex-syntax = { version = "0.4.0", path = "../regex-syntax" }
+regex-syntax2 = { version = "0.5.0", path = "../regex-syntax-2" }
 serde = "1"
 serde_derive = "1"
