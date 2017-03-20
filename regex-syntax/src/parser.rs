@@ -423,7 +423,7 @@ impl Parser {
     //
     // Start: `1`
     // End:   `,` (where `until == ','`)
-    fn parse_decimal<B: Bumpable>(&mut self, until: B) -> Result<u32> {
+    fn parse_decimal<F: FnMut(char) -> bool>(&mut self, until: F) -> Result<u32> {
         match self.bump_get(until) {
             // e.g., a{}
             None => Err(self.err(ErrorKind::MissingBase10)),
@@ -809,14 +809,23 @@ impl Parser {
 
     fn eof(&self) -> bool { self.chars().next().is_none() }
 
-    fn bump_get<B: Bumpable>(&mut self, s: B) -> Option<String> {
-        let n = s.match_end(self);
+    fn bump_get<F: FnMut(char) -> bool>(&mut self, mut f: F) -> Option<String> {
+        let mut s = String::new();
+        let n = {
+            let bumpable = |c| {
+                if f(c) {
+                    s.push(c);
+                    true
+                } else {
+                    false
+                }
+            };
+            bumpable.match_end(self)
+        };
         if n == 0 {
             None
         } else {
             let end = checkadd(self.chari, n);
-            let s = self.chars[self.chari..end]
-                        .iter().cloned().collect::<String>();
             self.chari = end;
             Some(s)
         }
@@ -2372,6 +2381,46 @@ mod tests {
         assert_eq!(p(r"(?x)\ d"), Expr::Class(class(PERLD)));
         assert_eq!(p(r"(?x)\
                      D"), Expr::Class(class(PERLD).negate()));
+    }
+
+    #[test]
+    fn ignore_space_escape_unicode_name() {
+        assert_eq!(p(r"(?x)\ p { Y i }"), Expr::Class(class(YI)));
+    }
+
+    #[test]
+    fn ignore_space_escape_octal() {
+        assert_eq!(p(r"(?x)\ 1 2 3"), lit('S'));
+        assert_eq!(p(r"(?x)\
+                     1 2 3"), lit('S'));
+    }
+
+    #[test]
+    fn ignore_space_escape_hex() {
+        assert_eq!(p(r"(?x)\x { 5 3 }"), lit('S'));
+        assert_eq!(p(r"(?x)\x
+                     { 5 3 }"), lit('S'));
+    }
+
+    #[test]
+    fn ignore_space_escape_hex2() {
+        assert_eq!(p(r"(?x)\x 5 3"), lit('S'));
+        assert_eq!(p(r"(?x)\x
+                     5 3"), lit('S'));
+    }
+
+    #[test]
+    fn ignore_space_repeat_counted() {
+        assert_eq!(p("(?x)a { 5 , 1 0 }"), Expr::Repeat {
+            e: b(lit('a')),
+            r: Repeater::Range { min: 5, max: Some(10) },
+            greedy: true,
+        });
+    }
+
+    #[test]
+    fn ignore_space_ascii_classes() {
+        assert_eq!(p("(?x)[ [ : u p p e r : ] ]"), Expr::Class(class(UPPER)));
     }
 
     #[test]
