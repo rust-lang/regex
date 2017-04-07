@@ -104,7 +104,11 @@ impl Parser {
     // Starts at the beginning of the input and consumes until either the end
     // of input or an error.
     fn parse_expr(mut self) -> Result<Expr> {
-        while !self.eof() {
+        loop {
+            self.ignore_space();
+            if self.eof() {
+                break;
+            }
             let build_expr = match self.cur() {
                 '\\' => try!(self.parse_escape()),
                 '|' => { let e = try!(self.alternate()); self.bump(); e }
@@ -177,7 +181,7 @@ impl Parser {
             return Err(self.err(ErrorKind::UnexpectedEscapeEof));
         }
         let c = self.cur();
-        if is_punct(c) {
+        if is_punct(c) || (self.flags.ignore_space && c.is_whitespace()) {
             let c = self.bump();
             return Ok(try!(self.lit(c)));
         }
@@ -234,6 +238,7 @@ impl Parser {
         let chari = self.chari;
         let mut name: CaptureName = None;
         self.bump();
+        self.ignore_space();
         if self.bump_if("?P<") {
             let n = try!(self.parse_group_name());
             if self.names.iter().any(|n2| n2 == &n) {
@@ -370,13 +375,16 @@ impl Parser {
             return Err(self.err(ErrorKind::RepeaterUnexpectedExpr(e)));
         }
         self.bump();
-        let min = try!(self.parse_decimal(|c| c != ',' && c != '}'));
+        self.ignore_space();
+        let min = try!(self.parse_decimal());
         let mut max_opt = Some(min);
+        self.ignore_space();
         if self.bump_if(',') {
+            self.ignore_space();
             if self.peek_is('}') {
                 max_opt = None;
             } else {
-                let max = try!(self.parse_decimal(|c| c != '}'));
+                let max = try!(self.parse_decimal());
                 if min > max {
                     // e.g., a{2,1}
                     return Err(self.err(ErrorKind::InvalidRepeatRange {
@@ -387,6 +395,7 @@ impl Parser {
                 max_opt = Some(max);
             }
         }
+        self.ignore_space();
         if !self.bump_if('}') {
             Err(self.err(ErrorKind::UnclosedRepeat))
         } else {
@@ -423,8 +432,8 @@ impl Parser {
     //
     // Start: `1`
     // End:   `,` (where `until == ','`)
-    fn parse_decimal<B: Bumpable>(&mut self, until: B) -> Result<u32> {
-        match self.bump_get(until) {
+    fn parse_decimal(&mut self) -> Result<u32> {
+        match self.bump_get(|c| is_ascii_word(c) || c.is_whitespace()) {
             // e.g., a{}
             None => Err(self.err(ErrorKind::MissingBase10)),
             Some(n) => {
@@ -472,6 +481,7 @@ impl Parser {
     // Start: `{`
     // End:   `b`
     fn parse_hex(&mut self) -> Result<Build> {
+        self.ignore_space();
         if self.bump_if('{') {
             self.parse_hex_many_digits()
         } else {
@@ -486,9 +496,11 @@ impl Parser {
     fn parse_hex_many_digits(&mut self) -> Result<Build> {
         use std::char;
 
-        let s = self.bump_get(|c| c != '}').unwrap_or("".into());
+        self.ignore_space();
+        let s = self.bump_get(is_ascii_word).unwrap_or("".into());
         let n = try!(u32::from_str_radix(&s, 16)
                          .map_err(|_| self.err(ErrorKind::InvalidBase16(s))));
+        self.ignore_space();
         if !self.bump_if('}') {
             // e.g., a\x{d
             return Err(self.err(ErrorKind::UnclosedHex));
@@ -530,12 +542,16 @@ impl Parser {
     // End:   `+`
     fn parse_class(&mut self) -> Result<Build> {
         self.bump();
+        self.ignore_space();
         let negated = self.bump_if('^');
+        self.ignore_space();
         let mut class = CharClass::empty();
         while self.bump_if('-') {
+            self.ignore_space();
             class.ranges.push(ClassRange::one('-'));
         }
         loop {
+            self.ignore_space();
             if self.eof() {
                 // e.g., [a
                 return Err(self.err(ErrorKind::UnexpectedClassEof));
@@ -631,11 +647,13 @@ impl Parser {
     // End:   `]`
     fn parse_class_range(&mut self, class: &mut CharClass, start: char)
                         -> Result<()> {
+        self.ignore_space();
         if !self.bump_if('-') {
             // Not a range, so just push a singleton range.
             class.ranges.push(ClassRange::one(start));
             return Ok(());
         }
+        self.ignore_space();
         if self.eof() {
             // e.g., [a-
             return Err(self.err(ErrorKind::UnexpectedClassEof));
@@ -730,9 +748,12 @@ impl Parser {
     //
     // `negate` is true when the class name is used with `\P`.
     fn parse_unicode_class(&mut self, neg: bool) -> Result<CharClass> {
+        self.ignore_space();
         let name =
             if self.bump_if('{') {
-                let n = self.bump_get(|c| c != '}').unwrap_or("".into());
+                self.ignore_space();
+                let n = self.bump_get(is_ascii_word).unwrap_or("".into());
+                self.ignore_space();
                 if n.is_empty() || !self.bump_if('}') {
                     // e.g., \p{Greek
                     return Err(self.err(ErrorKind::UnclosedUnicodeName));
@@ -796,7 +817,31 @@ impl Parser {
 // Auxiliary helper methods.
 impl Parser {
     fn chars(&self) -> Chars {
-        Chars::new(&self.chars[self.chari..], self.flags.ignore_space)
+        Chars::new(&self.chars[self.chari..])
+    }
+
+    fn ignore_space(&mut self) {
+        if !self.flags.ignore_space {
+            return;
+        }
+        while !self.eof() {
+            match self.cur() {
+                '#' => {
+                    self.bump();
+                    while !self.eof() {
+                        match self.bump() {
+                            '\n' => break,
+                            _ => continue,
+                        }
+                    }
+                },
+                c => if !c.is_whitespace() {
+                    return;
+                } else {
+                    self.bump();
+                }
+            }
+        }
     }
 
     fn bump(&mut self) -> char {
@@ -924,48 +969,22 @@ impl Parser {
 struct Chars<'a> {
     chars: &'a [char],
     cur: usize,
-    ignore_space: bool,
 }
 
 impl<'a> Iterator for Chars<'a> {
     type Item = char;
     fn next(&mut self) -> Option<char> {
-        if !self.ignore_space {
-            let x = self.c();
-            self.advance();
-            return x;
-        }
-        while let Some(c) = self.c() {
-            self.advance();
-            match c {
-                '\\' => return match self.c() {
-                            Some('#') => {self.advance(); Some('#')}
-                            _ => Some('\\')
-                        },
-                '#'  => loop {
-                            match self.c() {
-                                Some(c) => {
-                                    self.advance();
-                                    if c == '\n' {
-                                        break;
-                                    }
-                                },
-                                None => return None
-                            }
-                        },
-                _    => if !c.is_whitespace() {return Some(c);}
-            }
-        }
-        None
+        let x = self.c();
+        self.advance();
+        return x;
     }
 }
 
 impl<'a> Chars<'a> {
-    fn new(chars: &[char], ignore_space: bool) -> Chars {
+    fn new(chars: &[char]) -> Chars {
         Chars {
             chars: chars,
             cur: 0,
-            ignore_space: ignore_space,
         }
     }
 
@@ -1219,6 +1238,13 @@ fn rev_concat(mut exprs: Vec<Expr>) -> Expr {
 fn is_valid_capture_char(c: char) -> bool {
     c == '_' || (c >= '0' && c <= '9')
     || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
+}
+
+fn is_ascii_word(c: char) -> bool {
+    match c {
+        'a' ... 'z' | 'A' ... 'Z' | '_' | '0' ... '9' => true,
+        _ => false,
+    }
 }
 
 /// Returns true if the give character has significance in a regex.
@@ -2368,10 +2394,49 @@ mod tests {
     }
 
     #[test]
-    fn ignore_space_escape() {
-        assert_eq!(p(r"(?x)\ d"), Expr::Class(class(PERLD)));
-        assert_eq!(p(r"(?x)\
-                     D"), Expr::Class(class(PERLD).negate()));
+    fn ignore_space_escape_octal() {
+        assert_eq!(p(r"(?x)\12 3"), Expr::Concat(vec![
+            lit('\n'),
+            lit('3'),
+        ]));
+    }
+
+    #[test]
+    fn ignore_space_escape_hex() {
+        assert_eq!(p(r"(?x)\x { 53 }"), lit('S'));
+        assert_eq!(p(r"(?x)\x # comment
+{ # comment
+    53 # comment
+} # comment"), lit('S'));
+    }
+
+    #[test]
+    fn ignore_space_escape_hex2() {
+        assert_eq!(p(r"(?x)\x 53"), lit('S'));
+        assert_eq!(p(r"(?x)\x # comment
+        53 # comment"), lit('S'));
+    }
+
+    #[test]
+    fn ignore_space_escape_unicode_name() {
+        assert_eq!(p(r"(?x)\p # comment
+{ # comment
+    Yi # comment
+} # comment"), Expr::Class(class(YI)));
+    }
+
+    #[test]
+    fn ignore_space_repeat_counted() {
+        assert_eq!(p("(?x)a # comment
+{ # comment
+    5 # comment
+    , # comment
+    10 # comment
+}"), Expr::Repeat {
+            e: b(lit('a')),
+            r: Repeater::Range { min: 5, max: Some(10) },
+            greedy: true,
+        });
     }
 
     #[test]
@@ -2421,6 +2486,14 @@ mod tests {
         assert_eq!(p(r"(?x)a\# # hi there"), Expr::Concat(vec![
             lit('a'),
             lit('#'),
+        ]));
+    }
+
+    #[test]
+    fn ignore_space_escape_space() {
+        assert_eq!(p(r"(?x)a\  # hi there"), Expr::Concat(vec![
+            lit('a'),
+            lit(' '),
         ]));
     }
 
@@ -2814,5 +2887,20 @@ mod tests {
     fn error_duplicate_capture_name() {
         test_err!("(?P<a>.)(?P<a>.)", 14,
                   ErrorKind::DuplicateCaptureName("a".into()));
+    }
+
+    #[test]
+    fn error_ignore_space_escape_hex() {
+        test_err!(r"(?x)\x{ 5 3 }", 10, ErrorKind::UnclosedHex);
+    }
+
+    #[test]
+    fn error_ignore_space_escape_hex2() {
+        test_err!(r"(?x)\x 5 3", 9, ErrorKind::InvalidBase16("5 ".into()));
+    }
+
+    #[test]
+    fn error_ignore_space_escape_unicode_name() {
+        test_err!(r"(?x)\p{Y i}", 9, ErrorKind::UnclosedUnicodeName);
     }
 }
