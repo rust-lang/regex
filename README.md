@@ -20,7 +20,7 @@ supported.
 
 Documentation with examples for the various matching functions and iterators
 can be found on the
-[`Regex` type](https://doc.rust-lang.org/regex/regex/enum.Regex.html).
+[`Regex` type](https://doc.rust-lang.org/regex/regex/struct.Regex.html).
 
 ### Usage
 
