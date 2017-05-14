@@ -102,6 +102,19 @@ bool test_captures() {
         }
         passed = false;
     }
+    size_t expect_captures_len = 3;
+    size_t captures_len = rure_captures_len(caps);
+    if (captures_len != expect_captures_len) {
+        if (DEBUG) {
+            fprintf(stderr,
+                    "[test_captures] "
+                    "expected capture group lenght to be %zd, but "
+                    "got %zd\n",
+                    expect_captures_len, captures_len);
+        }
+        passed = false;
+        goto done;
+    }
     int32_t expect_capture_index = 2;
     int32_t capture_index = rure_capture_name_index(re, "snowman");
     if (capture_index != expect_capture_index) {

@@ -434,7 +434,7 @@ ffi_fn! {
 
 ffi_fn! {
     fn rure_captures_len(captures: *const Captures) -> size_t {
-        unsafe { (*captures).0.len() / 2 }
+        unsafe { (*captures).0.len() }
     }
 }
 
