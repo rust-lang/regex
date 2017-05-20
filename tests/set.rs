@@ -15,6 +15,7 @@ matset!(set14, &[r".*", "a"], "zzzzzz", 0);
 matset!(set15, &[r"\ba\b"], "hello a bye", 0);
 matset!(set16, &["a"], "a", 0);
 matset!(set17, &[".*a"], "a", 0);
+matset!(set18, &["a", "β"], "β", 1);
 
 nomatset!(nset1, &["a", "a"], "b");
 nomatset!(nset2, &["^foo", "bar$"], "bar foo");
