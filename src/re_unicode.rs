@@ -73,6 +73,12 @@ impl<'t> Match<'t> {
     }
 }
 
+impl<'t> From<Match<'t>> for &'t str {
+    fn from(m: Match<'t>) -> &'t str {
+        m.as_str()
+    }
+}
+
 /// A compiled regular expression for matching Unicode strings.
 ///
 /// It is represented as either a sequence of bytecode instructions (dynamic)
