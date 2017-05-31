@@ -3,7 +3,7 @@
 
 // A silly wrapper to make it possible to write and match raw bytes.
 struct R<'a>(&'a [u8]);
-impl<'a> R<'a> { fn as_bytes(&self) -> &'a [u8] { &self.0 } }
+impl<'a> R<'a> { fn as_bytes(&self) -> &'a [u8] { self.0 } }
 
 mat!(word_boundary, r"(?-u) \b", " δ", None);
 mat!(word_boundary_unicode, r" \b", " δ", Some((0, 1)));
@@ -57,6 +57,8 @@ matiter!(invalidutf8_anchor3,
 
 // See https://github.com/rust-lang/regex/issues/303
 #[test]
+#[cfg_attr(not(feature = "cargo-clippy"), allow(unknown_lints))]
+#[allow(invalid_regex)]
 fn negated_full_byte_range() {
      assert!(::regex::bytes::Regex::new(r#"(?-u)[^\x00-\xff]"#).is_err());
 }

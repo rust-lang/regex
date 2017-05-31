@@ -1,3 +1,5 @@
+#![cfg_attr(not(feature = "cargo-clippy"), allow(unknown_lints))]
+
 // Unicode word boundaries know about Unicode characters.
 // For ASCII word boundaries, the tests are precisely inverted.
 matiter!(unicode1, r"\bx\b", "áxβ");

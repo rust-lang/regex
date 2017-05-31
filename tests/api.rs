@@ -1,22 +1,30 @@
 #[test]
+#[cfg_attr(not(feature = "cargo-clippy"), allow(unknown_lints))]
+#[allow(trivial_regex, string_lit_as_bytes)]
 fn empty_regex_empty_match() {
     let re = regex!("");
     assert_eq!(vec![(0, 0)], findall!(re, ""));
 }
 
 #[test]
+#[cfg_attr(not(feature = "cargo-clippy"), allow(unknown_lints))]
+#[allow(trivial_regex, string_lit_as_bytes)]
 fn empty_regex_nonempty_match() {
     let re = regex!("");
     assert_eq!(vec![(0, 0), (1, 1), (2, 2), (3, 3)], findall!(re, "abc"));
 }
 
 #[test]
+#[cfg_attr(not(feature = "cargo-clippy"), allow(unknown_lints))]
+#[allow(string_lit_as_bytes)]
 fn one_zero_length_match() {
     let re = regex!(r"\d*");
     assert_eq!(vec![(0, 0), (1, 2), (3, 4)], findall!(re, "a1b2"));
 }
 
 #[test]
+#[cfg_attr(not(feature = "cargo-clippy"), allow(unknown_lints))]
+#[allow(string_lit_as_bytes)]
 fn many_zero_length_match() {
     let re = regex!(r"\d*");
     assert_eq!(vec![(0, 0), (1, 2), (3, 3), (4, 4), (5, 6)],
@@ -24,6 +32,8 @@ fn many_zero_length_match() {
 }
 
 #[test]
+#[cfg_attr(not(feature = "cargo-clippy"), allow(unknown_lints))]
+#[allow(string_lit_as_bytes)]
 fn many_sequential_zero_length_match() {
     let re = regex!(r"\d?");
     assert_eq!(vec![(0, 0), (1, 2), (2, 3), (4, 5), (6, 6)],
@@ -31,6 +41,8 @@ fn many_sequential_zero_length_match() {
 }
 
 #[test]
+#[cfg_attr(not(feature = "cargo-clippy"), allow(unknown_lints))]
+#[allow(string_lit_as_bytes)]
 fn quoted_bracket_set() {
     let re = regex!(r"([\x{5b}\x{5d}])");
     assert_eq!(vec![(0, 1), (1, 2)], findall!(re, "[]"));
@@ -39,24 +51,32 @@ fn quoted_bracket_set() {
 }
 
 #[test]
+#[cfg_attr(not(feature = "cargo-clippy"), allow(unknown_lints))]
+#[allow(string_lit_as_bytes)]
 fn first_range_starts_with_left_bracket() {
     let re = regex!(r"([\[-z])");
     assert_eq!(vec![(0, 1), (1, 2)], findall!(re, "[]"));
 }
 
 #[test]
+#[cfg_attr(not(feature = "cargo-clippy"), allow(unknown_lints))]
+#[allow(string_lit_as_bytes)]
 fn range_ends_with_escape() {
     let re = regex!(r"([\[-\x{5d}])");
     assert_eq!(vec![(0, 1), (1, 2)], findall!(re, "[]"));
 }
 
 #[test]
+#[cfg_attr(not(feature = "cargo-clippy"), allow(unknown_lints))]
+#[allow(string_lit_as_bytes)]
 fn empty_match_find_iter() {
     let re = regex!(r".*?");
     assert_eq!(vec![(0, 0), (1, 1), (2, 2), (3, 3)], findall!(re, "abc"));
 }
 
 #[test]
+#[cfg_attr(not(feature = "cargo-clippy"), allow(unknown_lints))]
+#[allow(string_lit_as_bytes)]
 fn empty_match_captures_iter() {
     let re = regex!(r".*?");
     let ms: Vec<_> = re.captures_iter(text!("abc"))
@@ -83,6 +103,8 @@ fn regex_string() {
 }
 
 #[test]
+#[cfg_attr(not(feature = "cargo-clippy"), allow(unknown_lints))]
+#[allow(string_lit_as_bytes)]
 fn capture_index() {
     let re = regex!(r"^(?P<name>.+)$");
     let cap = re.captures(t!("abc")).unwrap();
@@ -94,6 +116,8 @@ fn capture_index() {
 #[test]
 #[should_panic]
 #[cfg_attr(all(target_env = "msvc", target_pointer_width = "32"), ignore)]
+#[cfg_attr(not(feature = "cargo-clippy"), allow(unknown_lints))]
+#[allow(string_lit_as_bytes)]
 fn capture_index_panic_usize() {
     let re = regex!(r"^(?P<name>.+)$");
     let cap = re.captures(t!("abc")).unwrap();
@@ -103,6 +127,8 @@ fn capture_index_panic_usize() {
 #[test]
 #[should_panic]
 #[cfg_attr(all(target_env = "msvc", target_pointer_width = "32"), ignore)]
+#[cfg_attr(not(feature = "cargo-clippy"), allow(unknown_lints))]
+#[allow(string_lit_as_bytes)]
 fn capture_index_panic_name() {
     let re = regex!(r"^(?P<name>.+)$");
     let cap = re.captures(t!("abc")).unwrap();
@@ -122,6 +148,8 @@ fn capture_index_lifetime() {
 }
 
 #[test]
+#[cfg_attr(not(feature = "cargo-clippy"), allow(unknown_lints))]
+#[allow(string_lit_as_bytes)]
 fn capture_misc() {
     let re = regex!(r"(.)(?P<a>a)?(.)(?P<b>.)");
     let cap = re.captures(t!("abc")).unwrap();
@@ -141,6 +169,8 @@ fn capture_misc() {
 }
 
 #[test]
+#[cfg_attr(not(feature = "cargo-clippy"), allow(unknown_lints))]
+#[allow(string_lit_as_bytes)]
 fn sub_capture_matches() {
     let re = regex!(r"([a-z])(([a-z])|([0-9]))");
     let cap = re.captures(t!("a5")).unwrap();

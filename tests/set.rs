@@ -24,6 +24,8 @@ nomatset!(nset4, &[r"^rooted$", r"\.log$"], "notrooted");
 
 // See: https://github.com/rust-lang/regex/issues/187
 #[test]
+#[cfg_attr(not(feature = "cargo-clippy"), allow(unknown_lints))]
+#[allow(trivial_regex, string_lit_as_bytes)]
 fn regression_subsequent_matches() {
     let set = regex_set!(&["ab", "b"]);
     let text = text!("ba");

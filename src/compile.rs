@@ -569,7 +569,7 @@ impl Compiler {
         greedy: bool,
         min: u32,
     ) -> Result {
-        let min = u32_to_usize(min);
+        let min = min as usize;
         let patch_concat = try!(self.c_concat(iter::repeat(expr).take(min)));
         let patch_rep = try!(self.c_repeat_zero_or_more(expr, greedy));
         self.fill(patch_concat.hole, patch_rep.entry);
@@ -583,7 +583,7 @@ impl Compiler {
         min: u32,
         max: u32,
     ) -> Result {
-        let (min, max) = (u32_to_usize(min), u32_to_usize(max));
+        let (min, max) = (min as usize, max as usize);
         let patch_concat = try!(self.c_concat(iter::repeat(expr).take(min)));
         let initial_entry = patch_concat.entry;
         if min == max {
@@ -713,6 +713,12 @@ impl Compiler {
     }
 }
 
+impl Default for Compiler {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[derive(Debug)]
 enum Hole {
     None,
@@ -833,7 +839,7 @@ impl<'a, 'b> CompileClass<'a, 'b> {
         let mut utf8_seqs = self.c.utf8_seqs.take().unwrap();
         self.c.suffix_cache.clear();
 
-        for (i, ref range) in self.ranges.iter().enumerate() {
+        for (i, range) in self.ranges.iter().enumerate() {
             let is_last_range = i + 1 == self.ranges.len();
             utf8_seqs.reset(range.start, range.end);
             let mut it = (&mut utf8_seqs).peekable();
@@ -916,7 +922,7 @@ impl<'a, 'b> CompileClass<'a, 'b> {
     }
 }
 
-/// SuffixCache is a simple bounded hash map for caching suffix entries in
+/// `SuffixCache` is a simple bounded hash map for caching suffix entries in
 /// UTF-8 automata. For example, consider the Unicode range \u{0}-\u{FFFF}.
 /// The set of byte ranges looks like this:
 ///
@@ -1047,13 +1053,6 @@ impl ByteClassSet {
         }
         byte_classes
     }
-}
-
-fn u32_to_usize(n: u32) -> usize {
-    if (n as u64) > (::std::usize::MAX as u64) {
-        panic!("BUG: {} is too big to be pointer sized", n)
-    }
-    n as usize
 }
 
 #[cfg(test)]

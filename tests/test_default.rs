@@ -69,6 +69,8 @@ mod word_boundary;
 mod word_boundary_unicode;
 
 #[test]
+#[cfg_attr(not(feature = "cargo-clippy"), allow(unknown_lints))]
+#[allow(invalid_regex)]
 fn disallow_non_utf8() {
     assert!(regex::Regex::new(r"(?-u)\xFF").is_err());
     assert!(regex::Regex::new(r"(?-u).").is_err());

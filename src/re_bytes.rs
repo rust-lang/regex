@@ -785,6 +785,7 @@ pub struct Captures<'t> {
     named_groups: Arc<HashMap<String, usize>>,
 }
 
+#[allow(len_without_is_empty)]
 impl<'t> Captures<'t> {
     /// Returns the match associated with the capture group at index `i`. If
     /// `i` does not correspond to a capture group, or if the capture group
@@ -889,7 +890,7 @@ impl<'c, 't> fmt::Debug for CapturesDebug<'c, 't> {
         let mut map = f.debug_map();
         for (slot, m) in self.0.locs.iter().enumerate() {
             let m = m.map(|(s, e)| escape_bytes(&self.0.text[s..e]));
-            if let Some(ref name) = slot_to_name.get(&slot) {
+            if let Some(name) = slot_to_name.get(&slot) {
                 map.entry(&name, &m);
             } else {
                 map.entry(&slot, &m);
@@ -986,7 +987,7 @@ pub trait Replacer {
     /// be beneficial to avoid finding sub-captures.
     ///
     /// In general, this is called once for every call to `replacen`.
-    fn no_expansion<'r>(&'r mut self) -> Option<Cow<'r, [u8]>> {
+    fn no_expansion(&mut self) -> Option<Cow<[u8]>> {
         None
     }
 }
@@ -996,7 +997,7 @@ impl<'a> Replacer for &'a [u8] {
         caps.expand(*self, dst);
     }
 
-    fn no_expansion<'r>(&'r mut self) -> Option<Cow<'r, [u8]>> {
+    fn no_expansion(&mut self) -> Option<Cow<[u8]>> {
         match memchr(b'$', *self) {
             Some(_) => None,
             None => Some(Cow::Borrowed(*self)),
@@ -1010,7 +1011,7 @@ impl<F> Replacer for F where F: FnMut(&Captures) -> Vec<u8> {
     }
 }
 
-/// NoExpand indicates literal byte string replacement.
+/// `NoExpand` indicates literal byte string replacement.
 ///
 /// It can be used with `replace` and `replace_all` to do a literal byte string
 /// replacement without expanding `$name` to their corresponding capture
@@ -1025,7 +1026,7 @@ impl<'t> Replacer for NoExpand<'t> {
         dst.extend_from_slice(self.0);
     }
 
-    fn no_expansion<'r>(&'r mut self) -> Option<Cow<'r, [u8]>> {
+    fn no_expansion(&mut self) -> Option<Cow<[u8]>> {
         Some(Cow::Borrowed(self.0))
     }
 }

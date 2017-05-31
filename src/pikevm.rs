@@ -234,6 +234,7 @@ impl<'r, I: Input> Fsm<'r, I> {
     ///
     /// at and at_next are the current and next positions in the input. at or
     /// at_next may be EOF.
+    #[allow(too_many_arguments)]
     fn step(
         &mut self,
         nlist: &mut Threads,

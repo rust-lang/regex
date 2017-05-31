@@ -11,6 +11,8 @@ use std::io::{self, Read};
 
 macro_rules! regex { ($re:expr) => { ::regex::Regex::new($re).unwrap() } }
 
+#[cfg_attr(not(feature = "cargo-clippy"), allow(unknown_lints))]
+#[allow(trivial_regex)]
 fn main() {
     let mut seq = String::with_capacity(50 * (1 << 20));
     io::stdin().read_to_string(&mut seq).unwrap();
@@ -48,7 +50,7 @@ fn main() {
         (regex!("Y"), "(c|t)"),
     ];
     let mut seq = seq;
-    for (re, replacement) in substs.into_iter() {
+    for (re, replacement) in substs {
         seq = re.replace_all(&seq, replacement).into_owned();
     }
     println!("\n{}\n{}\n{}", ilen, clen, seq.len());

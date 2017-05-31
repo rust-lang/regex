@@ -1,5 +1,8 @@
+#![cfg_attr(not(feature = "cargo-clippy"), allow(unknown_lints))]
+
 // See: https://github.com/rust-lang/regex/issues/48
 #[test]
+#[allow(invalid_regex)]
 fn invalid_regexes_no_crash() {
     assert!(regex_new!("(*)").is_err());
     assert!(regex_new!("(?:?)").is_err());
@@ -9,6 +12,7 @@ fn invalid_regexes_no_crash() {
 
 // See: https://github.com/rust-lang/regex/issues/98
 #[test]
+#[allow(string_lit_as_bytes)]
 fn regression_many_repeat_stack_overflow() {
     let re = regex!("^.{1,2500}");
     assert_eq!(vec![(0, 1)], findall!(re, "a"));
@@ -27,6 +31,7 @@ mat!(regression_ascii_word_underscore, r"[[:word:]]", "_", Some((0, 1)));
 
 // See: https://github.com/rust-lang/regex/issues/129
 #[test]
+#[allow(string_lit_as_bytes)]
 fn regression_captures_rep() {
     let re = regex!(r"([a-f]){2}(?P<foo>[x-z])");
     let caps = re.captures(text!("abx")).unwrap();

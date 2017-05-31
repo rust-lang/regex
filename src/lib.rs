@@ -432,9 +432,9 @@ These classes are based on the definitions provided in
 <pre class="rust">
 \d     digit (\p{Nd})
 \D     not digit
-\s     whitespace (\p{White_Space})
+\s     whitespace (\p{`White_Space`})
 \S     not whitespace
-\w     word character (\p{Alphabetic} + \p{M} + \d + \p{Pc} + \p{Join_Control})
+\w     word character (\p{Alphabetic} + \p{M} + \d + \p{Pc} + \p{`Join_Control`})
 \W     not word character
 </pre>
 
@@ -488,6 +488,8 @@ another matching engine with fixed memory requirements.
 */
 
 #![deny(missing_docs)]
+#![allow(inline_always)]
+#![cfg_attr(not(feature = "cargo-clippy"), allow(unknown_lints))]
 #![cfg_attr(test, deny(warnings))]
 #![cfg_attr(feature = "pattern", feature(pattern))]
 #![cfg_attr(feature = "simd-accel", feature(cfg_target_feature))]

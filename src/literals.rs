@@ -92,7 +92,7 @@ impl LiteralSearcher {
     /// is comprised of a single complete literal `a`, but the regular
     /// expression demands that it only match at the beginning of a string.
     pub fn complete(&self) -> bool {
-        self.complete && self.len() > 0
+        self.complete && !self.is_empty()
     }
 
     /// Find the position of a literal in `haystack` if it exists.
@@ -189,12 +189,12 @@ impl LiteralSearcher {
 
 impl Matcher {
     fn prefixes(lits: &syntax::Literals) -> Self {
-        let sset = SingleByteSet::prefixes(&lits);
+        let sset = SingleByteSet::prefixes(lits);
         Matcher::new(lits, sset)
     }
 
     fn suffixes(lits: &syntax::Literals) -> Self {
-        let sset = SingleByteSet::suffixes(&lits);
+        let sset = SingleByteSet::suffixes(lits);
         Matcher::new(lits, sset)
     }
 
@@ -500,7 +500,7 @@ impl SingleSearch {
         if text.len() < self.len() {
             return false;
         }
-        &text[text.len() - self.len()..] == &*self.pat
+        text[text.len() - self.len()..] == *self.pat
     }
 
     pub fn len(&self) -> usize {
