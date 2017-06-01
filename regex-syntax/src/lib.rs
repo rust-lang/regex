@@ -1585,8 +1585,7 @@ impl fmt::Display for ErrorKind {
                 write!(f, "Number does not correspond to a Unicode scalar \
                            value: '{}'.", c),
             MissingBase10 =>
-                write!(f, "Missing maximum in counted
-repetition operator."),
+                write!(f, "Missing maximum in counted repetition operator."),
             RepeaterExpectsExpr =>
                 write!(f, "Missing expression for repetition operator."),
             RepeaterUnexpectedExpr(ref e) =>
