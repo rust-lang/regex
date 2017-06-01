@@ -12,7 +12,6 @@ macro_rules! findall {
 macro_rules! ismatch {
     ($name:ident, $re:expr, $text:expr, $ismatch:expr) => {
         #[test]
-        #[allow(string_lit_as_bytes)]
         fn $name() {
             let re = regex!($re);
             assert_eq!($ismatch, re.is_match(text!($text)));
@@ -23,8 +22,6 @@ macro_rules! ismatch {
 macro_rules! mat(
     ($name:ident, $re:expr, $text:expr, $($loc:tt)+) => (
         #[test]
-        #[cfg_attr(not(feature = "cargo-clippy"), allow(unknown_lints))]
-        #[allow(trivial_regex, invalid_regex, string_lit_as_bytes)]
         fn $name() {
             let text = text!($text);
             let expected: Vec<Option<_>> = vec![$($loc)+];
@@ -58,8 +55,6 @@ macro_rules! mat(
 macro_rules! matiter(
     ($name:ident, $re:expr, $text:expr) => (
         #[test]
-        #[cfg_attr(not(feature = "cargo-clippy"), allow(unknown_lints))]
-        #[allow(trivial_regex, string_lit_as_bytes)]
         fn $name() {
             let text = text!($text);
             let expected: Vec<(usize, usize)> = vec![];
@@ -86,8 +81,6 @@ macro_rules! matiter(
     );
     ($name:ident, $re:expr, $text:expr, $($loc:tt)+) => (
         #[test]
-        #[cfg_attr(not(feature = "cargo-clippy"), allow(unknown_lints))]
-        #[allow(trivial_regex, string_lit_as_bytes)]
         fn $name() {
             let text = text!($text);
             let expected: Vec<_> = vec![$($loc)+];
@@ -117,8 +110,6 @@ macro_rules! matiter(
 macro_rules! matset {
     ($name:ident, $res:expr, $text:expr, $($match_index:expr),*) => {
         #[test]
-        #[cfg_attr(not(feature = "cargo-clippy"), allow(unknown_lints))]
-        #[allow(trivial_regex, invalid_regex, string_lit_as_bytes)]
         fn $name() {
             let text = text!($text);
             let set = regex_set!($res);
@@ -135,8 +126,6 @@ macro_rules! matset {
 macro_rules! nomatset {
     ($name:ident, $res:expr, $text:expr) => {
         #[test]
-        #[cfg_attr(not(feature = "cargo-clippy"), allow(unknown_lints))]
-        #[allow(trivial_regex, string_lit_as_bytes)]
         fn $name() {
             let text = text!($text);
             let set = regex_set!($res);
@@ -151,8 +140,6 @@ macro_rules! nomatset {
 macro_rules! split {
     ($name:ident, $re:expr, $text:expr, $expected:expr) => {
         #[test]
-        #[cfg_attr(not(feature = "cargo-clippy"), allow(unknown_lints))]
-        #[allow(trivial_regex, string_lit_as_bytes)]
         fn $name() {
             let re = regex!($re);
             let splitted: Vec<_> = re.split(t!($text)).collect();

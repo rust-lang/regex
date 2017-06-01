@@ -226,12 +226,13 @@ impl ExecBuilder {
             let expr = try!(parser.parse(pat));
             bytes = bytes || expr.has_bytes();
 
-            if (is_set || !expr.is_anchored_start())
-                && expr.has_anchored_start() {
-                // Regex sets with anchors do not go well with literal
-                // optimizations.
+            if !expr.is_anchored_start() && expr.has_anchored_start() {
                 // Partial anchors unfortunately make it hard to use prefixes,
                 // so disable them.
+                prefixes = None;
+            } else if is_set && expr.is_anchored_start() {
+                // Regex sets with anchors do not go well with literal
+                // optimizations.
                 prefixes = None;
             }
             prefixes = prefixes.and_then(|mut prefixes| {

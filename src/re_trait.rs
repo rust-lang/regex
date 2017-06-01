@@ -20,7 +20,6 @@ pub type Slot = Option<usize>;
 #[doc(hidden)]
 pub struct Locations(Vec<Slot>);
 
-#[allow(len_without_is_empty)]
 impl Locations {
     /// Returns the start and end positions of the Nth capture group. Returns
     /// `None` if `i` is not a valid capture group or if the capture group did
@@ -165,7 +164,7 @@ pub trait RegularExpression: Sized {
     /// matches with captures.
     fn captures_iter(
         self,
-        text: & Self::Text,
+        text: &Self::Text,
     ) -> CaptureMatches<Self> {
         CaptureMatches(self.find_iter(text))
     }

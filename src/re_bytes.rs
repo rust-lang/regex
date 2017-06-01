@@ -785,7 +785,6 @@ pub struct Captures<'t> {
     named_groups: Arc<HashMap<String, usize>>,
 }
 
-#[allow(len_without_is_empty)]
 impl<'t> Captures<'t> {
     /// Returns the match associated with the capture group at index `i`. If
     /// `i` does not correspond to a capture group, or if the capture group
@@ -987,7 +986,7 @@ pub trait Replacer {
     /// be beneficial to avoid finding sub-captures.
     ///
     /// In general, this is called once for every call to `replacen`.
-    fn no_expansion(&mut self) -> Option<Cow<[u8]>> {
+    fn no_expansion<'r>(&'r mut self) -> Option<Cow<'r, [u8]>> {
         None
     }
 }

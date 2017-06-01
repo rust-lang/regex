@@ -271,7 +271,7 @@ struct State{
     data: Box<[u8]>,
 }
 
-/// `InstPt`r is a 32 bit pointer into a sequence of opcodes (i.e., it indexes
+/// `InstPtr` is a 32 bit pointer into a sequence of opcodes (i.e., it indexes
 /// an NFA state).
 ///
 /// Throughout this library, this is usually set to `usize`, but we force a
@@ -484,7 +484,7 @@ impl<'a> Fsm<'a> {
             Some(STATE_DEAD) => return Result::NoMatch(at),
             Some(si) => si,
         };
-        debug_assert_ne!(dfa.start, STATE_UNKNOWN);
+        debug_assert!(dfa.start != STATE_UNKNOWN);
         dfa.exec_at(&mut cache.qcur, &mut cache.qnext, text)
     }
 
@@ -517,7 +517,7 @@ impl<'a> Fsm<'a> {
             Some(STATE_DEAD) => return Result::NoMatch(at),
             Some(si) => si,
         };
-        debug_assert_ne!(dfa.start, STATE_UNKNOWN);
+        debug_assert!(dfa.start != STATE_UNKNOWN);
         dfa.exec_at_reverse(&mut cache.qcur, &mut cache.qnext, text)
     }
 
@@ -529,7 +529,7 @@ impl<'a> Fsm<'a> {
         text: &[u8],
         at: usize,
     ) -> Result<usize> {
-        debug_assert_eq!(matches.len(), prog.matches.len());
+        debug_assert!(matches.len() == prog.matches.len());
         let mut cache = cache.borrow_mut();
         let mut cache = &mut cache.dfa;
         let mut dfa = Fsm {
@@ -551,14 +551,14 @@ impl<'a> Fsm<'a> {
             Some(STATE_DEAD) => return Result::NoMatch(at),
             Some(si) => si,
         };
-        debug_assert_ne!(dfa.start, STATE_UNKNOWN);
+        debug_assert!(dfa.start != STATE_UNKNOWN);
         let result = dfa.exec_at(&mut cache.qcur, &mut cache.qnext, text);
         if result.is_match() {
             if matches.len() == 1 {
                 matches[0] = true;
             } else {
-                debug_assert_ne!(dfa.last_match_si, STATE_UNKNOWN);
-                debug_assert_ne!(dfa.last_match_si, STATE_DEAD);
+                debug_assert!(dfa.last_match_si != STATE_UNKNOWN);
+                debug_assert!(dfa.last_match_si != STATE_DEAD);
                 for ip in dfa.state(dfa.last_match_si).inst_ptrs() {
                     if let Inst::Match(slot) = dfa.prog[ip] {
                         matches[slot] = true;
@@ -730,7 +730,7 @@ impl<'a> Fsm<'a> {
                     Some(STATE_DEAD) => return result.set_non_match(at),
                     Some(si) => si,
                 };
-                debug_assert_ne!(next_si, STATE_UNKNOWN);
+                debug_assert!(next_si != STATE_UNKNOWN);
                 if next_si & STATE_MATCH > 0 {
                     next_si &= !STATE_MATCH;
                     result = Result::Match(at - 1);
@@ -754,7 +754,7 @@ impl<'a> Fsm<'a> {
             Some(STATE_DEAD) => return result.set_non_match(text.len()),
             Some(si) => si & !STATE_START,
         };
-        debug_assert_ne!(prev_si, STATE_UNKNOWN);
+        debug_assert!(prev_si != STATE_UNKNOWN);
         if prev_si & STATE_MATCH > 0 {
             prev_si &= !STATE_MATCH;
             self.last_match_si = prev_si;
@@ -835,7 +835,7 @@ impl<'a> Fsm<'a> {
                     Some(STATE_DEAD) => return result.set_non_match(at),
                     Some(si) => si,
                 };
-                debug_assert_ne!(next_si, STATE_UNKNOWN);
+                debug_assert!(next_si != STATE_UNKNOWN);
                 if next_si & STATE_MATCH > 0 {
                     next_si &= !STATE_MATCH;
                     result = Result::Match(at + 1);
@@ -856,7 +856,7 @@ impl<'a> Fsm<'a> {
             Some(STATE_DEAD) => return result.set_non_match(0),
             Some(si) => si,
         };
-        debug_assert_ne!(prev_si, STATE_UNKNOWN);
+        debug_assert!(prev_si != STATE_UNKNOWN);
         if prev_si & STATE_MATCH > 0 {
             prev_si &= !STATE_MATCH;
             self.last_match_si = prev_si;
@@ -1001,17 +1001,18 @@ impl<'a> Fsm<'a> {
             }
         }
 
-        let cache = if b.is_eof() && self.prog.matches.len() > 1 {
-            // If we're processing the last byte of the input and we're
-            // matching a regex set, then make the next state contain the
-            // previous states transitions. We do this so that the main
-            // matching loop can extract all of the match instructions.
-            mem::swap(qcur, qnext);
-            // And don't cache this state because it's totally bunk.
-            false
-        } else {
-            true
-        };
+        let cache =
+            if b.is_eof() && self.prog.matches.len() > 1 {
+                // If we're processing the last byte of the input and we're
+                // matching a regex set, then make the next state contain the
+                // previous states transitions. We do this so that the main
+                // matching loop can extract all of the match instructions.
+                mem::swap(qcur, qnext);
+                // And don't cache this state because it's totally bunk.
+                false
+            } else {
+                true
+            };
 
         // We've now built up the set of NFA states that ought to comprise the
         // next DFA state, so try to find it in the cache, and if it doesn't
@@ -1037,7 +1038,7 @@ impl<'a> Fsm<'a> {
         if next <= STATE_MAX && self.state(next).flags().is_match() {
             next |= STATE_MATCH;
         }
-        debug_assert_ne!(next, STATE_UNKNOWN);
+        debug_assert!(next != STATE_UNKNOWN);
         // And now store our state in the current state's next list.
         if cache {
             let cls = self.byte_class(b);
@@ -1173,10 +1174,11 @@ impl<'a> Fsm<'a> {
         }
         // If the cache has gotten too big, wipe it.
         if self.approximate_size() > self.prog.dfa_size_limit
-            && !self.clear_cache_and_save(current_state) {
-            // Ooops. DFA is giving up.
-            return None;
-        }
+            && !self.clear_cache_and_save(current_state)
+            {
+                // Ooops. DFA is giving up.
+                return None;
+            }
         // Allocate room for our state and add it.
         self.add_state(key)
     }
@@ -1377,7 +1379,7 @@ impl<'a> Fsm<'a> {
         // matches are delayed by one byte, start states can never be match
         // states.
         let flagi = {
-            ((empty_flags.start as u8) |
+            (((empty_flags.start as u8) << 0) |
              ((empty_flags.end as u8) << 1) |
              ((empty_flags.start_line as u8) << 2) |
              ((empty_flags.end_line as u8) << 3) |
@@ -1502,8 +1504,10 @@ impl<'a> Fsm<'a> {
         self.cache.states.push(state.clone());
         self.cache.compiled.insert(state, si);
         // Transition table and set of states and map should all be in sync.
-        debug_assert_eq!(self.cache.states.len(), self.cache.trans.num_states());
-        debug_assert_eq!(self.cache.states.len(), self.cache.compiled.len());
+        debug_assert!(self.cache.states.len()
+                      == self.cache.trans.num_states());
+        debug_assert!(self.cache.states.len()
+                      == self.cache.compiled.len());
         Some(si)
     }
 

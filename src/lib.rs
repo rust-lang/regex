@@ -488,8 +488,6 @@ another matching engine with fixed memory requirements.
 */
 
 #![deny(missing_docs)]
-#![allow(inline_always)]
-#![cfg_attr(not(feature = "cargo-clippy"), allow(unknown_lints))]
 #![cfg_attr(test, deny(warnings))]
 #![cfg_attr(feature = "pattern", feature(pattern))]
 #![cfg_attr(feature = "simd-accel", feature(cfg_target_feature))]

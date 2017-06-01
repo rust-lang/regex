@@ -13,8 +13,6 @@ use std::thread;
 
 macro_rules! regex { ($re:expr) => { ::regex::Regex::new($re).unwrap() } }
 
-#[cfg_attr(not(feature = "cargo-clippy"), allow(unknown_lints))]
-#[allow(trivial_regex)]
 fn main() {
     let mut seq = String::with_capacity(51 * (1 << 20));
     io::stdin().read_to_string(&mut seq).unwrap();

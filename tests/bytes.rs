@@ -57,8 +57,6 @@ matiter!(invalidutf8_anchor3,
 
 // See https://github.com/rust-lang/regex/issues/303
 #[test]
-#[cfg_attr(not(feature = "cargo-clippy"), allow(unknown_lints))]
-#[allow(invalid_regex)]
 fn negated_full_byte_range() {
      assert!(::regex::bytes::Regex::new(r#"(?-u)[^\x00-\xff]"#).is_err());
 }

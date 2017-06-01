@@ -158,12 +158,6 @@ impl Program {
     }
 }
 
-impl Default for Program {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl Deref for Program {
     type Target = [Inst];
 

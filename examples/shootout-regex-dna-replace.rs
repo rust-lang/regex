@@ -9,8 +9,6 @@ macro_rules! regex {
     }}
 }
 
-#[cfg_attr(not(feature = "cargo-clippy"), allow(unknown_lints))]
-#[allow(regex_macro)]
 fn main() {
     let mut seq = String::with_capacity(50 * (1 << 20));
     io::stdin().read_to_string(&mut seq).unwrap();

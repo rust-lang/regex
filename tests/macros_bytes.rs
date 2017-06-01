@@ -26,8 +26,6 @@ macro_rules! show {
 macro_rules! expand {
     ($name:ident, $re:expr, $text:expr, $expand:expr, $expected:expr) => {
         #[test]
-        #[cfg_attr(not(feature = "cargo-clippy"), allow(unknown_lints))]
-        #[allow(string_lit_as_bytes)]
         fn $name() {
             let re = regex!($re);
             let cap = re.captures(t!($text)).unwrap();

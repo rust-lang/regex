@@ -2,8 +2,6 @@ macro_rules! replace(
     ($name:ident, $which:ident, $re:expr,
      $search:expr, $replace:expr, $result:expr) => (
         #[test]
-        #[cfg_attr(not(feature = "cargo-clippy"), allow(unknown_lints))]
-        #[allow(trivial_regex, string_lit_as_bytes)]
         fn $name() {
             let re = regex!($re);
             assert_eq!(re.$which(text!($search), $replace), text!($result));

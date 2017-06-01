@@ -1,8 +1,6 @@
 macro_rules! shortmat {
     ($name:ident, $re:expr, $text:expr, $shortest_match:expr) => {
         #[test]
-        #[cfg_attr(not(feature = "cargo-clippy"), allow(unknown_lints))]
-        #[allow(string_lit_as_bytes)]
         fn $name() {
             let text = text!($text);
             let re = regex!($re);

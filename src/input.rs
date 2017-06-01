@@ -58,7 +58,7 @@ impl InputAt {
         self.len
     }
 
-    /// Returns wether the UTF-8 width of the character at this position
+    /// Returns whether the UTF-8 width of the character at this position
     /// is zero.
     pub fn is_empty(&self) -> bool {
         self.len == 0

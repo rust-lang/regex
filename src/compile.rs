@@ -569,7 +569,7 @@ impl Compiler {
         greedy: bool,
         min: u32,
     ) -> Result {
-        let min = min as usize;
+        let min = u32_to_usize(min);
         let patch_concat = try!(self.c_concat(iter::repeat(expr).take(min)));
         let patch_rep = try!(self.c_repeat_zero_or_more(expr, greedy));
         self.fill(patch_concat.hole, patch_rep.entry);
@@ -583,7 +583,7 @@ impl Compiler {
         min: u32,
         max: u32,
     ) -> Result {
-        let (min, max) = (min as usize, max as usize);
+        let (min, max) = (u32_to_usize(min), u32_to_usize(max));
         let patch_concat = try!(self.c_concat(iter::repeat(expr).take(min)));
         let initial_entry = patch_concat.entry;
         if min == max {
@@ -710,12 +710,6 @@ impl Compiler {
         } else {
             Ok(())
         }
-    }
-}
-
-impl Default for Compiler {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
@@ -1053,6 +1047,16 @@ impl ByteClassSet {
         }
         byte_classes
     }
+}
+
+fn u32_to_usize(n: u32) -> usize {
+    // In case usize is less than 32 bits, we need to guard against overflow.
+    // On most platforms this compiles to nothing.
+    // TODO Use `std::convert::TryFrom` once it's stable.
+    if (n as u64) > (::std::usize::MAX as u64) {
+        panic!("BUG: {} is too big to be pointer sized", n)
+    }
+    n as usize
 }
 
 #[cfg(test)]
