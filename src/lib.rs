@@ -432,9 +432,9 @@ These classes are based on the definitions provided in
 <pre class="rust">
 \d     digit (\p{Nd})
 \D     not digit
-\s     whitespace (\p{`White_Space`})
+\s     whitespace (\p{White_Space})
 \S     not whitespace
-\w     word character (\p{Alphabetic} + \p{M} + \d + \p{Pc} + \p{`Join_Control`})
+\w     word character (\p{Alphabetic} + \p{M} + \d + \p{Pc} + \p{Join_Control})
 \W     not word character
 </pre>
 
