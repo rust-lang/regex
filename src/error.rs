@@ -13,7 +13,7 @@ use std::fmt;
 use syntax;
 
 /// An error that occurred during parsing or compiling a regular expression.
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Error {
     /// A syntax error.
     Syntax(String),
