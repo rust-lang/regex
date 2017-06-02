@@ -58,6 +58,12 @@ impl InputAt {
         self.len
     }
 
+    /// Returns whether the UTF-8 width of the character at this position
+    /// is zero.
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+
     /// Returns the byte offset of this position.
     pub fn pos(&self) -> usize {
         self.pos
@@ -97,6 +103,9 @@ pub trait Input {
 
     /// The number of bytes in the input.
     fn len(&self) -> usize;
+
+    /// Whether the input is empty.
+    fn is_empty(&self) -> bool { self.len() == 0 }
 
     /// Return the given input as a sequence of bytes.
     fn as_bytes(&self) -> &[u8];
@@ -247,7 +256,7 @@ impl<'t> Input for ByteInput<'t> {
         InputAt {
             pos: i,
             c: None.into(),
-            byte: self.get(i).map(|&b| b),
+            byte: self.get(i).cloned(),
             len: 1,
         }
     }
@@ -325,7 +334,7 @@ impl<'t> Input for ByteInput<'t> {
     }
 
     fn as_bytes(&self) -> &[u8] {
-        &self.text
+        self.text
     }
 }
 
@@ -374,9 +383,8 @@ impl Char {
     /// If the byte is absent, then false is returned.
     pub fn is_word_byte(self) -> bool {
         match char::from_u32(self.0) {
-            None => false,
             Some(c) if c <= '\u{7F}' => syntax::is_word_byte(c as u8),
-            Some(_) => false,
+            None | Some(_) => false,
         }
     }
 

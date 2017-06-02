@@ -31,7 +31,7 @@ use re_trait::{RegularExpression, Slot, Locations, as_slots};
 use re_unicode;
 use utf8::next_utf8;
 
-/// Exec manages the execution of a regular expression.
+/// `Exec` manages the execution of a regular expression.
 ///
 /// In particular, this manages the various compiled forms of a single regular
 /// expression and the choice of which matching engine to use to execute a
@@ -43,7 +43,7 @@ pub struct Exec {
     cache: CachedThreadLocal<ProgramCache>,
 }
 
-/// ExecNoSync is like Exec, except it embeds a reference to a cache. This
+/// `ExecNoSync` is like `Exec`, except it embeds a reference to a cache. This
 /// means it is no longer Sync, but we can now avoid the overhead of
 /// synchronization to fetch the cache.
 #[derive(Debug)]
@@ -54,10 +54,10 @@ pub struct ExecNoSync<'c> {
     cache: &'c ProgramCache,
 }
 
-/// ExecNoSyncStr is like ExecNoSync, but matches on &str instead of &[u8].
+/// `ExecNoSyncStr` is like `ExecNoSync`, but matches on &str instead of &[u8].
 pub struct ExecNoSyncStr<'c>(ExecNoSync<'c>);
 
-/// ExecReadOnly comprises all read only state for a regex. Namely, all such
+/// `ExecReadOnly` comprises all read only state for a regex. Namely, all such
 /// state is determined at compile time and never changes during search.
 #[derive(Debug)]
 struct ExecReadOnly {
@@ -263,8 +263,8 @@ impl ExecBuilder {
         }
         Ok(Parsed {
             exprs: exprs,
-            prefixes: prefixes.unwrap_or(Literals::empty()),
-            suffixes: suffixes.unwrap_or(Literals::empty()),
+            prefixes: prefixes.unwrap_or_else(Literals::empty),
+            suffixes: suffixes.unwrap_or_else(Literals::empty),
             bytes: bytes,
         })
     }
@@ -397,7 +397,7 @@ impl<'c> RegularExpression for ExecNoSync<'c> {
             MatchType::DfaAnchoredReverse => {
                 match dfa::Fsm::reverse(
                     &self.ro.dfa_reverse,
-                    &self.cache,
+                    self.cache,
                     true,
                     &text[start..],
                     text.len(),
@@ -445,7 +445,7 @@ impl<'c> RegularExpression for ExecNoSync<'c> {
             MatchType::DfaAnchoredReverse => {
                 match dfa::Fsm::reverse(
                     &self.ro.dfa_reverse,
-                    &self.cache,
+                    self.cache,
                     true,
                     &text[start..],
                     text.len(),
@@ -633,7 +633,7 @@ impl<'c> ExecNoSync<'c> {
         use dfa::Result::*;
         let end = match dfa::Fsm::forward(
             &self.ro.dfa,
-            &self.cache,
+            self.cache,
             false,
             text,
             start,
@@ -646,7 +646,7 @@ impl<'c> ExecNoSync<'c> {
         // Now run the DFA in reverse to find the start of the match.
         match dfa::Fsm::reverse(
             &self.ro.dfa_reverse,
-            &self.cache,
+            self.cache,
             false,
             &text[start..],
             end - start,
@@ -672,7 +672,7 @@ impl<'c> ExecNoSync<'c> {
         use dfa::Result::*;
         match dfa::Fsm::reverse(
             &self.ro.dfa_reverse,
-            &self.cache,
+            self.cache,
             false,
             &text[start..],
             text.len() - start,
@@ -686,7 +686,7 @@ impl<'c> ExecNoSync<'c> {
     /// Finds the end of the shortest match using only the DFA.
     #[inline(always)] // reduces constant overhead
     fn shortest_dfa(&self, text: &[u8], start: usize) -> dfa::Result<usize> {
-        dfa::Fsm::forward(&self.ro.dfa, &self.cache, true, text, start)
+        dfa::Fsm::forward(&self.ro.dfa, self.cache, true, text, start)
     }
 
     /// Finds the end of the shortest match using only the DFA by scanning for
@@ -731,13 +731,13 @@ impl<'c> ExecNoSync<'c> {
         let mut end = start;
         while end <= text.len() {
             start = end;
-            end = end + match lcs.find(&text[end..]) {
+            end += match lcs.find(&text[end..]) {
                 None => return Some(NoMatch(text.len())),
                 Some(start) => start + lcs.len(),
             };
             match dfa::Fsm::reverse(
                 &self.ro.dfa_reverse,
-                &self.cache,
+                self.cache,
                 false,
                 &text[start..end],
                 end - start,
@@ -778,7 +778,7 @@ impl<'c> ExecNoSync<'c> {
         // leftmost-first match.)
         match dfa::Fsm::forward(
             &self.ro.dfa,
-            &self.cache,
+            self.cache,
             false,
             text,
             match_start,
@@ -939,7 +939,7 @@ impl<'c> ExecNoSync<'c> {
         if self.ro.nfa.uses_bytes() {
             pikevm::Fsm::exec(
                 &self.ro.nfa,
-                &self.cache,
+                self.cache,
                 matches,
                 slots,
                 quit_after_match,
@@ -948,7 +948,7 @@ impl<'c> ExecNoSync<'c> {
         } else {
             pikevm::Fsm::exec(
                 &self.ro.nfa,
-                &self.cache,
+                self.cache,
                 matches,
                 slots,
                 quit_after_match,
@@ -968,7 +968,7 @@ impl<'c> ExecNoSync<'c> {
         if self.ro.nfa.uses_bytes() {
             backtrack::Bounded::exec(
                 &self.ro.nfa,
-                &self.cache,
+                self.cache,
                 matches,
                 slots,
                 ByteInput::new(text, self.ro.nfa.only_utf8),
@@ -976,7 +976,7 @@ impl<'c> ExecNoSync<'c> {
         } else {
             backtrack::Bounded::exec(
                 &self.ro.nfa,
-                &self.cache,
+                self.cache,
                 matches,
                 slots,
                 CharInput::new(text),
@@ -1003,14 +1003,14 @@ impl<'c> ExecNoSync<'c> {
         }
         match self.ro.match_type {
             Literal(ty) => {
-                debug_assert!(matches.len() == 1);
+                debug_assert_eq!(matches.len(), 1);
                 matches[0] = self.find_literals(ty, text, start).is_some();
                 matches[0]
             }
             Dfa | DfaAnchoredReverse | DfaSuffix | DfaMany => {
                 match dfa::Fsm::forward_many(
                     &self.ro.dfa,
-                    &self.cache,
+                    self.cache,
                     matches,
                     text,
                     start,
@@ -1251,7 +1251,7 @@ enum MatchNfaType {
     PikeVM,
 }
 
-/// ProgramCache maintains reusable allocations for each matching engine
+/// `ProgramCache` maintains reusable allocations for each matching engine
 /// available to a particular program.
 pub type ProgramCache = RefCell<ProgramCacheInner>;
 

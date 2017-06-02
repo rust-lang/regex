@@ -58,7 +58,7 @@ use sparse::SparseSet;
 /// Return true if and only if the given program can be executed by a DFA.
 ///
 /// Generally, a DFA is always possible. A pathological case where it is not
-/// possible is if the number of NFA states exceeds u32::MAX, in which case,
+/// possible is if the number of NFA states exceeds `u32::MAX`, in which case,
 /// this function will return false.
 ///
 /// This function will also return false if the given program has any Unicode
@@ -104,7 +104,7 @@ pub struct Cache {
     qnext: SparseSet,
 }
 
-/// CacheInner is logically just a part of Cache, but groups together fields
+/// `CacheInner` is logically just a part of Cache, but groups together fields
 /// that aren't passed as function parameters throughout search. (This split
 /// is mostly an artifact of the borrow checker. It is happily paid.)
 #[derive(Clone, Debug)]
@@ -162,8 +162,8 @@ struct CacheInner {
 /// It is laid out in row-major order, with states as rows and byte class
 /// transitions as columns.
 ///
-/// The transition table is responsible for producing valid StatePtrs. A
-/// StatePtr points to the start of a particular row in this table. When
+/// The transition table is responsible for producing valid `StatePtrs`. A
+/// `StatePtr` points to the start of a particular row in this table. When
 /// indexing to find the next state this allows us to avoid a multiplication
 /// when computing an index into the table.
 #[derive(Clone)]
@@ -252,7 +252,7 @@ impl<T> Result<T> {
     }
 }
 
-/// State is a DFA state. It contains an ordered set of NFA states (not
+/// `State` is a DFA state. It contains an ordered set of NFA states (not
 /// necessarily complete) and a smattering of flags.
 ///
 /// The flags are packed into the first byte of data.
@@ -271,7 +271,7 @@ struct State{
     data: Box<[u8]>,
 }
 
-/// InstPtr is a 32 bit pointer into a sequence of opcodes (i.e., it indexes
+/// `InstPtr` is a 32 bit pointer into a sequence of opcodes (i.e., it indexes
 /// an NFA state).
 ///
 /// Throughout this library, this is usually set to `usize`, but we force a
@@ -322,7 +322,8 @@ impl State {
     }
 }
 
-/// StatePtr is a 32 bit pointer to the start of a row in the transition table.
+/// `StatePtr` is a 32 bit pointer to the start of a row in the transition
+/// table.
 ///
 /// It has many special values. There are two types of special values:
 /// sentinels and flags.
@@ -345,7 +346,8 @@ impl State {
 ///
 /// The other type of state pointer is a state pointer with special flag bits.
 /// There are two flags: a start flag and a match flag. The lower bits of both
-/// kinds always contain a "valid" StatePtr (indicated by the STATE_MAX mask).
+/// kinds always contain a "valid" `StatePtr` (indicated by the `STATE_MAX`
+/// mask).
 ///
 /// The start flag means that the state is a start state, and therefore may be
 /// subject to special prefix scanning optimizations.
@@ -998,16 +1000,20 @@ impl<'a> Fsm<'a> {
                 }
             }
         }
-        let mut cache = true;
-        if b.is_eof() && self.prog.matches.len() > 1 {
-            // If we're processing the last byte of the input and we're
-            // matching a regex set, then make the next state contain the
-            // previous states transitions. We do this so that the main
-            // matching loop can extract all of the match instructions.
-            mem::swap(qcur, qnext);
-            // And don't cache this state because it's totally bunk.
-            cache = false;
-        }
+
+        let cache =
+            if b.is_eof() && self.prog.matches.len() > 1 {
+                // If we're processing the last byte of the input and we're
+                // matching a regex set, then make the next state contain the
+                // previous states transitions. We do this so that the main
+                // matching loop can extract all of the match instructions.
+                mem::swap(qcur, qnext);
+                // And don't cache this state because it's totally bunk.
+                false
+            } else {
+                true
+            };
+
         // We've now built up the set of NFA states that ought to comprise the
         // next DFA state, so try to find it in the cache, and if it doesn't
         // exist, cache it.
@@ -1030,7 +1036,7 @@ impl<'a> Fsm<'a> {
             next = self.start_ptr(next);
         }
         if next <= STATE_MAX && self.state(next).flags().is_match() {
-            next = STATE_MATCH | next;
+            next |= STATE_MATCH;
         }
         debug_assert!(next != STATE_UNKNOWN);
         // And now store our state in the current state's next list.
@@ -1113,9 +1119,9 @@ impl<'a> Fsm<'a> {
                         NotWordBoundary if flags.not_word_boundary => {
                             self.cache.stack.push(inst.goto as InstPtr);
                         }
-                        StartLine | EndLine | StartText | EndText => {}
-                        WordBoundaryAscii | NotWordBoundaryAscii => {}
-                        WordBoundary | NotWordBoundary => {}
+                        StartLine | EndLine | StartText | EndText
+                        | WordBoundaryAscii | NotWordBoundaryAscii
+                        | WordBoundary | NotWordBoundary => {}
                     }
                 }
                 Save(ref inst) => self.cache.stack.push(inst.goto as InstPtr),
@@ -1167,12 +1173,12 @@ impl<'a> Fsm<'a> {
             return Some(si);
         }
         // If the cache has gotten too big, wipe it.
-        if self.approximate_size() > self.prog.dfa_size_limit {
-            if !self.clear_cache_and_save(current_state) {
+        if self.approximate_size() > self.prog.dfa_size_limit
+            && !self.clear_cache_and_save(current_state)
+            {
                 // Ooops. DFA is giving up.
                 return None;
             }
-        }
         // Allocate room for our state and add it.
         self.add_state(key)
     }
@@ -1210,8 +1216,7 @@ impl<'a> Fsm<'a> {
             let ip = usize_to_u32(ip);
             match self.prog[ip as usize] {
                 Char(_) | Ranges(_) => unreachable!(),
-                Save(_) => {}
-                Split(_) => {}
+                Save(_) | Split(_) => {}
                 Bytes(_) => push_inst_ptr(&mut insts, &mut prev, ip),
                 EmptyLook(_) => {
                     state_flags.set_empty();
@@ -1301,7 +1306,7 @@ impl<'a> Fsm<'a> {
         self.cache.trans.clear();
         self.cache.states.clear();
         self.cache.compiled.clear();
-        for s in self.cache.start_states.iter_mut() {
+        for s in &mut self.cache.start_states {
             *s = STATE_UNKNOWN;
         }
         // The unwraps are OK because we just cleared the cache and therefore
@@ -1411,9 +1416,9 @@ impl<'a> Fsm<'a> {
         let mut empty_flags = EmptyFlags::default();
         let mut state_flags = StateFlags::default();
         empty_flags.start = at == 0;
-        empty_flags.end = text.len() == 0;
+        empty_flags.end = text.is_empty();
         empty_flags.start_line = at == 0 || text[at - 1] == b'\n';
-        empty_flags.end_line = text.len() == 0;
+        empty_flags.end_line = text.is_empty();
 
         let is_word_last = at > 0 && Byte::byte(text[at - 1]).is_ascii_word();
         let is_word = at < text.len() && Byte::byte(text[at]).is_ascii_word();
@@ -1440,9 +1445,9 @@ impl<'a> Fsm<'a> {
         let mut empty_flags = EmptyFlags::default();
         let mut state_flags = StateFlags::default();
         empty_flags.start = at == text.len();
-        empty_flags.end = text.len() == 0;
+        empty_flags.end = text.is_empty();
         empty_flags.start_line = at == text.len() || text[at] == b'\n';
-        empty_flags.end_line = text.len() == 0;
+        empty_flags.end_line = text.is_empty();
 
         let is_word_last =
             at < text.len() && Byte::byte(text[at]).is_ascii_word();

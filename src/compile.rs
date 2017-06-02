@@ -833,7 +833,7 @@ impl<'a, 'b> CompileClass<'a, 'b> {
         let mut utf8_seqs = self.c.utf8_seqs.take().unwrap();
         self.c.suffix_cache.clear();
 
-        for (i, ref range) in self.ranges.iter().enumerate() {
+        for (i, range) in self.ranges.iter().enumerate() {
             let is_last_range = i + 1 == self.ranges.len();
             utf8_seqs.reset(range.start, range.end);
             let mut it = (&mut utf8_seqs).peekable();
@@ -916,7 +916,7 @@ impl<'a, 'b> CompileClass<'a, 'b> {
     }
 }
 
-/// SuffixCache is a simple bounded hash map for caching suffix entries in
+/// `SuffixCache` is a simple bounded hash map for caching suffix entries in
 /// UTF-8 automata. For example, consider the Unicode range \u{0}-\u{FFFF}.
 /// The set of byte ranges looks like this:
 ///
@@ -1050,6 +1050,9 @@ impl ByteClassSet {
 }
 
 fn u32_to_usize(n: u32) -> usize {
+    // In case usize is less than 32 bits, we need to guard against overflow.
+    // On most platforms this compiles to nothing.
+    // TODO Use `std::convert::TryFrom` once it's stable.
     if (n as u64) > (::std::usize::MAX as u64) {
         panic!("BUG: {} is too big to be pointer sized", n)
     }

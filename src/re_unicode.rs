@@ -737,7 +737,7 @@ impl Regex {
     pub fn as_str(&self) -> &str {
         match self.0 {
             _Regex::Dynamic(ref exec) => &exec.regex_strings()[0],
-            _Regex::Plugin(ref plug) => &plug.original,
+            _Regex::Plugin(ref plug) => plug.original,
         }
     }
 
@@ -874,7 +874,7 @@ enum NamedGroups {
 impl NamedGroups {
     fn from_regex(regex: &Regex) -> NamedGroups {
         match regex.0 {
-            _Regex::Plugin(ref plug) => NamedGroups::Plugin(&plug.groups),
+            _Regex::Plugin(ref plug) => NamedGroups::Plugin(plug.groups),
             _Regex::Dynamic(ref exec) => {
                 NamedGroups::Dynamic(exec.capture_name_idx().clone())
             }
@@ -888,12 +888,12 @@ impl NamedGroups {
                       .ok().map(|i| groups[i].1)
             },
             NamedGroups::Dynamic(ref groups) => {
-                groups.get(name).map(|i| *i)
+                groups.get(name).cloned()
             },
         }
     }
 
-    fn iter<'n>(&'n self) -> NamedGroupsIter<'n> {
+    fn iter(& self) -> NamedGroupsIter {
         match *self {
             NamedGroups::Plugin(g) => NamedGroupsIter::Plugin(g.iter()),
             NamedGroups::Dynamic(ref g) => NamedGroupsIter::Dynamic(g.iter()),
@@ -911,7 +911,7 @@ impl<'n> Iterator for NamedGroupsIter<'n> {
 
     fn next(&mut self) -> Option<Self::Item> {
         match *self {
-            NamedGroupsIter::Plugin(ref mut it) => it.next().map(|&v| v),
+            NamedGroupsIter::Plugin(ref mut it) => it.next().cloned(),
             NamedGroupsIter::Dynamic(ref mut it) => {
                 it.next().map(|(s, i)| (s.as_ref(), *i))
             }
@@ -1025,7 +1025,7 @@ impl<'c, 't> fmt::Debug for CapturesDebug<'c, 't> {
         let mut map = f.debug_map();
         for (slot, m) in self.0.locs.iter().enumerate() {
             let m = m.map(|(s, e)| &self.0.text[s..e]);
-            if let Some(ref name) = slot_to_name.get(&slot) {
+            if let Some(name) = slot_to_name.get(&slot) {
                 map.entry(&name, &m);
             } else {
                 map.entry(&slot, &m);
@@ -1208,7 +1208,7 @@ impl<'a> Replacer for &'a str {
         caps.expand(*self, dst);
     }
 
-    fn no_expansion<'r>(&'r mut self) -> Option<Cow<'r, str>> {
+    fn no_expansion(&mut self) -> Option<Cow<str>> {
         match memchr(b'$', self.as_bytes()) {
             Some(_) => None,
             None => Some(Cow::Borrowed(*self)),
@@ -1222,7 +1222,7 @@ impl<F> Replacer for F where F: FnMut(&Captures) -> String {
     }
 }
 
-/// NoExpand indicates literal string replacement.
+/// `NoExpand` indicates literal string replacement.
 ///
 /// It can be used with `replace` and `replace_all` to do a literal string
 /// replacement without expanding `$name` to their corresponding capture
@@ -1237,7 +1237,7 @@ impl<'t> Replacer for NoExpand<'t> {
         dst.push_str(self.0);
     }
 
-    fn no_expansion<'r>(&'r mut self) -> Option<Cow<'r, str>> {
+    fn no_expansion(&mut self) -> Option<Cow<str>> {
         Some(Cow::Borrowed(self.0))
     }
 }

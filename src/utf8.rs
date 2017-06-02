@@ -149,8 +149,8 @@ pub fn decode_utf8(src: &[u8]) -> Option<(char, usize)> {
     }
 }
 
-/// Like decode_utf8, but decodes the last UTF-8 sequence in `src` instead of
-/// the first.
+/// Like `decode_utf8`, but decodes the last UTF-8 sequence in `src` instead
+/// of the first.
 pub fn decode_last_utf8(src: &[u8]) -> Option<(char, usize)> {
     if src.is_empty() {
         return None;
