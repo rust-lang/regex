@@ -59,7 +59,7 @@ impl RegexBuilder {
     /// Create a new regular expression builder with the given pattern.
     ///
     /// If the pattern is invalid, then an error will be returned when
-    /// `compile` is called.
+    /// `build` is called.
     pub fn new(pattern: &str) -> RegexBuilder {
         let mut builder = RegexBuilder(RegexOptions::default());
         builder.0.pats.push(pattern.to_owned());
@@ -171,7 +171,7 @@ impl RegexSetBuilder {
     /// Create a new regular expression builder with the given pattern.
     ///
     /// If the pattern is invalid, then an error will be returned when
-    /// `compile` is called.
+    /// `build` is called.
     pub fn new<I, S>(patterns: I) -> RegexSetBuilder
             where S: AsRef<str>, I: IntoIterator<Item=S> {
         let mut builder = RegexSetBuilder(RegexOptions::default());
