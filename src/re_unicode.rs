@@ -181,6 +181,12 @@ impl FromStr for Regex {
     }
 }
 
+impl PartialEq for Regex {
+    fn eq(&self, other: &Regex) -> bool {
+        self.as_str() == other.as_str()
+    }
+}
+
 /// Core regular expression methods.
 impl Regex {
     /// Compiles a regular expression. Once compiled, it can be used repeatedly
