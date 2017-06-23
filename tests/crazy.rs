@@ -47,6 +47,20 @@ mat!(negclass_space_comma, r"[^,\s]", ", a", Some((2, 3)));
 mat!(negclass_comma_space, r"[^\s,]", " ,a", Some((2, 3)));
 mat!(negclass_ascii, r"[^[:alpha:]Z]", "A1", Some((1, 2)));
 
+// Test that repeated empty expressions don't loop forever.
+mat!(lazy_many_many, r"((?:.*)*?)=", "a=b", Some((0, 2)));
+mat!(lazy_many_optional, r"((?:.?)*?)=", "a=b", Some((0, 2)));
+mat!(lazy_one_many_many, r"((?:.*)+?)=", "a=b", Some((0, 2)));
+mat!(lazy_one_many_optional, r"((?:.?)+?)=", "a=b", Some((0, 2)));
+mat!(lazy_range_min_many, r"((?:.*){1,}?)=", "a=b", Some((0, 2)));
+mat!(lazy_range_many, r"((?:.*){1,2}?)=", "a=b", Some((0, 2)));
+mat!(greedy_many_many, r"((?:.*)*)=", "a=b", Some((0, 2)));
+mat!(greedy_many_optional, r"((?:.?)*)=", "a=b", Some((0, 2)));
+mat!(greedy_one_many_many, r"((?:.*)+)=", "a=b", Some((0, 2)));
+mat!(greedy_one_many_optional, r"((?:.?)+)=", "a=b", Some((0, 2)));
+mat!(greedy_range_min_many, r"((?:.*){1,})=", "a=b", Some((0, 2)));
+mat!(greedy_range_many, r"((?:.*){1,2})=", "a=b", Some((0, 2)));
+
 // Test that the DFA can handle pathological cases.
 // (This should result in the DFA's cache being flushed too frequently, which
 // should cause it to quit and fall back to the NFA algorithm.)
