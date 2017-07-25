@@ -13,6 +13,10 @@ finite automata and guarantees linear time matching on all inputs.
 """
 categories = ["text-processing"]
 
+[badges]
+travis-ci = { repository = "rust-lang/regex" }
+appveyor = { repository = "rust-lang-libs/regex" }
+
 [dependencies]
 # For very fast prefix literal matching.
 aho-corasick = "0.6.0"
