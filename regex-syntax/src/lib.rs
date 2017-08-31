@@ -1589,8 +1589,7 @@ impl fmt::Display for ErrorKind {
             RepeaterExpectsExpr =>
                 write!(f, "Missing expression for repetition operator."),
             RepeaterUnexpectedExpr(ref e) =>
-                write!(f, "Invalid application of repetition operator to: \
-                          '{}'.", e),
+                write!(f, "Invalid application of repetition operator."),
             UnclosedCaptureName(ref s) =>
                 write!(f, "Capture name group for '{}' is not closed. \
                            (Missing a '>'.)", s),
