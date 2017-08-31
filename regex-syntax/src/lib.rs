@@ -1588,7 +1588,7 @@ impl fmt::Display for ErrorKind {
                 write!(f, "Missing maximum in counted repetition operator."),
             RepeaterExpectsExpr =>
                 write!(f, "Missing expression for repetition operator."),
-            RepeaterUnexpectedExpr(ref e) =>
+            RepeaterUnexpectedExpr(_) =>
                 write!(f, "Invalid application of repetition operator."),
             UnclosedCaptureName(ref s) =>
                 write!(f, "Capture name group for '{}' is not closed. \
