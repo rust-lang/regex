@@ -464,7 +464,7 @@ impl<'a> Fsm<'a> {
         at: usize,
     ) -> Result<usize> {
         let mut cache = cache.borrow_mut();
-        let mut cache = &mut cache.dfa;
+        let cache = &mut cache.dfa;
         let mut dfa = Fsm {
             prog: prog,
             start: 0, // filled in below
@@ -497,7 +497,7 @@ impl<'a> Fsm<'a> {
         at: usize,
     ) -> Result<usize> {
         let mut cache = cache.borrow_mut();
-        let mut cache = &mut cache.dfa_reverse;
+        let cache = &mut cache.dfa_reverse;
         let mut dfa = Fsm {
             prog: prog,
             start: 0, // filled in below
@@ -531,7 +531,7 @@ impl<'a> Fsm<'a> {
     ) -> Result<usize> {
         debug_assert!(matches.len() == prog.matches.len());
         let mut cache = cache.borrow_mut();
-        let mut cache = &mut cache.dfa;
+        let cache = &mut cache.dfa;
         let mut dfa = Fsm {
             prog: prog,
             start: 0, // filled in below

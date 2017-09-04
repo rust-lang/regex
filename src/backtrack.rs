@@ -100,7 +100,7 @@ impl<'a, 'm, 'r, 's, I: Input> Bounded<'a, 'm, 'r, 's, I> {
         start: usize,
     ) -> bool {
         let mut cache = cache.borrow_mut();
-        let mut cache = &mut cache.backtrack;
+        let cache = &mut cache.backtrack;
         let start = input.at(start);
         let mut b = Bounded {
             prog: prog,
