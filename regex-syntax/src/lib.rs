@@ -2197,6 +2197,18 @@ mod tests {
     }
 
     #[test]
+    fn is_word_char() {
+        use super::is_word_char;
+        assert!(is_word_char('a'), "ASCII");
+        assert!(is_word_char('à'), "Latin-1");
+        assert!(is_word_char('\u{11011}'), "Brahmi (Unicode 6.0)");
+        assert!(is_word_char('\u{11611}'), "Modi (Unicode 7.0)");
+        assert!(is_word_char('\u{11711}'), "Ahom (Unicode 8.0)");
+        assert!(is_word_char('\u{17828}'), "Tangut (Unicode 9.0)");
+        assert!(is_word_char('\u{1B1B1}'), "Nushu (Unicode 10.0)");
+    }
+
+    #[test]
     fn roundtrip_class_hypen() {
         let expr = e("[-./]");
         assert_eq!("(?u:[-\\.-/])", expr.to_string());
