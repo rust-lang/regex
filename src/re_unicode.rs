@@ -331,7 +331,7 @@ impl Regex {
     /// with a `usize`.
     ///
     /// The `0`th capture group is always unnamed, so it must always be
-    /// accessed with `at(0)` or `[0]`.
+    /// accessed with `get(0)` or `[0]`.
     pub fn captures<'t>(&self, text: &'t str) -> Option<Captures<'t>> {
         let mut locs = self.locations();
         self.read_captures_at(&mut locs, text, 0).map(|_| Captures {
