@@ -374,7 +374,7 @@ the `x` flag and clears the `y` flag.
 All flags are by default disabled unless stated otherwise. They are:
 
 <pre class="rust">
-i     case-insensitive
+i     case-insensitive: letters match both upper and lower case
 m     multi-line mode: ^ and $ match begin/end of line
 s     allow . to match \n
 U     swap the meaning of x* and x*?
@@ -382,8 +382,8 @@ u     Unicode support (enabled by default)
 x     ignore whitespace and allow line comments (starting with `#`)
 </pre>
 
-Here's an example that matches case-insensitively for only part of the
-expression:
+Flags can be toggled within a pattern. Here's an example that matches
+case-insensitively for the first part but case-sensitively for the second part:
 
 ```rust
 # extern crate regex; use regex::Regex;
@@ -396,6 +396,16 @@ assert_eq!(&cap[0], "AaAaAbb");
 
 Notice that the `a+` matches either `a` or `A`, but the `b+` only matches
 `b`.
+
+Multi-line mode means `^` and `$` no longer match just at the beginning/end of
+the input:
+
+```
+# use regex::Regex;
+let re = Regex::new(r"(?m)^line \d+").unwrap();
+let m = re.find("line one\nline 2\n").unwrap();
+assert_eq!(m.as_str(), "line 2");
+```
 
 Here is an example that uses an ASCII word boundary instead of a Unicode
 word boundary:
