@@ -398,13 +398,22 @@ Notice that the `a+` matches either `a` or `A`, but the `b+` only matches
 `b`.
 
 Multi-line mode means `^` and `$` no longer match just at the beginning/end of
-the input:
+the input, but at the beginning/end of lines:
 
 ```
 # use regex::Regex;
 let re = Regex::new(r"(?m)^line \d+").unwrap();
 let m = re.find("line one\nline 2\n").unwrap();
 assert_eq!(m.as_str(), "line 2");
+```
+
+Note that `^` matches after new lines, even at the end of input:
+
+```
+# use regex::Regex;
+let re = Regex::new(r"(?m)^").unwrap();
+let m = re.find_iter("test\n").last().unwrap();
+assert_eq!((m.start(), m.end()), (5, 5));
 ```
 
 Here is an example that uses an ASCII word boundary instead of a Unicode
