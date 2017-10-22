@@ -1574,9 +1574,8 @@ impl fmt::Display for ErrorKind {
                 write!(f, "Invalid character class range '{}-{}'. \
                            Character class ranges must start with the smaller \
                            character, but {} > {}", start, end, start, end),
-            InvalidClassEscape(ref e) =>
-                write!(f, "Invalid escape sequence in character \
-                           class: '{}'.", e),
+            InvalidClassEscape(_) =>
+                write!(f, "Invalid escape sequence in character class."),
             InvalidRepeatRange { min, max } =>
                 write!(f, "Invalid counted repetition range: {{{}, {}}}. \
                            Counted repetition ranges must start with the \
@@ -1588,9 +1587,8 @@ impl fmt::Display for ErrorKind {
                 write!(f, "Missing maximum in counted repetition operator."),
             RepeaterExpectsExpr =>
                 write!(f, "Missing expression for repetition operator."),
-            RepeaterUnexpectedExpr(ref e) =>
-                write!(f, "Invalid application of repetition operator to: \
-                          '{}'.", e),
+            RepeaterUnexpectedExpr(_) =>
+                write!(f, "Invalid application of repetition operator."),
             UnclosedCaptureName(ref s) =>
                 write!(f, "Capture name group for '{}' is not closed. \
                            (Missing a '>'.)", s),
