@@ -264,9 +264,9 @@ times slightly, try using `cargo test --test default`, which will only use the
 
 The benchmarking in this crate is made up of many micro-benchmarks. Currently,
 there are two primary sets of benchmarks: the benchmarks that were adopted
-at this library's inception (in `benches/src/misc.rs`) and a newer set of
+at this library's inception (in `bench/src/misc.rs`) and a newer set of
 benchmarks meant to test various optimizations. Specifically, the latter set
-contain some analysis and are in `benches/src/sherlock.rs`. Also, the latter
+contain some analysis and are in `bench/src/sherlock.rs`. Also, the latter
 set are all executed on the same lengthy input whereas the former benchmarks
 are executed on strings of varying length.
 
@@ -292,20 +292,20 @@ library benchmarks (especially RE2).
 If you're hacking on one of the matching engines and just want to see
 benchmarks, then all you need to run is:
 
-    $ ./run-bench rust
+    $ ./bench/run rust
 
 If you want to compare your results with older benchmarks, then try:
 
-    $ ./run-bench rust | tee old
+    $ ./bench/run rust | tee old
     $ ... make it faster
-    $ ./run-bench rust | tee new
-    $ cargo-benchcmp old new --improvements
+    $ ./bench/run rust | tee new
+    $ cargo benchcmp old new --improvements
 
 The `cargo-benchcmp` utility is available here:
 https://github.com/BurntSushi/cargo-benchcmp
 
-The `run-bench` utility can run benchmarks for PCRE and Oniguruma too. See
-`./run-bench --help`.
+The `./bench/run` utility can run benchmarks for PCRE and Oniguruma too. See
+`./bench/bench --help`.
 
 ## Dev Docs
 
@@ -313,7 +313,7 @@ When digging your teeth into the codebase for the first time, the
 crate documentation can be a great resource. By default `rustdoc`
 will strip out all documentation of private crate members in an
 effort to help consumers of the crate focus on the *interface*
-without having to concern themselves with the *implimentation*.
+without having to concern themselves with the *implementation*.
 Normally this is a great thing, but if you want to start hacking
 on regex internals it is not what you want. Many of the private members
 of this crate are well documented with rustdoc style comments, and
@@ -321,7 +321,7 @@ it would be a shame to miss out on the opportunity that presents.
 You can generate the private docs with:
 
 ```
-> rustdoc --crate-name docs src/lib.rs -o target/doc -L target/debug/deps --no-defaults --passes collapse-docs --passes unindent-comments
+$ rustdoc --crate-name docs src/lib.rs -o target/doc -L target/debug/deps --no-defaults --passes collapse-docs --passes unindent-comments
 ```
 
 Then just point your browser at `target/doc/regex/index.html`.
