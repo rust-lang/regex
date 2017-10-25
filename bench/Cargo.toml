@@ -40,8 +40,7 @@ bench = false
 # Doing anything else will probably result in weird "duplicate definition"
 # compiler errors.
 #
-# Tip: use the run-bench script in the root of this repository to run
-# benchmarks.
+# Tip: use the `bench/run` script (in this directory) to run benchmarks.
 [features]
 re-pcre1 = ["libpcre-sys"]
 re-pcre2 = []
