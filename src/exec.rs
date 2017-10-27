@@ -554,12 +554,16 @@ impl<'c> RegularExpression for ExecNoSync<'c> {
                 })
             }
             MatchType::Dfa => {
-                match self.find_dfa_forward(text, start) {
-                    dfa::Result::Match((s, e)) => {
-                        self.captures_nfa_with_match(slots, text, s, e)
+                if self.ro.nfa.is_anchored_start {
+                    self.captures_nfa(slots, text, start)
+                } else {
+                    match self.find_dfa_forward(text, start) {
+                        dfa::Result::Match((s, e)) => {
+                            self.captures_nfa_with_match(slots, text, s, e)
+                        }
+                        dfa::Result::NoMatch(_) => None,
+                        dfa::Result::Quit => self.captures_nfa(slots, text, start),
                     }
-                    dfa::Result::NoMatch(_) => None,
-                    dfa::Result::Quit => self.captures_nfa(slots, text, start),
                 }
             }
             MatchType::DfaAnchoredReverse => {
