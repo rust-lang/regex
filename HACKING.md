@@ -313,3 +313,25 @@ https://github.com/BurntSushi/cargo-benchcmp
 
 The `run-bench` utility can run benchmarks for PCRE and Oniguruma too. See
 `./run-bench --help`.
+
+## Dev Docs
+
+When digging your teeth into the codebase for the first time, the
+crate documentation can be a great resource. By default `rustdoc`
+will strip out all documentation of private crate members in an
+effort to help consumers of the crate focus on the *interface*
+without having to concern themselves with the *implimentation*.
+Normally this is a great thing, but if you want to start hacking
+on regex internals it is not what you want. Many of the private members
+of this crate are well documented with rustdoc style comments, and
+it would be a shame to miss out on the opportunity that presents.
+You can generate the private docs with:
+
+```
+> rustdoc --crate-name docs src/lib.rs -o target/doc -L target/debug/deps --no-defaults --passes collapse-docs --passes unindent-comments
+```
+
+Then just point your browser at `target/doc/regex/index.html`.
+
+See https://github.com/rust-lang/rust/issues/15347 for more info
+about generating developer docs for internal use.
