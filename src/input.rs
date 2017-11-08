@@ -223,10 +223,6 @@ impl<'t> Input for CharInput<'t> {
 }
 
 /// An input reader over bytes.
-///
-/// N.B. We represent the reader with a string for now, since that gives us
-/// easy access to necessary Unicode decoding (used for word boundary look
-/// ahead/look behind).
 #[derive(Clone, Copy, Debug)]
 pub struct ByteInput<'t> {
     text: &'t [u8],
