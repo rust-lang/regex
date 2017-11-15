@@ -41,7 +41,7 @@ fn main() {
             we!("re2 cannot be found by pkg-config");
             process::exit(1);
         }
-        gcc::Config::new()
+        gcc::Build::new()
             .cpp(true)
             .flag("-std=c++11")
             .file("src/ffi/re2.cpp")
