@@ -205,6 +205,58 @@ impl Compiler {
         Ok(self.compiled)
     }
 
+    /// Compile expr into self.insts, returning a patch on success,
+    /// or an error if we run out of memory.
+    ///
+    /// All of the c_* methods of the compiler share the contract outlined
+    /// here.
+    ///
+    /// The main thing that a c_* method does is mutate `self.insts`
+    /// to add a list of mostly compiled instructions required to execute
+    /// the given expression. `self.insts` contains MaybeInsts rather than
+    /// Insts because there is some backpatching required.
+    ///
+    /// The `Patch` value returned by each c_* method provides metadata
+    /// about the compiled instructions emitted to `self.insts`. The
+    /// `entry` member of the patch refers to the first instruction
+    /// (the entry point), while the `hole` member contains zero or
+    /// more offsets to partial instructions that need to be backpatched.
+    /// The c_* routine can't know where its list of instructions are going to
+    /// jump to after execution, so it is up to the caller to patch
+    /// these jumps to point to the right place. So compiling some
+    /// expression, e, we would end up with a situation that looked like:
+    ///
+    /// ```text
+    /// self.insts = [ ..., i1, i2, ..., iexit1, ..., iexitn, ...]
+    ///                     ^              ^             ^
+    ///                     |                \         /
+    ///                   entry                \     /
+    ///                                         hole
+    /// ```
+    ///
+    /// To compile two expressions, e1 and e2, concatinated together we
+    /// would do:
+    ///
+    /// ```ignore
+    /// let patch1 = self.c(e1);
+    /// let patch2 = self.c(e2);
+    /// ```
+    ///
+    /// while leaves us with a situation that looks like
+    ///
+    /// ```text
+    /// self.insts = [ ..., i1, ..., iexit1, ..., i2, ..., iexit2 ]
+    ///                     ^        ^            ^        ^
+    ///                     |        |            |        |
+    ///                entry1        hole1   entry2        hole2
+    /// ```
+    ///
+    /// Then to merge the two patches together into one we would backpatch
+    /// hole1 with entry2 and return a new patch that enters at entry1
+    /// and has hole2 for a hole. In fact, if you look at the c_concat
+    /// method you will see that it does exactly this, though it handles
+    /// a list of expressions rather than just the two that we use for
+    /// an example.
     fn c(&mut self, expr: &Expr) -> Result {
         use prog;
         use syntax::Expr::*;
