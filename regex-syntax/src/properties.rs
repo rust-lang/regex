@@ -188,8 +188,8 @@ impl Arbitrary for Expr {
             ClassBytes(ref cls) => Box::new(cls.shrink().map(ClassBytes)),
             Group { ref e, ref i, ref name } => {
                 let (i, name) = (i.clone(), name.clone());
-                Box::new(e.clone().shrink()
-                          .chain(e.clone().shrink()
+                Box::new((*e.clone()).shrink()
+                          .chain((*e.clone()).shrink()
                                   .map(move |e| Group {
                                       e: Box::new(e),
                                       i: i.clone(),
