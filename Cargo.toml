@@ -19,9 +19,9 @@ appveyor = { repository = "rust-lang-libs/regex" }
 
 [dependencies]
 # For very fast prefix literal matching.
-aho-corasick = "0.6.0"
+aho-corasick = { version = "0.6.0", default-features = false }
 # For skipping along search text quickly when a leading byte is known.
-memchr = "2.0.0"
+memchr = { version = "2.0.0", default-features = false }
 # For managing regex caches quickly across multiple threads.
 thread_local = "0.3.2"
 # For parsing regular expressions.
@@ -40,10 +40,13 @@ quickcheck = { version = "0.4.1", default-features = false }
 rand = "0.3.15"
 
 [features]
+default = ["use_std"]
 # Enable to use the unstable pattern traits defined in std.
 pattern = []
 # Enable to use simd acceleration.
 simd-accel = ["simd"]
+# Allow compilation of dependencies without std
+use_std = ["aho-corasick/use_std", "memchr/use_std"]
 
 [lib]
 # There are no benchmarks in the library code itself
