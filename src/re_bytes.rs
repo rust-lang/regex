@@ -828,8 +828,8 @@ impl<'t> Captures<'t> {
         }
     }
 
-    /// Expands all instances of `$name` in `text` to the corresponding capture
-    /// group `name`, and writes them to the `dst` buffer given.
+    /// Expands all instances of `$name` in `replacement` to the corresponding
+    /// capture group `name`, and writes them to the `dst` buffer given.
     ///
     /// `name` may be an integer corresponding to the index of the
     /// capture group (counted by order of opening parenthesis where `0` is the
