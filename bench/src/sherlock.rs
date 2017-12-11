@@ -88,10 +88,14 @@ sherlock!(the_whitespace, r"the\s+\w+", 5410);
 
 // How fast can we match everything? This essentially defeats any clever prefix
 // tricks and just executes the DFA across the entire input.
+#[cfg(not(feature = "re-dphobos-dmd"))]
+#[cfg(not(feature = "re-dphobos-ldc"))]
 #[cfg(not(feature = "re-pcre1"))]
 #[cfg(not(feature = "re-pcre2"))]
 #[cfg(not(feature = "re-tcl"))]
 sherlock!(everything_greedy, r".*", 13053);
+#[cfg(not(feature = "re-dphobos-dmd"))]
+#[cfg(not(feature = "re-dphobos-ldc"))]
 #[cfg(not(feature = "re-onig"))]
 #[cfg(not(feature = "re-pcre1"))]
 #[cfg(not(feature = "re-pcre2"))]
@@ -148,10 +152,19 @@ sherlock!(quotes, r#"["'][^"']{0,30}[?!.]["']"#, 767);
 // Finds all occurrences of Sherlock Holmes at the beginning or end of a line.
 // The empty assertions defeat any detection of prefix literals, so it's the
 // lazy DFA the entire way.
+#[cfg(not(any(feature = "re-dphobos-dmd",
+              feature = "re-dphobos-ldc")))]
 sherlock!(
     line_boundary_sherlock_holmes,
     r"(?m)^Sherlock Holmes|Sherlock Holmes$",
     34);
+// D matches both \r\n and \n as EOL
+#[cfg(any(feature = "re-dphobos-dmd",
+          feature = "re-dphobos-ldc"))]
+sherlock!(
+    line_boundary_sherlock_holmes,
+    r"(?m)^Sherlock Holmes|Sherlock Holmes$",
+    37);
 
 // All words ending in `n`. This uses Unicode word boundaries, which the DFA
 // can speculatively handle. Since this benchmark is on mostly ASCII text, it
