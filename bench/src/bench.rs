@@ -37,6 +37,9 @@ pub use ffi::pcre1::Regex;
 pub use ffi::pcre2::Regex;
 #[cfg(feature = "re-re2")]
 pub use ffi::re2::Regex;
+#[cfg(any(feature = "re-dphobos-dmd",
+          feature = "re-dphobos-ldc"))]
+pub use ffi::d_phobos::Regex;
 #[cfg(feature = "re-rust")]
 pub use regex::Regex;
 #[cfg(feature = "re-rust-bytes")]
@@ -89,6 +92,8 @@ macro_rules! text {
     feature = "re-pcre1",
     feature = "re-pcre2",
     feature = "re-re2",
+    feature = "re-dphobos-ldc",
+    feature = "re-dphobos-dmd",
     feature = "re-rust",
   ))]
 macro_rules! text {
@@ -105,6 +110,8 @@ type Text = Vec<u8>;
     feature = "re-pcre1",
     feature = "re-pcre2",
     feature = "re-re2",
+    feature = "re-dphobos-ldc",
+    feature = "re-dphobos-dmd",
     feature = "re-rust",
   ))]
 type Text = String;
