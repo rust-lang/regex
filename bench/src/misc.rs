@@ -191,3 +191,85 @@ macro_rules! reallyhard2 { () => (r"\w+\s+Holmes") }
 
 bench_match!(reallyhard2_1K, reallyhard2!(),
              get_text(TXT_1K, reallyhard2_suffix()));
+
+
+//
+// Benchmarks to justify the short-haystack NFA fallthrough optimization
+// implemented by `read_captures_at` in regex/src/exec.rs. See github issue
+// #348.
+//
+// The procedure used to try to determine the right hardcoded cutoff
+// for the short-haystack optimization in issue #348 is as follows.
+//
+// ```
+// > cd bench
+// > cargo bench --features re-rust short_hay | tee dfa-nfa.res
+// > # modify the `MatchType::Dfa` branch in exec.rs:read_captures_at
+// > # to just execute the nfa
+// > cargo bench --features re-rust short_hay | tee nfa-only.res
+// > cargo benchcmp dfa-nfa.res nfa-only.res
+// ```
+//
+// The expected result is that short inputs will go faster under
+// the nfa-only mode, but at some turnover point the dfa-nfa mode
+// will start to win again. Unfortunately, that is not what happened.
+// Instead there was no noticeable change in the bench results, so
+// I've opted to just do the more conservative anchor optimization.
+//
+bench_captures!(short_haystack_1x,
+    Regex::new(r"(bbbb)cccc(bbb)").unwrap(), 2,
+    String::from("aaaabbbbccccbbbdddd"));
+bench_captures!(short_haystack_2x,
+    Regex::new(r"(bbbb)cccc(bbb)").unwrap(), 2,
+    format!("{}bbbbccccbbb{}",
+            repeat("aaaa").take(2).collect::<String>(),
+            repeat("dddd").take(2).collect::<String>(),
+            ));
+bench_captures!(short_haystack_3x,
+    Regex::new(r"(bbbb)cccc(bbb)").unwrap(), 2,
+    format!("{}bbbbccccbbb{}",
+            repeat("aaaa").take(3).collect::<String>(),
+            repeat("dddd").take(3).collect::<String>(),
+            ));
+bench_captures!(short_haystack_4x,
+    Regex::new(r"(bbbb)cccc(bbb)").unwrap(), 2,
+    format!("{}bbbbccccbbb{}",
+            repeat("aaaa").take(4).collect::<String>(),
+            repeat("dddd").take(4).collect::<String>(),
+            ));
+bench_captures!(short_haystack_10x,
+    Regex::new(r"(bbbb)cccc(bbb)").unwrap(), 2,
+    format!("{}bbbbccccbbb{}",
+            repeat("aaaa").take(10).collect::<String>(),
+            repeat("dddd").take(10).collect::<String>(),
+            ));
+bench_captures!(short_haystack_100x,
+    Regex::new(r"(bbbb)cccc(bbb)").unwrap(), 2,
+    format!("{}bbbbccccbbb{}",
+            repeat("aaaa").take(100).collect::<String>(),
+            repeat("dddd").take(100).collect::<String>(),
+            ));
+bench_captures!(short_haystack_1000x,
+    Regex::new(r"(bbbb)cccc(bbb)").unwrap(), 2,
+    format!("{}bbbbccccbbb{}",
+            repeat("aaaa").take(1000).collect::<String>(),
+            repeat("dddd").take(1000).collect::<String>(),
+            ));
+bench_captures!(short_haystack_10000x,
+    Regex::new(r"(bbbb)cccc(bbb)").unwrap(), 2,
+    format!("{}bbbbccccbbb{}",
+            repeat("aaaa").take(10000).collect::<String>(),
+            repeat("dddd").take(10000).collect::<String>(),
+            ));
+bench_captures!(short_haystack_100000x,
+    Regex::new(r"(bbbb)cccc(bbb)").unwrap(), 2,
+    format!("{}bbbbccccbbb{}",
+            repeat("aaaa").take(100000).collect::<String>(),
+            repeat("dddd").take(100000).collect::<String>(),
+            ));
+bench_captures!(short_haystack_1000000x,
+    Regex::new(r"(bbbb)cccc(bbb)").unwrap(), 2,
+    format!("{}bbbbccccbbb{}",
+            repeat("aaaa").take(1000000).collect::<String>(),
+            repeat("dddd").take(1000000).collect::<String>(),
+            ));
