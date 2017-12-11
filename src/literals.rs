@@ -38,8 +38,8 @@ use simd_accel::teddy128::{Teddy, is_teddy_128_available};
 #[derive(Clone, Debug)]
 pub struct LiteralSearcher {
     complete: bool,
-    lcp: SingleSearch,
-    lcs: SingleSearch,
+    lcp: MemchrSearch,
+    lcs: MemchrSearch,
     matcher: Matcher,
 }
 
@@ -49,8 +49,10 @@ enum Matcher {
     Empty,
     /// A set of four or more single byte literals.
     Bytes(SingleByteSet),
-    /// A single substring. (Likely using Boyer-Moore with memchr.)
-    Single(SingleSearch),
+    /// A single substring, find using memchr and frequency analysis.
+    SingleMemchr(MemchrSearch),
+    /// A single substring, find using Boyer-Moore.
+    SingleBoyerMoore(BoyerMooreSearch),
     /// An Aho-Corasick automaton.
     AC(FullAcAutomaton<syntax::Lit>),
     /// A simd accelerated multiple string matcher.
@@ -79,8 +81,8 @@ impl LiteralSearcher {
         let complete = lits.all_complete();
         LiteralSearcher {
             complete: complete,
-            lcp: SingleSearch::new(lits.longest_common_prefix().to_vec()),
-            lcs: SingleSearch::new(lits.longest_common_suffix().to_vec()),
+            lcp: MemchrSearch::new(lits.longest_common_prefix().to_vec()),
+            lcs: MemchrSearch::new(lits.longest_common_suffix().to_vec()),
             matcher: matcher,
         }
     }
@@ -102,7 +104,8 @@ impl LiteralSearcher {
         match self.matcher {
             Empty => Some((0, 0)),
             Bytes(ref sset) => sset.find(haystack).map(|i| (i, i + 1)),
-            Single(ref s) => s.find(haystack).map(|i| (i, i + s.len())),
+            SingleMemchr(ref s) => s.find(haystack).map(|i| (i, i + s.len())),
+            SingleBoyerMoore(ref s) => s.find(haystack).map(|i| (i, i + s.len())),
             AC(ref aut) => aut.find(haystack).next().map(|m| (m.start, m.end)),
             Teddy128(ref ted) => ted.find(haystack).map(|m| (m.start, m.end)),
         }
@@ -139,7 +142,8 @@ impl LiteralSearcher {
         match self.matcher {
             Matcher::Empty => LiteralIter::Empty,
             Matcher::Bytes(ref sset) => LiteralIter::Bytes(&sset.dense),
-            Matcher::Single(ref s) => LiteralIter::Single(&s.pat),
+            Matcher::SingleMemchr(ref s) => LiteralIter::Single(&s.pat),
+            Matcher::SingleBoyerMoore(ref s) => LiteralIter::Single(&s.pattern),
             Matcher::AC(ref ac) => LiteralIter::AC(ac.patterns()),
             Matcher::Teddy128(ref ted) => {
                 LiteralIter::Teddy128(ted.patterns())
@@ -148,12 +152,12 @@ impl LiteralSearcher {
     }
 
     /// Returns a matcher for the longest common prefix of this matcher.
-    pub fn lcp(&self) -> &SingleSearch {
+    pub fn lcp(&self) -> &MemchrSearch {
         &self.lcp
     }
 
     /// Returns a matcher for the longest common suffix of this matcher.
-    pub fn lcs(&self) -> &SingleSearch {
+    pub fn lcs(&self) -> &MemchrSearch {
         &self.lcs
     }
 
@@ -168,7 +172,8 @@ impl LiteralSearcher {
         match self.matcher {
             Empty => 0,
             Bytes(ref sset) => sset.dense.len(),
-            Single(_) => 1,
+            SingleMemchr(_) => 1,
+            SingleBoyerMoore(_) => 1,
             AC(ref aut) => aut.len(),
             Teddy128(ref ted) => ted.len(),
         }
@@ -180,7 +185,8 @@ impl LiteralSearcher {
         match self.matcher {
             Empty => 0,
             Bytes(ref sset) => sset.approximate_size(),
-            Single(ref single) => single.approximate_size(),
+            SingleMemchr(ref single) => single.approximate_size(),
+            SingleBoyerMoore(ref single) => single.approximate_size(),
             AC(ref aut) => aut.heap_bytes(),
             Teddy128(ref ted) => ted.approximate_size(),
         }
@@ -216,7 +222,11 @@ impl Matcher {
         }
         if lits.literals().len() == 1 {
             let lit = lits.literals()[0].to_vec();
-            return Matcher::Single(SingleSearch::new(lit));
+            if BoyerMooreSearch::should_use(lit.as_slice()) {
+                return Matcher::SingleBoyerMoore(BoyerMooreSearch::new(lit));
+            } else {
+                return Matcher::SingleMemchr(MemchrSearch::new(lit));
+            }
         }
         let is_aho_corasick_fast = sset.dense.len() == 1 && sset.all_ascii;
         if is_teddy_128_available() && !is_aho_corasick_fast {
@@ -392,7 +402,7 @@ impl SingleByteSet {
 ///
 /// TODO(burntsushi): Add some amount of shifting to this.
 #[derive(Clone, Debug)]
-pub struct SingleSearch {
+pub struct MemchrSearch {
     /// The pattern.
     pat: Vec<u8>,
     /// The number of Unicode characters in the pattern. This is useful for
@@ -418,12 +428,10 @@ pub struct SingleSearch {
     rare2i: usize,
 }
 
-impl SingleSearch {
-    fn new(pat: Vec<u8>) -> SingleSearch {
-        fn freq_rank(b: u8) -> usize { BYTE_FREQUENCIES[b as usize] as usize }
-
+impl MemchrSearch {
+    fn new(pat: Vec<u8>) -> MemchrSearch {
         if pat.is_empty() {
-            return SingleSearch::empty();
+            return MemchrSearch::empty();
         }
 
         // Find the rarest two bytes. Try to make them distinct (but it's not
@@ -448,7 +456,7 @@ impl SingleSearch {
         let rare2i = pat.iter().rposition(|&b| b == rare2).unwrap();
 
         let char_len = char_len_lossy(&pat);
-        SingleSearch {
+        MemchrSearch {
             pat: pat,
             char_len: char_len,
             rare1: rare1,
@@ -458,8 +466,8 @@ impl SingleSearch {
         }
     }
 
-    fn empty() -> SingleSearch {
-        SingleSearch {
+    fn empty() -> MemchrSearch {
+        MemchrSearch {
             pat: vec![],
             char_len: 0,
             rare1: 0,
@@ -518,4 +526,527 @@ impl SingleSearch {
 
 fn char_len_lossy(bytes: &[u8]) -> usize {
     String::from_utf8_lossy(bytes).chars().count()
+}
+
+/// An implementation of Tuned Boyer-Moore as laid out by
+/// Andrew Hume and Daniel Sunday in "Fast String Searching".
+/// O(n) in the size of the input.
+///
+/// Fast string searching algorithms come in many variations,
+/// but they can generally be described in terms of three main
+/// components.
+///
+/// The skip loop is where the string searcher wants to spend
+/// as much time as possible. Exactly which character in the
+/// pattern the skip loop examines varies from algorithm to
+/// algorithm, but in the simplest case this loop repeated
+/// looks at the last character in the pattern and jumps
+/// forward in the input if it is not in the pattern.
+/// Robert Boyer and J Moore called this the "fast" loop in
+/// their original paper.
+///
+/// The match loop is responsible for actually examining the
+/// whole potentially matching substring. In order to fail
+/// faster, the match loop sometimes has a guard test attached.
+/// The guard test uses frequency analysis of the different
+/// characters in the pattern to choose the least frequency
+/// occurring character and use it to find match failures
+/// as quickly as possible.
+///
+/// The shift rule governs how the algorithm will shuffle its
+/// test window in the event of a failure during the match loop.
+/// Certain shift rules allow the worst-case run time of the
+/// algorithm to be shown to be O(n) in the size of the input
+/// rather than O(nm) in the size of the input and the size
+/// of the pattern (as naive Boyer-Moore is).
+///
+/// "Fast String Searching", in addition to presenting a tuned
+/// algorithm, provides a comprehensive taxonomy of the many
+/// different flavors of string searchers. Under that taxonomy
+/// TBM, the algorithm implemented here, uses an unrolled fast
+/// skip loop with memchr fallback, a forward match loop with guard,
+/// and the mini Sunday's delta shift rule. To unpack that you'll have to
+/// read the paper.
+#[derive(Clone, Debug)]
+pub struct BoyerMooreSearch {
+    /// The pattern we are going to look for in the haystack.
+    pattern: Vec<u8>,
+
+    /// The skip table for the skip loop.
+    ///
+    /// Maps the character at the end of the input
+    /// to a shift.
+    skip_table: Vec<usize>,
+
+    /// The guard character (least frequently occurring char).
+    guard: u8,
+    /// The reverse-index of the guard character in the pattern.
+    guard_reverse_idx: usize,
+
+    /// Daniel Sunday's mini generalized delta2 shift table.
+    ///
+    /// We use a skip loop, so we only have to provide a shift
+    /// for the skip char (last char). This is why it is a mini
+    /// shift rule.
+    md2_shift: usize,
+}
+
+impl BoyerMooreSearch {
+    /// Create a new string searcher, performing whatever
+    /// compilation steps are required.
+    fn new(pattern: Vec<u8>) -> Self {
+        debug_assert!(pattern.len() > 0);
+
+        let (g, gi) = Self::select_guard(pattern.as_slice());
+        let skip_table = Self::compile_skip_table(pattern.as_slice());
+        let md2_shift = Self::compile_md2_shift(pattern.as_slice());
+        BoyerMooreSearch {
+            pattern: pattern,
+            skip_table: skip_table,
+            guard: g,
+            guard_reverse_idx: gi,
+            md2_shift: md2_shift,
+        }
+    }
+
+    /// Find the pattern in `haystack`, returning the offset
+    /// of the start of the first occurrence of the pattern
+    /// in `haystack`.
+    #[inline]
+    fn find(&self, haystack: &[u8]) -> Option<usize> {
+        debug_assert!(haystack.len() >= self.pattern.len());
+
+        let mut window_end = self.pattern.len() - 1;
+
+        // Inspired by the grep source. It is a way
+        // to do correct loop unrolling without having to place
+        // a crashpad of terminating charicters at the end in
+        // the way described in the Fast String Searching paper.
+        const NUM_UNROLL: usize = 10;
+        // 1 for the initial position, and 1 for the md2 shift
+        let short_circut = (NUM_UNROLL + 2) * self.pattern.len();
+
+        if haystack.len() > short_circut {
+            // just 1 for the md2 shift
+            let backstop = haystack.len() - ((NUM_UNROLL + 1) * self.pattern.len());
+            loop {
+                window_end = match self.skip_loop(haystack, window_end, backstop) {
+                    Some(i) => i,
+                    None => return None,
+                };
+                if window_end >= backstop {
+                    break;
+                }
+
+                if self.check_match(haystack, window_end) {
+                    return Some(window_end - (self.pattern.len() - 1));
+                } else {
+                    window_end += self.md2_shift;
+                    continue;
+                }
+            }
+        }
+
+        // now process the input after the backstop
+        while window_end < haystack.len() {
+            let mut skip = self.skip_table[haystack[window_end] as usize];
+            if skip == 0 {
+                if self.check_match(haystack, window_end) {
+                    return Some(window_end - (self.pattern.len() - 1));
+                } else {
+                    skip = self.md2_shift;
+                }
+            }
+            window_end += skip;
+        }
+
+        None
+    }
+
+    fn len(&self) -> usize {
+        return self.pattern.len()
+    }
+
+    /// The key heuristic behind which the BoyerMooreSearch lives.
+    ///
+    /// See `rust-lang/regex/issues/408`.
+    ///
+    /// Tuned Boyer-Moore is actually pretty slow! It turns out a handrolled
+    /// platform-specific memchr routine with a bit of frequency
+    /// analysis sprinkled on top actually wins most of the time.
+    /// However, there are a few cases where Tuned Boyer-Moore still
+    /// wins.
+    ///
+    /// If the haystack is random, frequency analysis doesn't help us,
+    /// so Boyer-Moore will win for sufficiently large needles.
+    /// Unfortunately, there is no obvious way to determine this
+    /// ahead of time.
+    ///
+    /// If the pattern itself consists of very common characters,
+    /// frequency analysis won't get us anywhere. The most extreme
+    /// example of this is a pattern like `eeeeeeeeeeeeeeee`. Fortunately,
+    /// this case is wholly determined by the pattern, so we can actually
+    /// implement the heuristic.
+    ///
+    /// A third case is if the pattern is sufficiently long. The idea
+    /// here is that once the pattern gets long enough the Tuned
+    /// Boyer-Moore skip loop will start making strides long enough
+    /// to beat the asm deep magic that is memchr. Unfortunately,
+    /// I had trouble proving a useful turnover point. Hopefully,
+    /// we can find one in the future.
+    fn should_use(pattern: &[u8]) -> bool {
+        const CUTOFF_FREQ: usize = 242;
+
+        // all the bytes must be more common than the cutoff.
+        pattern.iter().all(|c| freq_rank(*c) >= CUTOFF_FREQ)
+            // and the pattern must be long enough to be worthwhile.
+            // memchr will be faster on `e` because it is short
+            // even though e is quite common.
+            && pattern.len() > 7
+    }
+
+    /// Check to see if there is a match at the given position
+    #[inline]
+    fn check_match(&self, haystack: &[u8], window_end: usize) -> bool {
+        // guard test
+        if haystack[window_end - self.guard_reverse_idx] != self.guard {
+            return false;
+        }
+
+        // match loop
+        let window_start = window_end - (self.pattern.len() - 1);
+        for i in 0..self.pattern.len() {
+            if self.pattern[i] != haystack[window_start + i] {
+                return false;
+            }
+        }
+
+        true
+    }
+
+    /// Skip forward according to the shift table.
+    ///
+    /// Returns the offset of the next occurrence
+    /// of the last char in the pattern, or the none
+    /// if it never reappears. If `skip_loop` hits the backstop
+    /// it will leave early.
+    #[inline]
+    fn skip_loop(&self,
+        haystack: &[u8],
+        mut window_end: usize,
+        backstop: usize,
+    ) -> Option<usize> {
+        use std::mem;
+
+        let window_end_snapshot = window_end;
+        let skip_of = |we: usize| -> usize {
+            // Unsafe might make this faster, but the benchmarks
+            // were hard to interpret.
+            self.skip_table[haystack[we] as usize]
+        };
+
+        loop {
+            let mut skip = skip_of(window_end); window_end += skip;
+            skip = skip_of(window_end); window_end += skip;
+            if skip != 0 {
+                skip = skip_of(window_end); window_end += skip;
+                skip = skip_of(window_end); window_end += skip;
+                skip = skip_of(window_end); window_end += skip;
+                if skip != 0 {
+                    skip = skip_of(window_end); window_end += skip;
+                    skip = skip_of(window_end); window_end += skip;
+                    skip = skip_of(window_end); window_end += skip;
+                    if skip != 0 {
+                        skip = skip_of(window_end); window_end += skip;
+                        skip = skip_of(window_end); window_end += skip;
+
+                        // If ten iterations did not make at least 16 words
+                        // worth of progress, we just fall back on memchr.
+                        if window_end - window_end_snapshot >
+                             16 * mem::size_of::<usize>() {
+
+                            // Returning a window_end >= backstop will immediatly
+                            // break us out of the inner loop in `find`.
+                            if window_end >= backstop {
+                                return Some(window_end);
+                            }
+
+                            continue; // we made enough progress
+                        } else {
+                            // In case we are already there, and so that
+                            // we will catch the guard char.
+                            window_end = window_end
+                                .checked_sub(1 + self.guard_reverse_idx)
+                                .unwrap_or(0);
+
+                            match memchr(self.guard, &haystack[window_end..]) {
+                                None => return None,
+                                Some(g_idx) => {
+                                    return Some(window_end + g_idx + self.guard_reverse_idx);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            return Some(window_end);
+        }
+    }
+
+    /// Compute the ufast skip table.
+    fn compile_skip_table(pattern: &[u8]) -> Vec<usize> {
+        let mut tab = vec![pattern.len(); 256];
+
+        // For every char in the pattern, we write a skip
+        // that will line us up with the rightmost occurrence.
+        //
+        // N.B. the sentinel (0) is written by the last
+        // loop iteration.
+        for (i, c) in pattern.iter().enumerate() {
+            tab[*c as usize] = (pattern.len() - 1) - i;
+        }
+
+        tab
+    }
+
+    /// Select the guard character based off of the precomputed
+    /// frequency table.
+    fn select_guard(pattern: &[u8]) -> (u8, usize) {
+        let mut rarest = pattern[0];
+        let mut rarest_rev_idx = pattern.len() - 1;
+        for (i, c) in pattern.iter().enumerate() {
+            if freq_rank(*c) < freq_rank(rarest) {
+                rarest = *c;
+                rarest_rev_idx = (pattern.len() - 1) - i;
+            }
+        }
+
+        (rarest, rarest_rev_idx)
+    }
+
+    /// If there is another occurrence of the skip
+    /// char, shift to it, otherwise just shift to
+    /// the next window.
+    fn compile_md2_shift(pattern: &[u8]) -> usize {
+        let shiftc = *pattern.last().unwrap();
+
+        // For a pattern of length 1 we will never apply the
+        // shift rule, so we use a poison value on the principle
+        // that failing fast is a good thing.
+        if pattern.len() == 1 {
+            return 0xDEADBEAF;
+        }
+
+        let mut i = pattern.len() - 2;
+        while i > 0 {
+            if pattern[i] == shiftc {
+                return (pattern.len() - 1) - i;
+            }
+            i -= 1;
+        }
+
+        // The skip char never re-occurs in the pattern, so
+        // we can just shift the whole window length.
+        pattern.len() - 1
+    }
+
+    fn approximate_size(&self) -> usize {
+        (self.pattern.len() * mem::size_of::<u8>())
+            + (256 * mem::size_of::<usize>()) // skip table
+    }
+}
+
+fn freq_rank(b: u8) -> usize {
+    BYTE_FREQUENCIES[b as usize] as usize
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{BoyerMooreSearch, MemchrSearch};
+
+    //
+    // Unit Tests
+    //
+
+    // The "hello, world" of string searching
+    #[test]
+    fn bm_find_subs() {
+        let searcher = BoyerMooreSearch::new(Vec::from(&b"pattern"[..]));
+        let haystack = b"I keep seeing patterns in this text";
+        assert_eq!(14, searcher.find(haystack).unwrap());
+    }
+
+    #[test]
+    fn bm_find_no_subs() {
+        let searcher = BoyerMooreSearch::new(Vec::from(&b"pattern"[..]));
+        let haystack = b"I keep seeing needles in this text";
+        assert_eq!(None, searcher.find(haystack));
+    }
+
+    //
+    // Regression Tests
+    //
+
+    #[test]
+    fn bm_skip_reset_bug() {
+        let haystack = vec![0, 0, 0, 0, 0, 1, 1, 0];
+        let needle = vec![0, 1, 1, 0];
+
+        let searcher = BoyerMooreSearch::new(needle);
+        let offset = searcher.find(haystack.as_slice()).unwrap();
+        assert_eq!(4, offset);
+    }
+
+    #[test]
+    fn bm_backstop_underflow_bug() {
+        let haystack = vec![0, 0];
+        let needle = vec![0, 0];
+
+        let searcher = BoyerMooreSearch::new(needle);
+        let offset = searcher.find(haystack.as_slice()).unwrap();
+        assert_eq!(0, offset);
+    }
+
+    #[test]
+    fn bm_naive_off_by_one_bug() {
+        let haystack = vec![91];
+        let needle = vec![91];
+
+        let naive_offset = naive_find(needle, haystack.as_slice()).unwrap();
+        assert_eq!(0, naive_offset);
+    }
+
+    #[test]
+    fn bm_memchr_fallback_indexing_bug() {
+        let mut haystack = vec![
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 87, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        let needle = vec![1, 1, 1, 1, 32, 32, 87];
+        let needle_start = haystack.len();
+        haystack.extend(needle.clone());
+
+        let searcher = BoyerMooreSearch::new(needle);
+        assert_eq!(needle_start, searcher.find(haystack.as_slice()).unwrap());
+    }
+
+    #[test]
+    fn bm_win_gnu_indexing_bug() {
+        let haystack_raw = vec![
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        let needle = vec![1, 1, 1, 1, 1, 1, 1];
+        let haystack = haystack_raw.as_slice();
+
+        BoyerMooreSearch::new(needle.clone()).find(haystack);
+    }
+
+    //
+    // QuickCheck Properties
+    //
+
+    use quickcheck::TestResult;
+
+    fn naive_find(needle: Vec<u8>, haystack: &[u8]) -> Option<usize> {
+        assert!(needle.len() <= haystack.len());
+
+        for i in 0..(haystack.len() - (needle.len() - 1)) {
+            if haystack[i] == needle[0]
+                && &haystack[i..(i+needle.len())] == needle.as_slice() {
+                return Some(i)
+            }
+        }
+
+        None
+    }
+
+    quickcheck! {
+        fn qc_bm_equals_nieve_find(pile1: Vec<u8>, pile2: Vec<u8>) -> TestResult {
+            if pile1.len() == 0 || pile2.len() == 0 {
+                return TestResult::discard();
+            }
+
+            let (needle, haystack) = if pile1.len() < pile2.len() {
+                (pile1, pile2.as_slice())
+            } else {
+                (pile2, pile1.as_slice())
+            };
+
+            let searcher = BoyerMooreSearch::new(needle.clone());
+            TestResult::from_bool(
+                searcher.find(haystack) == naive_find(needle, haystack))
+        }
+
+        fn qc_bm_equals_single(pile1: Vec<u8>, pile2: Vec<u8>) -> TestResult {
+            if pile1.len() == 0 || pile2.len() == 0 {
+                return TestResult::discard();
+            }
+
+            let (needle, haystack) = if pile1.len() < pile2.len() {
+                (pile1, pile2.as_slice())
+            } else {
+                (pile2, pile1.as_slice())
+            };
+
+            let bm_searcher = BoyerMooreSearch::new(needle.clone());
+            let memchr_searcher = MemchrSearch::new(needle);
+            TestResult::from_bool(
+                bm_searcher.find(haystack) == memchr_searcher.find(haystack))
+        }
+
+        fn qc_bm_finds_trailing_needle(
+            haystack_pre: Vec<u8>,
+            needle: Vec<u8>
+        ) -> TestResult {
+            if needle.len() == 0 {
+                return TestResult::discard();
+            }
+
+            let mut haystack = haystack_pre.clone();
+            let searcher = BoyerMooreSearch::new(needle.clone());
+
+            if haystack.len() >= needle.len() &&
+                searcher.find(haystack.as_slice()).is_some() {
+                return TestResult::discard();
+            }
+
+            haystack.extend(needle.clone());
+
+            // What if the the tail of the haystack can start the
+            // needle?
+            let start = haystack_pre.len()
+                .checked_sub(needle.len())
+                .unwrap_or(0);
+            for i in 0..(needle.len() - 1) {
+                if searcher.find(&haystack[(i + start)..]).is_some() {
+                    return TestResult::discard();
+                }
+            }
+
+            TestResult::from_bool(
+                searcher.find(haystack.as_slice())
+                        .map(|x| x == haystack_pre.len())
+                        .unwrap_or(false))
+        }
+
+        fn qc_bm_finds_first(needle: Vec<u8>) -> TestResult {
+            if needle.len() == 0 {
+                return TestResult::discard();
+            }
+
+            let mut haystack = needle.clone();
+            let searcher = BoyerMooreSearch::new(needle.clone());
+            haystack.extend(needle);
+
+            TestResult::from_bool(
+                searcher.find(haystack.as_slice())
+                        .map(|x| x == 0)
+                        .unwrap_or(false))
+        }
+    }
 }
