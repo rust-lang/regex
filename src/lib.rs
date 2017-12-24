@@ -56,7 +56,7 @@ it to match anywhere in the text. Anchors can be used to ensure that the
 full text matches an expression.
 
 This example also demonstrates the utility of
-[raw strings](https://doc.rust-lang.org/stable/reference.html#raw-string-literals)
+[raw strings](https://doc.rust-lang.org/stable/reference/tokens.html#raw-string-literals)
 in Rust, which
 are just like regular strings except they are prefixed with an `r` and do
 not process any escape sequences. For example, `"\\d"` is the same
