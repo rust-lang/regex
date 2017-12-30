@@ -8,12 +8,10 @@ repository = "https://github.com/rust-lang/regex"
 documentation = "http://doc.rust-lang.org/regex"
 homepage = "https://github.com/rust-lang/regex"
 description = "A tool useful for debugging regular expressions."
+workspace = ".."
 
 [dependencies]
 docopt = "0.6"
 regex = { version = "0.2", path = ".." }
 regex-syntax = { version = "0.4.0", path = "../regex-syntax" }
 rustc-serialize = "0.3"
-
-[profile.release]
-debug = true

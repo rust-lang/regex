@@ -17,6 +17,9 @@ categories = ["text-processing"]
 travis-ci = { repository = "rust-lang/regex" }
 appveyor = { repository = "rust-lang-libs/regex" }
 
+[workspace]
+members = ["bench", "regex-capi", "regex-debug", "regex-syntax"]
+
 [dependencies]
 # For very fast prefix literal matching.
 aho-corasick = "0.6.0"
@@ -93,6 +96,12 @@ name = "backtrack-utf8bytes"
 [[test]]
 path = "tests/test_backtrack_bytes.rs"
 name = "backtrack-bytes"
+
+[profile.release]
+debug = true
+
+[profile.bench]
+debug = true
 
 [profile.test]
 debug = true

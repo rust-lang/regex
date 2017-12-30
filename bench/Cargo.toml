@@ -9,6 +9,7 @@ documentation = "http://doc.rust-lang.org/regex/regex/index.html"
 homepage = "https://github.com/rust-lang/regex"
 description = "Regex benchmarks for Rust's and other engines."
 build = "build.rs"
+workspace = ".."
 
 [dependencies]
 docopt = "0.6"
@@ -56,12 +57,3 @@ name = "bench"
 path = "src/bench.rs"
 test = false
 bench = true
-
-[profile.release]
-debug = true
-
-[profile.bench]
-debug = true
-
-[profile.test]
-debug = true
