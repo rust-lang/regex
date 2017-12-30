@@ -383,15 +383,6 @@ impl Char {
             None | Some(_) => false,
         }
     }
-
-    /// Converts the character to a real primitive `char`.
-    ///
-    /// If the character is absent, then `None` is returned.
-    pub fn as_char(self) -> Option<char> {
-        // This is only used in the `regex!` macro because it expands char
-        // classes into `match` expressions (instead of binary search).
-        char::from_u32(self.0)
-    }
 }
 
 impl From<char> for Char {

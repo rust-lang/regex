@@ -19,7 +19,6 @@ use {Regex, Text};
 #[cfg(not(feature = "re-onig"))]
 #[cfg(not(feature = "re-pcre1"))]
 #[cfg(not(feature = "re-pcre2"))]
-#[cfg(not(feature = "re-rust-plugin"))]
 bench_match!(no_exponential, {
     format!(
         "{}{}",

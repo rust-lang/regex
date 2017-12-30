@@ -49,7 +49,6 @@ re-onig = ["onig"]
 re-re2 = []
 re-rust = []
 re-rust-bytes = []
-re-rust-plugin = ["regex_macros"]
 re-tcl = []
 
 [[bench]]
