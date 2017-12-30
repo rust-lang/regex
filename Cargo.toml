@@ -27,7 +27,7 @@ thread_local = "0.3.2"
 # For parsing regular expressions.
 regex-syntax = { path = "regex-syntax", version = "0.4.1" }
 # For accelerating text search.
-simd = { version = "0.1.1", optional = true }
+simd = { version = "0.2.1", optional = true }
 # For compiling UTF-8 decoding into automata.
 utf8-ranges = "1.0.0"
 
