@@ -12,7 +12,7 @@ The header file (`includes/rure.h`) serves as the primary API documentation of
 this library. Types and flags are documented first, and functions follow.
 
 The syntax and possibly other useful things are documented in the Rust
-API documentation: http://doc.rust-lang.org/regex/regex/index.html
+API documentation: https://docs.rs/regex
 
 
 Examples
