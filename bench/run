@@ -23,7 +23,7 @@ case $which in
     exec cargo bench --bench bench --features re-rust-bytes "$@"
     ;;
   re2)
-    exec cargo bench --bench bench --features re-re2 "$@"
+    exec cargo bench --verbose --bench bench --features re-re2 "$@"
     ;;
   pcre1)
     exec cargo bench --bench bench --features re-pcre1 "$@"
