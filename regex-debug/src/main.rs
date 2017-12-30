@@ -1,7 +1,9 @@
 extern crate docopt;
 extern crate regex;
 extern crate regex_syntax as syntax;
-extern crate rustc_serialize;
+extern crate serde;
+#[macro_use]
+extern crate serde_derive;
 
 use std::error;
 use std::io::{self, Write};
@@ -46,7 +48,7 @@ Options:
                          constructed by the literals found.
 ";
 
-#[derive(RustcDecodable)]
+#[derive(Deserialize)]
 struct Args {
     cmd_ast: bool,
     cmd_prefixes: bool,
@@ -74,7 +76,7 @@ type Result<T> = result::Result<T, Box<error::Error + Send + Sync>>;
 
 fn main() {
     let mut args: Args = Docopt::new(USAGE)
-                                .and_then(|d| d.decode())
+                                .and_then(|d| d.deserialize())
                                 .unwrap_or_else(|e| e.exit());
     if args.flag_dfa_reverse {
         args.flag_dfa = true;
