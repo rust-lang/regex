@@ -14,13 +14,13 @@ by [RE2](https://github.com/google/re2).
 
 ### Documentation
 
-[Module documentation with examples](https://doc.rust-lang.org/regex).
+[Module documentation with examples](https://docs.rs/regex).
 The module documentation also include a comprehensive description of the syntax
 supported.
 
 Documentation with examples for the various matching functions and iterators
 can be found on the
-[`Regex` type](https://doc.rust-lang.org/regex/regex/struct.Regex.html).
+[`Regex` type](https://docs.rs/regex/*/regex/struct.Regex.html).
 
 ### Usage
 
@@ -197,8 +197,7 @@ execution. This may be useful if you're implementing your own regex engine or
 otherwise need to do analysis on the syntax of a regular expression. It is
 otherwise not recommended for general use.
 
-[Documentation for `regex-syntax` with
-examples](https://doc.rust-lang.org/regex/regex_syntax/index.html).
+[Documentation for `regex-syntax` with examples](https://docs.rs/regex-syntax).
 
 # License
 
