@@ -10,6 +10,7 @@ homepage = "https://github.com/rust-lang/regex"
 description = """
 A C API for Rust's regular expression library.
 """
+workspace = ".."
 
 [lib]
 name = "rure"

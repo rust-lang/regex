@@ -33,8 +33,8 @@ cargo doc --verbose --manifest-path regex-syntax/Cargo.toml
 
 # Run tests on regex-capi crate.
 cargo build --verbose --manifest-path regex-capi/Cargo.toml
-(cd regex-capi/ctest && ./compile && LD_LIBRARY_PATH=../target/debug ./test)
-(cd regex-capi/examples && ./compile && LD_LIBRARY_PATH=../target/debug ./iter)
+(cd regex-capi/ctest && ./compile && LD_LIBRARY_PATH=../../target/debug ./test)
+(cd regex-capi/examples && ./compile && LD_LIBRARY_PATH=../../target/debug ./iter)
 
 # Make sure benchmarks compile. Don't run them though because they take a
 # very long time.
