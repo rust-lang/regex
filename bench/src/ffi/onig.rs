@@ -22,7 +22,12 @@ impl Regex {
     pub fn is_match(&self, text: &str) -> bool {
         // Gah. onig's is_match function is anchored, but find is not.
         self.0.search_with_options(
-            text, 0, text.len(), onig::SEARCH_OPTION_NONE, None).is_some()
+            text,
+            0,
+            text.len(),
+            onig::SearchOptions::SEARCH_OPTION_NONE,
+            None,
+        ).is_some()
     }
 
     pub fn find_iter<'r, 't>(

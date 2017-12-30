@@ -1,7 +1,7 @@
 #include <iostream>
 #include <stdio.h>
 
-#include "re2.h"
+#include "re2/re2.h"
 
 using namespace re2;
 

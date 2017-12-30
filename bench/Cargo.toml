@@ -12,20 +12,20 @@ build = "build.rs"
 workspace = ".."
 
 [dependencies]
-docopt = "0.6"
-lazy_static = "0.1"
+docopt = "0.8"
+lazy_static = "1"
 libc = "0.2"
-onig = { version = "1.2", optional = true }
+onig = { version = "3", optional = true }
 libpcre-sys = { version = "0.2", optional = true }
 memmap = "0.2"
 regex = { version = "0.2.0", path = "..", features = ["simd-accel"] }
-regex_macros = { version = "0.2.0", path = "../regex_macros", optional = true }
 regex-syntax = { version = "0.4.0", path = "../regex-syntax" }
-rustc-serialize = "0.3"
+serde = "1"
+serde_derive = "1"
 
 [build-dependencies]
-gcc = "0.3"
-pkg-config = "0.3"
+cc = "1"
+pkg-config = "0.3.9"
 
 [[bin]]
 name = "regex-run-one"
@@ -41,8 +41,7 @@ bench = false
 # Doing anything else will probably result in weird "duplicate definition"
 # compiler errors.
 #
-# Tip: use the run-bench script in the root of this repository to run
-# benchmarks.
+# Tip: use the run script in this directory to run benchmarks.
 [features]
 re-pcre1 = ["libpcre-sys"]
 re-pcre2 = []
