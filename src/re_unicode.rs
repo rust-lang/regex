@@ -22,7 +22,6 @@ use error::Error;
 use exec::{Exec, ExecNoSyncStr};
 use expand::expand_str;
 use re_builder::unicode::RegexBuilder;
-use re_plugin::Plugin;
 use re_trait::{self, RegularExpression, Locations, SubCapturesPosIter};
 
 /// Escapes all regular expression meta characters in `text`.
@@ -135,21 +134,7 @@ impl<'t> From<Match<'t>> for &'t str {
 /// assert_eq!(haystack.split(&re).collect::<Vec<_>>(), vec!["a", "b", "c"]);
 /// ```
 #[derive(Clone)]
-pub struct Regex(#[doc(hidden)] pub _Regex);
-
-#[derive(Clone)]
-#[doc(hidden)]
-pub enum _Regex {
-    // The representation of `Regex` is exported to support the `regex!`
-    // syntax extension. Do not rely on it.
-    //
-    // See the comments for the `internal` module in `lib.rs` for a more
-    // detailed explanation for what `regex!` requires.
-    #[doc(hidden)]
-    Dynamic(Exec),
-    #[doc(hidden)]
-    Plugin(Plugin),
-}
+pub struct Regex(Exec);
 
 impl fmt::Display for Regex {
     /// Shows the original regular expression.
@@ -168,7 +153,7 @@ impl fmt::Debug for Regex {
 #[doc(hidden)]
 impl From<Exec> for Regex {
     fn from(exec: Exec) -> Regex {
-        Regex(_Regex::Dynamic(exec))
+        Regex(exec)
     }
 }
 
@@ -257,16 +242,7 @@ impl Regex {
     /// # }
     /// ```
     pub fn find_iter<'r, 't>(&'r self, text: &'t str) -> Matches<'r, 't> {
-        match self.0 {
-            _Regex::Dynamic(ref exec) => {
-                let it = exec.searcher_str().find_iter(text);
-                Matches(MatchesInner::Dynamic(it))
-            }
-            _Regex::Plugin(ref plug) => {
-                let it = plug.find_iter(text);
-                Matches(MatchesInner::Plugin(it))
-            }
-        }
+        Matches(self.0.searcher_str().find_iter(text))
     }
 
     /// Returns the capture groups corresponding to the leftmost-first
@@ -337,7 +313,7 @@ impl Regex {
         self.read_captures_at(&mut locs, text, 0).map(|_| Captures {
             text: text,
             locs: locs,
-            named_groups: NamedGroups::from_regex(self)
+            named_groups: self.0.capture_name_idx().clone(),
         })
     }
 
@@ -370,16 +346,7 @@ impl Regex {
         &'r self,
         text: &'t str,
     ) -> CaptureMatches<'r, 't> {
-        match self.0 {
-            _Regex::Dynamic(ref exec) => {
-                let it = exec.searcher_str().captures_iter(text);
-                CaptureMatches(CaptureMatchesInner::Dynamic(it))
-            }
-            _Regex::Plugin(ref plug) => {
-                let it = plug.captures_iter(text);
-                CaptureMatches(CaptureMatchesInner::Plugin(it))
-            }
-        }
+        CaptureMatches(self.0.searcher_str().captures_iter(text))
     }
 
     /// Returns an iterator of substrings of `text` delimited by a match of the
@@ -663,12 +630,7 @@ impl Regex {
         text: &str,
         start: usize,
     ) -> Option<usize> {
-        match self.0 {
-            _Regex::Dynamic(ref exec) => {
-                exec.searcher_str().shortest_match_at(text, start)
-            }
-            _Regex::Plugin(ref plug) => plug.shortest_match_at(text, start),
-        }
+        self.0.searcher_str().shortest_match_at(text, start)
     }
 
     /// Returns the same as is_match, but starts the search at the given
@@ -694,16 +656,9 @@ impl Regex {
         text: &'t str,
         start: usize,
     ) -> Option<Match<'t>> {
-        match self.0 {
-            _Regex::Dynamic(ref exec) => {
-                exec.searcher_str().find_at(text, start).map(|(s, e)| {
-                    Match::new(text, s, e)
-                })
-            }
-            _Regex::Plugin(ref plug) => {
-                plug.find_at(text, start).map(|(s, e)| Match::new(text, s, e))
-            }
-        }
+        self.0.searcher_str().find_at(text, start).map(|(s, e)| {
+            Match::new(text, s, e)
+        })
     }
 
     /// Returns the same as captures, but starts the search at the given
@@ -719,16 +674,10 @@ impl Regex {
         text: &'t str,
         start: usize,
     ) -> Option<Match<'t>> {
-        match self.0 {
-            _Regex::Dynamic(ref exec) => {
-                exec.searcher_str().read_captures_at(locs, text, start)
-                    .map(|(s, e)| Match::new(text, s, e))
-            }
-            _Regex::Plugin(ref plug) => {
-                plug.read_captures_at(locs, text, start)
-                    .map(|(s, e)| Match::new(text, s, e))
-            }
-        }
+        self.0
+            .searcher_str()
+            .read_captures_at(locs, text, start)
+            .map(|(s, e)| Match::new(text, s, e))
     }
 }
 
@@ -736,40 +685,24 @@ impl Regex {
 impl Regex {
     /// Returns the original string of this regex.
     pub fn as_str(&self) -> &str {
-        match self.0 {
-            _Regex::Dynamic(ref exec) => &exec.regex_strings()[0],
-            _Regex::Plugin(ref plug) => plug.original,
-        }
+        &self.0.regex_strings()[0]
     }
 
     /// Returns an iterator over the capture names.
     pub fn capture_names(&self) -> CaptureNames {
-        CaptureNames(match self.0 {
-            _Regex::Plugin(ref n) => _CaptureNames::Plugin(n.names.iter()),
-            _Regex::Dynamic(ref d) => {
-                _CaptureNames::Dynamic(d.capture_names().iter())
-            }
-        })
+        CaptureNames(self.0.capture_names().iter())
     }
 
     /// Returns the number of captures.
     pub fn captures_len(&self) -> usize {
-        match self.0 {
-            _Regex::Plugin(ref n) => n.names.len(),
-            _Regex::Dynamic(ref d) => d.capture_names().len()
-        }
+        self.0.capture_names().len()
     }
 
     /// Returns an empty set of locations that can be reused in multiple calls
     /// to `read_captures`.
     #[doc(hidden)]
     pub fn locations(&self) -> Locations {
-        match self.0 {
-            _Regex::Dynamic(ref exec) => {
-                exec.searcher_str().locations()
-            }
-            _Regex::Plugin(ref plug) => plug.locations(),
-        }
+        self.0.searcher_str().locations()
     }
 }
 
@@ -779,30 +712,20 @@ impl Regex {
 /// whole matched region) is always unnamed.
 ///
 /// `'r` is the lifetime of the compiled regular expression.
-pub struct CaptureNames<'r>(_CaptureNames<'r>);
-
-enum _CaptureNames<'r> {
-    Plugin(::std::slice::Iter<'r, Option<&'static str>>),
-    Dynamic(::std::slice::Iter<'r, Option<String>>)
-}
+pub struct CaptureNames<'r>(::std::slice::Iter<'r, Option<String>>);
 
 impl<'r> Iterator for CaptureNames<'r> {
     type Item = Option<&'r str>;
 
     fn next(&mut self) -> Option<Option<&'r str>> {
-        match self.0 {
-            _CaptureNames::Plugin(ref mut i) => i.next().cloned(),
-            _CaptureNames::Dynamic(ref mut i) => {
-                i.next().as_ref().map(|o| o.as_ref().map(|s| s.as_ref()))
-            }
-        }
+        self.0
+            .next()
+            .as_ref()
+            .map(|slot| slot.as_ref().map(|name| name.as_ref()))
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        match self.0 {
-            _CaptureNames::Plugin(ref i)  => i.size_hint(),
-            _CaptureNames::Dynamic(ref i) => i.size_hint(),
-        }
+        self.0.size_hint()
     }
 }
 
@@ -819,7 +742,7 @@ impl<'r, 't> Iterator for Split<'r, 't> {
     type Item = &'t str;
 
     fn next(&mut self) -> Option<&'t str> {
-        let text = self.finder.text();
+        let text = self.finder.0.text();
         match self.finder.next() {
             None => {
                 if self.last >= text.len() {
@@ -859,63 +782,10 @@ impl<'r, 't> Iterator for SplitN<'r, 't> {
         }
         self.n -= 1;
         if self.n == 0 {
-            let text = self.splits.finder.text();
+            let text = self.splits.finder.0.text();
             Some(&text[self.splits.last..])
         } else {
             self.splits.next()
-        }
-    }
-}
-
-enum NamedGroups {
-    Plugin(&'static [(&'static str, usize)]),
-    Dynamic(Arc<HashMap<String, usize>>),
-}
-
-impl NamedGroups {
-    fn from_regex(regex: &Regex) -> NamedGroups {
-        match regex.0 {
-            _Regex::Plugin(ref plug) => NamedGroups::Plugin(plug.groups),
-            _Regex::Dynamic(ref exec) => {
-                NamedGroups::Dynamic(exec.capture_name_idx().clone())
-            }
-        }
-    }
-
-    fn pos(&self, name: &str) -> Option<usize> {
-        match *self {
-            NamedGroups::Plugin(groups) => {
-                groups.binary_search_by(|&(n, _)| n.cmp(name))
-                      .ok().map(|i| groups[i].1)
-            },
-            NamedGroups::Dynamic(ref groups) => {
-                groups.get(name).cloned()
-            },
-        }
-    }
-
-    fn iter(& self) -> NamedGroupsIter {
-        match *self {
-            NamedGroups::Plugin(g) => NamedGroupsIter::Plugin(g.iter()),
-            NamedGroups::Dynamic(ref g) => NamedGroupsIter::Dynamic(g.iter()),
-        }
-    }
-}
-
-enum NamedGroupsIter<'n> {
-    Plugin(::std::slice::Iter<'static, (&'static str, usize)>),
-    Dynamic(::std::collections::hash_map::Iter<'n, String, usize>),
-}
-
-impl<'n> Iterator for NamedGroupsIter<'n> {
-    type Item = (&'n str, usize);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        match *self {
-            NamedGroupsIter::Plugin(ref mut it) => it.next().cloned(),
-            NamedGroupsIter::Dynamic(ref mut it) => {
-                it.next().map(|(s, i)| (s.as_ref(), *i))
-            }
         }
     }
 }
@@ -934,7 +804,7 @@ impl<'n> Iterator for NamedGroupsIter<'n> {
 pub struct Captures<'t> {
     text: &'t str,
     locs: Locations,
-    named_groups: NamedGroups,
+    named_groups: Arc<HashMap<String, usize>>,
 }
 
 impl<'t> Captures<'t> {
@@ -964,7 +834,7 @@ impl<'t> Captures<'t> {
     /// Returns the match for the capture group named `name`. If `name` isn't a
     /// valid capture group or didn't match anything, then `None` is returned.
     pub fn name(&self, name: &str) -> Option<Match<'t>> {
-        self.named_groups.pos(name).and_then(|i| self.get(i))
+        self.named_groups.get(name).and_then(|&i| self.get(i))
     }
 
     /// An iterator that yields all capturing matches in the order in which
@@ -1021,7 +891,7 @@ impl<'c, 't> fmt::Debug for CapturesDebug<'c, 't> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         // We'd like to show something nice here, even if it means an
         // allocation to build a reverse index.
-        let slot_to_name: HashMap<usize, &str> =
+        let slot_to_name: HashMap<&usize, &String> =
             self.0.named_groups.iter().map(|(a, b)| (b, a)).collect();
         let mut map = f.debug_map();
         for (slot, m) in self.0.locs.iter().enumerate() {
@@ -1107,34 +977,17 @@ impl<'c, 't> Iterator for SubCaptureMatches<'c, 't> {
 ///
 /// `'r` is the lifetime of the compiled regular expression and `'t` is the
 /// lifetime of the matched string.
-pub struct CaptureMatches<'r, 't>(CaptureMatchesInner<'r, 't>);
-
-enum CaptureMatchesInner<'r, 't> {
-    Dynamic(re_trait::CaptureMatches<'t, ExecNoSyncStr<'r>>),
-    Plugin(re_trait::CaptureMatches<'t, Plugin>),
-}
+pub struct CaptureMatches<'r, 't>(re_trait::CaptureMatches<'t, ExecNoSyncStr<'r>>);
 
 impl<'r, 't> Iterator for CaptureMatches<'r, 't> {
     type Item = Captures<'t>;
 
     fn next(&mut self) -> Option<Captures<'t>> {
-        match self.0 {
-            CaptureMatchesInner::Dynamic(ref mut it) => {
-                let named = it.regex().capture_name_idx().clone();
-                it.next().map(|locs| Captures {
-                    text: it.text(),
-                    locs: locs,
-                    named_groups: NamedGroups::Dynamic(named),
-                })
-            }
-            CaptureMatchesInner::Plugin(ref mut it) => {
-                it.next().map(|locs| Captures {
-                    text: it.text(),
-                    locs: locs,
-                    named_groups: NamedGroups::Plugin(it.regex().groups),
-                })
-            }
-        }
+        self.0.next().map(|locs| Captures {
+            text: self.0.text(),
+            locs: locs,
+            named_groups: self.0.regex().capture_name_idx().clone(),
+        })
     }
 }
 
@@ -1145,35 +998,14 @@ impl<'r, 't> Iterator for CaptureMatches<'r, 't> {
 ///
 /// `'r` is the lifetime of the compiled regular expression and `'t` is the
 /// lifetime of the matched string.
-pub struct Matches<'r, 't>(MatchesInner<'r, 't>);
-
-enum MatchesInner<'r, 't> {
-    Dynamic(re_trait::Matches<'t, ExecNoSyncStr<'r>>),
-    Plugin(re_trait::Matches<'t, Plugin>),
-}
-
-impl<'r, 't> Matches<'r, 't> {
-    fn text(&self) -> &'t str {
-        match self.0 {
-            MatchesInner::Dynamic(ref it) => it.text(),
-            MatchesInner::Plugin(ref it) => it.text(),
-        }
-    }
-}
+pub struct Matches<'r, 't>(re_trait::Matches<'t, ExecNoSyncStr<'r>>);
 
 impl<'r, 't> Iterator for Matches<'r, 't> {
     type Item = Match<'t>;
 
     fn next(&mut self) -> Option<Match<'t>> {
-        let text = self.text();
-        match self.0 {
-            MatchesInner::Dynamic(ref mut it) => {
-                it.next().map(|(s, e)| Match::new(text, s, e))
-            }
-            MatchesInner::Plugin(ref mut it) => {
-                it.next().map(|(s, e)| Match::new(text, s, e))
-            }
-        }
+        let text = self.0.text();
+        self.0.next().map(|(s, e)| Match::new(text, s, e))
     }
 }
 

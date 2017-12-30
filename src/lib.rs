@@ -641,7 +641,6 @@ mod pikevm;
 mod prog;
 mod re_builder;
 mod re_bytes;
-mod re_plugin;
 mod re_set;
 mod re_trait;
 mod re_unicode;
@@ -652,9 +651,9 @@ mod simd_accel;
 mod simd_accel;
 mod sparse;
 
-/// The `internal` module exists to support the `regex!` macro and other
-/// suspicious activity, such as testing different matching engines and
-/// supporting the `regex-debug` CLI utility.
+/// The `internal` module exists to support suspicious activity, such as
+/// testing different matching engines and supporting the `regex-debug` CLI
+/// utility.
 #[doc(hidden)]
 pub mod internal {
     pub use compile::Compiler;
@@ -662,6 +661,4 @@ pub mod internal {
     pub use input::{Char, Input, CharInput, InputAt};
     pub use literals::LiteralSearcher;
     pub use prog::{Program, Inst, EmptyLook, InstRanges};
-    pub use re_plugin::Plugin;
-    pub use re_unicode::_Regex;
 }

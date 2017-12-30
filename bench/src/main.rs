@@ -18,7 +18,6 @@ extern crate onig;
 #[cfg(any(
     feature = "re-rust",
     feature = "re-rust-bytes",
-    feature = "re-rust-plugin",
   ))]
 extern crate regex;
 #[cfg(feature = "re-rust")]

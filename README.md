@@ -188,37 +188,6 @@ assert!(!matches.matched(5));
 assert!(matches.matched(6));
 ```
 
-### Usage: `regex!` compiler plugin
-
-**WARNING**: The `regex!` compiler plugin is orders of magnitude slower than
-the normal `Regex::new(...)` usage. You should not use the compiler plugin
-unless you have a very special reason for doing so. The performance difference
-may be the temporary, but the path forward at this point isn't clear.
-
-The `regex!` compiler plugin will compile your regexes at compile time. **This
-only works with a nightly compiler.**
-
-Here is a small example:
-
-```rust
-#![feature(plugin)]
-
-#![plugin(regex_macros)]
-extern crate regex;
-
-fn main() {
-    let re = regex!(r"(\d{4})-(\d{2})-(\d{2})");
-    let caps = re.captures("2010-03-14").unwrap();
-
-    assert_eq!("2010", caps[1]);
-    assert_eq!("03", caps[2]);
-    assert_eq!("14", caps[3]);
-}
-```
-
-Notice that we never `unwrap` the result of `regex!`. This is because your
-*program* won't compile if the regex doesn't compile. (Try `regex!("(")`.)
-
 
 ### Usage: a regular expression parser
 

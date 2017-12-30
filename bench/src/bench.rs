@@ -11,11 +11,6 @@
 // Enable the benchmarking harness.
 #![feature(test)]
 
-// If we're benchmarking the Rust regex plugin, then pull that in.
-// This will bring a `regex!` macro into scope.
-#![cfg_attr(feature = "re-rust-plugin", feature(plugin))]
-#![cfg_attr(feature = "re-rust-plugin", plugin(regex_macros))]
-
 #[macro_use]
 extern crate lazy_static;
 #[cfg(not(any(feature = "re-rust", feature = "re-rust-bytes")))]
@@ -27,7 +22,6 @@ extern crate onig;
 #[cfg(any(
     feature = "re-rust",
     feature = "re-rust-bytes",
-    feature = "re-rust-plugin",
   ))]
 extern crate regex;
 #[cfg(feature = "re-rust")]
@@ -43,7 +37,7 @@ pub use ffi::pcre1::Regex;
 pub use ffi::pcre2::Regex;
 #[cfg(feature = "re-re2")]
 pub use ffi::re2::Regex;
-#[cfg(any(feature = "re-rust", feature = "re-rust-plugin"))]
+#[cfg(feature = "re-rust")]
 pub use regex::Regex;
 #[cfg(feature = "re-rust-bytes")]
 pub use regex::bytes::Regex;
@@ -52,14 +46,11 @@ pub use ffi::tcl::Regex;
 
 // Usage: regex!(pattern)
 //
-// Builds a ::Regex from a borrowed string. This is used in every regex
-// engine except for the Rust plugin, because the plugin itself defines the
-// same macro.
+// Builds a ::Regex from a borrowed string.
 //
 // Due to macro scoping rules, this definition only applies for the modules
 // defined below. Effectively, it allows us to use the same tests for both
 // native and dynamic regexes.
-#[cfg(not(feature = "re-rust-plugin"))]
 macro_rules! regex {
     ($re:expr) => { ::Regex::new(&$re.to_owned()).unwrap() }
 }
@@ -99,7 +90,6 @@ macro_rules! text {
     feature = "re-pcre2",
     feature = "re-re2",
     feature = "re-rust",
-    feature = "re-rust-plugin",
   ))]
 macro_rules! text {
     ($text:expr) => { $text }
@@ -116,7 +106,6 @@ type Text = Vec<u8>;
     feature = "re-pcre2",
     feature = "re-re2",
     feature = "re-rust",
-    feature = "re-rust-plugin",
   ))]
 type Text = String;
 
