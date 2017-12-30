@@ -11,7 +11,8 @@ description = "A tool useful for debugging regular expressions."
 workspace = ".."
 
 [dependencies]
-docopt = "0.6"
+docopt = "0.8"
 regex = { version = "0.2", path = ".." }
 regex-syntax = { version = "0.4.0", path = "../regex-syntax" }
-rustc-serialize = "0.3"
+serde = "1"
+serde_derive = "1"
