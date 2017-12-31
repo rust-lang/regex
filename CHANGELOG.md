@@ -1,3 +1,52 @@
+0.2.5 (2017-12-30)
+==================
+Bug fixes:
+
+* [BUG #437](https://github.com/rust-lang/regex/issues/437):
+  Fixes a bug in the new Boyer-Moore searcher that results in a panic.
+
+
+0.2.4 (2017-12-30)
+==================
+New features:
+
+* [FEATURE #348](https://github.com/rust-lang/regex/pull/348):
+  Improve performance for capture searches on anchored regex.
+  (Contributed by @ethanpailes. Nice work!)
+* [FEATURE #419](https://github.com/rust-lang/regex/pull/419):
+  Expand literal searching to include Tuned Boyer-Moore in some cases.
+  (Contributed by @ethanpailes. Nice work!)
+
+Bug fixes:
+
+* [BUG](https://github.com/rust-lang/regex/pull/436):
+  The regex compiler plugin has been removed.
+* [BUG](https://github.com/rust-lang/regex/pull/436):
+  `simd` has been bumped to `0.2.1`, which fixes a Rust nightly build error.
+* [BUG](https://github.com/rust-lang/regex/pull/436):
+  Bring the benchmark harness up to date.
+
+
+0.2.3 (2017-11-30)
+==================
+New features:
+
+* [FEATURE #374](https://github.com/rust-lang/regex/pull/374):
+  Add `impl From<Match> for &str`.
+* [FEATURE #380](https://github.com/rust-lang/regex/pull/380):
+  Derive `Clone` and `PartialEq` on `Error`.
+* [FEATURE #400](https://github.com/rust-lang/regex/pull/400):
+  Update to Unicode 10.
+
+Bug fixes:
+
+* [BUG #375](https://github.com/rust-lang/regex/issues/375):
+  Fix a bug that prevented the bounded backtracker from terminating.
+* [BUG #393](https://github.com/rust-lang/regex/issues/393),
+  [BUG #394](https://github.com/rust-lang/regex/issues/394):
+  Fix bug with `replace` methods for empty matches.
+
+
 0.2.2 (2017-05-21)
 ==================
 New features:
