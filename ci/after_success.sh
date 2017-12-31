@@ -9,6 +9,7 @@ if [ "$TRAVIS_RUST_VERSION" != "nightly" ] || [ "$TRAVIS_PULL_REQUEST" != "false
   exit 0
 fi
 
+export RUSTFLAGS="-C target-feature=+ssse3"
 env
 
 # Build and upload docs.
