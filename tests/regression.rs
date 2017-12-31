@@ -90,3 +90,10 @@ ismatch!(strange_anchor_non_complete_suffix, r"${2}a", "", false);
 // See: https://github.com/rust-lang/regex/issues/334
 mat!(captures_after_dfa_premature_end, r"a(b*(X|$))?", "abcbX",
      Some((0, 1)), None, None);
+
+// See: https://github.com/rust-lang/regex/issues/437
+ismatch!(
+    literal_panic,
+    r"typename type\-parameter\-\d+\-\d+::.+",
+    "test",
+    false);
