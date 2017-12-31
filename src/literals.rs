@@ -599,7 +599,9 @@ impl BoyerMooreSearch {
     /// in `haystack`.
     #[inline]
     fn find(&self, haystack: &[u8]) -> Option<usize> {
-        debug_assert!(haystack.len() >= self.pattern.len());
+        if haystack.len() < self.pattern.len() {
+            return None;
+        }
 
         let mut window_end = self.pattern.len() - 1;
 
