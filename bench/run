@@ -9,9 +9,10 @@ if [ $# = 0 ] || [ $1 = '-h' ] || [ $1 = '--help' ]; then
   usage
 fi
 
-# Enable SIMD.
-# export RUSTFLAGS="-C target-feature=+ssse3"
-export RUSTFLAGS="-C target-cpu=native"
+# Enable SIMD, unless we're in CI, then we inherit RUSTLFAGS.
+if [ -z "$TRAVIS_RUST_VERSION" ]; then
+  export RUSTFLAGS="-C target-cpu=native"
+fi
 
 which="$1"
 shift
@@ -29,7 +30,7 @@ case $which in
     exec cargo bench --bench bench --features re-rust-bytes "$@"
     ;;
   re2)
-    exec cargo bench --verbose --bench bench --features re-re2 "$@"
+    exec cargo bench --bench bench --features re-re2 "$@"
     ;;
   pcre1)
     exec cargo bench --bench bench --features re-pcre1 "$@"
