@@ -42,6 +42,8 @@ fn main() {
 
         let out_dir = env::var("OUT_DIR").unwrap();
         let out_file = &format!("-of={}/libdphobos-dmd.a", out_dir);
+        let is_compile_time = env::var("CARGO_FEATURE_RE_DPHOBOS_DMD_CT").is_ok();
+        let extra_args = if is_compile_time { vec!["-version=CtRegex"] } else { vec![] };
 
         let res = process::Command::new("dmd")
             .arg("-w")
@@ -49,7 +51,10 @@ fn main() {
             .arg("-O")
             .arg("-release")
             .arg("-inline")
+            .arg("-Isrc/ffi")
+            .args(extra_args)
             .arg("src/ffi/d_phobos.d")
+            .arg("src/ffi/d_phobos_ct.d")
             .arg(out_file)
             .output()
             .expect("unable to compile dphobos-regex (dmd)");
@@ -75,13 +80,19 @@ fn main() {
         let out_dir = env::var("OUT_DIR").unwrap();
         let out_file = &format!("-of={}/libdphobos-ldc.a", out_dir);
 
+        let is_compile_time = env::var("CARGO_FEATURE_RE_DPHOBOS_LDC_CT").is_ok();
+        let extra_args = if is_compile_time { vec!["-d-version=CtRegex"] } else { vec![] };
+
         let res = process::Command::new("ldc")
             .arg("-w")
             .arg("-lib")
             .arg("-O3")
             .arg("-release")
             .arg("-mcpu=native")
+            .arg("-Isrc/ffi")
+            .args(extra_args)
             .arg("src/ffi/d_phobos.d")
+            .arg("src/ffi/d_phobos_ct.d")
             .arg(out_file)
             .output()
             .expect("unable to compile dphobos-regex (ldc)");

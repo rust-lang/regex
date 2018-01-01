@@ -9,6 +9,8 @@ import std.typecons;
 
 import std.stdio;
 
+import d_phobos_ct;
+
 auto rustRegexToD(string regex) {
     auto flags = "g";
     if (regex.startsWith("(?i)")) {
@@ -27,7 +29,12 @@ extern(C):
 void* d_phobos_regex_new(string s) {
     auto r = cast(Regex!char*)malloc(Regex!char.sizeof);
 
-    *r = regex(rustRegexToD(s).expand);
+    version(CtRegex) {
+        auto ctR = getCtRegex();
+        *r = ctR[s];
+    } else {
+        *r = regex(rustRegexToD(s).expand);
+    }
 
     return r;
 }
