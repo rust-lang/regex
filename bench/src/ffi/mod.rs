@@ -12,8 +12,7 @@
 // of conditional compilation and such.
 #![allow(dead_code)]
 
-#[cfg(any(feature = "re-dphobos-dmd",
-          feature = "re-dphobos-ldc"))]
+#[cfg(feature = "re-dphobos")]
 pub mod d_phobos;
 #[cfg(feature = "re-onig")]
 pub mod onig;
