@@ -1227,7 +1227,7 @@ impl Parser {
                             return Err(self.errat(
                                 chari, ErrorKind::UnclosedParen));
                         }
-                        e => unreachable!("{:?}", e),
+                        _ => unreachable!(),
                     }
                 }
                 Some(Build::Expr(e)) => { concat.push(e); }
