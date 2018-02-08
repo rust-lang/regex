@@ -1,3 +1,12 @@
+0.2.6 (2018-02-08)
+==================
+Bug fixes:
+
+* [BUG #446](https://github.com/rust-lang/regex/issues/446):
+  Fixes a bug in the new Boyer-Moore searcher that results in a match failure.
+  We fix this bug by temporarily disabling Boyer-Moore.
+
+
 0.2.5 (2017-12-30)
 ==================
 Bug fixes:
