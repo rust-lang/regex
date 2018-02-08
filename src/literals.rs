@@ -8,7 +8,6 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use std::cmp;
 use std::mem;
 
 use aho_corasick::{Automaton, AcAutomaton, FullAcAutomaton};
@@ -681,7 +680,13 @@ impl BoyerMooreSearch {
     /// to beat the asm deep magic that is memchr. Unfortunately,
     /// I had trouble proving a useful turnover point. Hopefully,
     /// we can find one in the future.
-    fn should_use(pattern: &[u8]) -> bool {
+    fn should_use(_pattern: &[u8]) -> bool {
+        // TBM is disabled until the bm_backstop_boundary unit test can pass
+        // and we're more confident that the implementation is correct.
+        //
+        // See: https://github.com/rust-lang/regex/issues/446
+        false
+        /*
         // The minimum pattern length required to use TBM.
         const MIN_LEN: usize = 9;
         // The minimum frequency rank (lower is rarer) that every byte in the
@@ -709,6 +714,7 @@ impl BoyerMooreSearch {
         pattern.len() > MIN_LEN
             // all the bytes must be more common than the cutoff.
             && pattern.iter().all(|c| freq_rank(*c) >= cutoff)
+        */
     }
 
     /// Check to see if there is a match at the given position
@@ -937,6 +943,22 @@ mod tests {
 
         let searcher = BoyerMooreSearch::new(needle);
         assert_eq!(needle_start, searcher.find(haystack.as_slice()).unwrap());
+    }
+
+    #[test]
+    #[should_panic]
+    fn bm_backstop_boundary() {
+        let haystack = b"\
+// aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+e_data.clone_created(entity_id, entity_to_add.entity_id);
+aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+".to_vec();
+        let needle = b"clone_created".to_vec();
+
+        let searcher = BoyerMooreSearch::new(needle);
+        let result = searcher.find(&haystack);
+        assert_eq!(Some(43), result);
     }
 
     #[test]
