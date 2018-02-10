@@ -71,7 +71,7 @@ pub fn can_exec(insts: &Program) -> bool {
     // If i32::MAX is the largest positive delta,
     // then -i32::MAX == i32::MIN + 1 is the largest negative delta,
     // and we are OK to use 32 bits.
-    if insts.len() > ::std::i32::MAX as usize {
+    if insts.dfa_size_limit == 0 || insts.len() > ::std::i32::MAX as usize {
         return false;
     }
     for inst in insts {
