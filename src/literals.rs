@@ -927,7 +927,7 @@ mod tests {
         let haystack = vec![91];
         let needle = vec![91];
 
-        let naive_offset = naive_find(needle, haystack.as_slice()).unwrap();
+        let naive_offset = naive_find(&needle, &haystack).unwrap();
         assert_eq!(0, naive_offset);
     }
 
@@ -981,12 +981,12 @@ aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 
     use quickcheck::TestResult;
 
-    fn naive_find(needle: Vec<u8>, haystack: &[u8]) -> Option<usize> {
+    fn naive_find(needle: &[u8], haystack: &[u8]) -> Option<usize> {
         assert!(needle.len() <= haystack.len());
 
         for i in 0..(haystack.len() - (needle.len() - 1)) {
             if haystack[i] == needle[0]
-                && &haystack[i..(i+needle.len())] == needle.as_slice() {
+                && &haystack[i..(i+needle.len())] == needle {
                 return Some(i)
             }
         }
@@ -1008,7 +1008,7 @@ aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 
             let searcher = BoyerMooreSearch::new(needle.clone());
             TestResult::from_bool(
-                searcher.find(haystack) == naive_find(needle, haystack))
+                searcher.find(haystack) == naive_find(&needle, haystack))
         }
 
         fn qc_bm_equals_single(pile1: Vec<u8>, pile2: Vec<u8>) -> TestResult {
@@ -1061,6 +1061,44 @@ aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
                 searcher.find(haystack.as_slice())
                         .map(|x| x == haystack_pre.len())
                         .unwrap_or(false))
+        }
+
+        // qc_equals_* is only testing the negative case as @burntsushi
+        // pointed out in https://github.com/rust-lang/regex/issues/446.
+        // This quickcheck prop represents an effort to force testing of
+        // the positive case. qc_bm_finds_first and qc_bm_finds_trailing_needle
+        // already check some of the positive cases, but they don't cover
+        // cases where the needle is in the middle of haystack. This prop
+        // fills that hole.
+        fn qc_bm_finds_subslice(
+            haystack: Vec<u8>,
+            needle_start: usize,
+            needle_length: usize
+        ) -> TestResult {
+            if haystack.len() == 0 {
+                return TestResult::discard();
+            }
+
+            let needle_start = needle_start % haystack.len();
+            let needle_length = needle_length % (haystack.len() - needle_start);
+
+            if needle_length == 0 {
+                return TestResult::discard();
+            }
+
+            let needle = &haystack[needle_start..(needle_start + needle_length)];
+
+            let bm_searcher = BoyerMooreSearch::new(needle.to_vec());
+
+            let start = naive_find(&needle, &haystack);
+            match start {
+                None => TestResult::from_bool(false),
+                Some(nf_start) =>
+                    TestResult::from_bool(
+                        nf_start <= needle_start
+                            && bm_searcher.find(&haystack) == start
+                    )
+            }
         }
 
         fn qc_bm_finds_first(needle: Vec<u8>) -> TestResult {
