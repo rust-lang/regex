@@ -1034,6 +1034,46 @@ pub trait Replacer {
     fn no_expansion<'r>(&'r mut self) -> Option<Cow<'r, str>> {
         None
     }
+
+    /// Return a `Replacer` that borrows and wraps this `Replacer`.
+    ///
+    /// This is useful when you want to take a generic `Replacer` (which might
+    /// not be cloneable) and use it without consuming it, so it can be used
+    /// more than once.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use regex::{Regex, Replacer};
+    ///
+    /// fn replace_all_twice<R: Replacer>(
+    ///     re: Regex,
+    ///     src: &str,
+    ///     mut rep: R,
+    /// ) -> String {
+    ///     let dst = re.replace_all(src, rep.by_ref());
+    ///     let dst = re.replace_all(&dst, rep.by_ref());
+    ///     dst.into_owned()
+    /// }
+    /// ```
+    fn by_ref<'r>(&'r mut self) -> ReplacerRef<'r, Self> {
+        ReplacerRef(self)
+    }
+}
+
+/// By-reference adaptor for a `Replacer`
+///
+/// Returned by [`Replacer::by_ref`](trait.Replacer.html#method.by_ref).
+#[derive(Debug)]
+pub struct ReplacerRef<'a, R: ?Sized + 'a>(&'a mut R);
+
+impl<'a, R: Replacer + ?Sized + 'a> Replacer for ReplacerRef<'a, R> {
+    fn replace_append(&mut self, caps: &Captures, dst: &mut String) {
+        self.0.replace_append(caps, dst)
+    }
+    fn no_expansion(&mut self) -> Option<Cow<str>> {
+        self.0.no_expansion()
+    }
 }
 
 impl<'a> Replacer for &'a str {
