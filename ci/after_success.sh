@@ -12,15 +12,6 @@ fi
 export RUSTFLAGS="-C target-feature=+ssse3"
 env
 
-# Build and upload docs.
-echo '<meta http-equiv=refresh content=0;url=regex/index.html>' > target/doc/index.html
-ve=$(mktemp -d)
-virtualenv "$ve"
-"$ve"/bin/pip install --upgrade pip
-"$ve"/bin/pip install ghp-import
-"$ve"/bin/ghp-import -n target/doc
-git push -qf https://${TOKEN}@github.com/${TRAVIS_REPO_SLUG}.git gh-pages
-
 # Install kcov.
 tmp=$(mktemp -d)
 pushd "$tmp"

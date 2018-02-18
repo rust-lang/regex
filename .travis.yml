@@ -20,9 +20,6 @@ addons:
     - python
     - python-virtualenv
 after_success: ci/after_success.sh
-env:
-  global:
-    secure: "GdGE0kFYiJGccVZligur7JlWRCy49eH6uWPl71mrnaaW8jLHmkva0jVb0LB9e5ol3YMaMCgrwM2pcj3Uk2C08YcGIoEKOLlDVho351KaD6XfclZ29CQTAPMz4Xut2IcB4YeuZlDrOnM26guTIOtn2NAjeQgOhpM/ErzVBgkB+wQ="
 notifications:
   email:
     on_success: never
