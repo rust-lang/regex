@@ -17,7 +17,7 @@ lazy_static = "1"
 libc = "0.2"
 onig = { version = "3", optional = true }
 libpcre-sys = { version = "0.2", optional = true }
-memmap = "0.2"
+memmap = "0.6"
 regex = { version = "0.2.0", path = "..", features = ["simd-accel"] }
 regex-syntax = { version = "0.4.0", path = "../regex-syntax" }
 serde = "1"

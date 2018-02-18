@@ -26,10 +26,11 @@ extern crate serde;
 #[macro_use]
 extern crate serde_derive;
 
+use std::fs::File;
 use std::str;
 
 use docopt::Docopt;
-use memmap::{Mmap, Protection};
+use memmap::Mmap;
 
 mod ffi;
 
@@ -69,8 +70,10 @@ fn main() {
         .and_then(|d| d.deserialize())
         .unwrap_or_else(|e| e.exit());
 
-    let mmap = Mmap::open_path(&args.arg_file, Protection::Read).unwrap();
-    let haystack = unsafe { str::from_utf8_unchecked(mmap.as_slice()) };
+    let mmap = unsafe {
+        Mmap::map(&File::open(&args.arg_file).unwrap()).unwrap()
+    };
+    let haystack = unsafe { str::from_utf8_unchecked(&mmap) };
 
     println!("{}", args.count(&haystack));
 }
