@@ -14,7 +14,9 @@ use std::cmp;
 use std::sync::Arc;
 
 use thread_local::CachedThreadLocal;
-use syntax::{Expr, ExprBuilder, Literals};
+use syntax::ParserBuilder;
+use syntax::hir::Hir;
+use syntax::hir::literal::Literals;
 
 use backtrack;
 use compile::Compiler;
@@ -102,7 +104,7 @@ pub struct ExecBuilder {
 /// Parsed represents a set of parsed regular expressions and their detected
 /// literals.
 struct Parsed {
-    exprs: Vec<Expr>,
+    exprs: Vec<Hir>,
     prefixes: Literals,
     suffixes: Literals,
     bytes: bool,
@@ -214,19 +216,25 @@ impl ExecBuilder {
         // If we're compiling a regex set and that set has any anchored
         // expressions, then disable all literal optimizations.
         for pat in &self.options.pats {
-            let parser =
-                ExprBuilder::new()
+            let mut parser =
+                ParserBuilder::new()
+                    // TODO(burntsushi): Disable octal in regex 1.0. Nobody
+                    // uses it, and we'll get better error messages when
+                    // someone tries to use a backreference. Provide a new
+                    // opt-in toggle for it though.
+                    .octal(true)
                     .case_insensitive(self.options.case_insensitive)
                     .multi_line(self.options.multi_line)
                     .dot_matches_new_line(self.options.dot_matches_new_line)
                     .swap_greed(self.options.swap_greed)
                     .ignore_whitespace(self.options.ignore_whitespace)
                     .unicode(self.options.unicode)
-                    .allow_bytes(!self.only_utf8);
+                    .allow_invalid_utf8(!self.only_utf8)
+                    .build();
             let expr = try!(parser.parse(pat));
-            bytes = bytes || expr.has_bytes();
+            bytes = bytes || !expr.is_always_utf8();
 
-            if !expr.is_anchored_start() && expr.has_anchored_start() {
+            if !expr.is_anchored_start() && expr.is_any_anchored_start() {
                 // Partial anchors unfortunately make it hard to use prefixes,
                 // so disable them.
                 prefixes = None;
@@ -243,14 +251,14 @@ impl ExecBuilder {
                 }
             });
 
-            if !expr.is_anchored_end() && expr.has_anchored_end() {
+            if !expr.is_anchored_end() && expr.is_any_anchored_end() {
                 // Partial anchors unfortunately make it hard to use suffixes,
                 // so disable them.
                 suffixes = None;
             } else if is_set && expr.is_anchored_end() {
                 // Regex sets with anchors do not go well with literal
                 // optimizations.
-                prefixes = None;
+                suffixes = None;
             }
             suffixes = suffixes.and_then(|mut suffixes| {
                 if !suffixes.union_suffixes(&expr) {

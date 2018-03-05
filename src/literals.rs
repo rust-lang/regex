@@ -12,7 +12,7 @@ use std::mem;
 
 use aho_corasick::{Automaton, AcAutomaton, FullAcAutomaton};
 use memchr::{memchr, memchr2, memchr3};
-use syntax;
+use syntax::hir::literal::{Literal, Literals};
 
 use freqs::BYTE_FREQUENCIES;
 
@@ -42,7 +42,7 @@ enum Matcher {
     /// A single substring, find using Boyer-Moore.
     BoyerMoore(BoyerMooreSearch),
     /// An Aho-Corasick automaton.
-    AC(FullAcAutomaton<syntax::Lit>),
+    AC(FullAcAutomaton<Literal>),
     /// A simd accelerated multiple string matcher. Used only for a small
     /// number of small literals.
     Teddy128(Teddy),
@@ -51,22 +51,22 @@ enum Matcher {
 impl LiteralSearcher {
     /// Returns a matcher that never matches and never advances the input.
     pub fn empty() -> Self {
-        Self::new(syntax::Literals::empty(), Matcher::Empty)
+        Self::new(Literals::empty(), Matcher::Empty)
     }
 
     /// Returns a matcher for literal prefixes from the given set.
-    pub fn prefixes(lits: syntax::Literals) -> Self {
+    pub fn prefixes(lits: Literals) -> Self {
         let matcher = Matcher::prefixes(&lits);
         Self::new(lits, matcher)
     }
 
     /// Returns a matcher for literal suffixes from the given set.
-    pub fn suffixes(lits: syntax::Literals) -> Self {
+    pub fn suffixes(lits: Literals) -> Self {
         let matcher = Matcher::suffixes(&lits);
         Self::new(lits, matcher)
     }
 
-    fn new(lits: syntax::Literals, matcher: Matcher) -> Self {
+    fn new(lits: Literals, matcher: Matcher) -> Self {
         let complete = lits.all_complete();
         LiteralSearcher {
             complete: complete,
@@ -183,17 +183,17 @@ impl LiteralSearcher {
 }
 
 impl Matcher {
-    fn prefixes(lits: &syntax::Literals) -> Self {
+    fn prefixes(lits: &Literals) -> Self {
         let sset = SingleByteSet::prefixes(lits);
         Matcher::new(lits, sset)
     }
 
-    fn suffixes(lits: &syntax::Literals) -> Self {
+    fn suffixes(lits: &Literals) -> Self {
         let sset = SingleByteSet::suffixes(lits);
         Matcher::new(lits, sset)
     }
 
-    fn new(lits: &syntax::Literals, sset: SingleByteSet) -> Self {
+    fn new(lits: &Literals, sset: SingleByteSet) -> Self {
         if lits.literals().is_empty() {
             return Matcher::Empty;
         }
@@ -245,7 +245,7 @@ pub enum LiteralIter<'a> {
     Empty,
     Bytes(&'a [u8]),
     Single(&'a [u8]),
-    AC(&'a [syntax::Lit]),
+    AC(&'a [Literal]),
     Teddy128(&'a [Vec<u8>]),
 }
 
@@ -313,7 +313,7 @@ impl SingleByteSet {
         }
     }
 
-    fn prefixes(lits: &syntax::Literals) -> SingleByteSet {
+    fn prefixes(lits: &Literals) -> SingleByteSet {
         let mut sset = SingleByteSet::new();
         for lit in lits.literals() {
             sset.complete = sset.complete && lit.len() == 1;
@@ -330,7 +330,7 @@ impl SingleByteSet {
         sset
     }
 
-    fn suffixes(lits: &syntax::Literals) -> SingleByteSet {
+    fn suffixes(lits: &Literals) -> SingleByteSet {
         let mut sset = SingleByteSet::new();
         for lit in lits.literals() {
             sset.complete = sset.complete && lit.len() == 1;
