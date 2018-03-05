@@ -1,7 +1,6 @@
 extern crate docopt;
 extern crate regex;
-extern crate regex_syntax as syntax;
-extern crate regex_syntax2;
+extern crate regex_syntax2 as syntax;
 extern crate serde;
 #[macro_use]
 extern crate serde_derive;
@@ -12,14 +11,14 @@ use std::process;
 use std::result;
 
 use docopt::Docopt;
+use syntax::hir::Hir;
+use syntax::hir::literal::Literals;
 use regex::internal::{Compiler, LiteralSearcher};
-use syntax::{ExprBuilder, Expr, Literals};
 
 const USAGE: &'static str = "
 Usage:
     regex-debug [options] ast <pattern>
-    regex-debug [options] ast2 <pattern>
-    regex-debug [options] hir2 <pattern>
+    regex-debug [options] hir <pattern>
     regex-debug [options] prefixes <patterns> ...
     regex-debug [options] suffixes <patterns> ...
     regex-debug [options] anchors <pattern>
@@ -54,8 +53,7 @@ Options:
 #[derive(Deserialize)]
 struct Args {
     cmd_ast: bool,
-    cmd_ast2: bool,
-    cmd_hir2: bool,
+    cmd_hir: bool,
     cmd_prefixes: bool,
     cmd_suffixes: bool,
     cmd_anchors: bool,
@@ -98,10 +96,8 @@ fn main() {
 fn run(args: &Args) -> Result<()> {
     if args.cmd_ast {
         cmd_ast(args)
-    } else if args.cmd_ast2 {
-        cmd_ast2(args)
-    } else if args.cmd_hir2 {
-        cmd_hir2(args)
+    } else if args.cmd_hir {
+        cmd_hir(args)
     } else if args.cmd_prefixes {
         cmd_literals(args)
     } else if args.cmd_suffixes {
@@ -118,13 +114,7 @@ fn run(args: &Args) -> Result<()> {
 }
 
 fn cmd_ast(args: &Args) -> Result<()> {
-    let ast = try!(args.parse_one());
-    println!("{:#?}", ast);
-    Ok(())
-}
-
-fn cmd_ast2(args: &Args) -> Result<()> {
-    use regex_syntax2::ast::parse::Parser;
+    use syntax::ast::parse::Parser;
 
     let mut parser = Parser::new();
     let ast = try!(parser.parse(&args.arg_pattern));
@@ -132,8 +122,8 @@ fn cmd_ast2(args: &Args) -> Result<()> {
     Ok(())
 }
 
-fn cmd_hir2(args: &Args) -> Result<()> {
-    use regex_syntax2::ParserBuilder;
+fn cmd_hir(args: &Args) -> Result<()> {
+    use syntax::ParserBuilder;
 
     let mut parser = ParserBuilder::new()
         .allow_invalid_utf8(false)
@@ -213,17 +203,17 @@ fn cmd_compile(args: &Args) -> Result<()> {
 }
 
 impl Args {
-    fn parse_one(&self) -> Result<Expr> {
+    fn parse_one(&self) -> Result<Hir> {
         parse(&self.arg_pattern)
     }
 
-    fn parse_many(&self) -> Result<Vec<Expr>> {
+    fn parse_many(&self) -> Result<Vec<Hir>> {
         self.arg_patterns.iter().map(|s| parse(s)).collect()
     }
 
-    fn literals<F: Fn(&mut Literals, &Expr) -> bool>(
+    fn literals<F: Fn(&mut Literals, &Hir) -> bool>(
         &self,
-        exprs: &[Expr],
+        exprs: &[Hir],
         get_literals: F,
     ) -> Literals {
         let mut lits = Some(self.empty_literals());
@@ -251,8 +241,13 @@ impl Args {
     }
 }
 
-fn parse(re: &str) -> Result<Expr> {
-    ExprBuilder::new().allow_bytes(true).parse(re).map_err(From::from)
+fn parse(re: &str) -> Result<Hir> {
+    use syntax::ParserBuilder;
+    ParserBuilder::new()
+        .allow_invalid_utf8(true)
+        .build()
+        .parse(re)
+        .map_err(From::from)
 }
 
 fn escape_unicode(bytes: &[u8]) -> String {

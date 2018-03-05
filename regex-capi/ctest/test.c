@@ -303,7 +303,7 @@ bool test_compile_error() {
         rure_free(re);
     }
     const char *msg = rure_error_message(err);
-    if (NULL == strstr(msg, "Unclosed parenthesis")) {
+    if (NULL == strstr(msg, "unclosed group")) {
         if (DEBUG) {
             fprintf(stderr,
                     "[test_compile_error] "

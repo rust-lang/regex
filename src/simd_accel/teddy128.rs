@@ -331,7 +331,7 @@ use simd::u8x16;
 use simd::x86::sse2::Sse2Bool8ix16;
 use simd::x86::ssse3::Ssse3U8x16;
 
-use syntax;
+use syntax::hir::literal::Literals;
 
 /// Corresponds to the number of bytes read at a time in the haystack.
 const BLOCK_SIZE: usize = 16;
@@ -388,7 +388,7 @@ impl Teddy {
     ///
     /// If a `Teddy` matcher could not be created (e.g., `pats` is empty or has
     /// an empty substring), then `None` is returned.
-    pub fn new(pats: &syntax::Literals) -> Option<Teddy> {
+    pub fn new(pats: &Literals) -> Option<Teddy> {
         let pats: Vec<_> = pats.literals().iter().map(|p|p.to_vec()).collect();
         let min_len = pats.iter().map(|p| p.len()).min().unwrap_or(0);
         // Don't allow any empty patterns and require that we have at

@@ -18,7 +18,9 @@ travis-ci = { repository = "rust-lang/regex" }
 appveyor = { repository = "rust-lang-libs/regex" }
 
 [workspace]
-members = ["bench", "regex-capi", "regex-debug", "regex-syntax"]
+members = [
+  "bench", "regex-capi", "regex-debug", "regex-syntax", "regex-syntax-2",
+]
 
 [dependencies]
 # For very fast prefix literal matching.
@@ -29,6 +31,7 @@ memchr = "2.0.0"
 thread_local = "0.3.2"
 # For parsing regular expressions.
 regex-syntax = { path = "regex-syntax", version = "0.4.1" }
+regex-syntax2 = { path = "regex-syntax-2", version = "0.5.0" }
 # For accelerating text search.
 simd = { version = "0.2.1", optional = true }
 # For compiling UTF-8 decoding into automata.
