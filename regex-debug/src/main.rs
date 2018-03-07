@@ -1,6 +1,6 @@
 extern crate docopt;
 extern crate regex;
-extern crate regex_syntax2 as syntax;
+extern crate regex_syntax as syntax;
 extern crate serde;
 #[macro_use]
 extern crate serde_derive;

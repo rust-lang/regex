@@ -1,4 +1,4 @@
-// Copyright 2014 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2018 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -13,14 +13,14 @@
 extern crate regex_syntax;
 extern crate test;
 
-use regex_syntax::Expr;
+use regex_syntax::Parser;
 use test::Bencher;
 
 #[bench]
 fn parse_simple1(b: &mut Bencher) {
     b.iter(|| {
         let re = r"^bc(d|e)*$";
-        Expr::parse(re).unwrap()
+        Parser::new().parse(re).unwrap()
     });
 }
 
@@ -28,7 +28,7 @@ fn parse_simple1(b: &mut Bencher) {
 fn parse_simple2(b: &mut Bencher) {
     b.iter(|| {
         let re = r"'[a-zA-Z_][a-zA-Z0-9_]*(')\b";
-        Expr::parse(re).unwrap()
+        Parser::new().parse(re).unwrap()
     });
 }
 
@@ -36,7 +36,7 @@ fn parse_simple2(b: &mut Bencher) {
 fn parse_small1(b: &mut Bencher) {
     b.iter(|| {
         let re = r"\p{L}|\p{N}|\s|.|\d";
-        Expr::parse(re).unwrap()
+        Parser::new().parse(re).unwrap()
     });
 }
 
@@ -44,7 +44,7 @@ fn parse_small1(b: &mut Bencher) {
 fn parse_medium1(b: &mut Bencher) {
     b.iter(|| {
         let re = r"\pL\p{Greek}\p{Hiragana}\p{Alphabetic}\p{Hebrew}\p{Arabic}";
-        Expr::parse(re).unwrap()
+        Parser::new().parse(re).unwrap()
     });
 }
 
@@ -52,7 +52,15 @@ fn parse_medium1(b: &mut Bencher) {
 fn parse_medium2(b: &mut Bencher) {
     b.iter(|| {
         let re = r"\s\S\w\W\d\D";
-        Expr::parse(re).unwrap()
+        Parser::new().parse(re).unwrap()
+    });
+}
+
+#[bench]
+fn parse_medium3(b: &mut Bencher) {
+    b.iter(|| {
+        let re = r"\p{age:3.2}\p{hira}\p{scx:hira}\p{alphabetic}\p{sc:Greek}\pL";
+        Parser::new().parse(re).unwrap()
     });
 }
 
@@ -60,6 +68,6 @@ fn parse_medium2(b: &mut Bencher) {
 fn parse_huge(b: &mut Bencher) {
     b.iter(|| {
         let re = r"\p{L}{100}";
-        Expr::parse(re).unwrap()
+        Parser::new().parse(re).unwrap()
     });
 }

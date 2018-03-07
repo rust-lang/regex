@@ -526,8 +526,7 @@ extern crate aho_corasick;
 extern crate memchr;
 extern crate thread_local;
 #[macro_use] #[cfg(test)] extern crate quickcheck;
-// extern crate regex_syntax as syntax;
-extern crate regex_syntax2 as syntax;
+extern crate regex_syntax as syntax;
 #[cfg(feature = "simd-accel")] extern crate simd;
 extern crate utf8_ranges;
 
