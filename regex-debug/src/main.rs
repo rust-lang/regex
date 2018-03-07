@@ -4,6 +4,7 @@ extern crate regex_syntax2 as syntax;
 extern crate serde;
 #[macro_use]
 extern crate serde_derive;
+extern crate utf8_ranges;
 
 use std::error;
 use std::io::{self, Write};
@@ -24,6 +25,7 @@ Usage:
     regex-debug [options] anchors <pattern>
     regex-debug [options] captures <pattern>
     regex-debug [options] compile <patterns> ...
+    regex-debug [options] utf8-ranges <class>
     regex-debug --help
 
 Options:
@@ -59,9 +61,11 @@ struct Args {
     cmd_anchors: bool,
     cmd_captures: bool,
     cmd_compile: bool,
+    cmd_utf8_ranges: bool,
 
     arg_pattern: String,
     arg_patterns: Vec<String>,
+    arg_class: String,
 
     flag_size_limit: usize,
     flag_bytes: bool,
@@ -108,6 +112,8 @@ fn run(args: &Args) -> Result<()> {
         cmd_captures(args)
     } else if args.cmd_compile {
         cmd_compile(args)
+    } else if args.cmd_utf8_ranges {
+        cmd_utf8_ranges(args)
     } else {
         unreachable!()
     }
@@ -199,6 +205,37 @@ fn cmd_compile(args: &Args) -> Result<()> {
             .reverse(args.flag_dfa_reverse);
     let prog = try!(compiler.compile(&exprs));
     print!("{:?}", prog);
+    Ok(())
+}
+
+fn cmd_utf8_ranges(args: &Args) -> Result<()> {
+    use syntax::ParserBuilder;
+    use syntax::hir::{self, HirKind};
+    use utf8_ranges::Utf8Sequences;
+
+    let hir = try!(ParserBuilder::new()
+        .build()
+        .parse(&format!("[{}]", args.arg_class)));
+    let cls = match hir.into_kind() {
+        HirKind::Class(hir::Class::Unicode(cls)) => cls,
+        _ => return Err(
+            format!("unexpected HIR, expected Unicode class").into(),
+        ),
+    };
+    for (i, range) in cls.iter().enumerate() {
+        if i > 0 {
+            println!("----------------------------");
+        }
+        for seq in Utf8Sequences::new(range.start(), range.end()) {
+            for (i, utf8_range) in seq.into_iter().enumerate() {
+                if i > 0 {
+                    print!("|");
+                }
+                print!("[{:02X}-{:02X}]", utf8_range.start, utf8_range.end);
+            }
+            println!();
+        }
+    }
     Ok(())
 }
 
