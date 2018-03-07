@@ -527,7 +527,7 @@ pub use re_trait::Locations;
 pub use re_unicode::{
     Regex, Match, Captures,
     CaptureNames, Matches, CaptureMatches, SubCaptureMatches,
-    Replacer, NoExpand, Split, SplitN,
+    Replacer, ReplacerRef, NoExpand, Split, SplitN,
     escape,
 };
 
