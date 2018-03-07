@@ -522,11 +522,29 @@ impl Compiler {
         for e in &exprs[0..exprs.len() - 1] {
             self.fill_to_next(prev_hole);
             let split = self.push_split_hole();
+            let prev_entry = self.insts.len();
             let Patch { hole, entry } = try!(self.c(e));
+            if prev_entry == self.insts.len() {
+                // TODO(burntsushi): It is kind of silly that we don't support
+                // empty-subexpressions in alternates, but it is supremely
+                // awkward to support them in the existing compiler
+                // infrastructure. This entire compiler needs to be thrown out
+                // anyway, so don't feel too bad.
+                return Err(Error::Syntax(
+                    "alternations cannot currently contain \
+                     empty sub-expressions".to_string()));
+            }
             holes.push(hole);
             prev_hole = self.fill_split(split, Some(entry), None);
         }
+        let prev_entry = self.insts.len();
         let Patch { hole, entry } = try!(self.c(&exprs[exprs.len() - 1]));
+        if prev_entry == self.insts.len() {
+            // TODO(burntsushi): See TODO above.
+            return Err(Error::Syntax(
+                "alternations cannot currently contain \
+                 empty sub-expressions".to_string()));
+        }
         holes.push(hole);
         self.fill(prev_hole, entry);
         Ok(Patch { hole: Hole::Many(holes), entry: first_split_entry })

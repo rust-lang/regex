@@ -61,6 +61,19 @@ mat!(greedy_one_many_optional, r"((?:.?)+)=", "a=b", Some((0, 2)));
 mat!(greedy_range_min_many, r"((?:.*){1,})=", "a=b", Some((0, 2)));
 mat!(greedy_range_many, r"((?:.*){1,2})=", "a=b", Some((0, 2)));
 
+// Test that we handle various flavors of empty expressions.
+matiter!(match_empty1, r"", "", (0, 0));
+matiter!(match_empty2, r"", "abc", (0, 0), (1, 1), (2, 2), (3, 3));
+matiter!(match_empty3, r"()", "abc", (0, 0), (1, 1), (2, 2), (3, 3));
+matiter!(match_empty4, r"()*", "abc", (0, 0), (1, 1), (2, 2), (3, 3));
+matiter!(match_empty5, r"()+", "abc", (0, 0), (1, 1), (2, 2), (3, 3));
+matiter!(match_empty6, r"()?", "abc", (0, 0), (1, 1), (2, 2), (3, 3));
+matiter!(match_empty7, r"()()", "abc", (0, 0), (1, 1), (2, 2), (3, 3));
+matiter!(match_empty8, r"()+|z", "abc", (0, 0), (1, 1), (2, 2), (3, 3));
+matiter!(match_empty9, r"z|()+", "abc", (0, 0), (1, 1), (2, 2), (3, 3));
+matiter!(match_empty10, r"()+|b", "abc", (0, 0), (1, 1), (2, 2), (3, 3));
+matiter!(match_empty11, r"b|()+", "abc", (0, 0), (1, 2), (3, 3));
+
 // Test that the DFA can handle pathological cases.
 // (This should result in the DFA's cache being flushed too frequently, which
 // should cause it to quit and fall back to the NFA algorithm.)
