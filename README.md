@@ -15,8 +15,8 @@ by [RE2](https://github.com/google/re2).
 ### Documentation
 
 [Module documentation with examples](https://docs.rs/regex).
-The module documentation also include a comprehensive description of the syntax
-supported.
+The module documentation also includes a comprehensive description of the
+syntax supported.
 
 Documentation with examples for the various matching functions and iterators
 can be found on the
@@ -192,12 +192,13 @@ assert!(matches.matched(6));
 ### Usage: a regular expression parser
 
 This repository contains a crate that provides a well tested regular expression
-parser and abstract syntax. It provides no facilities for compilation or
-execution. This may be useful if you're implementing your own regex engine or
-otherwise need to do analysis on the syntax of a regular expression. It is
-otherwise not recommended for general use.
+parser, abstract syntax and a high-level intermediate representation for
+convenient analysis. It provides no facilities for compilation or execution.
+This may be useful if you're implementing your own regex engine or otherwise
+need to do analysis on the syntax of a regular expression. It is otherwise not
+recommended for general use.
 
-[Documentation for `regex-syntax` with examples](https://docs.rs/regex-syntax).
+[Documentation `regex-syntax`.](https://docs.rs/regex-syntax)
 
 # License
 
