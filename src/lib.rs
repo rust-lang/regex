@@ -217,9 +217,8 @@ This implementation executes regular expressions **only** on valid UTF-8
 while exposing match locations as byte indices into the search string.
 
 Only simple case folding is supported. Namely, when matching
-case-insensitively, the characters are first mapped using the [simple case
-folding](ftp://ftp.unicode.org/Public/UNIDATA/CaseFolding.txt) mapping
-before matching.
+case-insensitively, the characters are first mapped using the "simple" case
+folding rules defined by Unicode.
 
 Regular expressions themselves are **only** interpreted as a sequence of
 Unicode scalar values. This means you can use Unicode characters directly
@@ -248,9 +247,9 @@ are some examples:
   recognize `\n` and not any of the other forms of line terminators defined
   by Unicode.
 
-Finally, Unicode general categories and scripts are available as character
-classes. For example, you can match a sequence of numerals, Greek or
-Cherokee letters:
+Unicode general categories, scripts, script extensions, ages and a smattering
+of boolean properties are available as character classes. For example, you can
+match a sequence of numerals, Greek or Cherokee letters:
 
 ```rust
 # extern crate regex; use regex::Regex;
@@ -260,6 +259,12 @@ let mat = re.find("abcΔᎠβⅠᏴγδⅡxyz").unwrap();
 assert_eq!((mat.start(), mat.end()), (3, 23));
 # }
 ```
+
+For a more detailed breakdown of Unicode support with respect to
+[UTS#18](http://unicode.org/reports/tr18/),
+please see the
+[UNICODE](https://github.com/rust-lang/regex/blob/master/UNICODE.md)
+document in the root of the regex repository.
 
 # Opt out of Unicode support
 
@@ -307,6 +312,8 @@ a separate crate, [`regex-syntax`](../regex_syntax/index.html).
 [x[^xyz]]     Nested/grouping character class (matching any character except y and z)
 [a-y&&xyz]    Intersection (matching x or y)
 [0-9&&[^4]]   Subtraction using intersection and negation (matching 0-9 except 4)
+[0-9--4]      Direct subtraction (matching 0-9 except 4)
+[a-g~~b-h]    Symmetric difference (matching `a` and `h` only)
 [\[\]]        Escaping in character classes (matching [ or ])
 </pre>
 
@@ -431,16 +438,20 @@ assert_eq!(&cap[0], "abc");
 ## Escape sequences
 
 <pre class="rust">
-\*         literal *, works for any punctuation character: \.+*?()|[]{}^$
-\a         bell (\x07)
-\f         form feed (\x0C)
-\t         horizontal tab
-\n         new line
-\r         carriage return
-\v         vertical tab (\x0B)
-\123       octal character code (up to three digits)
-\x7F       hex character code (exactly two digits)
-\x{10FFFF} any hex character code corresponding to a Unicode code point
+\*          literal *, works for any punctuation character: \.+*?()|[]{}^$
+\a          bell (\x07)
+\f          form feed (\x0C)
+\t          horizontal tab
+\n          new line
+\r          carriage return
+\v          vertical tab (\x0B)
+\123        octal character code (up to three digits)
+\x7F        hex character code (exactly two digits)
+\x{10FFFF}  any hex character code corresponding to a Unicode code point
+\u007F      hex character code (exactly four digits)
+\u{7F}      any hex character code corresponding to a Unicode code point
+\U0000007F  hex character code (exactly eight digits)
+\U{7F}      any hex character code corresponding to a Unicode code point
 </pre>
 
 ## Perl character classes (Unicode friendly)
