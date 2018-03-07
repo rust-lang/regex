@@ -627,7 +627,9 @@ impl BoyerMooreSearch {
                 if self.check_match(haystack, window_end) {
                     return Some(window_end - (self.pattern.len() - 1));
                 } else {
-                    window_end += self.md2_shift;
+                    let skip = self.skip_table[haystack[window_end] as usize];
+                    window_end +=
+                        if skip == 0 { self.md2_shift } else { skip };
                     continue;
                 }
             }
@@ -946,7 +948,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn bm_backstop_boundary() {
         let haystack = b"\
 // aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
