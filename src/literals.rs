@@ -680,9 +680,7 @@ impl BoyerMooreSearch {
     /// A third case is if the pattern is sufficiently long. The idea
     /// here is that once the pattern gets long enough the Tuned
     /// Boyer-Moore skip loop will start making strides long enough
-    /// to beat the asm deep magic that is memchr. Unfortunately,
-    /// I had trouble proving a useful turnover point. Hopefully,
-    /// we can find one in the future.
+    /// to beat the asm deep magic that is memchr.
     fn should_use(pattern: &[u8]) -> bool {
         // The minimum pattern length required to use TBM.
         const MIN_LEN: usize = 9;
