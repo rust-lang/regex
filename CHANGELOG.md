@@ -1,5 +1,5 @@
-TBD
-===
+0.2.7 (2018-03-07)
+==================
 This release includes a ground-up rewrite of the regex-syntax crate, which has
 been in development for over a year.
 
@@ -30,6 +30,13 @@ New features:
 * [FEATURE #424](https://github.com/rust-lang/regex/issues/424):
   Support `\u`, `\u{...}`, `\U` and `\U{...}` syntax for specifying code points
   in a regular expression.
+* [FEATURE #449](https://github.com/rust-lang/regex/pull/449):
+  Add a `Replace::by_ref` adapter for use of a replacer without consuming it.
+
+Bug fixes:
+
+* [BUG #446](https://github.com/rust-lang/regex/issues/446):
+  We re-enable the Boyer-Moore literal matcher.
 
 
 0.2.6 (2018-02-08)
