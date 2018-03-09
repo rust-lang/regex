@@ -230,6 +230,7 @@ impl ExecBuilder {
                     .ignore_whitespace(self.options.ignore_whitespace)
                     .unicode(self.options.unicode)
                     .allow_invalid_utf8(!self.only_utf8)
+                    .nest_limit(self.options.nest_limit)
                     .build();
             let expr = try!(parser.parse(pat));
             bytes = bytes || !expr.is_always_utf8();

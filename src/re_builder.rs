@@ -15,6 +15,7 @@ pub struct RegexOptions {
     pub pats: Vec<String>,
     pub size_limit: usize,
     pub dfa_size_limit: usize,
+    pub nest_limit: u32,
     pub case_insensitive: bool,
     pub multi_line: bool,
     pub dot_matches_new_line: bool,
@@ -29,6 +30,7 @@ impl Default for RegexOptions {
             pats: vec![],
             size_limit: 10 * (1<<20),
             dfa_size_limit: 2 * (1<<20),
+            nest_limit: 250,
             case_insensitive: false,
             multi_line: false,
             dot_matches_new_line: false,
@@ -163,6 +165,36 @@ impl RegexBuilder {
         self.0.dfa_size_limit = limit;
         self
     }
+
+    /// Set the nesting limit for this parser.
+    ///
+    /// The nesting limit controls how deep the abstract syntax tree is allowed
+    /// to be. If the AST exceeds the given limit (e.g., with too many nested
+    /// groups), then an error is returned by the parser.
+    ///
+    /// The purpose of this limit is to act as a heuristic to prevent stack
+    /// overflow for consumers that do structural induction on an `Ast` using
+    /// explicit recursion. While this crate never does this (instead using
+    /// constant stack space and moving the call stack to the heap), other
+    /// crates may.
+    ///
+    /// This limit is not checked until the entire Ast is parsed. Therefore,
+    /// if callers want to put a limit on the amount of heap space used, then
+    /// they should impose a limit on the length, in bytes, of the concrete
+    /// pattern string. In particular, this is viable since this parser
+    /// implementation will limit itself to heap space proportional to the
+    /// lenth of the pattern string.
+    ///
+    /// Note that a nest limit of `0` will return a nest limit error for most
+    /// patterns but not all. For example, a nest limit of `0` permits `a` but
+    /// not `ab`, since `ab` requires a concatenation, which results in a nest
+    /// depth of `1`. In general, a nest limit is not something that manifests
+    /// in an obvious way in the concrete syntax, therefore, it should not be
+    /// used in a granular way.
+    pub fn nest_limit(&mut self, limit: u32) -> &mut RegexBuilder {
+        self.0.nest_limit = limit;
+        self
+    }
 }
         }
     }
@@ -274,6 +306,37 @@ impl RegexSetBuilder {
         self.0.dfa_size_limit = limit;
         self
     }
+
+    /// Set the nesting limit for this parser.
+    ///
+    /// The nesting limit controls how deep the abstract syntax tree is allowed
+    /// to be. If the AST exceeds the given limit (e.g., with too many nested
+    /// groups), then an error is returned by the parser.
+    ///
+    /// The purpose of this limit is to act as a heuristic to prevent stack
+    /// overflow for consumers that do structural induction on an `Ast` using
+    /// explicit recursion. While this crate never does this (instead using
+    /// constant stack space and moving the call stack to the heap), other
+    /// crates may.
+    ///
+    /// This limit is not checked until the entire Ast is parsed. Therefore,
+    /// if callers want to put a limit on the amount of heap space used, then
+    /// they should impose a limit on the length, in bytes, of the concrete
+    /// pattern string. In particular, this is viable since this parser
+    /// implementation will limit itself to heap space proportional to the
+    /// lenth of the pattern string.
+    ///
+    /// Note that a nest limit of `0` will return a nest limit error for most
+    /// patterns but not all. For example, a nest limit of `0` permits `a` but
+    /// not `ab`, since `ab` requires a concatenation, which results in a nest
+    /// depth of `1`. In general, a nest limit is not something that manifests
+    /// in an obvious way in the concrete syntax, therefore, it should not be
+    /// used in a granular way.
+    pub fn nest_limit(&mut self, limit: u32) -> &mut RegexSetBuilder {
+        self.0.nest_limit = limit;
+        self
+    }
+
 }
         }
     }
