@@ -1,3 +1,11 @@
+TBD
+===
+Bug gixes:
+
+* [BUG #454](https://github.com/rust-lang/regex/pull/454):
+  Fix a bug in the nest limit checker being too aggressive.
+
+
 0.2.7 (2018-03-07)
 ==================
 This release includes a ground-up rewrite of the regex-syntax crate, which has

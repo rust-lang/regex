@@ -2106,7 +2106,7 @@ impl<'p, 's, P: Borrow<Parser>> NestLimiter<'p, 's, P> {
     fn decrement_depth(&mut self) {
         // Assuming the correctness of the visitor, this should never drop
         // below 0.
-        self.depth.checked_sub(1).unwrap();
+        self.depth = self.depth.checked_sub(1).unwrap();
     }
 }
 
@@ -5253,5 +5253,48 @@ bar
                     }),
                 ],
             })));
+    }
+
+    // This tests a bug fix where the nest limit checker wasn't decrementing
+    // its depth during post-traversal, which causes long regexes to trip
+    // the default limit too aggressively.
+    #[test]
+    fn regression_454_nest_too_big() {
+        let pattern = r#"
+        2(?:
+          [45]\d{3}|
+          7(?:
+            1[0-267]|
+            2[0-289]|
+            3[0-29]|
+            4[01]|
+            5[1-3]|
+            6[013]|
+            7[0178]|
+            91
+          )|
+          8(?:
+            0[125]|
+            [139][1-6]|
+            2[0157-9]|
+            41|
+            6[1-35]|
+            7[1-5]|
+            8[1-8]|
+            90
+          )|
+          9(?:
+            0[0-2]|
+            1[0-4]|
+            2[568]|
+            3[3-6]|
+            5[5-7]|
+            6[0167]|
+            7[15]|
+            8[0146-9]
+          )
+        )\d{4}
+        "#;
+        assert!(parser_nest_limit(pattern, 50).parse().is_ok());
     }
 }
