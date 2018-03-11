@@ -16,8 +16,9 @@ use memchr::{memchr, memchr2, memchr3};
 use syntax::hir::literal::{Literal, Literals};
 
 use freqs::BYTE_FREQUENCIES;
+use self::teddy_ssse3::Teddy;
 
-use simd_accel::teddy128::{Teddy, is_teddy_128_available};
+mod teddy_ssse3;
 
 /// A prefix extracted from a compiled regular expression.
 ///
@@ -219,7 +220,7 @@ impl Matcher {
             }
         }
         let is_aho_corasick_fast = sset.dense.len() == 1 && sset.all_ascii;
-        if is_teddy_128_available() && !is_aho_corasick_fast {
+        if Teddy::available() && !is_aho_corasick_fast {
             // Only try Teddy if Aho-Corasick can't use memchr on an ASCII
             // byte. Also, in its current form, Teddy doesn't scale well to
             // lots of literals.

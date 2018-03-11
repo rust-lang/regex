@@ -520,14 +520,15 @@ another matching engine with fixed memory requirements.
 #![deny(missing_docs)]
 #![cfg_attr(test, deny(warnings))]
 #![cfg_attr(feature = "pattern", feature(pattern))]
-#![cfg_attr(feature = "simd-accel", feature(cfg_target_feature))]
+#![cfg_attr(feature = "unstable", feature(target_feature, stdsimd))]
 
 extern crate aho_corasick;
 extern crate memchr;
 extern crate thread_local;
-#[macro_use] #[cfg(test)] extern crate quickcheck;
+#[cfg(test)]
+#[macro_use]
+extern crate quickcheck;
 extern crate regex_syntax as syntax;
-#[cfg(feature = "simd-accel")] extern crate simd;
 extern crate utf8_ranges;
 
 pub use error::Error;
@@ -645,7 +646,7 @@ mod exec;
 mod expand;
 mod freqs;
 mod input;
-mod literals;
+mod literal;
 #[cfg(feature = "pattern")]
 mod pattern;
 mod pikevm;
@@ -655,12 +656,9 @@ mod re_bytes;
 mod re_set;
 mod re_trait;
 mod re_unicode;
-#[cfg(feature = "simd-accel")]
-mod simd_accel;
-#[cfg(not(feature = "simd-accel"))]
-#[path = "simd_fallback/mod.rs"]
-mod simd_accel;
 mod sparse;
+#[cfg(feature = "unstable")]
+mod vector;
 
 /// The `internal` module exists to support suspicious activity, such as
 /// testing different matching engines and supporting the `regex-debug` CLI
@@ -670,6 +668,6 @@ pub mod internal {
     pub use compile::Compiler;
     pub use exec::{Exec, ExecBuilder};
     pub use input::{Char, Input, CharInput, InputAt};
-    pub use literals::LiteralSearcher;
+    pub use literal::LiteralSearcher;
     pub use prog::{Program, Inst, EmptyLook, InstRanges};
 }

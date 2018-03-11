@@ -23,7 +23,7 @@ use compile::Compiler;
 use dfa;
 use error::Error;
 use input::{ByteInput, CharInput};
-use literals::LiteralSearcher;
+use literal::LiteralSearcher;
 use pikevm;
 use prog::Program;
 use re_builder::RegexOptions;
