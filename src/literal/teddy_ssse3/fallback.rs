@@ -1,9 +1,5 @@
 use syntax::hir::literal::Literals;
 
-pub fn is_teddy_128_available() -> bool {
-    false
-}
-
 #[derive(Debug, Clone)]
 pub struct Teddy(());
 
@@ -15,6 +11,7 @@ pub struct Match {
 }
 
 impl Teddy {
+    pub fn available() -> bool { false }
     pub fn new(_pats: &Literals) -> Option<Teddy> { None }
     pub fn patterns(&self) -> &[Vec<u8>] { &[] }
     pub fn len(&self) -> usize { 0 }

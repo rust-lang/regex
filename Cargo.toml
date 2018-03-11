@@ -31,8 +31,6 @@ memchr = "2.0.0"
 thread_local = "0.3.2"
 # For parsing regular expressions.
 regex-syntax = { path = "regex-syntax", version = "0.5.1" }
-# For accelerating text search.
-simd = { version = "0.2.1", optional = true }
 # For compiling UTF-8 decoding into automata.
 utf8-ranges = "1.0.0"
 
@@ -45,10 +43,20 @@ quickcheck = { version = "0.6", default-features = false }
 rand = "0.4"
 
 [features]
-# Enable to use the unstable pattern traits defined in std.
+# We don't enable any features by default currently, but if the compiler
+# supports a specific type of feature, then regex's build.rs might enable
+# some default features.
+default = []
+# A blanket feature that governs whether unstable features are enabled or not.
+# Unstable features are disabled by default, and typically rely on unstable
+# features in rustc itself.
+unstable = ["pattern"]
+# Enable to use the unstable pattern traits defined in std. This is enabled
+# by default if the unstable feature is enabled.
 pattern = []
 # Enable to use simd acceleration.
-simd-accel = ["simd"]
+# Note that this is deprecated and is a no-op.
+simd-accel = []
 
 [lib]
 # There are no benchmarks in the library code itself

@@ -7,7 +7,7 @@ use std::slice;
 use std::sync::Arc;
 
 use input::Char;
-use literals::LiteralSearcher;
+use literal::LiteralSearcher;
 
 /// `InstPtr` represents the index of an instruction in a regex program.
 pub type InstPtr = usize;
