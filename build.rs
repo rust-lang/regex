@@ -21,6 +21,7 @@ fn main() {
     if env::var_os("CARGO_CFG_REGEX_DISABLE_AUTO_OPTIMIZATIONS").is_none() {
         if version.contains("nightly") {
             println!("cargo:rustc-cfg=regex_runtime_teddy_ssse3");
+            println!("cargo:rustc-cfg=regex_runtime_teddy_avx2");
         }
     }
 }
