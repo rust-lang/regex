@@ -1,5 +1,5 @@
-TBD
-===
+0.2.8 (2018-03-12)
+==================
 Bug gixes:
 
 * [BUG #454](https://github.com/rust-lang/regex/pull/454):
