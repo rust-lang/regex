@@ -1,3 +1,11 @@
+TBD
+===
+Bug gixes:
+
+* [BUG #455](https://github.com/rust-lang/regex/pull/455):
+  Fix a bug where `(?x)[ / - ]` failed to parse.
+
+
 0.2.8 (2018-03-12)
 ==================
 Bug gixes:

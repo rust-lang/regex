@@ -587,6 +587,32 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
         self.pattern()[self.offset() + self.char().len_utf8()..].chars().next()
     }
 
+    /// Like peek, but will ignore spaces when the parser is in whitespace
+    /// insensitive mode.
+    fn peek_space(&self) -> Option<char> {
+        if !self.ignore_whitespace() {
+            return self.peek();
+        }
+        if self.is_eof() {
+            return None;
+        }
+        let mut start = self.offset() + self.char().len_utf8();
+        let mut in_comment = false;
+        for (i, c) in self.pattern()[start..].char_indices() {
+            if c.is_whitespace() {
+                continue;
+            } else if !in_comment && c == '#' {
+                in_comment = true;
+            } else if in_comment && c == '\n' {
+                in_comment = false;
+            } else {
+                start += i;
+                break;
+            }
+        }
+        self.pattern()[start..].chars().next()
+    }
+
     /// Returns true if the next call to `bump` would return false.
     fn is_eof(&self) -> bool {
         self.offset() == self.pattern().len()
@@ -1773,8 +1799,8 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
         // after a `-` is a `-`, then `--` corresponds to a "difference"
         // operation.
         if self.char() != '-'
-            || self.peek() == Some(']')
-            || self.peek() == Some('-')
+            || self.peek_space() == Some(']')
+            || self.peek_space() == Some('-')
         {
             return prim1.into_class_set_item(self);
         }
@@ -5296,5 +5322,31 @@ bar
         )\d{4}
         "#;
         assert!(parser_nest_limit(pattern, 50).parse().is_ok());
+    }
+
+    // This tests that we treat a trailing `-` in a character class as a
+    // literal `-` even when whitespace mode is enabled and there is whitespace
+    // after the trailing `-`.
+    #[test]
+    fn regression_455_trailing_dash_ignore_whitespace() {
+        assert!(parser("(?x)[ / - ]").parse().is_ok());
+        assert!(parser("(?x)[ a - ]").parse().is_ok());
+        assert!(parser("(?x)[
+            a
+            - ]
+        ").parse().is_ok());
+        assert!(parser("(?x)[
+            a # wat
+            - ]
+        ").parse().is_ok());
+
+        assert!(parser("(?x)[ / -").parse().is_err());
+        assert!(parser("(?x)[ / - ").parse().is_err());
+        assert!(parser("(?x)[
+            / -
+        ").parse().is_err());
+        assert!(parser("(?x)[
+            / - # wat
+        ").parse().is_err());
     }
 }
