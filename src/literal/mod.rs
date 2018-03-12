@@ -16,8 +16,10 @@ use memchr::{memchr, memchr2, memchr3};
 use syntax::hir::literal::{Literal, Literals};
 
 use freqs::BYTE_FREQUENCIES;
-use self::teddy_ssse3::Teddy;
+use self::teddy_avx2::{Teddy as TeddyAVX2};
+use self::teddy_ssse3::{Teddy as TeddySSSE3};
 
+mod teddy_avx2;
 mod teddy_ssse3;
 
 /// A prefix extracted from a compiled regular expression.
@@ -47,7 +49,10 @@ enum Matcher {
     AC(FullAcAutomaton<Literal>),
     /// A simd accelerated multiple string matcher. Used only for a small
     /// number of small literals.
-    Teddy128(Teddy),
+    TeddySSSE3(TeddySSSE3),
+    /// A simd accelerated multiple string matcher. Used only for a small
+    /// number of small literals. This uses 256-bit vectors.
+    TeddyAVX2(TeddyAVX2),
 }
 
 impl LiteralSearcher {
@@ -98,7 +103,8 @@ impl LiteralSearcher {
             FreqyPacked(ref s) => s.find(haystack).map(|i| (i, i + s.len())),
             BoyerMoore(ref s) => s.find(haystack).map(|i| (i, i + s.len())),
             AC(ref aut) => aut.find(haystack).next().map(|m| (m.start, m.end)),
-            Teddy128(ref ted) => ted.find(haystack).map(|m| (m.start, m.end)),
+            TeddySSSE3(ref t) => t.find(haystack).map(|m| (m.start, m.end)),
+            TeddyAVX2(ref t) => t.find(haystack).map(|m| (m.start, m.end)),
         }
     }
 
@@ -136,8 +142,11 @@ impl LiteralSearcher {
             Matcher::FreqyPacked(ref s) => LiteralIter::Single(&s.pat),
             Matcher::BoyerMoore(ref s) => LiteralIter::Single(&s.pattern),
             Matcher::AC(ref ac) => LiteralIter::AC(ac.patterns()),
-            Matcher::Teddy128(ref ted) => {
-                LiteralIter::Teddy128(ted.patterns())
+            Matcher::TeddySSSE3(ref ted) => {
+                LiteralIter::TeddySSSE3(ted.patterns())
+            }
+            Matcher::TeddyAVX2(ref ted) => {
+                LiteralIter::TeddyAVX2(ted.patterns())
             }
         }
     }
@@ -166,7 +175,8 @@ impl LiteralSearcher {
             FreqyPacked(_) => 1,
             BoyerMoore(_) => 1,
             AC(ref aut) => aut.len(),
-            Teddy128(ref ted) => ted.len(),
+            TeddySSSE3(ref ted) => ted.len(),
+            TeddyAVX2(ref ted) => ted.len(),
         }
     }
 
@@ -179,7 +189,8 @@ impl LiteralSearcher {
             FreqyPacked(ref single) => single.approximate_size(),
             BoyerMoore(ref single) => single.approximate_size(),
             AC(ref aut) => aut.heap_bytes(),
-            Teddy128(ref ted) => ted.approximate_size(),
+            TeddySSSE3(ref ted) => ted.approximate_size(),
+            TeddyAVX2(ref ted) => ted.approximate_size(),
         }
     }
 }
@@ -220,7 +231,15 @@ impl Matcher {
             }
         }
         let is_aho_corasick_fast = sset.dense.len() == 1 && sset.all_ascii;
-        if Teddy::available() && !is_aho_corasick_fast {
+        if TeddyAVX2::available() && !is_aho_corasick_fast {
+            const MAX_TEDDY_LITERALS: usize = 32;
+            if lits.literals().len() <= MAX_TEDDY_LITERALS {
+                if let Some(ted) = TeddyAVX2::new(lits) {
+                    return Matcher::TeddyAVX2(ted);
+                }
+            }
+        }
+        if TeddySSSE3::available() && !is_aho_corasick_fast {
             // Only try Teddy if Aho-Corasick can't use memchr on an ASCII
             // byte. Also, in its current form, Teddy doesn't scale well to
             // lots of literals.
@@ -232,8 +251,8 @@ impl Matcher {
             // negating the benefit of memchr.
             const MAX_TEDDY_LITERALS: usize = 32;
             if lits.literals().len() <= MAX_TEDDY_LITERALS {
-                if let Some(ted) = Teddy::new(lits) {
-                    return Matcher::Teddy128(ted);
+                if let Some(ted) = TeddySSSE3::new(lits) {
+                    return Matcher::TeddySSSE3(ted);
                 }
             }
             // Fallthrough to ol' reliable Aho-Corasick...
@@ -248,7 +267,8 @@ pub enum LiteralIter<'a> {
     Bytes(&'a [u8]),
     Single(&'a [u8]),
     AC(&'a [Literal]),
-    Teddy128(&'a [Vec<u8>]),
+    TeddySSSE3(&'a [Vec<u8>]),
+    TeddyAVX2(&'a [Vec<u8>]),
 }
 
 impl<'a> Iterator for LiteralIter<'a> {
@@ -284,7 +304,16 @@ impl<'a> Iterator for LiteralIter<'a> {
                     Some(&**next)
                 }
             }
-            LiteralIter::Teddy128(ref mut lits) => {
+            LiteralIter::TeddySSSE3(ref mut lits) => {
+                if lits.is_empty() {
+                    None
+                } else {
+                    let next = &lits[0];
+                    *lits = &lits[1..];
+                    Some(&**next)
+                }
+            }
+            LiteralIter::TeddyAVX2(ref mut lits) => {
                 if lits.is_empty() {
                     None
                 } else {
