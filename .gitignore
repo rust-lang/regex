@@ -5,3 +5,4 @@ bench-log
 wiki
 tags
 examples/debug.rs
+tmp/
