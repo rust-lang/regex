@@ -1,5 +1,17 @@
-TBD
-===
+0.2.9 (2018-03-12)
+==================
+This release introduces a new nightly only feature, `unstable`, which enables
+SIMD optimizations for certain types of regexes. No additional compile time
+options are necessary, and the regex crate will automatically choose the
+best CPU features at run time. As a result, the `simd` (nightly only) crate
+dependency has been dropped.
+
+New features:
+
+* [FEATURE #456](https://github.com/rust-lang/regex/pull/456):
+  The regex crate now includes AVX2 optimizations in addition to the extant
+  SSSE3 optimization.
+
 Bug gixes:
 
 * [BUG #455](https://github.com/rust-lang/regex/pull/455):
