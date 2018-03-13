@@ -4,12 +4,6 @@
 
 set -ex
 
-if [ "$TRAVIS_RUST_VERSION" = "nightly" ]; then
-  # We set this once so that all invocations share this setting. This should
-  # help with build times by avoiding excessive re-compiles.
-  export RUSTFLAGS="-C target-feature=+ssse3"
-fi
-
 # Builds the regex crate and runs tests.
 cargo build --verbose
 cargo doc --verbose
@@ -25,7 +19,7 @@ fi
 
 # Run tests. If we have nightly, then enable our nightly features.
 if [ "$TRAVIS_RUST_VERSION" = "nightly" ]; then
-  cargo test --verbose --features 'simd-accel pattern'
+  cargo test --verbose --features unstable
 else
   cargo test --verbose
 fi

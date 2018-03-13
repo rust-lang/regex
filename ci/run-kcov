@@ -28,7 +28,7 @@ while true; do
   esac
 done
 
-cargo test --no-run --verbose --jobs 4
+cargo test --no-run --verbose --jobs 4 --features unstable
 for t in ${tests[@]}; do
   kcov \
     --verify \
