@@ -25,6 +25,7 @@ pub use hir::visitor::{Visitor, visit};
 
 mod interval;
 pub mod literal;
+pub mod print;
 pub mod translate;
 mod visitor;
 
@@ -152,6 +153,10 @@ impl fmt::Display for ErrorKind {
 ///    and can be computed cheaply during the construction process. For
 ///    example, one such attribute is whether the expression must match at the
 ///    beginning of the text.
+///
+/// Also, an `Hir`'s `fmt::Display` implementation prints an HIR as a regular
+/// expression pattern string, and uses constant stack space and heap space
+/// proportional to the size of the `Hir`.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Hir {
     /// The underlying HIR kind.
@@ -599,6 +604,19 @@ impl HirKind {
             | HirKind::Concat(_)
             | HirKind::Alternation(_) => true,
         }
+    }
+}
+
+/// Print a display representation of this Hir.
+///
+/// The result of this is a valid regular expression pattern string.
+///
+/// This implementation uses constant stack space and heap space proportional
+/// to the size of the `Hir`.
+impl fmt::Display for Hir {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use hir::print::Printer;
+        Printer::new().print(self, f)
     }
 }
 
