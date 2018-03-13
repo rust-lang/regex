@@ -58,6 +58,11 @@ impl TranslatorBuilder {
     /// When disabled (the default), the translator is guaranteed to produce
     /// an expression that will only ever match valid UTF-8 (otherwise, the
     /// translator will return an error).
+    ///
+    /// Note that currently, even when invalid UTF-8 is banned, the translator
+    /// will permit a negated ASCII word boundary (i.e., `(?-u:\B)`) even
+    /// though it can actually match at invalid UTF-8 boundaries. This bug
+    /// will be fixed on the next semver release.
     pub fn allow_invalid_utf8(
         &mut self,
         yes: bool,
@@ -290,7 +295,7 @@ impl<'t, 'p> Visitor for TranslatorI<'t, 'p> {
                 self.push(HirFrame::Expr(try!(self.hir_dot(span))));
             }
             Ast::Assertion(ref x) => {
-                self.push(HirFrame::Expr(self.hir_assertion(x)));
+                self.push(HirFrame::Expr(try!(self.hir_assertion(x))));
             }
             Ast::Class(ast::Class::Perl(ref x)) => {
                 if self.flags().unicode() {
@@ -679,10 +684,10 @@ impl<'t, 'p> TranslatorI<'t, 'p> {
         })
     }
 
-    fn hir_assertion(&self, asst: &ast::Assertion) -> Hir {
+    fn hir_assertion(&self, asst: &ast::Assertion) -> Result<Hir> {
         let unicode = self.flags().unicode();
         let multi_line = self.flags().multi_line();
-        match asst.kind {
+        Ok(match asst.kind {
             ast::AssertionKind::StartLine => {
                 Hir::anchor(if multi_line {
                     hir::Anchor::StartLine
@@ -714,10 +719,20 @@ impl<'t, 'p> TranslatorI<'t, 'p> {
                 Hir::word_boundary(if unicode {
                     hir::WordBoundary::UnicodeNegate
                 } else {
+                    // It is possible for negated ASCII word boundaries to
+                    // match at invalid UTF-8 boundaries, even when searching
+                    // valid UTF-8.
+                    //
+                    // TODO(ag): Enable this error when regex goes to 1.0.
+                    // Otherwise, it is too steep of a breaking change.
+                    // if !self.trans().allow_invalid_utf8 {
+                        // return Err(self.error(
+                            // asst.span, ErrorKind::InvalidUtf8));
+                    // }
                     hir::WordBoundary::AsciiNegate
                 })
             }
-        }
+        })
     }
 
     fn hir_group(&self, group: &ast::Group, expr: Hir) -> Hir {
@@ -1490,7 +1505,15 @@ mod tests {
         assert_eq!(t(r"\b"), hir_word(hir::WordBoundary::Unicode));
         assert_eq!(t(r"\B"), hir_word(hir::WordBoundary::UnicodeNegate));
         assert_eq!(t(r"(?-u)\b"), hir_word(hir::WordBoundary::Ascii));
-        assert_eq!(t(r"(?-u)\B"), hir_word(hir::WordBoundary::AsciiNegate));
+        assert_eq!(
+            t_bytes(r"(?-u)\B"),
+            hir_word(hir::WordBoundary::AsciiNegate));
+
+        // TODO(ag): Enable this tests when regex goes to 1.0.
+        // assert_eq!(t_err(r"(?-u)\B"), TestError {
+            // kind: hir::ErrorKind::InvalidUtf8,
+            // span: Span::new(Position::new(5, 1, 6), Position::new(7, 1, 8)),
+        // });
     }
 
     #[test]
@@ -2355,13 +2378,13 @@ mod tests {
         assert!(t_bytes(r"[^a][^a]").is_always_utf8());
         assert!(t_bytes(r"\b").is_always_utf8());
         assert!(t_bytes(r"\B").is_always_utf8());
+        assert!(t_bytes(r"(?-u)\b").is_always_utf8());
 
         // Negative examples.
         assert!(!t_bytes(r"(?-u)\xFF").is_always_utf8());
         assert!(!t_bytes(r"(?-u)\xFF\xFF").is_always_utf8());
         assert!(!t_bytes(r"(?-u)[^a]").is_always_utf8());
         assert!(!t_bytes(r"(?-u)[^a][^a]").is_always_utf8());
-        assert!(!t_bytes(r"(?-u)\b").is_always_utf8());
         assert!(!t_bytes(r"(?-u)\B").is_always_utf8());
     }
 
@@ -2490,7 +2513,7 @@ mod tests {
         assert!(t(r"\A").is_match_empty());
         assert!(t(r"\z").is_match_empty());
         assert!(t(r"\B").is_match_empty());
-        assert!(t(r"(?-u)\B").is_match_empty());
+        assert!(t_bytes(r"(?-u)\B").is_match_empty());
 
         // Negative examples.
         assert!(!t(r"a+").is_match_empty());
