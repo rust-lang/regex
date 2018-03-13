@@ -87,6 +87,11 @@ impl ParserBuilder {
     /// When disabled (the default), the parser is guaranteed to produce
     /// an expression that will only ever match valid UTF-8 (otherwise, the
     /// parser will return an error).
+    ///
+    /// Note that currently, even when invalid UTF-8 is banned, the parser
+    /// will permit a negated ASCII word boundary (i.e., `(?-u:\B)`) even
+    /// though it can actually match at invalid UTF-8 boundaries. This bug
+    /// will be fixed on the next semver release.
     pub fn allow_invalid_utf8(&mut self, yes: bool) -> &mut ParserBuilder {
         self.hir.allow_invalid_utf8(yes);
         self

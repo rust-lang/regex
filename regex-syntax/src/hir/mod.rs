@@ -302,10 +302,7 @@ impl Hir {
         // A negated word boundary matches the empty string, but a normal
         // word boundary does not!
         info.set_match_empty(word_boundary.is_negated());
-        // ASCII word boundaries can match invalid UTF-8.
-        if let WordBoundary::Ascii = word_boundary {
-            info.set_always_utf8(false);
-        }
+        // Negated ASCII word boundaries can match invalid UTF-8.
         if let WordBoundary::AsciiNegate = word_boundary {
             info.set_always_utf8(false);
         }
