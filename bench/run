@@ -9,11 +9,6 @@ if [ $# = 0 ] || [ $1 = '-h' ] || [ $1 = '--help' ]; then
   usage
 fi
 
-# Enable SIMD, unless we're in CI, then we inherit RUSTLFAGS.
-if [ -z "$TRAVIS_RUST_VERSION" ]; then
-  export RUSTFLAGS="-C target-cpu=native"
-fi
-
 which="$1"
 shift
 case $which in
