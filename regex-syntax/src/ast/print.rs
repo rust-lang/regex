@@ -9,7 +9,7 @@
 // except according to those terms.
 
 /*!
-This module provides a regular expression printer.
+This module provides a regular expression printer for `Ast`.
 */
 
 use std::fmt;
@@ -422,7 +422,7 @@ mod tests {
     }
 
     fn roundtrip_with<F>(mut f: F, given: &str)
-        where F: FnMut(&mut ParserBuilder) -> &mut ParserBuilder
+    where F: FnMut(&mut ParserBuilder) -> &mut ParserBuilder
     {
         let mut builder = ParserBuilder::new();
         f(&mut builder);
@@ -432,11 +432,6 @@ mod tests {
         let mut dst = String::new();
         printer.print(&ast, &mut dst).unwrap();
         assert_eq!(given, dst);
-    }
-
-    #[test]
-    fn scratch() {
-        roundtrip(".");
     }
 
     #[test]
