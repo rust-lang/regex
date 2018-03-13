@@ -188,6 +188,16 @@ assert!(!matches.matched(5));
 assert!(matches.matched(6));
 ```
 
+### Usage: enable SIMD optimizations
+
+This crate provides an `unstable` feature that can only be enabled on nightly
+Rust. When this feature is enabled, the regex crate will use SIMD optimizations
+if your CPU supports them. No additional compile time flags are required; the
+regex crate will detect your CPU support at runtime.
+
+When `std::arch` becomes stable, then these optimizations will be enabled
+automatically.
+
 
 ### Usage: a regular expression parser
 
