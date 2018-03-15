@@ -19,6 +19,7 @@ use {Regex, Text};
 #[cfg(not(feature = "re-onig"))]
 #[cfg(not(feature = "re-pcre1"))]
 #[cfg(not(feature = "re-pcre2"))]
+#[cfg(not(feature = "re-stdcpp"))]
 #[cfg(not(feature = "re-dphobos-dmd-ct"))]
 #[cfg(not(feature = "re-dphobos-ldc-ct"))]
 bench_match!(no_exponential, {
@@ -45,6 +46,7 @@ bench_match!(match_class_in_range, "[ac]", {
 });
 
 #[cfg(not(feature = "re-rust-bytes"))]
+#[cfg(not(feature = "re-stdcpp"))]
 #[cfg(not(feature = "re-tcl"))]
 bench_match!(match_class_unicode, r"\p{L}", {
     format!("{}a", repeat("☃5☃5").take(20).collect::<String>())

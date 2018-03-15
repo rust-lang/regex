@@ -1,7 +1,7 @@
 #!/bin/bash
 
 usage() {
-  echo "Usage: $(basename $0) [dphobos-dmd | dphobos-ldc | dphobos-dmd-ct | dphobos-ldc-ct | rust | rust-bytes | pcre1 | pcre2 | re2 | onig | tcl ]" >&2
+  echo "Usage: $(basename $0) [dphobos-dmd | dphobos-ldc | dphobos-dmd-ct | dphobos-ldc-ct | rust | rust-bytes | pcre1 | pcre2 | stdcpp | re2 | onig | tcl ]" >&2
   exit 1
 }
 
@@ -29,6 +29,9 @@ case $which in
     ;;
   rust-bytes)
     exec cargo bench --bench bench --features re-rust-bytes "$@"
+    ;;
+  stdcpp)
+    exec cargo bench --bench bench --features re-stdcpp "$@"
     ;;
   re2)
     exec cargo bench --bench bench --features re-re2 "$@"

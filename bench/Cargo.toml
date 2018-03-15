@@ -46,6 +46,7 @@ bench = false
 re-pcre1 = ["libpcre-sys"]
 re-pcre2 = []
 re-onig = ["onig"]
+re-stdcpp = []
 re-re2 = []
 re-dphobos = []
 re-dphobos-dmd = ["re-dphobos"]

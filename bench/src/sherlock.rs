@@ -35,8 +35,14 @@ sherlock!(name_sherlock_holmes, r"Sherlock Holmes", 91);
 // Like the above, except case insensitively. The prefix detector will extract
 // multiple *cut* prefix literals for each of the following before hitting its
 // limit. All of these should be able to use either memchr2 or memchr3.
+// std C++ does not support inline modifier syntax
+#[cfg(not(feature = "re-stdcpp"))]
 sherlock!(name_sherlock_nocase, r"(?i)Sherlock", 102);
+// std C++ does not support inline modifier syntax
+#[cfg(not(feature = "re-stdcpp"))]
 sherlock!(name_holmes_nocase, r"(?i)Holmes", 467);
+// std C++ does not support inline modifier syntax
+#[cfg(not(feature = "re-stdcpp"))]
 sherlock!(name_sherlock_holmes_nocase, r"(?i)Sherlock Holmes", 96);
 
 // Will quickly find instances of 'Sherlock', but then needs to fall back to
@@ -55,6 +61,8 @@ sherlock!(name_alt2, r"Sherlock|Holmes", 558);
 // also can't use any memchr variant.
 sherlock!(name_alt3, r"Sherlock|Holmes|Watson|Irene|Adler|John|Baker", 740);
 // Still using Aho-Corasick, but needs the lazy DFA.
+// std C++ does not support inline modifier syntax
+#[cfg(not(feature = "re-stdcpp"))]
 sherlock!(
     name_alt3_nocase,
     r"(?i)Sherlock|Holmes|Watson|Irene|Adler|John|Baker",
@@ -62,9 +70,13 @@ sherlock!(
 // Should still use Aho-Corasick for the prefixes in each alternate, but
 // we need to use the lazy DFA to complete it.
 sherlock!(name_alt4, r"Sher[a-z]+|Hol[a-z]+", 582);
+// std C++ does not support inline modifier syntax
+#[cfg(not(feature = "re-stdcpp"))]
 sherlock!(name_alt4_nocase, r"(?i)Sher[a-z]+|Hol[a-z]+", 697);
 // Uses Aho-Corasick, but can use memchr3 (unlike name_alt3).
 sherlock!(name_alt5, r"Sherlock|Holmes|Watson", 639);
+// std C++ does not support inline modifier syntax
+#[cfg(not(feature = "re-stdcpp"))]
 sherlock!(name_alt5_nocase, r"(?i)Sherlock|Holmes|Watson", 650);
 
 // How long does it take to discover that there's no match? In the first two
@@ -80,6 +92,8 @@ sherlock!(no_match_really_common, r"aei", 0);
 // matching engines.)
 sherlock!(the_lower, r"the", 7218);
 sherlock!(the_upper, r"The", 741);
+// std C++ does not support inline modifier syntax
+#[cfg(not(feature = "re-stdcpp"))]
 sherlock!(the_nocase, r"(?i)the", 7987);
 
 // Process whitespace after a very common word.
@@ -91,30 +105,41 @@ sherlock!(the_whitespace, r"the\s+\w+", 5410);
 #[cfg(not(feature = "re-dphobos"))]
 #[cfg(not(feature = "re-pcre1"))]
 #[cfg(not(feature = "re-pcre2"))]
+#[cfg(not(feature = "re-stdcpp"))]
 #[cfg(not(feature = "re-tcl"))]
 sherlock!(everything_greedy, r".*", 13053);
+// std::regex . does not match \r
+#[cfg(feature = "re-stdcpp")]
+sherlock!(everything_greedy, r"[^\n]*", 13053);
 #[cfg(not(feature = "re-dphobos"))]
 #[cfg(not(feature = "re-onig"))]
 #[cfg(not(feature = "re-pcre1"))]
 #[cfg(not(feature = "re-pcre2"))]
+// std C++ does not support inline modifier syntax
+#[cfg(not(feature = "re-stdcpp"))]
 #[cfg(not(feature = "re-tcl"))]
 sherlock!(everything_greedy_nl, r"(?s).*", 1);
 
 // How fast can we match every letter? This also defeats any clever prefix
 // tricks.
+#[cfg(not(feature = "re-stdcpp"))]
 #[cfg(not(feature = "re-tcl"))]
 sherlock!(letters, r"\p{L}", 447160);
 
+#[cfg(not(feature = "re-stdcpp"))]
 #[cfg(not(feature = "re-tcl"))]
 sherlock!(letters_upper, r"\p{Lu}", 14180);
 
+#[cfg(not(feature = "re-stdcpp"))]
 #[cfg(not(feature = "re-tcl"))]
 sherlock!(letters_lower, r"\p{Ll}", 432980);
 
 // Similarly, for words.
 #[cfg(not(feature = "re-re2"))]
+#[cfg(not(feature = "re-stdcpp"))]
 sherlock!(words, r"\w+", 109214);
 #[cfg(feature = "re-re2")]
+#[cfg(feature = "re-stdcpp")]
 sherlock!(words, r"\w+", 109222); // hmm, why does RE2 diverge here?
 
 // Find complete words before Holmes. The `\w` defeats any prefix
@@ -136,6 +161,7 @@ sherlock!(holmes_cochar_watson, r"Holmes.{0,25}Watson|Watson.{0,25}Holmes", 7);
 #[cfg(not(feature = "re-onig"))]
 #[cfg(not(feature = "re-pcre1"))]
 #[cfg(not(feature = "re-pcre2"))]
+#[cfg(not(feature = "re-stdcpp"))]
 #[cfg(not(feature = "re-tcl"))]
 sherlock!(
     holmes_coword_watson,
@@ -150,6 +176,8 @@ sherlock!(quotes, r#"["'][^"']{0,30}[?!.]["']"#, 767);
 // Finds all occurrences of Sherlock Holmes at the beginning or end of a line.
 // The empty assertions defeat any detection of prefix literals, so it's the
 // lazy DFA the entire way.
+// std C++ does not support multiline until C++17 nor the inline modifier syntax
+#[cfg(not(feature = "re-stdcpp"))]
 #[cfg(not(feature = "re-dphobos"))]
 sherlock!(
     line_boundary_sherlock_holmes,
