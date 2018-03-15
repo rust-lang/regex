@@ -35,6 +35,8 @@ pub use ffi::onig::Regex;
 pub use ffi::pcre1::Regex;
 #[cfg(feature = "re-pcre2")]
 pub use ffi::pcre2::Regex;
+#[cfg(feature = "re-stdcpp")]
+pub use ffi::stdcpp::Regex;
 #[cfg(feature = "re-re2")]
 pub use ffi::re2::Regex;
 #[cfg(feature = "re-dphobos")]
@@ -90,6 +92,7 @@ macro_rules! text {
     feature = "re-onig",
     feature = "re-pcre1",
     feature = "re-pcre2",
+    feature = "re-stdcpp",
     feature = "re-re2",
     feature = "re-dphobos",
     feature = "re-rust",
@@ -107,6 +110,7 @@ type Text = Vec<u8>;
     feature = "re-onig",
     feature = "re-pcre1",
     feature = "re-pcre2",
+    feature = "re-stdcpp",
     feature = "re-re2",
     feature = "re-dphobos",
     feature = "re-rust",
