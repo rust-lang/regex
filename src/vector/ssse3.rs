@@ -20,7 +20,7 @@ impl SSSE3VectorBuilder {
     /// If the SSSE3 feature is not enabled for the current target, then
     /// return `None`.
     pub fn new() -> Option<SSSE3VectorBuilder> {
-        if is_target_feature_detected!("ssse3") {
+        if is_x86_feature_detected!("ssse3") {
             Some(SSSE3VectorBuilder(()))
         } else {
             None
