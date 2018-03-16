@@ -20,10 +20,20 @@ fn main() {
     }
     if env::var("CARGO_FEATURE_RE_STDCPP").is_ok() {
         // stdcpp is a C++ library, so we need to compile our shim layer.
-        cc::Build::new()
-            .cpp(true)
-            .file("src/ffi/stdcpp.cpp")
-            .compile("libcstdcpp.a");
+        if !env::var("CARGO_FEATURE_LIBCXX").is_ok() {
+            // use default stdlib
+            cc::Build::new()
+                .cpp(true)
+                .file("src/ffi/stdcpp.cpp")
+                .compile("libcstdcpp.a");
+        } else {
+            // use libc++ stdlib
+            cc::Build::new()
+                .cpp(true)
+                .file("src/ffi/stdcpp.cpp")
+                .cpp_link_stdlib("c++")
+                .compile("libcstdcpp.a");
+        }
     }
     if env::var("CARGO_FEATURE_RE_RE2").is_ok() {
         // RE2 is a C++ library, so we need to compile our shim layer.
