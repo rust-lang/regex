@@ -222,20 +222,20 @@ fn cmd_utf8_ranges(args: &Args) -> Result<()> {
             format!("unexpected HIR, expected Unicode class").into(),
         ),
     };
+    let mut char_count = 0;
     for (i, range) in cls.iter().enumerate() {
         if i > 0 {
             println!("----------------------------");
         }
+        char_count += (range.end() as u32) - (range.start() as u32) + 1;
         for seq in Utf8Sequences::new(range.start(), range.end()) {
-            for (i, utf8_range) in seq.into_iter().enumerate() {
-                if i > 0 {
-                    print!("|");
-                }
+            for utf8_range in seq.into_iter() {
                 print!("[{:02X}-{:02X}]", utf8_range.start, utf8_range.end);
             }
             println!();
         }
     }
+    println!("codepoint count: {}", char_count);
     Ok(())
 }
 
