@@ -135,8 +135,15 @@ fn count_pcre2(pat: &str, haystack: &str) -> usize {
     Regex::new(pat).unwrap().find_iter(haystack).count()
 }
 
+#[cfg(not(any(
+    feature = "re-stdcpp",
+    feature = "re-boost",
+  )))]
 nada!("re-stdcpp", count_stdcpp);
-#[cfg(feature = "re-stdcpp")]
+#[cfg(any(
+    feature = "re-stdcpp",
+    feature = "re-boost",
+  ))]
 fn count_stdcpp(pat: &str, haystack: &str) -> usize {
     use ffi::stdcpp::Regex;
     Regex::new(pat).unwrap().find_iter(haystack).count()

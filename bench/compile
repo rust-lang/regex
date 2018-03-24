@@ -2,5 +2,5 @@
 
 exec cargo build \
   --release \
-  --features 're-stdcpp re-re2 re-onig re-pcre1 re-pcre2 re-rust re-rust-bytes re-tcl re-dphobos-dmd re-dphobos-ldc' \
+  --features 're-stdcpp re-boost re-re2 re-onig re-pcre1 re-pcre2 re-rust re-rust-bytes re-tcl re-dphobos-dmd re-dphobos-ldc' \
   "$@"
