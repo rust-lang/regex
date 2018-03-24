@@ -106,10 +106,14 @@ sherlock!(the_whitespace, r"the\s+\w+", 5410);
 #[cfg(not(feature = "re-pcre1"))]
 #[cfg(not(feature = "re-pcre2"))]
 #[cfg(not(feature = "re-stdcpp"))]
+#[cfg(not(feature = "re-boost"))]
 #[cfg(not(feature = "re-tcl"))]
 sherlock!(everything_greedy, r".*", 13053);
 // std::regex . does not match \r
-#[cfg(feature = "re-stdcpp")]
+#[cfg(any(
+    feature = "re-stdcpp",
+    feature = "re-boost",
+  ))]
 sherlock!(everything_greedy, r"[^\n]*", 13053);
 #[cfg(not(feature = "re-dphobos"))]
 #[cfg(not(feature = "re-onig"))]
@@ -122,24 +126,34 @@ sherlock!(everything_greedy_nl, r"(?s).*", 1);
 
 // How fast can we match every letter? This also defeats any clever prefix
 // tricks.
+// std C++ does not support unicode character classes
 #[cfg(not(feature = "re-stdcpp"))]
+#[cfg(not(feature = "re-boost"))]
 #[cfg(not(feature = "re-tcl"))]
 sherlock!(letters, r"\p{L}", 447160);
 
+// std C++ does not support unicode character classes
 #[cfg(not(feature = "re-stdcpp"))]
+#[cfg(not(feature = "re-boost"))]
 #[cfg(not(feature = "re-tcl"))]
 sherlock!(letters_upper, r"\p{Lu}", 14180);
 
+// std C++ does not support unicode character classes
 #[cfg(not(feature = "re-stdcpp"))]
+#[cfg(not(feature = "re-boost"))]
 #[cfg(not(feature = "re-tcl"))]
 sherlock!(letters_lower, r"\p{Ll}", 432980);
 
 // Similarly, for words.
-#[cfg(not(feature = "re-re2"))]
 #[cfg(not(feature = "re-stdcpp"))]
+#[cfg(not(feature = "re-boost"))]
+#[cfg(not(feature = "re-re2"))]
 sherlock!(words, r"\w+", 109214);
-#[cfg(feature = "re-re2")]
-#[cfg(feature = "re-stdcpp")]
+#[cfg(any(
+    feature = "re-stdcpp",
+    feature = "re-boost",
+    feature = "re-re2",
+  ))]
 sherlock!(words, r"\w+", 109222); // hmm, why does RE2 diverge here?
 
 // Find complete words before Holmes. The `\w` defeats any prefix
@@ -162,6 +176,7 @@ sherlock!(holmes_cochar_watson, r"Holmes.{0,25}Watson|Watson.{0,25}Holmes", 7);
 #[cfg(not(feature = "re-pcre1"))]
 #[cfg(not(feature = "re-pcre2"))]
 #[cfg(not(feature = "re-stdcpp"))]
+#[cfg(not(feature = "re-boost"))]
 #[cfg(not(feature = "re-tcl"))]
 sherlock!(
     holmes_coword_watson,
@@ -178,13 +193,17 @@ sherlock!(quotes, r#"["'][^"']{0,30}[?!.]["']"#, 767);
 // lazy DFA the entire way.
 // std C++ does not support multiline until C++17 nor the inline modifier syntax
 #[cfg(not(feature = "re-stdcpp"))]
+#[cfg(not(feature = "re-boost"))]
 #[cfg(not(feature = "re-dphobos"))]
 sherlock!(
     line_boundary_sherlock_holmes,
     r"(?m)^Sherlock Holmes|Sherlock Holmes$",
     34);
 // D matches both \r\n and \n as EOL
-#[cfg(feature = "re-dphobos")]
+#[cfg(any(
+    feature = "re-boost",
+    feature = "re-dphobos",
+  ))]
 sherlock!(
     line_boundary_sherlock_holmes,
     r"(?m)^Sherlock Holmes|Sherlock Holmes$",

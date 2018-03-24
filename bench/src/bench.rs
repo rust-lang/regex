@@ -28,14 +28,16 @@ extern crate regex;
 extern crate regex_syntax;
 extern crate test;
 
-
 #[cfg(feature = "re-onig")]
 pub use ffi::onig::Regex;
 #[cfg(feature = "re-pcre1")]
 pub use ffi::pcre1::Regex;
 #[cfg(feature = "re-pcre2")]
 pub use ffi::pcre2::Regex;
-#[cfg(feature = "re-stdcpp")]
+#[cfg(any(
+    feature = "re-stdcpp",
+    feature = "re-boost",
+  ))]
 pub use ffi::stdcpp::Regex;
 #[cfg(feature = "re-re2")]
 pub use ffi::re2::Regex;
@@ -93,6 +95,7 @@ macro_rules! text {
     feature = "re-pcre1",
     feature = "re-pcre2",
     feature = "re-stdcpp",
+    feature = "re-boost",
     feature = "re-re2",
     feature = "re-dphobos",
     feature = "re-rust",
@@ -111,6 +114,7 @@ type Text = Vec<u8>;
     feature = "re-pcre1",
     feature = "re-pcre2",
     feature = "re-stdcpp",
+    feature = "re-boost",
     feature = "re-re2",
     feature = "re-dphobos",
     feature = "re-rust",

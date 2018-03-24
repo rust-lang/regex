@@ -46,7 +46,9 @@ bench_match!(match_class_in_range, "[ac]", {
 });
 
 #[cfg(not(feature = "re-rust-bytes"))]
+// std C++ does not support unicode character classes
 #[cfg(not(feature = "re-stdcpp"))]
+#[cfg(not(feature = "re-boost"))]
 #[cfg(not(feature = "re-tcl"))]
 bench_match!(match_class_unicode, r"\p{L}", {
     format!("{}a", repeat("☃5☃5").take(20).collect::<String>())
