@@ -1,3 +1,14 @@
+0.2.10 (2018-03-16)
+===================
+This release primarily updates the regex crate to changes made in `std::arch`
+on nightly Rust.
+
+New features:
+
+* [FEATURE #458](https://github.com/rust-lang/regex/pull/458):
+  The `Hir` type in `regex-syntax` now has a printer.
+
+
 0.2.9 (2018-03-12)
 ==================
 This release introduces a new nightly only feature, `unstable`, which enables
