@@ -166,7 +166,13 @@ impl<'p> Spans<'p> {
     fn from_formatter<'e, E: fmt::Display>(
         fmter: &'p Formatter<'e, E>,
     ) -> Spans<'p> {
-        let line_count = fmter.pattern.lines().count();
+        let mut line_count = fmter.pattern.lines().count();
+        // If the pattern ends with a `\n` literal, then our line count is
+        // off by one, since a span can occur immediately after the last `\n`,
+        // which is consider to be an additional line.
+        if fmter.pattern.ends_with('\n') {
+            line_count += 1;
+        }
         let line_number_width =
             if line_count <= 1 {
                 0
@@ -275,4 +281,17 @@ impl<'p> Spans<'p> {
 
 fn repeat_char(c: char, count: usize) -> String {
     ::std::iter::repeat(c).take(count).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use ast::parse::Parser;
+
+    // See: https://github.com/rust-lang/regex/issues/464
+    #[test]
+    fn regression_464() {
+        let err = Parser::new().parse("a{\n").unwrap_err();
+        // This test checks that the error formatter doesn't panic.
+        assert!(!err.to_string().is_empty());
+    }
 }
