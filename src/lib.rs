@@ -520,9 +520,6 @@ another matching engine with fixed memory requirements.
 #![deny(missing_docs)]
 #![cfg_attr(test, deny(warnings))]
 #![cfg_attr(feature = "pattern", feature(pattern))]
-#![cfg_attr(
-    feature = "unstable",
-    feature(cfg_target_feature, target_feature, stdsimd))]
 
 extern crate aho_corasick;
 extern crate memchr;

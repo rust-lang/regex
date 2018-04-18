@@ -120,6 +120,7 @@ impl Teddy {
         unsafe { self.find_impl(haystack) }
     }
 
+    #[allow(unused_attributes)]
     #[target_feature(enable = "avx2")]
     unsafe fn find_impl(&self, haystack: &[u8]) -> Option<Match> {
         // If our haystack is smaller than the block size, then fall back to
