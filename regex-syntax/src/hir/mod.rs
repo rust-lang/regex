@@ -797,6 +797,16 @@ impl ClassUnicode {
     pub fn symmetric_difference(&mut self, other: &ClassUnicode) {
         self.set.symmetric_difference(&other.set);
     }
+
+    /// Returns true iff this character class contains no characters.
+    ///
+    /// This should never be true for a character class which was
+    /// constructed by the regex parser, but a notion of character
+    /// class emptiness can be useful for code that wants to
+    /// programmatically generate character classes.
+    pub fn is_empty(&self) -> bool {
+        self.set.is_empty()
+    }
 }
 
 /// An iterator over all ranges in a Unicode character class.
@@ -997,6 +1007,16 @@ impl ClassBytes {
     /// if and only if this class contains a non-ASCII byte.
     pub fn is_all_ascii(&self) -> bool {
         self.set.intervals().last().map_or(true, |r| r.end <= 0x7F)
+    }
+
+    /// Returns true iff this character class contains no characters.
+    ///
+    /// This should never be true for a character class which was
+    /// constructed by the regex parser, but a notion of character
+    /// class emptiness can be useful for code that wants to
+    /// programmatically generate character classes.
+    pub fn is_empty(&self) -> bool {
+        self.set.is_empty()
     }
 }
 

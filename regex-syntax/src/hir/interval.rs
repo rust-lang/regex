@@ -309,6 +309,11 @@ impl<I: Interval> IntervalSet<I> {
         }
         true
     }
+
+    /// Returns true iff this class is empty.
+    pub fn is_empty(&self) -> bool {
+        self.ranges.is_empty()
+    }
 }
 
 /// An iterator over intervals.
