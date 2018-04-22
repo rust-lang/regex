@@ -50,20 +50,15 @@ impl IsOnePassVisitor {
         let mut empty_run = vec![];
 
         for e in NestedConcat::new(es) {
-            // TODO(ethan):yakshaving factor the determination of when
-            //     a regex accepts_empty out into a separate function,
-            //     so that we don't compute the whole first set when we
-            //     don't need to.
-            let fset = fset_of(e);
             let is_rep = match e.kind() {
                 &HirKind::Repetition(_) => true,
                 _ => false,
             };
 
             empty_run.push(e);
-            if !(fset.accepts_empty || is_rep) {
-                // this is the last one in the run
-                break;
+            if !(accepts_empty(e) || is_rep) {
+                self.0 = self.0 && !fsets_clash(&empty_run);
+                empty_run.clear();
             }
         }
 
@@ -76,7 +71,7 @@ impl IsOnePassVisitor {
         self.0 = self.0 && !fsets_clash(&es.iter().collect::<Vec<_>>());
     }
 
-    // Unicode classes are really big alternatives from the byte
+    // Unicode classes are really just big alternatives from the byte
     // oriented point of view.
     //
     // This function translates a unicode class into the 
@@ -99,7 +94,7 @@ impl IsOnePassVisitor {
                     }
                 }
             }
-            _ => {} // FALLTHROUGH
+            _ => {}
         }
     }
 
@@ -115,16 +110,6 @@ fn fsets_clash(es: &[&Hir]) -> bool {
                 let mut fset = fset_of(e1);
                 let fset2 = fset_of(e2);
 
-                // For the regex /a|()+/, we don't have a way to
-                // differentiate the branches, so we are not onepass.
-                //
-                // We might be able to loosen this restriction by
-                // considering the expression after the alternative
-                // if there is one.
-                if fset.is_empty() || fset2.is_empty() {
-                    return true;
-                }
-
                 fset.intersect(&fset2);
                 if ! fset.is_empty() {
                     return true;
@@ -138,14 +123,14 @@ fn fsets_clash(es: &[&Hir]) -> bool {
 
 /// Compute the first set of a given regular expression.
 ///
-/// The first set of a regular expression is the set of all characters
+/// The first set of a regular expression is the set of all bytes
 /// which might begin it. This is a less general version of the
 /// notion of a regular expression preview (the first set can be
 /// thought of as the 1-preview of a regular expression).
 ///
 /// Note that first sets are byte-oriented because the DFA is
 /// byte oriented. This means an expression like /Δ|δ/ is actually not
-/// one-pass, even though there is clearly no non-determinism inherent
+/// onepass, even though there is clearly no non-determinism inherent
 /// to the regex at a unicode code point level (big delta and little
 /// delta start with the same byte).
 fn fset_of(expr: &Hir) -> FirstSet {
@@ -155,7 +140,9 @@ fn fset_of(expr: &Hir) -> FirstSet {
         f
     }
 
-    match expr.kind() {
+    // First compute the set of characters that might begin
+    // the expression (ignoring epsilon for now).
+    let mut f_char_set = match expr.kind() {
         &HirKind::Empty => FirstSet::epsilon(),
         &HirKind::Literal(ref lit) => {
             match lit {
@@ -191,29 +178,13 @@ fn fset_of(expr: &Hir) -> FirstSet {
         // that such an emptylook could potentially match on any character.
         &HirKind::Anchor(_) | &HirKind::WordBoundary(_) => FirstSet::anychar(),
 
-        &HirKind::Repetition(ref rep) => {
-            let mut f = fset_of(&*rep.hir);
-            match rep.kind {
-                RepetitionKind::ZeroOrOne => f.accepts_empty = true,
-                RepetitionKind::ZeroOrMore => f.accepts_empty = true,
-                RepetitionKind::OneOrMore => {},
-                RepetitionKind::Range(ref range) => {
-                    match range {
-                        &RepetitionRange::Exactly(0)
-                        | &RepetitionRange::AtLeast(0)
-                        | &RepetitionRange::Bounded(0, _) =>
-                            f.accepts_empty = true,
-                        _ => {}
-                    }
-                }
-            }
-            f
-        },
+        &HirKind::Repetition(ref rep) => fset_of(&rep.hir),
         &HirKind::Group(ref group) => fset_of(&group.hir),
 
         // The most involved case. We need to strip leading empty-looks
         // as well as take the union of the first sets of the first n+1
-        // expressions where n is the number of leading repetitions.
+        // expressions where n is the number of leading expressions which
+        // accept the empty string.
         &HirKind::Concat(ref es) => {
             let mut fset = FirstSet::empty();
             for (i, e) in es.iter().enumerate() {
@@ -229,13 +200,9 @@ fn fset_of(expr: &Hir) -> FirstSet {
                         let inner_fset = fset_of(e);
                         fset.union(&inner_fset);
 
-                        if !inner_fset.accepts_empty() {
+                        if !accepts_empty(e) {
                             // We can stop accumulating after we stop seeing
                             // first sets which contain epsilon.
-                            // Also, a contatination which terminated by
-                            // one or more expressions which do not accept
-                            // epsilon itself does not acceept epsilon.
-                            fset.accepts_empty = false;
                             break;
                         }
                     }
@@ -250,13 +217,68 @@ fn fset_of(expr: &Hir) -> FirstSet {
             }
             fset
         }
+    };
+
+    f_char_set.accepts_empty = accepts_empty(expr);
+    f_char_set
+}
+
+fn accepts_empty(expr: &Hir) -> bool {
+    match expr.kind() {
+        &HirKind::Empty => true,
+        &HirKind::Literal(_) => false,
+        &HirKind::Class(_) => false,
+
+        // A naked empty look is a pretty weird thing because we
+        // normally strip them from the beginning of concatinations.
+        // We are just going to treat them like `.`
+        &HirKind::Anchor(_) | &HirKind::WordBoundary(_) => false,
+
+        &HirKind::Repetition(ref rep) => {
+            match rep.kind {
+                RepetitionKind::ZeroOrOne => true,
+                RepetitionKind::ZeroOrMore => true,
+                RepetitionKind::OneOrMore => accepts_empty(&rep.hir),
+                RepetitionKind::Range(ref range) => {
+                    match range {
+                        &RepetitionRange::Exactly(0)
+                        | &RepetitionRange::AtLeast(0)
+                        | &RepetitionRange::Bounded(0, _) => true,
+                        _ => accepts_empty(&rep.hir),
+                    }
+                }
+            }
+        }
+
+        &HirKind::Group(ref group) => accepts_empty(&group.hir),
+
+        &HirKind::Concat(ref es) => {
+            let mut accepts: bool = true;
+            for e in es.iter() {
+                match e.kind() {
+                    &HirKind::Anchor(_) | &HirKind::WordBoundary(_) => {
+                        // Ignore any leading emptylooks.
+                    }
+                    _ => {
+                        accepts = accepts && accepts_empty(&e);
+                    }
+                }
+
+                if !accepts {
+                    break;
+                }
+            }
+            accepts
+        }
+
+        &HirKind::Alternation(ref es) => es.iter().any(accepts_empty)
     }
 }
 
 /// The first byte of a unicode code point.
 ///
-/// We only ever care about the first byte of a particular character,
-/// because the onepass DFA is implemented in the byte space, not the
+/// We only ever care about the first byte of a particular character
+/// because the onepass DFA is implemented in the byte space not the
 /// character space. This means, for example, that a branch between
 /// lowercase delta and uppercase delta is actually non-deterministic.
 fn first_byte(c: char) -> u8 {
@@ -322,10 +344,6 @@ impl FirstSet {
 
     fn is_empty(&self) -> bool {
         self.bytes.is_empty() && !self.accepts_empty
-    }
-
-    fn accepts_empty(&self) -> bool {
-        self.accepts_empty
     }
 }
 
@@ -543,5 +561,11 @@ mod tests {
 
         assert!(!is_onepass(&e1));
         assert!(!is_onepass(&e2));
+    }
+
+    #[test]
+    fn is_onepass_clash_in_middle_of_concat() {
+        let e = Parser::new().parse(r"ab?b").unwrap();
+        assert!(!is_onepass(&e));
     }
 }

@@ -245,7 +245,7 @@ impl<'a, 'm, 'r, 's, I: Input> Bounded<'a, 'm, 'r, 's, I> {
                     ip = inst.goto1;
                 }
                 EmptyLook(ref inst) => {
-                    if self.input.is_empty_match(at, inst) {
+                    if self.input.is_empty_match(at, inst.look) {
                         ip = inst.goto;
                     } else {
                         return false;

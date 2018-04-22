@@ -32,6 +32,7 @@ use re_set;
 use re_trait::{RegularExpression, Slot, Locations};
 use re_unicode;
 use utf8::next_utf8;
+use onepass::{OnePass, OnePassCompiler};
 
 /// `Exec` manages the execution of a regular expression.
 ///
@@ -81,6 +82,8 @@ struct ExecReadOnly {
     /// preceding `.*?`). This is used by the DFA to find the starting location
     /// of matches.
     dfa_reverse: Program,
+    /// A compiled onepass DFA. Always byte based.
+    onepass: Option<OnePass>,
     /// A set of suffix literals extracted from the regex.
     ///
     /// Prefix literals are stored on the `Program`, since they are used inside
@@ -176,6 +179,16 @@ impl ExecBuilder {
         self.match_type = Some(MatchType::Nfa(MatchNfaType::Backtrack));
         self
     }
+
+    /// Asks the matching engine to use a onepass DFA if possible.
+    ///
+    /// This overrides whatever was previously set via the `automatic`,
+    /// `nfa`, or `bounded_backtracking` methods.
+    pub fn onepass(mut self) -> Self {
+        self.match_type = Some(MatchType::OnePassDfa(Box::new(None)));
+        self
+    }
+
 
     /// Compiles byte based programs for use with the NFA matching engines.
     ///
@@ -286,6 +299,7 @@ impl ExecBuilder {
                 nfa: Program::new(),
                 dfa: Program::new(),
                 dfa_reverse: Program::new(),
+                onepass: None,
                 suffixes: LiteralSearcher::empty(),
                 match_type: MatchType::Nothing,
             });
@@ -320,10 +334,14 @@ impl ExecBuilder {
         dfa_reverse.dfa_size_limit = self.options.dfa_size_limit;
 
         let mut ro = ExecReadOnly {
-            res: self.options.pats,
             nfa: nfa,
             dfa: dfa,
             dfa_reverse: dfa_reverse,
+            onepass: OnePassCompiler::new(
+                        &parsed.exprs,
+                        &self.options,
+                        self.only_utf8).and_then(|c| c.compile()).ok(),
+            res: self.options.pats,
             suffixes: LiteralSearcher::suffixes(suffixes),
             match_type: MatchType::Nothing,
         };
@@ -421,6 +439,21 @@ impl<'c> RegularExpression for ExecNoSync<'c> {
                     dfa::Result::Quit => self.shortest_nfa(text, start),
                 }
             }
+            MatchType::OnePassDfa(_) => {
+                debug_assert!(self.ro.onepass.is_some());
+
+                match self.ro.onepass {
+                    Some(ref op) => {
+                        let mut slots = vec![None; self.slots_len()];
+                        if op.exec(&mut slots, text, start) {
+                            slots[0]
+                        } else {
+                            None
+                        }
+                    }
+                    None => unreachable!(),
+                }
+            }
             MatchType::Nfa(ty) => self.shortest_nfa_type(ty, text, start),
             MatchType::Nothing => None,
         }
@@ -469,6 +502,17 @@ impl<'c> RegularExpression for ExecNoSync<'c> {
                     dfa::Result::Quit => self.match_nfa(text, start),
                 }
             }
+            MatchType::OnePassDfa(_) => {
+                debug_assert!(self.ro.onepass.is_some());
+
+                match self.ro.onepass {
+                    Some(ref op) => {
+                        let mut slots = vec![None; self.slots_len()];
+                        op.exec(&mut slots, text, start)
+                    }
+                    None => unreachable!(),
+                }
+            }
             MatchType::Nfa(ty) => self.match_nfa_type(ty, text, start),
             MatchType::Nothing => false,
         }
@@ -512,6 +556,21 @@ impl<'c> RegularExpression for ExecNoSync<'c> {
                     }
                 }
             }
+            MatchType::OnePassDfa(_) => {
+                debug_assert!(self.ro.onepass.is_some());
+
+                match self.ro.onepass {
+                    Some(ref op) => {
+                        let mut slots = vec![None; self.slots_len()];
+                        if op.exec(&mut slots, text, start) {
+                            slots[0].and_then(|s1| slots[1].map(|s2| (s1, s2)))
+                        } else {
+                            None
+                        }
+                    }
+                    None => unreachable!(),
+                }
+            }
             MatchType::Nfa(ty) => self.find_nfa(ty, text, start),
             MatchType::Nothing => None,
             MatchType::DfaMany => {
@@ -534,7 +593,7 @@ impl<'c> RegularExpression for ExecNoSync<'c> {
         text: &[u8],
         start: usize,
     ) -> Option<(usize, usize)> {
-        let slots = locs.as_slots();
+        let mut slots = locs.as_slots();
         for slot in slots.iter_mut() {
             *slot = None;
         }
@@ -589,6 +648,20 @@ impl<'c> RegularExpression for ExecNoSync<'c> {
                     }
                     dfa::Result::NoMatch(_) => None,
                     dfa::Result::Quit => self.captures_nfa(slots, text, start),
+                }
+            }
+            MatchType::OnePassDfa(_) => {
+                debug_assert!(self.ro.onepass.is_some());
+
+                match self.ro.onepass {
+                    Some(ref op) => {
+                        if op.exec(&mut slots, text, start) {
+                            slots[0].and_then(|s1| slots[1].map(|s2| (s1, s2)))
+                        } else {
+                            None
+                        }
+                    }
+                    None => unreachable!(),
                 }
             }
             MatchType::Nfa(ty) => {
@@ -1013,17 +1086,30 @@ impl<'c> ExecNoSync<'c> {
         text: &[u8],
         start: usize,
     ) -> bool {
+        self.many_matches_at_match_type(
+            matches, text, start, &self.ro.match_type)
+    }
+
+    /// Finds which regular expressions match the given text with a
+    /// specific match type.
+    fn many_matches_at_match_type(
+        &self,
+        matches: &mut [bool],
+        text: &[u8],
+        start: usize,
+        match_type: &MatchType,
+    ) -> bool {
         use self::MatchType::*;
         if !self.is_anchor_end_match(text) {
             return false;
         }
-        match self.ro.match_type {
-            Literal(ty) => {
+        match match_type {
+            &Literal(ty) => {
                 debug_assert_eq!(matches.len(), 1);
                 matches[0] = self.find_literals(ty, text, start).is_some();
                 matches[0]
             }
-            Dfa | DfaAnchoredReverse | DfaSuffix | DfaMany => {
+            &Dfa | &DfaAnchoredReverse | &DfaSuffix | &DfaMany => {
                 match dfa::Fsm::forward_many(
                     &self.ro.dfa,
                     self.cache,
@@ -1044,8 +1130,17 @@ impl<'c> ExecNoSync<'c> {
                     }
                 }
             }
-            Nfa(ty) => self.exec_nfa(ty, matches, &mut [], false, text, start),
-            Nothing => false,
+            &OnePassDfa(ref fallback) => {
+                match **fallback {
+                    Some(ref fb) =>
+                        self.many_matches_at_match_type(
+                            matches, text, start, fb),
+                    None => unreachable!(
+                        "BUG: we must have a real fallback by now."),
+                }
+            }
+            &Nfa(ty) => self.exec_nfa(ty, matches, &mut [], false, text, start),
+            &Nothing => false,
         }
     }
 
@@ -1141,6 +1236,17 @@ impl Clone for Exec {
 impl ExecReadOnly {
     fn choose_match_type(&self, hint: Option<MatchType>) -> MatchType {
         use self::MatchType::*;
+        // If we have been asked to use the onepass DFA, we still need
+        // to choose a fallback in the usual way.
+        if let Some(OnePassDfa(_)) = hint {
+            let fallback = self.choose_match_type(None);
+            if self.onepass.is_some() {
+                return OnePassDfa(Box::new(Some(fallback)));
+            } else {
+                return fallback;
+            }
+        }
+
         if let Some(Nfa(_)) = hint {
             return hint.unwrap();
         }
@@ -1222,11 +1328,14 @@ impl ExecReadOnly {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 enum MatchType {
     /// A single or multiple literal search. This is only used when the regex
     /// can be decomposed into unambiguous literal search.
     Literal(MatchLiteralType),
+    /// A onepass DFA search. If a onepass search is impossible, we just
+    /// fall back to an automatically chosen search.
+    OnePassDfa(Box<Option<MatchType>>),
     /// A normal DFA search.
     Dfa,
     /// A reverse DFA search starting from the end of a haystack.

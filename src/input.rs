@@ -17,7 +17,7 @@ use std::u32;
 use syntax;
 
 use literal::LiteralSearcher;
-use prog::InstEmptyLook;
+use prog::EmptyLook;
 use utf8::{decode_utf8, decode_last_utf8};
 
 /// Represents a location in the input.
@@ -92,7 +92,7 @@ pub trait Input {
 
     /// Return true if the given empty width instruction matches at the
     /// input position given.
-    fn is_empty_match(&self, at: InputAt, empty: &InstEmptyLook) -> bool;
+    fn is_empty_match(&self, at: InputAt, look: EmptyLook) -> bool;
 
     /// Scan the input for a matching prefix.
     fn prefix_at(
@@ -118,8 +118,8 @@ impl<'a, T: Input> Input for &'a T {
 
     fn previous_char(&self, at: InputAt) -> Char { (**self).previous_char(at) }
 
-    fn is_empty_match(&self, at: InputAt, empty: &InstEmptyLook) -> bool {
-        (**self).is_empty_match(at, empty)
+    fn is_empty_match(&self, at: InputAt, look: EmptyLook) -> bool {
+        (**self).is_empty_match(at, look)
     }
 
     fn prefix_at(
@@ -173,9 +173,9 @@ impl<'t> Input for CharInput<'t> {
         decode_last_utf8(&self[..at.pos()]).map(|(c, _)| c).into()
     }
 
-    fn is_empty_match(&self, at: InputAt, empty: &InstEmptyLook) -> bool {
+    fn is_empty_match(&self, at: InputAt, look: EmptyLook) -> bool {
         use prog::EmptyLook::*;
-        match empty.look {
+        match look {
             StartLine => {
                 let c = self.previous_char(at);
                 at.pos() == 0 || c == '\n'
@@ -265,9 +265,9 @@ impl<'t> Input for ByteInput<'t> {
         decode_last_utf8(&self[..at.pos()]).map(|(c, _)| c).into()
     }
 
-    fn is_empty_match(&self, at: InputAt, empty: &InstEmptyLook) -> bool {
+    fn is_empty_match(&self, at: InputAt, look: EmptyLook) -> bool {
         use prog::EmptyLook::*;
-        match empty.look {
+        match look {
             StartLine => {
                 let c = self.previous_char(at);
                 at.pos() == 0 || c == '\n'

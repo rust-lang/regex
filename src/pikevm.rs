@@ -322,7 +322,7 @@ impl<'r, I: Input> Fsm<'r, I> {
             nlist.set.insert(ip);
             match self.prog[ip] {
                 EmptyLook(ref inst) => {
-                    if self.input.is_empty_match(at, inst) {
+                    if self.input.is_empty_match(at, inst.look) {
                         ip = inst.goto;
                     }
                 }

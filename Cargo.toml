@@ -114,6 +114,11 @@ name = "backtrack-bytes"
 path = "tests/test_crates_regex.rs"
 name = "crates-regex"
 
+# Run the test suite on the onepass engine.
+[[test]]
+path = "tests/test_onepass.rs"
+name = "onepass"
+
 [profile.release]
 debug = true
 
