@@ -108,6 +108,12 @@ name = "backtrack-utf8bytes"
 path = "tests/test_backtrack_bytes.rs"
 name = "backtrack-bytes"
 
+# Run all backends against each regex found on crates.io and make sure
+# that they all do the same thing.
+[[test]]
+path = "tests/test_crates_regex.rs"
+name = "crates-regex"
+
 [profile.release]
 debug = true
 
