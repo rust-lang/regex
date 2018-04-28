@@ -20,6 +20,11 @@ pub mod onig;
 pub mod pcre1;
 #[cfg(feature = "re-pcre2")]
 pub mod pcre2;
+#[cfg(any(
+    feature = "re-stdcpp",
+    feature = "re-boost",
+  ))]
+pub mod stdcpp;
 #[cfg(feature = "re-re2")]
 pub mod re2;
 #[cfg(feature = "re-tcl")]
