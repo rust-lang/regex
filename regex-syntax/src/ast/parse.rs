@@ -1051,6 +1051,13 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
                 ast::ErrorKind::RepetitionMissing,
             )),
         };
+        match ast {
+            Ast::Empty(_) | Ast::Flags(_) => return Err(self.error(
+                self.span(),
+                ast::ErrorKind::RepetitionMissing,
+            )),
+            _ => {}
+        }
         let mut greedy = true;
         if self.bump() && self.char() == '?' {
             greedy = false;
@@ -2940,6 +2947,12 @@ bar
             parser(r"*").parse().unwrap_err(),
             TestError {
                 span: span(0..0),
+                kind: ast::ErrorKind::RepetitionMissing,
+            });
+        assert_eq!(
+            parser(r"(?i)*").parse().unwrap_err(),
+            TestError {
+                span: span(4..4),
                 kind: ast::ErrorKind::RepetitionMissing,
             });
         assert_eq!(

@@ -156,9 +156,9 @@ pub enum ErrorKind {
     /// An opening `{` was found with no corresponding closing `}`.
     RepetitionCountUnclosed,
     /// A repetition operator was applied to a missing sub-expression. This
-    /// occurs, for example, in the regex consisting of just a `*`. It is,
-    /// however, possible to create a repetition operating on an empty
-    /// sub-expression. For example, `()*` is still considered valid.
+    /// occurs, for example, in the regex consisting of just a `*` or even
+    /// `(?i)*`. It is, however, possible to create a repetition operating on
+    /// an empty sub-expression. For example, `()*` is still considered valid.
     RepetitionMissing,
     /// When octal support is disabled, this error is produced when an octal
     /// escape is used. The octal escape is assumed to be an invocation of

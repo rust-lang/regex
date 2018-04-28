@@ -349,7 +349,9 @@ impl<'t, 'p> Visitor for TranslatorI<'t, 'p> {
             Ast::Concat(_) => {
                 let mut exprs = vec![];
                 while let Some(HirFrame::Expr(expr)) = self.pop() {
-                    exprs.push(expr);
+                    if !expr.kind().is_empty() {
+                        exprs.push(expr);
+                    }
                 }
                 exprs.reverse();
                 self.push(HirFrame::Expr(Hir::concat(exprs)));
