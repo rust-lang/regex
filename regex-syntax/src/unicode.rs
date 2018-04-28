@@ -25,42 +25,6 @@ pub enum Error {
     PropertyValueNotFound,
 }
 
-/// Encode the given Unicode character to `dst` as a single UTF-8 sequence.
-///
-/// If `dst` is not long enough, then `None` is returned. Otherwise, the number
-/// of bytes written is returned.
-pub fn encode_utf8(character: char, dst: &mut [u8]) -> Option<usize> {
-    // TODO: Remove this function once we move to at least Rust 1.15, which
-    // provides char::encode_utf8 for us.
-    const TAG_CONT: u8 = 0b1000_0000;
-    const TAG_TWO: u8 = 0b1100_0000;
-    const TAG_THREE: u8 = 0b1110_0000;
-    const TAG_FOUR: u8 = 0b1111_0000;
-
-    let code = character as u32;
-    if code <= 0x7F && !dst.is_empty() {
-        dst[0] = code as u8;
-        Some(1)
-    } else if code <= 0x7FF && dst.len() >= 2 {
-        dst[0] = (code >> 6 & 0x1F) as u8 | TAG_TWO;
-        dst[1] = (code & 0x3F) as u8 | TAG_CONT;
-        Some(2)
-    } else if code <= 0xFFFF && dst.len() >= 3  {
-        dst[0] = (code >> 12 & 0x0F) as u8 | TAG_THREE;
-        dst[1] = (code >>  6 & 0x3F) as u8 | TAG_CONT;
-        dst[2] = (code & 0x3F) as u8 | TAG_CONT;
-        Some(3)
-    } else if dst.len() >= 4 {
-        dst[0] = (code >> 18 & 0x07) as u8 | TAG_FOUR;
-        dst[1] = (code >> 12 & 0x3F) as u8 | TAG_CONT;
-        dst[2] = (code >>  6 & 0x3F) as u8 | TAG_CONT;
-        dst[3] = (code & 0x3F) as u8 | TAG_CONT;
-        Some(4)
-    } else {
-        None
-    }
-}
-
 /// An iterator over a codepoint's simple case equivalence class.
 #[derive(Debug)]
 pub struct SimpleFoldIter(::std::slice::Iter<'static, char>);

@@ -19,7 +19,6 @@ use std::mem;
 use std::ops;
 
 use hir::{self, Hir, HirKind};
-use unicode;
 
 /// A set of literal byte strings extracted from a regular expression.
 ///
@@ -603,9 +602,8 @@ impl Literals {
 fn prefixes(expr: &Hir, lits: &mut Literals) {
     match *expr.kind() {
         HirKind::Literal(hir::Literal::Unicode(c)) => {
-            let mut buf = [0u8; 4];
-            let i = unicode::encode_utf8(c, &mut buf).unwrap();
-            lits.cross_add(&buf[..i]);
+            let mut buf = [0; 4];
+            lits.cross_add(c.encode_utf8(&mut buf).as_bytes());
         }
         HirKind::Literal(hir::Literal::Byte(b)) => {
             lits.cross_add(&[b]);
@@ -685,7 +683,7 @@ fn suffixes(expr: &Hir, lits: &mut Literals) {
     match *expr.kind() {
         HirKind::Literal(hir::Literal::Unicode(c)) => {
             let mut buf = [0u8; 4];
-            let i = unicode::encode_utf8(c, &mut buf).unwrap();
+            let i = c.encode_utf8(&mut buf).len();
             let mut buf = &mut buf[..i];
             buf.reverse();
             lits.cross_add(buf);
