@@ -54,9 +54,6 @@ unstable = ["pattern"]
 # Enable to use the unstable pattern traits defined in std. This is enabled
 # by default if the unstable feature is enabled.
 pattern = []
-# Enable to use simd acceleration.
-# Note that this is deprecated and is a no-op.
-simd-accel = []
 
 [lib]
 # There are no benchmarks in the library code itself
