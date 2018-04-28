@@ -66,29 +66,21 @@ impl SSSE3VectorBuilder {
     }
 }
 
-// We define our union with a macro so that our code continues to compile on
-// Rust 1.12.
-macro_rules! defunion {
-    () => {
-        /// A u8x16 is a 128-bit vector with 16 single-byte lanes.
-        ///
-        /// It provides a safe API that uses only SSE2 or SSSE3 instructions.
-        /// The only way for callers to construct a value of this type is
-        /// through the SSSE3VectorBuilder type, and the only way to get a
-        /// SSSE3VectorBuilder is if the `ssse3` target feature is enabled.
-        ///
-        /// Note that generally speaking, all uses of this type should get
-        /// inlined, otherwise you probably have a performance bug.
-        #[derive(Clone, Copy)]
-        #[allow(non_camel_case_types)]
-        pub union u8x16 {
-            vector: __m128i,
-            bytes: [u8; 16],
-        }
-    }
+/// A u8x16 is a 128-bit vector with 16 single-byte lanes.
+///
+/// It provides a safe API that uses only SSE2 or SSSE3 instructions.
+/// The only way for callers to construct a value of this type is
+/// through the SSSE3VectorBuilder type, and the only way to get a
+/// SSSE3VectorBuilder is if the `ssse3` target feature is enabled.
+///
+/// Note that generally speaking, all uses of this type should get
+/// inlined, otherwise you probably have a performance bug.
+#[derive(Clone, Copy)]
+#[allow(non_camel_case_types)]
+pub union u8x16 {
+    vector: __m128i,
+    bytes: [u8; 16],
 }
-
-defunion!();
 
 impl u8x16 {
     #[inline]
