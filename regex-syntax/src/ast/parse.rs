@@ -95,7 +95,7 @@ impl Primitive {
 
         match self {
             Literal(lit) => Ok(lit),
-            x => Err(p.error(*x.span(), ast::ErrorKind::ClassEscapeInvalid)),
+            x => Err(p.error(*x.span(), ast::ErrorKind::ClassRangeLiteral)),
         }
     }
 }
@@ -4677,13 +4677,13 @@ bar
             parser(r"[\w-a]").parse().unwrap_err(),
             TestError {
                 span: span(1..3),
-                kind: ast::ErrorKind::ClassEscapeInvalid,
+                kind: ast::ErrorKind::ClassRangeLiteral,
             });
         assert_eq!(
             parser(r"[a-\w]").parse().unwrap_err(),
             TestError {
                 span: span(3..5),
-                kind: ast::ErrorKind::ClassEscapeInvalid,
+                kind: ast::ErrorKind::ClassRangeLiteral,
             });
         assert_eq!(
             parser(r"[z-a]").parse().unwrap_err(),

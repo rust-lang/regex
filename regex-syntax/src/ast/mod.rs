@@ -89,6 +89,10 @@ pub enum ErrorKind {
     /// An invalid character class range was found. An invalid range is any
     /// range where the start is greater than the end.
     ClassRangeInvalid,
+    /// An invalid range boundary was found in a character class. Range
+    /// boundaries must be a single literal codepoint, but this error indicates
+    /// that something else was found, such as a nested class.
+    ClassRangeLiteral,
     /// An opening `[` was found with no corresponding closing `]`.
     ClassUnclosed,
     /// An empty decimal number was given where one was expected.
@@ -182,6 +186,7 @@ impl error::Error for Error {
             CaptureLimitExceeded => "capture group limit exceeded",
             ClassEscapeInvalid => "invalid escape sequence in character class",
             ClassRangeInvalid => "invalid character class range",
+            ClassRangeLiteral => "invalid range boundary, must be a literal",
             ClassUnclosed => "unclosed character class",
             DecimalEmpty => "empty decimal literal",
             DecimalInvalid => "invalid decimal literal",
@@ -232,6 +237,9 @@ impl fmt::Display for ErrorKind {
             ClassRangeInvalid => {
                 write!(f, "invalid character class range, \
                            the start must be <= the end")
+            }
+            ClassRangeLiteral => {
+                write!(f, "invalid range boundary, must be a literal")
             }
             ClassUnclosed => {
                 write!(f, "unclosed character class")
