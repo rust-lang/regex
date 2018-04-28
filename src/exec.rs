@@ -228,7 +228,9 @@ impl ExecBuilder {
                     .allow_invalid_utf8(!self.only_utf8)
                     .nest_limit(self.options.nest_limit)
                     .build();
-            let expr = parser.parse(pat)?;
+            let expr = parser
+                .parse(pat)
+                .map_err(|e| Error::Syntax(e.to_string()))?;
             bytes = bytes || !expr.is_always_utf8();
 
             if !expr.is_anchored_start() && expr.is_any_anchored_start() {
