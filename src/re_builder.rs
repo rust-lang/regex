@@ -22,6 +22,7 @@ pub struct RegexOptions {
     pub swap_greed: bool,
     pub ignore_whitespace: bool,
     pub unicode: bool,
+    pub octal: bool,
 }
 
 impl Default for RegexOptions {
@@ -37,6 +38,7 @@ impl Default for RegexOptions {
             swap_greed: false,
             ignore_whitespace: false,
             unicode: true,
+            octal: false,
         }
     }
 }
@@ -139,6 +141,26 @@ impl RegexBuilder {
     /// match ASCII word characters instead of all Unicode word characters.
     pub fn unicode(&mut self, yes: bool) -> &mut RegexBuilder {
         self.0.unicode = yes;
+        self
+    }
+
+    /// Whether to support octal syntax or not.
+    ///
+    /// Octal syntax is a little-known way of uttering Unicode codepoints in
+    /// a regular expression. For example, `a`, `\x61`, `\u0061` and
+    /// `\141` are all equivalent regular expressions, where the last example
+    /// shows octal syntax.
+    ///
+    /// While supporting octal syntax isn't in and of itself a problem, it does
+    /// make good error messages harder. That is, in PCRE based regex engines,
+    /// syntax like `\0` invokes a backreference, which is explicitly
+    /// unsupported in Rust's regex engine. However, many users expect it to
+    /// be supported. Therefore, when octal support is disabled, the error
+    /// message will explicitly mention that backreferences aren't supported.
+    ///
+    /// Octal syntax is disabled by default.
+    pub fn octal(&mut self, yes: bool) -> &mut RegexBuilder {
+        self.0.octal = yes;
         self
     }
 
@@ -280,6 +302,26 @@ impl RegexSetBuilder {
     /// Set the value for the Unicode (`u`) flag.
     pub fn unicode(&mut self, yes: bool) -> &mut RegexSetBuilder {
         self.0.unicode = yes;
+        self
+    }
+
+    /// Whether to support octal syntax or not.
+    ///
+    /// Octal syntax is a little-known way of uttering Unicode codepoints in
+    /// a regular expression. For example, `a`, `\x61`, `\u0061` and
+    /// `\141` are all equivalent regular expressions, where the last example
+    /// shows octal syntax.
+    ///
+    /// While supporting octal syntax isn't in and of itself a problem, it does
+    /// make good error messages harder. That is, in PCRE based regex engines,
+    /// syntax like `\0` invokes a backreference, which is explicitly
+    /// unsupported in Rust's regex engine. However, many users expect it to
+    /// be supported. Therefore, when octal support is disabled, the error
+    /// message will explicitly mention that backreferences aren't supported.
+    ///
+    /// Octal syntax is disabled by default.
+    pub fn octal(&mut self, yes: bool) -> &mut RegexSetBuilder {
+        self.0.octal = yes;
         self
     }
 

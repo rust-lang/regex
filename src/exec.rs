@@ -218,11 +218,7 @@ impl ExecBuilder {
         for pat in &self.options.pats {
             let mut parser =
                 ParserBuilder::new()
-                    // TODO(burntsushi): Disable octal in regex 1.0. Nobody
-                    // uses it, and we'll get better error messages when
-                    // someone tries to use a backreference. Provide a new
-                    // opt-in toggle for it though.
-                    .octal(true)
+                    .octal(self.options.octal)
                     .case_insensitive(self.options.case_insensitive)
                     .multi_line(self.options.multi_line)
                     .dot_matches_new_line(self.options.dot_matches_new_line)

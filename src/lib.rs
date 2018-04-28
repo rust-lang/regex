@@ -445,7 +445,7 @@ assert_eq!(&cap[0], "abc");
 \n          new line
 \r          carriage return
 \v          vertical tab (\x0B)
-\123        octal character code (up to three digits)
+\123        octal character code (up to three digits) (when enabled)
 \x7F        hex character code (exactly two digits)
 \x{10FFFF}  any hex character code corresponding to a Unicode code point
 \u007F      hex character code (exactly four digits)
@@ -619,7 +619,8 @@ determine whether a byte is a word byte or not.
 5. Hexadecimal notation can be used to specify arbitrary bytes instead of
 Unicode codepoints. For example, in ASCII compatible mode, `\xFF` matches the
 literal byte `\xFF`, while in Unicode mode, `\xFF` is a Unicode codepoint that
-matches its UTF-8 encoding of `\xC3\xBF`. Similarly for octal notation.
+matches its UTF-8 encoding of `\xC3\xBF`. Similarly for octal notation when
+enabled.
 6. `.` matches any *byte* except for `\n` instead of any Unicode scalar value.
 When the `s` flag is enabled, `.` matches any byte.
 
