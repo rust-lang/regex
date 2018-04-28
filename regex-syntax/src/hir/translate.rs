@@ -1897,6 +1897,12 @@ mod tests {
         assert_eq!(
             t(r"\p{gc=Separator}"),
             hir_uclass_query(ClassQuery::Binary("Z")));
+        assert_eq!(
+            t(r"\p{Other}"),
+            hir_uclass_query(ClassQuery::Binary("Other")));
+        assert_eq!(
+            t(r"\pC"),
+            hir_uclass_query(ClassQuery::Binary("Other")));
 
         assert_eq!(
             t(r"\PZ"),

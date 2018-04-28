@@ -217,7 +217,7 @@ impl<'a> ClassQuery<'a> {
 /// Like ClassQuery, but its parameters have been canonicalized. This also
 /// differentiates binary properties from flattened general categories and
 /// scripts.
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 enum CanonicalClassQuery {
     /// The canonical binary property name.
     Binary(&'static str),
@@ -458,5 +458,15 @@ mod tests {
         assert!(!contains_simple_case_mapping('[', '`'));
 
         assert!(!contains_simple_case_mapping('☃', '☃'));
+    }
+
+    #[test]
+    fn regression_466() {
+        use super::{CanonicalClassQuery, ClassQuery};
+
+        let q = ClassQuery::OneLetter('C');
+        assert_eq!(
+            q.canonicalize().unwrap(),
+            CanonicalClassQuery::GeneralCategory("Other"));
     }
 }
