@@ -54,20 +54,12 @@ impl AVX2VectorBuilder {
     }
 }
 
-// We define our union with a macro so that our code continues to compile on
-// Rust 1.12.
-macro_rules! defunion {
-    () => {
-        #[derive(Clone, Copy)]
-        #[allow(non_camel_case_types)]
-        pub union u8x32 {
-            vector: __m256i,
-            bytes: [u8; 32],
-        }
-    }
+#[derive(Clone, Copy)]
+#[allow(non_camel_case_types)]
+pub union u8x32 {
+    vector: __m256i,
+    bytes: [u8; 32],
 }
-
-defunion!();
 
 impl u8x32 {
     #[inline]

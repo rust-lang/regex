@@ -11,6 +11,7 @@ by [RE2](https://github.com/google/re2).
 [![Build status](https://ci.appveyor.com/api/projects/status/github/rust-lang/regex?svg=true)](https://ci.appveyor.com/project/rust-lang-libs/regex)
 [![Coverage Status](https://coveralls.io/repos/github/rust-lang/regex/badge.svg?branch=master)](https://coveralls.io/github/rust-lang/regex?branch=master)
 [![](http://meritbadge.herokuapp.com/regex)](https://crates.io/crates/regex)
+[![Rust](https://img.shields.io/badge/rust-1.20%2B-blue.svg?maxAge=3600)](https://github.com/rust-lang/regex)
 
 ### Documentation
 
@@ -210,7 +211,22 @@ recommended for general use.
 
 [Documentation `regex-syntax`.](https://docs.rs/regex-syntax)
 
-# License
+
+### Minimum Rust version policy
+
+This crate's minimum supported `rustc` version is `1.20.0`.
+
+The current **tentative** policy is that the minimum Rust version required to
+use this crate can be increased in minor version updates. For example, if
+regex 1.0.0 requires Rust 1.20.0, then regex 1.0.z for all values of `z` will
+also require Rust 1.20.0 or newer. However, regex 1.y for `y > 0` may require
+a newer minimum version of Rust.
+
+In general, this crate will be conservative with respect to the minimum
+supported version of Rust.
+
+
+### License
 
 This project is licensed under either of
 
