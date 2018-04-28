@@ -724,13 +724,10 @@ impl<'t, 'p> TranslatorI<'t, 'p> {
                     // It is possible for negated ASCII word boundaries to
                     // match at invalid UTF-8 boundaries, even when searching
                     // valid UTF-8.
-                    //
-                    // TODO(ag): Enable this error when regex goes to 1.0.
-                    // Otherwise, it is too steep of a breaking change.
-                    // if !self.trans().allow_invalid_utf8 {
-                        // return Err(self.error(
-                            // asst.span, ErrorKind::InvalidUtf8));
-                    // }
+                    if !self.trans().allow_invalid_utf8 {
+                        return Err(self.error(
+                            asst.span, ErrorKind::InvalidUtf8));
+                    }
                     hir::WordBoundary::AsciiNegate
                 })
             }
@@ -1511,11 +1508,10 @@ mod tests {
             t_bytes(r"(?-u)\B"),
             hir_word(hir::WordBoundary::AsciiNegate));
 
-        // TODO(ag): Enable this tests when regex goes to 1.0.
-        // assert_eq!(t_err(r"(?-u)\B"), TestError {
-            // kind: hir::ErrorKind::InvalidUtf8,
-            // span: Span::new(Position::new(5, 1, 6), Position::new(7, 1, 8)),
-        // });
+        assert_eq!(t_err(r"(?-u)\B"), TestError {
+            kind: hir::ErrorKind::InvalidUtf8,
+            span: Span::new(Position::new(5, 1, 6), Position::new(7, 1, 8)),
+        });
     }
 
     #[test]
