@@ -244,7 +244,7 @@ enum CanonicalClassQuery {
 pub fn class<'a>(query: ClassQuery<'a>) -> Result<hir::ClassUnicode> {
     use self::CanonicalClassQuery::*;
 
-    match try!(query.canonicalize()) {
+    match query.canonicalize()? {
         Binary(name) => {
             property_set(property_bool::BY_NAME, name)
                 .map(hir_class)
@@ -255,9 +255,9 @@ pub fn class<'a>(query: ClassQuery<'a>) -> Result<hir::ClassUnicode> {
         }
         GeneralCategory("Assigned") => {
             let mut cls =
-                try!(property_set(general_category::BY_NAME, "Unassigned")
+                property_set(general_category::BY_NAME, "Unassigned")
                     .map(hir_class)
-                    .ok_or(Error::PropertyNotFound));
+                    .ok_or(Error::PropertyNotFound)?;
             cls.negate();
             Ok(cls)
         }
@@ -276,7 +276,7 @@ pub fn class<'a>(query: ClassQuery<'a>) -> Result<hir::ClassUnicode> {
         }
         ByValue { property_name: "Age", property_value } => {
             let mut class = hir::ClassUnicode::empty();
-            for set in try!(ages(property_value)) {
+            for set in ages(property_value)? {
                 class.union(&hir_class(set));
             }
             Ok(class)

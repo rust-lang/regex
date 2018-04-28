@@ -66,11 +66,11 @@ impl fmt::Debug for Error {
         match *self {
             Error::Syntax(ref err) => {
                 let hr: String = repeat('~').take(79).collect();
-                try!(writeln!(f, "Syntax("));
-                try!(writeln!(f, "{}", hr));
-                try!(writeln!(f, "{}", err));
-                try!(writeln!(f, "{}", hr));
-                try!(write!(f, ")"));
+                writeln!(f, "Syntax(")?;
+                writeln!(f, "{}", hr)?;
+                writeln!(f, "{}", err)?;
+                writeln!(f, "{}", hr)?;
+                write!(f, ")")?;
                 Ok(())
             }
             Error::CompiledTooBig(limit) => {

@@ -228,8 +228,8 @@ impl<'a> HeapVisitor<'a> {
 
         visitor.start();
         loop {
-            try!(visitor.visit_pre(ast));
-            if let Some(x) = try!(self.induct(ast, &mut visitor)) {
+            visitor.visit_pre(ast)?;
+            if let Some(x) = self.induct(ast, &mut visitor)? {
                 let child = x.child();
                 self.stack.push((ast, x));
                 ast = child;
@@ -237,7 +237,7 @@ impl<'a> HeapVisitor<'a> {
             }
             // No induction means we have a base case, so we can post visit
             // it now.
-            try!(visitor.visit_post(ast));
+            visitor.visit_post(ast)?;
 
             // At this point, we now try to pop our call stack until it is
             // either empty or we hit another inductive case.
@@ -250,7 +250,7 @@ impl<'a> HeapVisitor<'a> {
                 // inductive steps to process.
                 if let Some(x) = self.pop(frame) {
                     if let Frame::Alternation {..} = x {
-                        try!(visitor.visit_alternation_in());
+                        visitor.visit_alternation_in()?;
                     }
                     ast = x.child();
                     self.stack.push((post_ast, x));
@@ -258,7 +258,7 @@ impl<'a> HeapVisitor<'a> {
                 }
                 // Otherwise, we've finished visiting all the child nodes for
                 // this AST, so we can post visit it now.
-                try!(visitor.visit_post(post_ast));
+                visitor.visit_post(post_ast)?;
             }
         }
     }
@@ -275,7 +275,7 @@ impl<'a> HeapVisitor<'a> {
     ) -> Result<Option<Frame<'a>>, V::Err> {
         Ok(match *ast {
             Ast::Class(ast::Class::Bracketed(ref x)) => {
-                try!(self.visit_class(x, visitor));
+                self.visit_class(x, visitor)?;
                 None
             }
             Ast::Repetition(ref x) => Some(Frame::Repetition(x)),
@@ -334,14 +334,14 @@ impl<'a> HeapVisitor<'a> {
     ) -> Result<(), V::Err> {
         let mut ast = ClassInduct::from_bracketed(ast);
         loop {
-            try!(self.visit_class_pre(&ast, visitor));
+            self.visit_class_pre(&ast, visitor)?;
             if let Some(x) = self.induct_class(&ast) {
                 let child = x.child();
                 self.stack_class.push((ast, x));
                 ast = child;
                 continue;
             }
-            try!(self.visit_class_post(&ast, visitor));
+            self.visit_class_post(&ast, visitor)?;
 
             // At this point, we now try to pop our call stack until it is
             // either empty or we hit another inductive case.
@@ -354,7 +354,7 @@ impl<'a> HeapVisitor<'a> {
                 // additional inductive steps to process.
                 if let Some(x) = self.pop_class(frame) {
                     if let ClassFrame::BinaryRHS { ref op, .. } = x {
-                        try!(visitor.visit_class_set_binary_op_in(op));
+                        visitor.visit_class_set_binary_op_in(op)?;
                     }
                     ast = x.child();
                     self.stack_class.push((post_ast, x));
@@ -362,7 +362,7 @@ impl<'a> HeapVisitor<'a> {
                 }
                 // Otherwise, we've finished visiting all the child nodes for
                 // this class node, so we can post visit it now.
-                try!(self.visit_class_post(&post_ast, visitor));
+                self.visit_class_post(&post_ast, visitor)?;
             }
         }
     }
@@ -375,10 +375,10 @@ impl<'a> HeapVisitor<'a> {
     ) -> Result<(), V::Err> {
         match *ast {
             ClassInduct::Item(item) => {
-                try!(visitor.visit_class_set_item_pre(item));
+                visitor.visit_class_set_item_pre(item)?;
             }
             ClassInduct::BinaryOp(op) => {
-                try!(visitor.visit_class_set_binary_op_pre(op));
+                visitor.visit_class_set_binary_op_pre(op)?;
             }
         }
         Ok(())
@@ -392,10 +392,10 @@ impl<'a> HeapVisitor<'a> {
     ) -> Result<(), V::Err> {
         match *ast {
             ClassInduct::Item(item) => {
-                try!(visitor.visit_class_set_item_post(item));
+                visitor.visit_class_set_item_post(item)?;
             }
             ClassInduct::BinaryOp(op) => {
-                try!(visitor.visit_class_set_binary_op_post(op));
+                visitor.visit_class_set_binary_op_post(op)?;
             }
         }
         Ok(())

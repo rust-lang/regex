@@ -94,71 +94,71 @@ impl<'p, W: fmt::Write> Visitor for Writer<'p, W> {
             | HirKind::Concat(_)
             | HirKind::Alternation(_) => {}
             HirKind::Literal(hir::Literal::Unicode(c)) => {
-                try!(self.write_literal_char(c));
+                self.write_literal_char(c)?;
             }
             HirKind::Literal(hir::Literal::Byte(b)) => {
-                try!(self.write_literal_byte(b));
+                self.write_literal_byte(b)?;
             }
             HirKind::Class(hir::Class::Unicode(ref cls)) => {
-                try!(self.wtr.write_str("["));
+                self.wtr.write_str("[")?;
                 for range in cls.iter() {
                     if range.start() == range.end() {
-                        try!(self.write_literal_char(range.start()));
+                        self.write_literal_char(range.start())?;
                     } else {
-                        try!(self.write_literal_char(range.start()));
-                        try!(self.wtr.write_str("-"));
-                        try!(self.write_literal_char(range.end()));
+                        self.write_literal_char(range.start())?;
+                        self.wtr.write_str("-")?;
+                        self.write_literal_char(range.end())?;
                     }
                 }
-                try!(self.wtr.write_str("]"));
+                self.wtr.write_str("]")?;
             }
             HirKind::Class(hir::Class::Bytes(ref cls)) => {
-                try!(self.wtr.write_str("(?-u:["));
+                self.wtr.write_str("(?-u:[")?;
                 for range in cls.iter() {
                     if range.start() == range.end() {
-                        try!(self.write_literal_class_byte(range.start()));
+                        self.write_literal_class_byte(range.start())?;
                     } else {
-                        try!(self.write_literal_class_byte(range.start()));
-                        try!(self.wtr.write_str("-"));
-                        try!(self.write_literal_class_byte(range.end()));
+                        self.write_literal_class_byte(range.start())?;
+                        self.wtr.write_str("-")?;
+                        self.write_literal_class_byte(range.end())?;
                     }
                 }
-                try!(self.wtr.write_str("])"));
+                self.wtr.write_str("])")?;
             }
             HirKind::Anchor(hir::Anchor::StartLine) => {
-                try!(self.wtr.write_str("(?m:^)"));
+                self.wtr.write_str("(?m:^)")?;
             }
             HirKind::Anchor(hir::Anchor::EndLine) => {
-                try!(self.wtr.write_str("(?m:$)"));
+                self.wtr.write_str("(?m:$)")?;
             }
             HirKind::Anchor(hir::Anchor::StartText) => {
-                try!(self.wtr.write_str(r"\A"));
+                self.wtr.write_str(r"\A")?;
             }
             HirKind::Anchor(hir::Anchor::EndText) => {
-                try!(self.wtr.write_str(r"\z"));
+                self.wtr.write_str(r"\z")?;
             }
             HirKind::WordBoundary(hir::WordBoundary::Unicode) => {
-                try!(self.wtr.write_str(r"\b"));
+                self.wtr.write_str(r"\b")?;
             }
             HirKind::WordBoundary(hir::WordBoundary::UnicodeNegate) => {
-                try!(self.wtr.write_str(r"\B"));
+                self.wtr.write_str(r"\B")?;
             }
             HirKind::WordBoundary(hir::WordBoundary::Ascii) => {
-                try!(self.wtr.write_str(r"(?-u:\b)"));
+                self.wtr.write_str(r"(?-u:\b)")?;
             }
             HirKind::WordBoundary(hir::WordBoundary::AsciiNegate) => {
-                try!(self.wtr.write_str(r"(?-u:\B)"));
+                self.wtr.write_str(r"(?-u:\B)")?;
             }
             HirKind::Group(ref x) => {
                 match x.kind {
                     hir::GroupKind::CaptureIndex(_) => {
-                        try!(self.wtr.write_str("("));
+                        self.wtr.write_str("(")?;
                     }
                     hir::GroupKind::CaptureName { ref name, .. } => {
-                        try!(write!(self.wtr, "(?P<{}>", name));
+                        write!(self.wtr, "(?P<{}>", name)?;
                     }
                     hir::GroupKind::NonCapturing => {
-                        try!(self.wtr.write_str("(?:"));
+                        self.wtr.write_str("(?:")?;
                     }
                 }
             }
@@ -179,34 +179,34 @@ impl<'p, W: fmt::Write> Visitor for Writer<'p, W> {
             HirKind::Repetition(ref x) => {
                 match x.kind {
                     hir::RepetitionKind::ZeroOrOne => {
-                        try!(self.wtr.write_str("?"));
+                        self.wtr.write_str("?")?;
                     }
                     hir::RepetitionKind::ZeroOrMore => {
-                        try!(self.wtr.write_str("*"));
+                        self.wtr.write_str("*")?;
                     }
                     hir::RepetitionKind::OneOrMore => {
-                        try!(self.wtr.write_str("+"));
+                        self.wtr.write_str("+")?;
                     }
                     hir::RepetitionKind::Range(ref x) => {
                         match *x {
                             hir::RepetitionRange::Exactly(m) => {
-                                try!(write!(self.wtr, "{{{}}}", m));
+                                write!(self.wtr, "{{{}}}", m)?;
                             }
                             hir::RepetitionRange::AtLeast(m) => {
-                                try!(write!(self.wtr, "{{{},}}", m));
+                                write!(self.wtr, "{{{},}}", m)?;
                             }
                             hir::RepetitionRange::Bounded(m, n) => {
-                                try!(write!(self.wtr, "{{{},{}}}", m, n));
+                                write!(self.wtr, "{{{},{}}}", m, n)?;
                             }
                         }
                     }
                 }
                 if !x.greedy {
-                    try!(self.wtr.write_str("?"));
+                    self.wtr.write_str("?")?;
                 }
             }
             HirKind::Group(_) => {
-                try!(self.wtr.write_str(")"));
+                self.wtr.write_str(")")?;
             }
         }
         Ok(())
@@ -220,7 +220,7 @@ impl<'p, W: fmt::Write> Visitor for Writer<'p, W> {
 impl<'p, W: fmt::Write> Writer<'p, W> {
     fn write_literal_char(&mut self, c: char) -> fmt::Result {
         if is_meta_character(c) {
-            try!(self.wtr.write_str("\\"));
+            self.wtr.write_str("\\")?;
         }
         self.wtr.write_char(c)
     }

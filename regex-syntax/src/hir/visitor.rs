@@ -119,7 +119,7 @@ impl<'a> HeapVisitor<'a> {
 
         visitor.start();
         loop {
-            try!(visitor.visit_pre(hir));
+            visitor.visit_pre(hir)?;
             if let Some(x) = self.induct(hir) {
                 let child = x.child();
                 self.stack.push((hir, x));
@@ -128,7 +128,7 @@ impl<'a> HeapVisitor<'a> {
             }
             // No induction means we have a base case, so we can post visit
             // it now.
-            try!(visitor.visit_post(hir));
+            visitor.visit_post(hir)?;
 
             // At this point, we now try to pop our call stack until it is
             // either empty or we hit another inductive case.
@@ -141,7 +141,7 @@ impl<'a> HeapVisitor<'a> {
                 // inductive steps to process.
                 if let Some(x) = self.pop(frame) {
                     if let Frame::Alternation {..} = x {
-                        try!(visitor.visit_alternation_in());
+                        visitor.visit_alternation_in()?;
                     }
                     hir = x.child();
                     self.stack.push((post_hir, x));
@@ -149,7 +149,7 @@ impl<'a> HeapVisitor<'a> {
                 }
                 // Otherwise, we've finished visiting all the child nodes for
                 // this HIR, so we can post visit it now.
-                try!(visitor.visit_post(post_hir));
+                visitor.visit_post(post_hir)?;
             }
         }
     }

@@ -146,9 +146,9 @@ impl<'p, W: fmt::Write> Visitor for Writer<'p, W> {
             Empty(_) => Ok(()),
             Literal(ref x) => self.fmt_literal(x),
             Range(ref x) => {
-                try!(self.fmt_literal(&x.start));
-                try!(self.wtr.write_str("-"));
-                try!(self.fmt_literal(&x.end));
+                self.fmt_literal(&x.start)?;
+                self.wtr.write_str("-")?;
+                self.fmt_literal(&x.end)?;
                 Ok(())
             }
             Ascii(ref x) => self.fmt_class_ascii(x),
@@ -173,15 +173,15 @@ impl<'p, W: fmt::Write> Writer<'p, W> {
         match ast.kind {
             CaptureIndex(_) => self.wtr.write_str("("),
             CaptureName(ref x) => {
-                try!(self.wtr.write_str("(?P<"));
-                try!(self.wtr.write_str(&x.name));
-                try!(self.wtr.write_str(">"));
+                self.wtr.write_str("(?P<")?;
+                self.wtr.write_str(&x.name)?;
+                self.wtr.write_str(">")?;
                 Ok(())
             }
             NonCapturing(ref flags) => {
-                try!(self.wtr.write_str("(?"));
-                try!(self.fmt_flags(flags));
-                try!(self.wtr.write_str(":"));
+                self.wtr.write_str("(?")?;
+                self.fmt_flags(flags)?;
+                self.wtr.write_str(":")?;
                 Ok(())
             }
         }
@@ -201,9 +201,9 @@ impl<'p, W: fmt::Write> Writer<'p, W> {
             OneOrMore if ast.greedy => self.wtr.write_str("+"),
             OneOrMore => self.wtr.write_str("+?"),
             Range(ref x) => {
-                try!(self.fmt_repetition_range(x));
+                self.fmt_repetition_range(x)?;
                 if !ast.greedy {
-                    try!(self.wtr.write_str("?"));
+                    self.wtr.write_str("?")?;
                 }
                 Ok(())
             }
@@ -284,9 +284,9 @@ impl<'p, W: fmt::Write> Writer<'p, W> {
     }
 
     fn fmt_set_flags(&mut self, ast: &ast::SetFlags) -> fmt::Result {
-        try!(self.wtr.write_str("(?"));
-        try!(self.fmt_flags(&ast.flags));
-        try!(self.wtr.write_str(")"));
+        self.wtr.write_str("(?")?;
+        self.fmt_flags(&ast.flags)?;
+        self.wtr.write_str(")")?;
         Ok(())
     }
 
@@ -294,7 +294,7 @@ impl<'p, W: fmt::Write> Writer<'p, W> {
         use ast::{Flag, FlagsItemKind};
 
         for item in &ast.items {
-            try!(match item.kind {
+            match item.kind {
                 FlagsItemKind::Negation => self.wtr.write_str("-"),
                 FlagsItemKind::Flag(ref flag) => {
                     match *flag {
@@ -306,7 +306,7 @@ impl<'p, W: fmt::Write> Writer<'p, W> {
                         Flag::IgnoreWhitespace => self.wtr.write_str("x"),
                     }
                 }
-            });
+            }?;
         }
         Ok(())
     }
@@ -392,9 +392,9 @@ impl<'p, W: fmt::Write> Writer<'p, W> {
         use ast::ClassUnicodeOpKind::*;
 
         if ast.negated {
-            try!(self.wtr.write_str(r"\P"));
+            self.wtr.write_str(r"\P")?;
         } else {
-            try!(self.wtr.write_str(r"\p"));
+            self.wtr.write_str(r"\p")?;
         }
         match ast.kind {
             OneLetter(c) => self.wtr.write_char(c),

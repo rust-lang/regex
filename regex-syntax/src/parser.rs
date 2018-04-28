@@ -199,8 +199,8 @@ impl Parser {
     /// Parse the regular expression into a high level intermediate
     /// representation.
     pub fn parse(&mut self, pattern: &str) -> Result<hir::Hir> {
-        let ast = try!(self.ast.parse(pattern));
-        let hir = try!(self.hir.translate(pattern, &ast));
+        let ast = self.ast.parse(pattern)?;
+        let hir = self.hir.translate(pattern, &ast)?;
         Ok(hir)
     }
 }

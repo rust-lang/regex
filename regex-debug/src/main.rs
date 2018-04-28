@@ -123,7 +123,7 @@ fn cmd_ast(args: &Args) -> Result<()> {
     use syntax::ast::parse::Parser;
 
     let mut parser = Parser::new();
-    let ast = try!(parser.parse(&args.arg_pattern));
+    let ast = parser.parse(&args.arg_pattern)?;
     println!("{:#?}", ast);
     Ok(())
 }
@@ -134,13 +134,13 @@ fn cmd_hir(args: &Args) -> Result<()> {
     let mut parser = ParserBuilder::new()
         .allow_invalid_utf8(false)
         .build();
-    let hir = try!(parser.parse(&args.arg_pattern));
+    let hir = parser.parse(&args.arg_pattern)?;
     println!("{:#?}", hir);
     Ok(())
 }
 
 fn cmd_literals(args: &Args) -> Result<()> {
-    let exprs = try!(args.parse_many());
+    let exprs = args.parse_many()?;
     let mut lits =
         if args.cmd_prefixes {
             args.literals(&exprs, |lits, e| lits.union_prefixes(e))
@@ -173,7 +173,7 @@ fn cmd_literals(args: &Args) -> Result<()> {
 }
 
 fn cmd_anchors(args: &Args) -> Result<()> {
-    let expr = try!(args.parse_one());
+    let expr = args.parse_one()?;
     if expr.is_anchored_start() {
         println!("start");
     }
@@ -184,8 +184,8 @@ fn cmd_anchors(args: &Args) -> Result<()> {
 }
 
 fn cmd_captures(args: &Args) -> Result<()> {
-    let expr = try!(args.parse_one());
-    let prog = try!(args.compiler().only_utf8(false).compile(&[expr]));
+    let expr = args.parse_one()?;
+    let prog = args.compiler().only_utf8(false).compile(&[expr])?;
     for (i, name) in prog.captures.iter().enumerate() {
         match *name {
             None => println!("{}", i),
@@ -196,14 +196,14 @@ fn cmd_captures(args: &Args) -> Result<()> {
 }
 
 fn cmd_compile(args: &Args) -> Result<()> {
-    let exprs = try!(args.parse_many());
+    let exprs = args.parse_many()?;
     let compiler =
         args.compiler()
             .bytes(args.flag_bytes)
             .only_utf8(!args.flag_bytes)
             .dfa(args.flag_dfa)
             .reverse(args.flag_dfa_reverse);
-    let prog = try!(compiler.compile(&exprs));
+    let prog = compiler.compile(&exprs)?;
     print!("{:?}", prog);
     Ok(())
 }
@@ -213,9 +213,9 @@ fn cmd_utf8_ranges(args: &Args) -> Result<()> {
     use syntax::hir::{self, HirKind};
     use utf8_ranges::Utf8Sequences;
 
-    let hir = try!(ParserBuilder::new()
+    let hir = ParserBuilder::new()
         .build()
-        .parse(&format!("[{}]", args.arg_class)));
+        .parse(&format!("[{}]", args.arg_class))?;
     let cls = match hir.into_kind() {
         HirKind::Class(hir::Class::Unicode(cls)) => cls,
         _ => return Err(

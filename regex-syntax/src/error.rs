@@ -105,11 +105,11 @@ impl<'e, E: fmt::Display> fmt::Display for Formatter<'e, E> {
         if self.pattern.contains('\n') {
             let divider = repeat_char('~', 79);
 
-            try!(writeln!(f, "regex parse error:"));
-            try!(writeln!(f, "{}", divider));
+            writeln!(f, "regex parse error:")?;
+            writeln!(f, "{}", divider)?;
             let notated = spans.notate();
-            try!(write!(f, "{}", notated));
-            try!(writeln!(f, "{}", divider));
+            write!(f, "{}", notated)?;
+            writeln!(f, "{}", divider)?;
             // If we have error spans that cover multiple lines, then we just
             // note the line numbers.
             if !spans.multi_line.is_empty() {
@@ -120,14 +120,14 @@ impl<'e, E: fmt::Display> fmt::Display for Formatter<'e, E> {
                         span.start.line, span.start.column,
                         span.end.line, span.end.column - 1));
                 }
-                try!(writeln!(f, "{}", notes.join("\n")));
+                writeln!(f, "{}", notes.join("\n"))?;
             }
-            try!(write!(f, "error: {}", self.err));
+            write!(f, "error: {}", self.err)?;
         } else {
-            try!(writeln!(f, "regex parse error:"));
+            writeln!(f, "regex parse error:")?;
             let notated = Spans::from_formatter(self).notate();
-            try!(write!(f, "{}", notated));
-            try!(write!(f, "error: {}", self.err));
+            write!(f, "{}", notated)?;
+            write!(f, "error: {}", self.err)?;
         }
         Ok(())
     }
