@@ -232,7 +232,7 @@ impl ExecBuilder {
                     .allow_invalid_utf8(!self.only_utf8)
                     .nest_limit(self.options.nest_limit)
                     .build();
-            let expr = try!(parser.parse(pat));
+            let expr = parser.parse(pat)?;
             bytes = bytes || !expr.is_always_utf8();
 
             if !expr.is_anchored_start() && expr.is_any_anchored_start() {
@@ -293,26 +293,26 @@ impl ExecBuilder {
             });
             return Ok(Exec { ro: ro, cache: CachedThreadLocal::new() });
         }
-        let parsed = try!(self.parse());
-        let mut nfa = try!(
+        let parsed = self.parse()?;
+        let mut nfa =
             Compiler::new()
                      .size_limit(self.options.size_limit)
                      .bytes(self.bytes || parsed.bytes)
                      .only_utf8(self.only_utf8)
-                     .compile(&parsed.exprs));
-        let mut dfa = try!(
+                     .compile(&parsed.exprs)?;
+        let mut dfa =
             Compiler::new()
                      .size_limit(self.options.size_limit)
                      .dfa(true)
                      .only_utf8(self.only_utf8)
-                     .compile(&parsed.exprs));
-        let mut dfa_reverse = try!(
+                     .compile(&parsed.exprs)?;
+        let mut dfa_reverse =
             Compiler::new()
                      .size_limit(self.options.size_limit)
                      .dfa(true)
                      .only_utf8(self.only_utf8)
                      .reverse(true)
-                     .compile(&parsed.exprs));
+                     .compile(&parsed.exprs)?;
 
         let prefixes = parsed.prefixes.unambiguous_prefixes();
         let suffixes = parsed.suffixes.unambiguous_suffixes();

@@ -141,11 +141,11 @@ impl Compiler {
         self.compiled.is_anchored_start = expr.is_anchored_start();
         self.compiled.is_anchored_end = expr.is_anchored_end();
         if self.compiled.needs_dotstar() {
-            dotstar_patch = try!(self.c_dotstar());
+            dotstar_patch = self.c_dotstar()?;
             self.compiled.start = dotstar_patch.entry;
         }
         self.compiled.captures = vec![None];
-        let patch = try!(self.c_capture(0, expr));
+        let patch = self.c_capture(0, expr)?;
         if self.compiled.needs_dotstar() {
             self.fill(dotstar_patch.hole, patch.entry);
         } else {
@@ -169,7 +169,7 @@ impl Compiler {
             exprs.iter().all(|e| e.is_anchored_end());
         let mut dotstar_patch = Patch { hole: Hole::None, entry: 0 };
         if self.compiled.needs_dotstar() {
-            dotstar_patch = try!(self.c_dotstar());
+            dotstar_patch = self.c_dotstar()?;
             self.compiled.start = dotstar_patch.entry;
         } else {
             self.compiled.start = 0; // first instruction is always split
@@ -180,14 +180,14 @@ impl Compiler {
         for (i, expr) in exprs[0..exprs.len() - 1].iter().enumerate() {
             self.fill_to_next(prev_hole);
             let split = self.push_split_hole();
-            let Patch { hole, entry } = try!(self.c_capture(0, expr));
+            let Patch { hole, entry } = self.c_capture(0, expr)?;
             self.fill_to_next(hole);
             self.compiled.matches.push(self.insts.len());
             self.push_compiled(Inst::Match(i));
             prev_hole = self.fill_split(split, Some(entry), None);
         }
         let i = exprs.len() - 1;
-        let Patch { hole, entry } = try!(self.c_capture(0, &exprs[i]));
+        let Patch { hole, entry } = self.c_capture(0, &exprs[i])?;
         self.fill(prev_hole, entry);
         self.fill_to_next(hole);
         self.compiled.matches.push(self.insts.len());
@@ -259,7 +259,7 @@ impl Compiler {
         use prog;
         use syntax::hir::HirKind::*;
 
-        try!(self.check_size());
+        self.check_size()?;
         match *expr.kind() {
             Empty => Ok(Patch { hole: Hole::None, entry: self.insts.len() }),
             Literal(hir::Literal::Unicode(c)) => {
@@ -371,7 +371,7 @@ impl Compiler {
         } else {
             let entry = self.insts.len();
             let hole = self.push_hole(InstHole::Save { slot: first_slot });
-            let patch = try!(self.c(expr));
+            let patch = self.c(expr)?;
             self.fill(hole, patch.entry);
             self.fill_to_next(patch.hole);
             let hole = self.push_hole(InstHole::Save { slot: first_slot + 1 });
@@ -381,17 +381,17 @@ impl Compiler {
 
     fn c_dotstar(&mut self) -> Result {
         Ok(if !self.compiled.only_utf8() {
-            try!(self.c(&Hir::repetition(hir::Repetition {
+            self.c(&Hir::repetition(hir::Repetition {
                 kind: hir::RepetitionKind::ZeroOrMore,
                 greedy: false,
                 hir: Box::new(Hir::any(true)),
-            })))
+            }))?
         } else {
-            try!(self.c(&Hir::repetition(hir::Repetition {
+            self.c(&Hir::repetition(hir::Repetition {
                 kind: hir::RepetitionKind::ZeroOrMore,
                 greedy: false,
                 hir: Box::new(Hir::any(false)),
-            })))
+            }))?
         })
     }
 
@@ -404,9 +404,9 @@ impl Compiler {
                 Box::new(chars.iter())
             };
         let first = *chars.next().expect("non-empty literal");
-        let Patch { mut hole, entry } = try!(self.c_char(first));
+        let Patch { mut hole, entry } = self.c_char(first)?;
         for &c in chars {
-            let p = try!(self.c_char(c));
+            let p = self.c_char(c)?;
             self.fill(hole, p.entry);
             hole = p.hole;
         }
@@ -445,9 +445,9 @@ impl Compiler {
                 Box::new(bytes.iter())
             };
         let first = *bytes.next().expect("non-empty literal");
-        let Patch { mut hole, entry } = try!(self.c_byte(first));
+        let Patch { mut hole, entry } = self.c_byte(first)?;
         for &b in bytes {
-            let p = try!(self.c_byte(b));
+            let p = self.c_byte(b)?;
             self.fill(hole, p.entry);
             hole = p.hole;
         }
@@ -498,9 +498,9 @@ impl Compiler {
                 return Ok(Patch { hole: Hole::None, entry: self.insts.len() })
             }
         };
-        let Patch { mut hole, entry } = try!(self.c(first));
+        let Patch { mut hole, entry } = self.c(first)?;
         for e in exprs {
-            let p = try!(self.c(e));
+            let p = self.c(e)?;
             self.fill(hole, p.entry);
             hole = p.hole;
         }
@@ -523,7 +523,7 @@ impl Compiler {
             self.fill_to_next(prev_hole);
             let split = self.push_split_hole();
             let prev_entry = self.insts.len();
-            let Patch { hole, entry } = try!(self.c(e));
+            let Patch { hole, entry } = self.c(e)?;
             if prev_entry == self.insts.len() {
                 // TODO(burntsushi): It is kind of silly that we don't support
                 // empty-subexpressions in alternates, but it is supremely
@@ -538,7 +538,7 @@ impl Compiler {
             prev_hole = self.fill_split(split, Some(entry), None);
         }
         let prev_entry = self.insts.len();
-        let Patch { hole, entry } = try!(self.c(&exprs[exprs.len() - 1]));
+        let Patch { hole, entry } = self.c(&exprs[exprs.len() - 1])?;
         if prev_entry == self.insts.len() {
             // TODO(burntsushi): See TODO above.
             return Err(Error::Syntax(
@@ -571,7 +571,7 @@ impl Compiler {
     fn c_repeat_zero_or_one(&mut self, expr: &Hir, greedy: bool) -> Result {
         let split_entry = self.insts.len();
         let split = self.push_split_hole();
-        let Patch { hole: hole_rep, entry: entry_rep } = try!(self.c(expr));
+        let Patch { hole: hole_rep, entry: entry_rep } = self.c(expr)?;
 
         let split_hole = if greedy {
             self.fill_split(split, Some(entry_rep), None)
@@ -585,7 +585,7 @@ impl Compiler {
     fn c_repeat_zero_or_more(&mut self, expr: &Hir, greedy: bool) -> Result {
         let split_entry = self.insts.len();
         let split = self.push_split_hole();
-        let Patch { hole: hole_rep, entry: entry_rep } = try!(self.c(expr));
+        let Patch { hole: hole_rep, entry: entry_rep } = self.c(expr)?;
 
         self.fill(hole_rep, split_entry);
         let split_hole = if greedy {
@@ -597,7 +597,7 @@ impl Compiler {
     }
 
     fn c_repeat_one_or_more(&mut self, expr: &Hir, greedy: bool) -> Result {
-        let Patch { hole: hole_rep, entry: entry_rep } = try!(self.c(expr));
+        let Patch { hole: hole_rep, entry: entry_rep } = self.c(expr)?;
         self.fill_to_next(hole_rep);
         let split = self.push_split_hole();
 
@@ -616,8 +616,8 @@ impl Compiler {
         min: u32,
     ) -> Result {
         let min = u32_to_usize(min);
-        let patch_concat = try!(self.c_concat(iter::repeat(expr).take(min)));
-        let patch_rep = try!(self.c_repeat_zero_or_more(expr, greedy));
+        let patch_concat = self.c_concat(iter::repeat(expr).take(min))?;
+        let patch_rep = self.c_repeat_zero_or_more(expr, greedy)?;
         self.fill(patch_concat.hole, patch_rep.entry);
         Ok(Patch { hole: patch_rep.hole, entry: patch_concat.entry })
     }
@@ -630,7 +630,7 @@ impl Compiler {
         max: u32,
     ) -> Result {
         let (min, max) = (u32_to_usize(min), u32_to_usize(max));
-        let patch_concat = try!(self.c_concat(iter::repeat(expr).take(min)));
+        let patch_concat = self.c_concat(iter::repeat(expr).take(min))?;
         let initial_entry = patch_concat.entry;
         if min == max {
             return Ok(patch_concat);
@@ -659,7 +659,7 @@ impl Compiler {
         for _ in min..max {
             self.fill_to_next(prev_hole);
             let split = self.push_split_hole();
-            let Patch { hole, entry } = try!(self.c(expr));
+            let Patch { hole, entry } = self.c(expr)?;
             prev_hole = hole;
             if greedy {
                 holes.push(self.fill_split(split, Some(entry), None));
@@ -889,7 +889,7 @@ impl<'a, 'b> CompileClass<'a, 'b> {
                     Some(utf8_seq) => utf8_seq,
                 };
                 if is_last_range && it.peek().is_none() {
-                    let Patch { hole, entry } = try!(self.c_utf8_seq(&utf8_seq));
+                    let Patch { hole, entry } = self.c_utf8_seq(&utf8_seq)?;
                     holes.push(hole);
                     self.c.fill(last_split, entry);
                     last_split = Hole::None;
@@ -902,7 +902,7 @@ impl<'a, 'b> CompileClass<'a, 'b> {
                     }
                     self.c.fill_to_next(last_split);
                     last_split = self.c.push_split_hole();
-                    let Patch { hole, entry } = try!(self.c_utf8_seq(&utf8_seq));
+                    let Patch { hole, entry } = self.c_utf8_seq(&utf8_seq)?;
                     holes.push(hole);
                     last_split = self.c.fill_split(last_split, Some(entry), None);
                 }

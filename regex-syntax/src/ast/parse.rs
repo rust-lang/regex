@@ -426,9 +426,9 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
     /// If the capture limit is exceeded, then an error is returned.
     fn next_capture_index(&self, span: Span) -> Result<u32> {
         let current = self.parser().capture_index.get();
-        let i = try!(current.checked_add(1).ok_or_else(|| {
+        let i = current.checked_add(1).ok_or_else(|| {
             self.error(span, ast::ErrorKind::CaptureLimitExceeded)
-        }));
+        })?;
         self.parser().capture_index.set(i);
         Ok(i)
     }
@@ -695,7 +695,7 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
     /// is returned.
     fn push_group(&self, mut concat: ast::Concat) -> Result<ast::Concat> {
         assert_eq!(self.char(), '(');
-        match try!(self.parse_group()) {
+        match self.parse_group()? {
             Either::Left(set) => {
                 let ignore = set.flags.flag_state(ast::Flag::IgnoreWhitespace);
                 if let Some(v) = ignore {
@@ -837,7 +837,7 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
     ) -> Result<ast::ClassSetUnion> {
         assert_eq!(self.char(), '[');
 
-        let (nested_set, nested_union) = try!(self.parse_set_class_open());
+        let (nested_set, nested_union) = self.parse_set_class_open()?;
         self.parser().stack_class.borrow_mut().push(ClassState::Open {
             union: parent_union,
             set: nested_set,
@@ -987,33 +987,33 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
                 break;
             }
             match self.char() {
-                '(' => concat = try!(self.push_group(concat)),
-                ')' => concat = try!(self.pop_group(concat)),
-                '|' => concat = try!(self.push_alternate(concat)),
+                '(' => concat = self.push_group(concat)?,
+                ')' => concat = self.pop_group(concat)?,
+                '|' => concat = self.push_alternate(concat)?,
                 '[' => {
-                    let class = try!(self.parse_set_class());
+                    let class = self.parse_set_class()?;
                     concat.asts.push(Ast::Class(class));
                 }
                 '?' => {
-                    concat = try!(self.parse_uncounted_repetition(
-                        concat, ast::RepetitionKind::ZeroOrOne));
+                    concat = self.parse_uncounted_repetition(
+                        concat, ast::RepetitionKind::ZeroOrOne)?;
                 }
                 '*' => {
-                    concat = try!(self.parse_uncounted_repetition(
-                        concat, ast::RepetitionKind::ZeroOrMore));
+                    concat = self.parse_uncounted_repetition(
+                        concat, ast::RepetitionKind::ZeroOrMore)?;
                 }
                 '+' => {
-                    concat = try!(self.parse_uncounted_repetition(
-                        concat, ast::RepetitionKind::OneOrMore));
+                    concat = self.parse_uncounted_repetition(
+                        concat, ast::RepetitionKind::OneOrMore)?;
                 }
                 '{' => {
-                    concat = try!(self.parse_counted_repetition(concat));
+                    concat = self.parse_counted_repetition(concat)?;
                 }
-                _ => concat.asts.push(try!(self.parse_primitive()).into_ast()),
+                _ => concat.asts.push(self.parse_primitive()?.into_ast()),
             }
         }
-        let ast = try!(self.pop_group_end(concat));
-        try!(NestLimiter::new(self).check(&ast));
+        let ast = self.pop_group_end(concat)?;
+        NestLimiter::new(self).check(&ast)?;
         Ok(ast::WithComments {
             ast: ast,
             comments: mem::replace(
@@ -1106,7 +1106,7 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
                 ast::ErrorKind::RepetitionCountUnclosed,
             ));
         }
-        let count_start = try!(self.parse_decimal());
+        let count_start = self.parse_decimal()?;
         let mut range = ast::RepetitionRange::Exactly(count_start);
         if self.is_eof() {
             return Err(self.error(
@@ -1122,7 +1122,7 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
                 ));
             }
             if self.char() != '}' {
-                let count_end = try!(self.parse_decimal());
+                let count_end = self.parse_decimal()?;
                 range = ast::RepetitionRange::Bounded(count_start, count_end);
             } else {
                 range = ast::RepetitionRange::AtLeast(count_start);
@@ -1191,8 +1191,8 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
         }
         let inner_span = self.span();
         if self.bump_if("?P<") {
-            let capture_index = try!(self.next_capture_index(open_span));
-            let cap = try!(self.parse_capture_name(capture_index));
+            let capture_index = self.next_capture_index(open_span)?;
+            let cap = self.parse_capture_name(capture_index)?;
             Ok(Either::Right(ast::Group {
                 span: open_span,
                 kind: ast::GroupKind::CaptureName(cap),
@@ -1205,7 +1205,7 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
                     ast::ErrorKind::GroupUnclosed,
                 ));
             }
-            let flags = try!(self.parse_flags());
+            let flags = self.parse_flags()?;
             let char_end = self.char();
             self.bump();
             if char_end == ')' {
@@ -1230,7 +1230,7 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
                 }))
             }
         } else {
-            let capture_index = try!(self.next_capture_index(open_span));
+            let capture_index = self.next_capture_index(open_span)?;
             Ok(Either::Right(ast::Group {
                 span: open_span,
                 kind: ast::GroupKind::CaptureIndex(capture_index),
@@ -1291,7 +1291,7 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
             name: name.to_string(),
             index: capture_index,
         };
-        try!(self.add_capture_name(&capname));
+        self.add_capture_name(&capname)?;
         Ok(capname)
     }
 
@@ -1334,7 +1334,7 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
                 last_was_negation = None;
                 let item = ast::FlagsItem {
                     span: self.span_char(),
-                    kind: ast::FlagsItemKind::Flag(try!(self.parse_flag())),
+                    kind: ast::FlagsItemKind::Flag(self.parse_flag()?),
                 };
                 if let Some(i) = flags.add_item(item) {
                     return Err(self.error(
@@ -1460,12 +1460,12 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
                 ));
             }
             'x' | 'u' | 'U' => {
-                let mut lit = try!(self.parse_hex());
+                let mut lit = self.parse_hex()?;
                 lit.span.start = start;
                 return Ok(Primitive::Literal(lit));
             }
             'p' | 'P' => {
-                let mut cls = try!(self.parse_unicode_class());
+                let mut cls = self.parse_unicode_class()?;
                 cls.span.start = start;
                 return Ok(Primitive::Unicode(cls));
             }
@@ -1756,10 +1756,10 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
                             continue;
                         }
                     }
-                    union = try!(self.push_class_open(union));
+                    union = self.push_class_open(union)?;
                 }
                 ']' => {
-                    match try!(self.pop_class(union)) {
+                    match self.pop_class(union)? {
                         Either::Left(nested_union) => { union = nested_union; }
                         Either::Right(class) => return Ok(class),
                     }
@@ -1780,7 +1780,7 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
                         ast::ClassSetBinaryOpKind::SymmetricDifference, union);
                 }
                 _ => {
-                    union.push(try!(self.parse_set_class_range()));
+                    union.push(self.parse_set_class_range()?);
                 }
             }
         }
@@ -1795,7 +1795,7 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
     /// a simple literal is expected (e.g., in a range), then an error is
     /// returned.
     fn parse_set_class_range(&self) -> Result<ast::ClassSetItem> {
-        let prim1 = try!(self.parse_set_class_item());
+        let prim1 = self.parse_set_class_item()?;
         self.bump_space();
         if self.is_eof() {
             return Err(self.unclosed_class_error());
@@ -1816,11 +1816,11 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
         if !self.bump_and_bump_space() {
             return Err(self.unclosed_class_error());
         }
-        let prim2 = try!(self.parse_set_class_item());
+        let prim2 = self.parse_set_class_item()?;
         let range = ast::ClassSetRange {
             span: Span::new(prim1.span().start, prim2.span().end),
-            start: try!(prim1.into_class_literal(self)),
-            end: try!(prim2.into_class_literal(self)),
+            start: prim1.into_class_literal(self)?,
+            end: prim2.into_class_literal(self)?,
         };
         if !range.is_valid() {
             return Err(self.error(
@@ -2121,10 +2121,10 @@ impl<'p, 's, P: Borrow<Parser>> NestLimiter<'p, 's, P> {
     }
 
     fn increment_depth(&mut self, span: &Span) -> Result<()> {
-        let new = try!(self.depth.checked_add(1).ok_or_else(|| self.p.error(
+        let new = self.depth.checked_add(1).ok_or_else(|| self.p.error(
             span.clone(),
             ast::ErrorKind::NestLimitExceeded(::std::u32::MAX),
-        )));
+        ))?;
         let limit = self.p.parser().nest_limit;
         if new > limit {
             return Err(self.p.error(
