@@ -43,10 +43,13 @@ quickcheck = { version = "0.6", default-features = false }
 rand = "0.4"
 
 [features]
-# We don't enable any features by default currently, but if the compiler
-# supports a specific type of feature, then regex's build.rs might enable
-# some default features.
-default = []
+default = ["use_std"]
+# The 'use_std' feature permits the regex crate to use the standard library.
+# This is intended to support future use cases where the regex crate may be
+# able to compile without std, and instead just rely on 'core' and 'alloc'
+# (for example). Currently, this isn't supported, and removing the 'use_std'
+# feature will prevent regex from compiling.
+use_std = []
 # A blanket feature that governs whether unstable features are enabled or not.
 # Unstable features are disabled by default, and typically rely on unstable
 # features in rustc itself.

@@ -530,11 +530,17 @@ extern crate quickcheck;
 extern crate regex_syntax as syntax;
 extern crate utf8_ranges;
 
+#[cfg(feature = "use_std")]
 pub use error::Error;
+#[cfg(feature = "use_std")]
 pub use re_builder::unicode::*;
+#[cfg(feature = "use_std")]
 pub use re_builder::set_unicode::*;
+#[cfg(feature = "use_std")]
 pub use re_set::unicode::*;
+#[cfg(feature = "use_std")]
 pub use re_trait::Locations;
+#[cfg(feature = "use_std")]
 pub use re_unicode::{
     Regex, Match, Captures,
     CaptureNames, Matches, CaptureMatches, SubCaptureMatches,
@@ -629,6 +635,7 @@ When the `s` flag is enabled, `.` matches any byte.
 In general, one should expect performance on `&[u8]` to be roughly similar to
 performance on `&str`.
 */
+#[cfg(feature = "use_std")]
 pub mod bytes {
     pub use re_builder::bytes::*;
     pub use re_builder::set_bytes::*;
@@ -664,6 +671,7 @@ mod vector;
 /// testing different matching engines and supporting the `regex-debug` CLI
 /// utility.
 #[doc(hidden)]
+#[cfg(feature = "use_std")]
 pub mod internal {
     pub use compile::Compiler;
     pub use exec::{Exec, ExecBuilder};
