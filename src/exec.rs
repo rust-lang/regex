@@ -622,8 +622,13 @@ impl<'c> ExecNoSync<'c> {
             }
             AnchoredStart => {
                 let lits = &self.ro.nfa.prefixes;
-                lits.find_start(&text[start..])
-                    .map(|(s, e)| (start + s, start + e))
+                if !self.ro.nfa.is_anchored_start
+                    || (self.ro.nfa.is_anchored_start && start == 0) {
+                    lits.find_start(&text[start..])
+                        .map(|(s, e)| (start + s, start + e))
+                } else {
+                    None
+                }
             }
             AnchoredEnd => {
                 let lits = &self.ro.suffixes;
@@ -1283,6 +1288,65 @@ impl ProgramCacheInner {
             backtrack: backtrack::Cache::new(&ro.nfa),
             dfa: dfa::Cache::new(&ro.dfa),
             dfa_reverse: dfa::Cache::new(&ro.dfa_reverse),
+        }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    #[test]
+    fn uppercut_s_backtracking_bytes_default_bytes_mismatch() {
+        use internal::ExecBuilder;
+
+        let backtrack_bytes_re = ExecBuilder::new("^S")
+            .bounded_backtracking()
+            .only_utf8(false)
+            .build()
+            .map(|exec| exec.into_byte_regex())
+            .map_err(|err| format!("{}", err))
+            .unwrap();
+
+        let default_bytes_re = ExecBuilder::new("^S")
+            .only_utf8(false)
+            .build()
+            .map(|exec| exec.into_byte_regex())
+            .map_err(|err| format!("{}", err))
+            .unwrap();
+
+        let input = vec![83, 83];
+
+        let s1 = backtrack_bytes_re.split(&input);
+        let s2 = default_bytes_re.split(&input);
+        for (chunk1, chunk2) in s1.zip(s2) {
+            assert_eq!(chunk1, chunk2);
+        }
+    }
+
+    #[test]
+    fn unicode_lit_star_backtracking_utf8bytes_default_utf8bytes_mismatch() {
+        use internal::ExecBuilder;
+
+        let backtrack_bytes_re = ExecBuilder::new(r"^(?u:\*)")
+            .bounded_backtracking()
+            .bytes(true)
+            .build()
+            .map(|exec| exec.into_regex())
+            .map_err(|err| format!("{}", err))
+            .unwrap();
+
+        let default_bytes_re = ExecBuilder::new(r"^(?u:\*)")
+            .bytes(true)
+            .build()
+            .map(|exec| exec.into_regex())
+            .map_err(|err| format!("{}", err))
+            .unwrap();
+
+        let input = "**";
+
+        let s1 = backtrack_bytes_re.split(input);
+        let s2 = default_bytes_re.split(input);
+        for (chunk1, chunk2) in s1.zip(s2) {
+            assert_eq!(chunk1, chunk2);
         }
     }
 }
