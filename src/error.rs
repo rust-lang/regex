@@ -11,8 +11,6 @@
 use std::fmt;
 use std::iter::repeat;
 
-use syntax;
-
 /// An error that occurred during parsing or compiling a regular expression.
 #[derive(Clone, PartialEq)]
 pub enum Error {
@@ -82,11 +80,5 @@ impl fmt::Debug for Error {
                 f.debug_tuple("__Nonexhaustive").finish()
             }
         }
-    }
-}
-
-impl From<syntax::Error> for Error {
-    fn from(err: syntax::Error) -> Error {
-        Error::Syntax(err.to_string())
     }
 }
