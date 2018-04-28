@@ -1023,8 +1023,8 @@ fn hir_ascii_class_bytes(kind: &ast::ClassAsciiKind) -> hir::ClassBytes {
 fn ascii_class(kind: &ast::ClassAsciiKind) -> &'static [(char, char)] {
     use ast::ClassAsciiKind::*;
 
-    // TODO: Get rid of these consts, which appear necessary for older
-    // versions of Rust.
+    // The contortions below with `const` appear necessary for older versions
+    // of Rust.
     type T = &'static [(char, char)];
     match *kind {
         Alnum => {
@@ -1599,8 +1599,7 @@ mod tests {
     fn escape() {
         assert_eq!(
             t(r"\\\.\+\*\?\(\)\|\[\]\{\}\^\$\#"),
-            hir_lit(r"\.+*?()|[]{}^$#"),
-        );
+            hir_lit(r"\.+*?()|[]{}^$#"));
     }
 
     #[test]
