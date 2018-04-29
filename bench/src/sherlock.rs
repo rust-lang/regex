@@ -178,6 +178,8 @@ sherlock!(holmes_cochar_watson, r"Holmes.{0,25}Watson|Watson.{0,25}Holmes", 7);
 #[cfg(not(feature = "re-stdcpp"))]
 #[cfg(not(feature = "re-boost"))]
 #[cfg(not(feature = "re-tcl"))]
+#[cfg(not(feature = "re-dphobos-dmd-ct"))]
+#[cfg(not(feature = "re-dphobos-ldc-ct"))]
 sherlock!(
     holmes_coword_watson,
     r"Holmes(?:\s*.+\s*){0,10}Watson|Watson(?:\s*.+\s*){0,10}Holmes",
