@@ -1,3 +1,34 @@
+0.2.11 (2018-05-01)
+===================
+This release primarily contains bug fixes. Some of them resolve bugs where
+the parser could panic.
+
+New features:
+
+* [FEATURE #459](https://github.com/rust-lang/regex/pull/459):
+  Include C++'s standard regex library and Boost's regex library in the
+  benchmark harness. We now include D/libphobos, C++/std, C++/boost, Oniguruma,
+  PCRE1, PCRE2, RE2 and Tcl in the harness.
+
+Bug fixes:
+
+* [BUG #445](https://github.com/rust-lang/regex/issues/445):
+  Clarify order of indices returned by RegexSet match iterator.
+* [BUG #461](https://github.com/rust-lang/regex/issues/461):
+  Improve error messages for invalid regexes like `[\d-a]`.
+* [BUG #464](https://github.com/rust-lang/regex/issues/464):
+  Fix a bug in the error message pretty printer that could cause a panic when
+  a regex contained a literal `\n` character.
+* [BUG #465](https://github.com/rust-lang/regex/issues/465):
+  Fix a panic in the parser that was caused by applying a repetition operator
+  to `(?flags)`.
+* [BUG #466](https://github.com/rust-lang/regex/issues/466):
+  Fix a bug where `\pC` was not recognized as an alias for `\p{Other}`.
+* [BUG #470](https://github.com/rust-lang/regex/pull/470):
+  Fix a bug where literal searches did more work than necessary for anchored
+  regexes.
+
+
 0.2.10 (2018-03-16)
 ===================
 This release primarily updates the regex crate to changes made in `std::arch`
@@ -23,7 +54,7 @@ New features:
   The regex crate now includes AVX2 optimizations in addition to the extant
   SSSE3 optimization.
 
-Bug gixes:
+Bug fixes:
 
 * [BUG #455](https://github.com/rust-lang/regex/pull/455):
   Fix a bug where `(?x)[ / - ]` failed to parse.
