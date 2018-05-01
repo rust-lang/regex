@@ -1,3 +1,35 @@
+1.0.0 (2018-05-01)
+==================
+This release marks the 1.0 release of regex.
+
+While this release includes some breaking changes, most users of older versions
+of the regex library should be able to migrate to 1.0 by simply bumping the
+version number. The important changes are as follows:
+
+* We adopt Rust 1.20 as the new minimum supported version of Rust for regex.
+  We also tentativley adopt a policy that permits bumping the minimum supported
+  version of Rust in minor version releases of regex, but no patch releases.
+  That is, with respect to semver, we do not strictly consider bumping the
+  minimum version of Rust to be a breaking change, but adopt a conservative
+  stance as a compromise.
+* Octal syntax in regular expressions has been disabled by default. This
+  permits better error messages that inform users that backreferences aren't
+  available. Octal syntax can be re-enabled via the corresponding option on
+  `RegexBuilder`.
+* `(?-u:\B)` is no longer allowed in Unicode regexes since it can match at
+  invalid UTF-8 code unit boundaries. `(?-u:\b)` is still allowed in Unicode
+  regexes.
+* The `From<regex_syntax::Error>` impl has been removed. This formally removes
+  the public dependency on `regex-syntax`.
+* A new feature, `use_std`, has been added and enabled by default. Disabling
+  the feature will result in a compilation error. In the future, this may
+  permit us to support `no_std` environments (w/ `alloc`) in a backwards
+  compatible way.
+
+For more information and discussion, please see
+[1.0 release tracking issue](https://github.com/rust-lang/regex/issues/457).
+
+
 0.2.11 (2018-05-01)
 ===================
 This release primarily contains bug fixes. Some of them resolve bugs where
