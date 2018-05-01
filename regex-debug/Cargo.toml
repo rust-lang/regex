@@ -12,8 +12,8 @@ workspace = ".."
 
 [dependencies]
 docopt = "0.8"
-regex = { version = "0.2", path = ".." }
-regex-syntax = { version = "0.5.6", path = "../regex-syntax" }
+regex = { version = "1.0", path = ".." }
+regex-syntax = { version = "0.6.0", path = "../regex-syntax" }
 serde = "1"
 serde_derive = "1"
 utf8-ranges = "1"
