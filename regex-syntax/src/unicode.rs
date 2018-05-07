@@ -1,5 +1,20 @@
-use std::cmp::Ordering;
-use std::result;
+cfg_if! {
+    if #[cfg(feature = "std")] {
+        use std::cmp::Ordering;
+        use std::result;
+        use std::slice;
+    } else if #[cfg(not(feature = "std"))] {
+        use alloc::vec::Vec;
+        use alloc::string::{String, ToString};
+        use core::cmp::Ordering;
+        use core::result;
+        use core::slice;
+    } else {
+        use core::cmp::Ordering;
+        use core::result;
+        use core::slice;
+    }
+}
 
 use ucd_util::{self, PropertyValues};
 
@@ -27,7 +42,7 @@ pub enum Error {
 
 /// An iterator over a codepoint's simple case equivalence class.
 #[derive(Debug)]
-pub struct SimpleFoldIter(::std::slice::Iter<'static, char>);
+pub struct SimpleFoldIter(slice::Iter<'static, char>);
 
 impl Iterator for SimpleFoldIter {
     type Item = char;
@@ -372,6 +387,7 @@ impl Iterator for AgeIter {
 
 #[cfg(test)]
 mod tests {
+    use std::prelude::v1::*;
     use super::{contains_simple_case_mapping, simple_fold};
 
     #[test]

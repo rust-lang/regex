@@ -9,5 +9,13 @@ homepage = "https://github.com/rust-lang/regex"
 description = "A regular expression parser."
 workspace = ".."
 
+[features]
+default = ["std"]
+# Disable this on-by-default feature and add "alloc" to allow use in no_std builds
+std = []
+# Required for use in no_std builds, presently nightly-only
+alloc = []
+
 [dependencies]
+cfg-if = "0.1"
 ucd-util = "0.1.0"

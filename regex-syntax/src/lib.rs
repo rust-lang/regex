@@ -105,7 +105,22 @@ done automatically in the `regex` crate.
 
 #![deny(missing_docs)]
 
+#![cfg_attr(not(feature = "std"), no_std)]
+#![cfg_attr(all(feature = "alloc", not(feature = "std")), feature(alloc))]
+#![cfg_attr(all(feature = "alloc", not(feature = "std")), feature(slice_concat_ext))]
+
+#[cfg(all(test, not(feature = "std")))]
+#[macro_use]
+extern crate std;
+
+#[cfg(all(feature = "alloc", not(feature = "std")))]
+#[macro_use]
+extern crate alloc;
+
 extern crate ucd_util;
+
+#[macro_use]
+extern crate cfg_if;
 
 pub use error::{Error, Result};
 pub use parser::{Parser, ParserBuilder};
@@ -117,6 +132,9 @@ pub mod hir;
 mod parser;
 mod unicode;
 mod unicode_tables;
+
+#[cfg(all(feature = "alloc", not(feature = "std")))]
+use alloc::string::String;
 
 /// Escapes all regular expression meta characters in `text`.
 ///
@@ -168,7 +186,10 @@ pub fn is_meta_character(c: char) -> bool {
 /// `Join_Control` properties, or is in one of the `Decimal_Number`, `Mark`
 /// or `Connector_Punctuation` general categories.
 pub fn is_word_character(c: char) -> bool {
+    #[cfg(feature = "std")]
     use std::cmp::Ordering;
+    #[cfg(not(feature = "std"))]
+    use core::cmp::Ordering;
     use unicode_tables::perl_word::PERL_WORD;
 
     if c <= 0x7F as char && is_word_byte(c as u8) {
@@ -199,6 +220,7 @@ pub fn is_word_byte(c: u8) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use std::prelude::v1::*;
     use super::*;
 
     #[test]

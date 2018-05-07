@@ -1,8 +1,25 @@
-use std::char;
-use std::cmp;
-use std::fmt::Debug;
-use std::slice;
-use std::u8;
+cfg_if! {
+    if #[cfg(feature = "std")] {
+        use std::char;
+        use std::cmp;
+        use std::fmt::Debug;
+        use std::slice;
+        use std::u8;
+    } else if #[cfg(not(feature = "std"))] {
+        use alloc::vec::Vec;
+        use core::char;
+        use core::cmp;
+        use core::fmt::Debug;
+        use core::slice;
+        use core::u8;
+    } else {
+        use core::char;
+        use core::cmp;
+        use core::fmt::Debug;
+        use core::slice;
+        use core::u8;
+    }
+}
 
 // This module contains an *internal* implementation of interval sets.
 //

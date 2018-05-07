@@ -11,11 +11,28 @@
 /*!
 Defines a high-level intermediate representation for regular expressions.
 */
-use std::char;
-use std::cmp;
-use std::error;
-use std::fmt;
-use std::u8;
+cfg_if! {
+    if #[cfg(feature = "std")] {
+        use std::char;
+        use std::cmp;
+        use std::error;
+        use std::fmt;
+        use std::u8;
+    } else if #[cfg(all(feature = "alloc", not(feature = "std")))] {
+        use alloc::boxed::Box;
+        use alloc::string::{String, ToString};
+        use alloc::vec::Vec;
+        use core::char;
+        use core::cmp;
+        use core::fmt;
+        use core::u8;
+    } else {
+        use core::char;
+        use core::cmp;
+        use core::fmt;
+        use core::u8;
+    }
+}
 
 use ast::Span;
 use hir::interval::{Interval, IntervalSet, IntervalSetIter};
@@ -104,6 +121,7 @@ impl ErrorKind {
     }
 }
 
+#[cfg(feature = "std")]
 impl error::Error for Error {
     fn description(&self) -> &str {
         self.kind.description()
@@ -209,7 +227,10 @@ impl Hir {
     /// Consumes ownership of this HIR expression and returns its underlying
     /// `HirKind`.
     pub fn into_kind(mut self) -> HirKind {
+        #[cfg(feature = "std")]
         use std::mem;
+        #[cfg(not(feature = "std"))]
+        use core::mem;
         mem::replace(&mut self.kind, HirKind::Empty)
     }
 
@@ -1249,7 +1270,10 @@ pub enum RepetitionRange {
 /// space but heap space proportional to the depth of the total `Hir`.
 impl Drop for Hir {
     fn drop(&mut self) {
+        #[cfg(feature = "std")]
         use std::mem;
+        #[cfg(not(feature = "std"))]
+        use core::mem;
 
         match *self.kind() {
             HirKind::Empty

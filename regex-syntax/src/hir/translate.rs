@@ -12,8 +12,21 @@
 Defines a translator that converts an `Ast` to an `Hir`.
 */
 
-use std::cell::{Cell, RefCell};
-use std::result;
+cfg_if! {
+    if #[cfg(feature = "std")] {
+        use std::cell::{Cell, RefCell};
+        use std::result;
+    } else if #[cfg(all(feature = "alloc", not(feature = "std")))] {
+        use alloc::boxed::Box;
+        use alloc::string::ToString;
+        use alloc::vec::Vec;
+        use core::cell::{Cell, RefCell};
+        use core::result;
+    } else {
+        use core::cell::{Cell, RefCell};
+        use core::result;
+    }
+}
 
 use ast::{self, Ast, Span, Visitor};
 use hir::{self, Error, ErrorKind, Hir};
@@ -1094,6 +1107,7 @@ mod tests {
     use ast::{self, Ast, Position, Span};
     use ast::parse::ParserBuilder;
     use hir::{self, Hir, HirKind};
+    use std::prelude::v1::*;
     use unicode::{self, ClassQuery};
 
     use super::{TranslatorBuilder, ascii_class};

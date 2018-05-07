@@ -12,10 +12,27 @@
 This module provides a regular expression parser.
 */
 
-use std::borrow::Borrow;
-use std::cell::{Cell, RefCell};
-use std::mem;
-use std::result;
+cfg_if! {
+    if #[cfg(feature = "std")] {
+        use std::borrow::Borrow;
+        use std::cell::{Cell, RefCell};
+        use std::mem;
+        use std::result;
+    } else if #[cfg(all(feature = "alloc", not(feature = "std")))] {
+        use alloc::borrow::Borrow;
+        use alloc::boxed::Box;
+        use alloc::string::{String, ToString};
+        use alloc::vec::Vec;
+        use core::cell::{Cell, RefCell};
+        use core::mem;
+        use core::result;
+    } else {
+        use core::cell::{Cell, RefCell};
+        use core::mem;
+        use core::result;
+    }
+}
+
 
 use ast::{self, Ast, Position, Span};
 use either::Either;
@@ -1530,8 +1547,15 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
     ///
     /// Assuming the preconditions are met, this routine can never fail.
     fn parse_octal(&self) -> ast::Literal {
-        use std::char;
-        use std::u32;
+        cfg_if! {
+            if #[cfg(feature = "std")] {
+                use std::char;
+                use std::u32;
+            } else if #[cfg(not(feature = "std"))] {
+                use core::char;
+                use core::u32;
+            }
+        }
 
         assert!(self.parser().octal);
         assert!('0' <= self.char() && self.char() <= '7');
@@ -1596,8 +1620,15 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
         &self,
         kind: ast::HexLiteralKind,
     ) -> Result<ast::Literal> {
-        use std::char;
-        use std::u32;
+        cfg_if! {
+            if #[cfg(feature = "std")] {
+                use std::char;
+                use std::u32;
+            } else if #[cfg(not(feature = "std"))] {
+                use core::char;
+                use core::u32;
+            }
+        }
 
         let mut scratch = self.parser().scratch.borrow_mut();
         scratch.clear();
@@ -1643,8 +1674,15 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
         &self,
         kind: ast::HexLiteralKind,
     ) -> Result<ast::Literal> {
-        use std::char;
-        use std::u32;
+        cfg_if! {
+            if #[cfg(feature = "std")] {
+                use std::char;
+                use std::u32;
+            } else if #[cfg(not(feature = "std"))] {
+                use core::char;
+                use core::u32;
+            }
+        }
 
         let mut scratch = self.parser().scratch.borrow_mut();
         scratch.clear();
@@ -2121,9 +2159,13 @@ impl<'p, 's, P: Borrow<Parser>> NestLimiter<'p, 's, P> {
     }
 
     fn increment_depth(&mut self, span: &Span) -> Result<()> {
+        #[cfg(feature = "std")]
+        use std::u32;
+        #[cfg(not(feature = "std"))]
+        use core::u32;
         let new = self.depth.checked_add(1).ok_or_else(|| self.p.error(
             span.clone(),
-            ast::ErrorKind::NestLimitExceeded(::std::u32::MAX),
+            ast::ErrorKind::NestLimitExceeded(u32::MAX),
         ))?;
         let limit = self.p.parser().nest_limit;
         if new > limit {
@@ -2255,6 +2297,7 @@ impl<'p, 's, P: Borrow<Parser>> ast::Visitor for NestLimiter<'p, 's, P> {
 
 #[cfg(test)]
 mod tests {
+    use std::prelude::v1::*;
     use std::ops::Range;
 
     use ast::{self, Ast, Position, Span};

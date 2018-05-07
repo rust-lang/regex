@@ -12,9 +12,22 @@
 Defines an abstract syntax for regular expressions.
 */
 
-use std::cmp::Ordering;
-use std::error;
-use std::fmt;
+cfg_if! {
+    if #[cfg(feature = "std")] {
+        use std::cmp::Ordering;
+        use std::error;
+        use std::fmt;
+    } else if #[cfg(all(feature = "alloc", not(feature = "std")))] {
+        use alloc::boxed::Box;
+        use alloc::string::String;
+        use alloc::vec::Vec;
+        use core::cmp::Ordering;
+        use core::fmt;
+    } else {
+        use core::cmp::Ordering;
+        use core::fmt;
+    }
+}
 
 pub use ast::visitor::{Visitor, visit};
 
@@ -179,6 +192,7 @@ pub enum ErrorKind {
     __Nonexhaustive,
 }
 
+#[cfg(feature = "std")]
 impl error::Error for Error {
     fn description(&self) -> &str {
         use self::ErrorKind::*;
@@ -226,10 +240,14 @@ impl fmt::Display for Error {
 impl fmt::Display for ErrorKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use self::ErrorKind::*;
+        #[cfg(feature = "std")]
+        use std::u32;
+        #[cfg(not(feature = "std"))]
+        use core::u32;
         match *self {
             CaptureLimitExceeded => {
                 write!(f, "exceeded the maximum number of \
-                           capturing groups ({})", ::std::u32::MAX)
+                           capturing groups ({})", u32::MAX)
             }
             ClassEscapeInvalid => {
                 write!(f, "invalid escape sequence found in character class")
@@ -1366,7 +1384,10 @@ pub enum Flag {
 /// space but heap space proportional to the depth of the `Ast`.
 impl Drop for Ast {
     fn drop(&mut self) {
+        #[cfg(feature = "std")]
         use std::mem;
+        #[cfg(not(feature = "std"))]
+        use core::mem;
 
         match *self {
             Ast::Empty(_)
@@ -1416,7 +1437,10 @@ impl Drop for Ast {
 /// stack space but heap space proportional to the depth of the `ClassSet`.
 impl Drop for ClassSet {
     fn drop(&mut self) {
+        #[cfg(feature = "std")]
         use std::mem;
+        #[cfg(not(feature = "std"))]
+        use core::mem;
 
         match *self {
             ClassSet::Item(ref item) => {

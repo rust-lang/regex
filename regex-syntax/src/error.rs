@@ -1,7 +1,22 @@
-use std::cmp;
-use std::error;
-use std::fmt;
-use std::result;
+cfg_if! {
+    if #[cfg(feature = "std")] {
+        use std::cmp;
+        use std::error;
+        use std::fmt;
+        use std::result;
+    } else if #[cfg(all(feature = "alloc", not(feature = "std")))] {
+        use alloc::slice::SliceConcatExt;
+        use alloc::string::{String, ToString};
+        use alloc::vec::Vec;
+        use core::cmp;
+        use core::fmt;
+        use core::result;
+    } else {
+        use core::cmp;
+        use core::fmt;
+        use core::result;
+    }
+}
 
 use ast;
 use hir;
@@ -39,6 +54,7 @@ impl From<hir::Error> for Error {
     }
 }
 
+#[cfg(feature = "std")]
 impl error::Error for Error {
     fn description(&self) -> &str {
         match *self {
@@ -280,11 +296,17 @@ impl<'p> Spans<'p> {
 }
 
 fn repeat_char(c: char, count: usize) -> String {
-    ::std::iter::repeat(c).take(count).collect()
+    #[cfg(feature = "std")]
+    use std::iter;
+    #[cfg(not(feature = "std"))]
+    use core::iter;
+
+    iter::repeat(c).take(count).collect()
 }
 
 #[cfg(test)]
 mod tests {
+    use std::prelude::v1::*;
     use ast::parse::Parser;
 
     // See: https://github.com/rust-lang/regex/issues/464

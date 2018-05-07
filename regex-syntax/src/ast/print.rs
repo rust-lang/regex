@@ -12,7 +12,10 @@
 This module provides a regular expression printer for `Ast`.
 */
 
+#[cfg(feature = "std")]
 use std::fmt;
+#[cfg(not(feature = "std"))]
+use core::fmt;
 
 use ast::{self, Ast};
 use ast::visitor::{self, Visitor};
@@ -415,6 +418,7 @@ impl<'p, W: fmt::Write> Writer<'p, W> {
 #[cfg(test)]
 mod tests {
     use ast::parse::ParserBuilder;
+    use std::prelude::v1::*;
     use super::Printer;
 
     fn roundtrip(given: &str) {
