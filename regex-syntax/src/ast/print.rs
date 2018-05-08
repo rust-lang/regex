@@ -418,7 +418,7 @@ impl<'p, W: fmt::Write> Writer<'p, W> {
 #[cfg(test)]
 mod tests {
     use ast::parse::ParserBuilder;
-    use std::prelude::v1::*;
+    use std_test::prelude::v1::*;
     use super::Printer;
 
     fn roundtrip(given: &str) {

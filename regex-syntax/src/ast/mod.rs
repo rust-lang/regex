@@ -12,22 +12,14 @@
 Defines an abstract syntax for regular expressions.
 */
 
-cfg_if! {
-    if #[cfg(feature = "std")] {
-        use std::cmp::Ordering;
-        use std::error;
-        use std::fmt;
-    } else if #[cfg(all(feature = "alloc", not(feature = "std")))] {
-        use alloc::boxed::Box;
-        use alloc::string::String;
-        use alloc::vec::Vec;
-        use core::cmp::Ordering;
-        use core::fmt;
-    } else {
-        use core::cmp::Ordering;
-        use core::fmt;
-    }
-}
+use core::cmp::Ordering;
+use core::fmt;
+#[cfg(feature = "std")]
+use core::error;
+#[cfg(all(feature = "alloc", not(feature = "std")))]
+use alloc::boxed::Box;
+#[cfg(all(feature = "alloc", not(feature = "std")))]
+use alloc::{String, Vec};
 
 pub use ast::visitor::{Visitor, visit};
 
@@ -240,14 +232,10 @@ impl fmt::Display for Error {
 impl fmt::Display for ErrorKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use self::ErrorKind::*;
-        #[cfg(feature = "std")]
-        use std::u32;
-        #[cfg(not(feature = "std"))]
-        use core::u32;
         match *self {
             CaptureLimitExceeded => {
                 write!(f, "exceeded the maximum number of \
-                           capturing groups ({})", u32::MAX)
+                           capturing groups ({})", ::core::u32::MAX)
             }
             ClassEscapeInvalid => {
                 write!(f, "invalid escape sequence found in character class")
@@ -1384,9 +1372,6 @@ pub enum Flag {
 /// space but heap space proportional to the depth of the `Ast`.
 impl Drop for Ast {
     fn drop(&mut self) {
-        #[cfg(feature = "std")]
-        use std::mem;
-        #[cfg(not(feature = "std"))]
         use core::mem;
 
         match *self {
@@ -1437,9 +1422,6 @@ impl Drop for Ast {
 /// stack space but heap space proportional to the depth of the `ClassSet`.
 impl Drop for ClassSet {
     fn drop(&mut self) {
-        #[cfg(feature = "std")]
-        use std::mem;
-        #[cfg(not(feature = "std"))]
         use core::mem;
 
         match *self {
@@ -1512,7 +1494,7 @@ mod tests {
     #[test]
     #[cfg(any(unix, windows))]
     fn no_stack_overflow_on_drop() {
-        use std::thread;
+        use std_test::thread;
 
         let run = || {
             let span = || Span::splat(Position::new(0, 0, 0));

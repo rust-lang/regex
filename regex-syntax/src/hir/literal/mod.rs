@@ -12,31 +12,19 @@
 Provides routines for extracting literal prefixes and suffixes from an `Hir`.
 */
 
-cfg_if! {
-    if #[cfg(feature = "std")] {
-        use std::cmp;
-        use std::fmt;
-        use std::iter;
-        use std::mem;
-        use std::ops;
-    } else if #[cfg(all(feature = "alloc", not(feature = "std")))] {
-        use alloc::borrow::ToOwned;
-        use alloc::boxed::Box;
-        use alloc::string::{String, ToString};
-        use alloc::vec::Vec;
-        use core::cmp;
-        use core::fmt;
-        use core::iter;
-        use core::mem;
-        use core::ops;
-    } else {
-        use core::cmp;
-        use core::fmt;
-        use core::iter;
-        use core::mem;
-        use core::ops;
-    }
-}
+use core::cmp;
+use core::fmt;
+use core::iter;
+use core::mem;
+use core::ops;
+#[cfg(all(feature = "alloc", not(feature = "std")))]
+use alloc::borrow::ToOwned;
+#[cfg(all(feature = "alloc", not(feature = "std")))]
+use alloc::boxed::Box;
+#[cfg(all(feature = "alloc", not(feature = "std")))]
+use alloc::string::{String, ToString};
+#[cfg(all(feature = "alloc", not(feature = "std")))]
+use alloc::vec::Vec;
 
 use hir::{self, Hir, HirKind};
 
@@ -503,9 +491,6 @@ impl Literals {
         cls: &hir::ClassUnicode,
         reverse: bool,
     ) -> bool {
-        #[cfg(feature = "std")]
-        use std::char;
-        #[cfg(not(feature = "std"))]
         use core::char;
 
         if self.class_exceeds_limits(cls_char_count(cls)) {
@@ -969,11 +954,7 @@ fn position(needle: &[u8], mut haystack: &[u8]) -> Option<usize> {
 }
 
 fn escape_unicode(bytes: &[u8]) -> String {
-    #[cfg(feature = "std")]
-    use std::str;
-    #[cfg(not(feature = "std"))]
-    use core::str;
-    let show = match str::from_utf8(bytes) {
+    let show = match ::core::str::from_utf8(bytes) {
         Ok(v) => v.to_string(),
         Err(_) => escape_bytes(bytes),
     };
@@ -1006,9 +987,6 @@ fn escape_bytes(bytes: &[u8]) -> String {
 }
 
 fn escape_byte(byte: u8) -> String {
-    #[cfg(feature = "std")]
-    use std::ascii::escape_default;
-    #[cfg(not(feature = "std"))]
     use core::ascii::escape_default;
 
     let escaped: Vec<u8> = escape_default(byte).collect();
@@ -1029,8 +1007,8 @@ fn cls_byte_count(cls: &hir::ClassBytes) -> usize {
 
 #[cfg(test)]
 mod tests {
-    use std::prelude::v1::*;
-    use std::fmt;
+    use std_test::prelude::v1::*;
+    use core::fmt;
 
     use ParserBuilder;
     use hir::Hir;

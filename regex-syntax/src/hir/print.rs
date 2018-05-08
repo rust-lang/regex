@@ -2,9 +2,6 @@
 This module provides a regular expression printer for `Hir`.
 */
 
-#[cfg(feature = "std")]
-use std::fmt;
-#[cfg(not(feature = "std"))]
 use core::fmt;
 
 use hir::{self, Hir, HirKind};
@@ -250,7 +247,7 @@ impl<'p, W: fmt::Write> Writer<'p, W> {
 #[cfg(test)]
 mod tests {
     use ParserBuilder;
-    use std::prelude::v1::*;
+    use std_test::prelude::v1::*;
     use super::Printer;
 
     fn roundtrip(given: &str, expected: &str) {

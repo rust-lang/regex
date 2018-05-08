@@ -17,5 +17,4 @@ std = []
 alloc = []
 
 [dependencies]
-cfg-if = "0.1"
 ucd-util = "0.1.0"

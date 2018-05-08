@@ -1,20 +1,10 @@
-cfg_if! {
-    if #[cfg(feature = "std")] {
-        use std::cmp::Ordering;
-        use std::result;
-        use std::slice;
-    } else if #[cfg(not(feature = "std"))] {
-        use alloc::vec::Vec;
-        use alloc::string::{String, ToString};
-        use core::cmp::Ordering;
-        use core::result;
-        use core::slice;
-    } else {
-        use core::cmp::Ordering;
-        use core::result;
-        use core::slice;
-    }
-}
+use core::cmp::Ordering;
+use core::result;
+use core::slice;
+#[cfg(all(feature = "alloc", not(feature = "std")))]
+use alloc::string::{String, ToString};
+#[cfg(all(feature = "alloc", not(feature = "std")))]
+use alloc::vec::Vec;
 
 use ucd_util::{self, PropertyValues};
 
@@ -387,7 +377,7 @@ impl Iterator for AgeIter {
 
 #[cfg(test)]
 mod tests {
-    use std::prelude::v1::*;
+    use std_test::prelude::v1::*;
     use super::{contains_simple_case_mapping, simple_fold};
 
     #[test]

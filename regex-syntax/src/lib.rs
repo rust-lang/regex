@@ -109,18 +109,18 @@ done automatically in the `regex` crate.
 #![cfg_attr(all(feature = "alloc", not(feature = "std")), feature(alloc))]
 #![cfg_attr(all(feature = "alloc", not(feature = "std")), feature(slice_concat_ext))]
 
-#[cfg(all(test, not(feature = "std")))]
+#[cfg(test)]
+extern crate std as std_test;
+
+#[cfg(feature = "std")]
 #[macro_use]
-extern crate std;
+extern crate std as core;
 
 #[cfg(all(feature = "alloc", not(feature = "std")))]
 #[macro_use]
 extern crate alloc;
 
 extern crate ucd_util;
-
-#[macro_use]
-extern crate cfg_if;
 
 pub use error::{Error, Result};
 pub use parser::{Parser, ParserBuilder};
@@ -186,9 +186,6 @@ pub fn is_meta_character(c: char) -> bool {
 /// `Join_Control` properties, or is in one of the `Decimal_Number`, `Mark`
 /// or `Connector_Punctuation` general categories.
 pub fn is_word_character(c: char) -> bool {
-    #[cfg(feature = "std")]
-    use std::cmp::Ordering;
-    #[cfg(not(feature = "std"))]
     use core::cmp::Ordering;
     use unicode_tables::perl_word::PERL_WORD;
 
@@ -220,7 +217,7 @@ pub fn is_word_byte(c: u8) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use std::prelude::v1::*;
+    use std_test::prelude::v1::*;
     use super::*;
 
     #[test]

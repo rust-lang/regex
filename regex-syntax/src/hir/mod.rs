@@ -11,28 +11,21 @@
 /*!
 Defines a high-level intermediate representation for regular expressions.
 */
-cfg_if! {
-    if #[cfg(feature = "std")] {
-        use std::char;
-        use std::cmp;
-        use std::error;
-        use std::fmt;
-        use std::u8;
-    } else if #[cfg(all(feature = "alloc", not(feature = "std")))] {
-        use alloc::boxed::Box;
-        use alloc::string::{String, ToString};
-        use alloc::vec::Vec;
-        use core::char;
-        use core::cmp;
-        use core::fmt;
-        use core::u8;
-    } else {
-        use core::char;
-        use core::cmp;
-        use core::fmt;
-        use core::u8;
-    }
-}
+
+use core::char;
+use core::cmp;
+use core::fmt;
+use core::u8;
+
+#[cfg(feature = "std")]
+use core::error;
+
+#[cfg(all(feature = "alloc", not(feature = "std")))]
+use alloc::boxed::Box;
+#[cfg(all(feature = "alloc", not(feature = "std")))]
+use alloc::string::{String, ToString};
+#[cfg(all(feature = "alloc", not(feature = "std")))]
+use alloc::vec::Vec;
 
 use ast::Span;
 use hir::interval::{Interval, IntervalSet, IntervalSetIter};
@@ -227,11 +220,7 @@ impl Hir {
     /// Consumes ownership of this HIR expression and returns its underlying
     /// `HirKind`.
     pub fn into_kind(mut self) -> HirKind {
-        #[cfg(feature = "std")]
-        use std::mem;
-        #[cfg(not(feature = "std"))]
-        use core::mem;
-        mem::replace(&mut self.kind, HirKind::Empty)
+        ::core::mem::replace(&mut self.kind, HirKind::Empty)
     }
 
     /// Returns an empty HIR expression.
@@ -1270,9 +1259,6 @@ pub enum RepetitionRange {
 /// space but heap space proportional to the depth of the total `Hir`.
 impl Drop for Hir {
     fn drop(&mut self) {
-        #[cfg(feature = "std")]
-        use std::mem;
-        #[cfg(not(feature = "std"))]
         use core::mem;
 
         match *self.kind() {
@@ -2040,7 +2026,7 @@ mod tests {
     #[test]
     #[cfg(any(unix, windows))]
     fn no_stack_overflow_on_drop() {
-        use std::thread;
+        use std_test::thread;
 
         let run = || {
             let mut expr = Hir::empty();
