@@ -29,3 +29,5 @@ pub mod stdcpp;
 pub mod re2;
 #[cfg(feature = "re-tcl")]
 pub mod tcl;
+#[cfg(feature = "re-hyperscan")]
+pub mod hs;

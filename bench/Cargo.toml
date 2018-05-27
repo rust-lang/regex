@@ -22,6 +22,7 @@ regex = { version = "1.0.0", path = "..", features = ["unstable"] }
 regex-syntax = { version = "0.6.0", path = "../regex-syntax" }
 serde = "1"
 serde_derive = "1"
+hyperscan = { version = "0.1", optional = true }
 
 [build-dependencies]
 cc = "1"
@@ -58,6 +59,7 @@ re-dphobos-ldc-ct = ["re-dphobos-ldc"]
 re-rust = []
 re-rust-bytes = []
 re-tcl = []
+re-hyperscan = ["hyperscan"]
 
 [[bench]]
 name = "bench"

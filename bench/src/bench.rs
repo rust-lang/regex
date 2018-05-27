@@ -17,6 +17,8 @@ extern crate lazy_static;
 extern crate libc;
 #[cfg(feature = "re-pcre1")]
 extern crate libpcre_sys;
+#[cfg(feature = "re-hyperscan")]
+extern crate hyperscan;
 #[cfg(feature = "re-onig")]
 extern crate onig;
 #[cfg(any(
@@ -49,6 +51,8 @@ pub use regex::Regex;
 pub use regex::bytes::Regex;
 #[cfg(feature = "re-tcl")]
 pub use ffi::tcl::Regex;
+#[cfg(feature = "re-hyperscan")]
+pub use ffi::hs::Regex;
 
 // Usage: regex!(pattern)
 //
@@ -99,6 +103,7 @@ macro_rules! text {
     feature = "re-re2",
     feature = "re-dphobos",
     feature = "re-rust",
+    feature = "re-hyperscan",
   ))]
 macro_rules! text {
     ($text:expr) => { $text }
@@ -118,6 +123,7 @@ type Text = Vec<u8>;
     feature = "re-re2",
     feature = "re-dphobos",
     feature = "re-rust",
+    feature = "re-hyperscan",
   ))]
 type Text = String;
 

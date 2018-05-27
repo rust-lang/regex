@@ -12,6 +12,8 @@ extern crate docopt;
 extern crate libc;
 #[cfg(feature = "re-pcre1")]
 extern crate libpcre_sys;
+#[cfg(feature = "re-hyperscan")]
+extern crate hyperscan;
 extern crate memmap;
 #[cfg(feature = "re-onig")]
 extern crate onig;
@@ -45,7 +47,7 @@ Since this tool includes compilation of the <pattern>, sufficiently large
 haystacks should be used to amortize the cost of compilation. (e.g., >1MB.)
 
 Usage:
-    regex-run-one [options] [onig | pcre1 | pcre2 | stdcpp | re2 | rust | rust-bytes | tcl] <file> <pattern>
+    regex-run-one [options] [onig | pcre1 | pcre2 | stdcpp | re2 | rust | rust-bytes | tcl | hyperscan] <file> <pattern>
     regex-run-one [options] (-h | --help)
 
 Options:
@@ -64,6 +66,7 @@ struct Args {
     cmd_rust: bool,
     cmd_rust_bytes: bool,
     cmd_tcl: bool,
+    cmd_hyperscan: bool,
 }
 
 fn main() {
@@ -98,6 +101,8 @@ impl Args {
             count_rust_bytes(pat, haystack)
         } else if self.cmd_tcl {
             count_tcl(pat, haystack)
+        } else if self.cmd_hyperscan {
+            count_hyperscan(pat, haystack)
         } else {
             panic!("unreachable")
         }
@@ -175,4 +180,11 @@ nada!("re-tcl", count_tcl);
 fn count_tcl(pat: &str, haystack: &str) -> usize {
     use ffi::tcl::{Regex, Text};
     Regex::new(pat).unwrap().find_iter(&Text::new(haystack.to_owned())).count()
+}
+
+nada!("re-hyperscan", count_hyperscan);
+#[cfg(feature = "re-hyperscan")]
+fn count_hyperscan(pat: &str, haystack: &str) -> usize {
+    use ffi::hs::Regex;
+    Regex::new(pat).unwrap().find_iter(haystack).count()
 }
