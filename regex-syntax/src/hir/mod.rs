@@ -12,20 +12,13 @@
 Defines a high-level intermediate representation for regular expressions.
 */
 
-use core::char;
-use core::cmp;
-use core::fmt;
-use core::u8;
-
+use std::char;
+use std::cmp;
 #[cfg(feature = "std")]
-use core::error;
-
-#[cfg(all(feature = "alloc", not(feature = "std")))]
-use alloc::boxed::Box;
-#[cfg(all(feature = "alloc", not(feature = "std")))]
-use alloc::string::{String, ToString};
-#[cfg(all(feature = "alloc", not(feature = "std")))]
-use alloc::vec::Vec;
+use std::error;
+use std::fmt;
+use std::u8;
+use prelude::*;
 
 use ast::Span;
 use hir::interval::{Interval, IntervalSet, IntervalSetIter};
@@ -220,7 +213,7 @@ impl Hir {
     /// Consumes ownership of this HIR expression and returns its underlying
     /// `HirKind`.
     pub fn into_kind(mut self) -> HirKind {
-        ::core::mem::replace(&mut self.kind, HirKind::Empty)
+        ::std::mem::replace(&mut self.kind, HirKind::Empty)
     }
 
     /// Returns an empty HIR expression.
@@ -1259,7 +1252,7 @@ pub enum RepetitionRange {
 /// space but heap space proportional to the depth of the total `Hir`.
 impl Drop for Hir {
     fn drop(&mut self) {
-        use core::mem;
+        use std::mem;
 
         match *self.kind() {
             HirKind::Empty

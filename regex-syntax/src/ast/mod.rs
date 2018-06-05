@@ -12,14 +12,11 @@
 Defines an abstract syntax for regular expressions.
 */
 
-use core::cmp::Ordering;
-use core::fmt;
+use std::cmp::Ordering;
 #[cfg(feature = "std")]
-use core::error;
-#[cfg(all(feature = "alloc", not(feature = "std")))]
-use alloc::boxed::Box;
-#[cfg(all(feature = "alloc", not(feature = "std")))]
-use alloc::{String, Vec};
+use std::error;
+use std::fmt;
+use prelude::*;
 
 pub use ast::visitor::{Visitor, visit};
 
@@ -235,7 +232,7 @@ impl fmt::Display for ErrorKind {
         match *self {
             CaptureLimitExceeded => {
                 write!(f, "exceeded the maximum number of \
-                           capturing groups ({})", ::core::u32::MAX)
+                           capturing groups ({})", ::std::u32::MAX)
             }
             ClassEscapeInvalid => {
                 write!(f, "invalid escape sequence found in character class")
@@ -1372,7 +1369,7 @@ pub enum Flag {
 /// space but heap space proportional to the depth of the `Ast`.
 impl Drop for Ast {
     fn drop(&mut self) {
-        use core::mem;
+        use std::mem;
 
         match *self {
             Ast::Empty(_)
@@ -1422,7 +1419,7 @@ impl Drop for Ast {
 /// stack space but heap space proportional to the depth of the `ClassSet`.
 impl Drop for ClassSet {
     fn drop(&mut self) {
-        use core::mem;
+        use std::mem;
 
         match *self {
             ClassSet::Item(ref item) => {

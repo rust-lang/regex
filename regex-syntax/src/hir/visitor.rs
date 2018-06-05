@@ -8,8 +8,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#[cfg(all(feature = "alloc", not(feature = "std")))]
-use alloc::vec::Vec;
+use prelude::Vec;
 use hir::{self, Hir, HirKind};
 
 /// A trait for visiting the high-level IR (HIR) in depth first order.

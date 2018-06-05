@@ -112,9 +112,9 @@ done automatically in the `regex` crate.
 #[cfg(test)]
 extern crate std as std_test;
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "std"))]
 #[macro_use]
-extern crate std as core;
+extern crate core as std;
 
 #[cfg(all(feature = "alloc", not(feature = "std")))]
 #[macro_use]
@@ -130,11 +130,11 @@ mod either;
 mod error;
 pub mod hir;
 mod parser;
+mod prelude;
 mod unicode;
 mod unicode_tables;
 
-#[cfg(all(feature = "alloc", not(feature = "std")))]
-use alloc::string::String;
+use prelude::String;
 
 /// Escapes all regular expression meta characters in `text`.
 ///
@@ -186,7 +186,7 @@ pub fn is_meta_character(c: char) -> bool {
 /// `Join_Control` properties, or is in one of the `Decimal_Number`, `Mark`
 /// or `Connector_Punctuation` general categories.
 pub fn is_word_character(c: char) -> bool {
-    use core::cmp::Ordering;
+    use std::cmp::Ordering;
     use unicode_tables::perl_word::PERL_WORD;
 
     if c <= 0x7F as char && is_word_byte(c as u8) {

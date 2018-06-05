@@ -1,17 +1,9 @@
-use core::cmp;
-use core::fmt;
-use core::result;
+use std::cmp;
 #[cfg(feature = "std")]
 use std::error;
-#[cfg(feature = "std")]
-use std::prelude::v1::*;
-
-#[cfg(all(feature = "alloc", not(feature = "std")))]
-use alloc::slice::SliceConcatExt;
-#[cfg(all(feature = "alloc", not(feature = "std")))]
-use alloc::string::{String, ToString};
-#[cfg(all(feature = "alloc", not(feature = "std")))]
-use alloc::vec::Vec;
+use std::fmt;
+use std::result;
+use prelude::*;
 
 use ast;
 use hir;
@@ -291,7 +283,7 @@ impl<'p> Spans<'p> {
 }
 
 fn repeat_char(c: char, count: usize) -> String {
-    ::core::iter::repeat(c).take(count).collect()
+    ::std::iter::repeat(c).take(count).collect()
 }
 
 #[cfg(test)]

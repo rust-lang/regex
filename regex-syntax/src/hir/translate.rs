@@ -12,15 +12,9 @@
 Defines a translator that converts an `Ast` to an `Hir`.
 */
 
-use core::cell::{Cell, RefCell};
-use core::result;
-#[cfg(all(feature = "alloc", not(feature = "std")))]
-use alloc::boxed::Box;
-#[cfg(all(feature = "alloc", not(feature = "std")))]
-use alloc::string::ToString;
-#[cfg(all(feature = "alloc", not(feature = "std")))]
-use alloc::vec::Vec;
-
+use std::cell::{Cell, RefCell};
+use std::result;
+use prelude::{Box, ToString, Vec};
 use ast::{self, Ast, Span, Visitor};
 use hir::{self, Error, ErrorKind, Hir};
 use unicode::{self, ClassQuery};

@@ -1,10 +1,6 @@
-use core::cmp::Ordering;
-use core::result;
-use core::slice;
-#[cfg(all(feature = "alloc", not(feature = "std")))]
-use alloc::string::{String, ToString};
-#[cfg(all(feature = "alloc", not(feature = "std")))]
-use alloc::vec::Vec;
+use std::cmp::Ordering;
+use std::result;
+use prelude::{String, ToString, Vec};
 
 use ucd_util::{self, PropertyValues};
 
@@ -32,7 +28,7 @@ pub enum Error {
 
 /// An iterator over a codepoint's simple case equivalence class.
 #[derive(Debug)]
-pub struct SimpleFoldIter(slice::Iter<'static, char>);
+pub struct SimpleFoldIter(::std::slice::Iter<'static, char>);
 
 impl Iterator for SimpleFoldIter {
     type Item = char;

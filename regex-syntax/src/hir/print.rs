@@ -2,7 +2,7 @@
 This module provides a regular expression printer for `Hir`.
 */
 
-use core::fmt;
+use std::fmt;
 
 use hir::{self, Hir, HirKind};
 use hir::visitor::{self, Visitor};

@@ -12,10 +12,7 @@
 This module provides a regular expression printer for `Ast`.
 */
 
-#[cfg(feature = "std")]
 use std::fmt;
-#[cfg(not(feature = "std"))]
-use core::fmt;
 
 use ast::{self, Ast};
 use ast::visitor::{self, Visitor};

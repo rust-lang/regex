@@ -12,19 +12,12 @@
 Provides routines for extracting literal prefixes and suffixes from an `Hir`.
 */
 
-use core::cmp;
-use core::fmt;
-use core::iter;
-use core::mem;
-use core::ops;
-#[cfg(all(feature = "alloc", not(feature = "std")))]
-use alloc::borrow::ToOwned;
-#[cfg(all(feature = "alloc", not(feature = "std")))]
-use alloc::boxed::Box;
-#[cfg(all(feature = "alloc", not(feature = "std")))]
-use alloc::string::{String, ToString};
-#[cfg(all(feature = "alloc", not(feature = "std")))]
-use alloc::vec::Vec;
+use std::cmp;
+use std::fmt;
+use std::iter;
+use std::mem;
+use std::ops;
+use prelude::*;
 
 use hir::{self, Hir, HirKind};
 
@@ -491,7 +484,7 @@ impl Literals {
         cls: &hir::ClassUnicode,
         reverse: bool,
     ) -> bool {
-        use core::char;
+        use std::char;
 
         if self.class_exceeds_limits(cls_char_count(cls)) {
             return false;
@@ -954,7 +947,7 @@ fn position(needle: &[u8], mut haystack: &[u8]) -> Option<usize> {
 }
 
 fn escape_unicode(bytes: &[u8]) -> String {
-    let show = match ::core::str::from_utf8(bytes) {
+    let show = match ::std::str::from_utf8(bytes) {
         Ok(v) => v.to_string(),
         Err(_) => escape_bytes(bytes),
     };
@@ -987,7 +980,7 @@ fn escape_bytes(bytes: &[u8]) -> String {
 }
 
 fn escape_byte(byte: u8) -> String {
-    use core::ascii::escape_default;
+    use std::ascii::escape_default;
 
     let escaped: Vec<u8> = escape_default(byte).collect();
     String::from_utf8_lossy(&escaped).into_owned()
@@ -1008,7 +1001,7 @@ fn cls_byte_count(cls: &hir::ClassBytes) -> usize {
 #[cfg(test)]
 mod tests {
     use std_test::prelude::v1::*;
-    use core::fmt;
+    use std::fmt;
 
     use ParserBuilder;
     use hir::Hir;
