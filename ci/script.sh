@@ -20,6 +20,7 @@ ci/run-shootout-test
 
 # Run tests on regex-syntax crate.
 cargo test --verbose --manifest-path regex-syntax/Cargo.toml
+cargo test --verbose --manifest-path regex-syntax/Cargo.toml --no-default-features --features "alloc"
 cargo doc --verbose --manifest-path regex-syntax/Cargo.toml
 
 # Run tests on regex-capi crate.
