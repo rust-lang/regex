@@ -20,8 +20,11 @@ ci/run-shootout-test
 
 # Run tests on regex-syntax crate.
 cargo test --verbose --manifest-path regex-syntax/Cargo.toml
-cargo test --verbose --manifest-path regex-syntax/Cargo.toml --no-default-features --features "alloc"
 cargo doc --verbose --manifest-path regex-syntax/Cargo.toml
+
+if [ "$TRAVIS_RUST_VERSION" = "nightly" ]; then
+  cargo test --verbose --manifest-path regex-syntax/Cargo.toml --no-default-features --features "alloc"
+fi
 
 # Run tests on regex-capi crate.
 cargo build --verbose --manifest-path regex-capi/Cargo.toml
