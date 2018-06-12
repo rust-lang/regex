@@ -346,6 +346,7 @@ fn ages(canonical_age: &str) -> Result<AgeIter> {
         ("V8_0", age::V8_0),
         ("V9_0", age::V9_0),
         ("V10_0", age::V10_0),
+        ("V11_0", age::V11_0),
     ];
     assert_eq!(AGES.len(), age::BY_NAME.len(), "ages are out of sync");
 
