@@ -29,7 +29,7 @@ used by adding `regex` to your dependencies in your project's `Cargo.toml`.
 
 ```toml
 [dependencies]
-regex = "1.0.0"
+regex = "1"
 ```
 
 and this to your crate root:
