@@ -1,3 +1,25 @@
+1.0.1 (2018-06-19)
+==================
+This release upgrades regex's Unicode tables to Unicode 11, and enables SIMD
+optimizations automatically on Rust stable (1.27 or newer).
+
+New features:
+
+* [FEATURE #486](https://github.com/rust-lang/regex/pull/486):
+  Implement `size_hint` on `RegexSet` match iterators.
+* [FEATURE #488](https://github.com/rust-lang/regex/pull/488):
+  Update Unicode tables for Unicode 11.
+* [FEATURE #490](https://github.com/rust-lang/regex/pull/490):
+  SIMD optimizations are now enabled automatically in Rust stable, for versions
+  1.27 and up. No compilation flags or features need to be set. CPU support
+  SIMD is detected automatically at runtime.
+
+Bug fixes:
+
+* [BUG #482](https://github.com/rust-lang/regex/pull/482):
+  Present a better compilation error when the `use_std` feature isn't used.
+
+
 1.0.0 (2018-05-01)
 ==================
 This release marks the 1.0 release of regex.
