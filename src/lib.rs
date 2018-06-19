@@ -521,6 +521,11 @@ another matching engine with fixed memory requirements.
 #![cfg_attr(test, deny(warnings))]
 #![cfg_attr(feature = "pattern", feature(pattern))]
 
+
+#[cfg(not(feature = "use_std"))]
+compile_error!("`use_std` feature is currently required to build this crate");
+
+
 extern crate aho_corasick;
 extern crate memchr;
 extern crate thread_local;
