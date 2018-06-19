@@ -12,6 +12,7 @@ An implementation of regular expressions for Rust. This implementation uses
 finite automata and guarantees linear time matching on all inputs.
 """
 categories = ["text-processing"]
+autotests = false
 
 [badges]
 travis-ci = { repository = "rust-lang/regex" }

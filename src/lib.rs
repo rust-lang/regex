@@ -521,10 +521,8 @@ another matching engine with fixed memory requirements.
 #![cfg_attr(test, deny(warnings))]
 #![cfg_attr(feature = "pattern", feature(pattern))]
 
-
 #[cfg(not(feature = "use_std"))]
 compile_error!("`use_std` feature is currently required to build this crate");
-
 
 extern crate aho_corasick;
 extern crate memchr;
@@ -669,7 +667,7 @@ mod re_set;
 mod re_trait;
 mod re_unicode;
 mod sparse;
-#[cfg(feature = "unstable")]
+#[cfg(any(regex_runtime_teddy_ssse3, regex_runtime_teddy_avx2))]
 mod vector;
 
 /// The `internal` module exists to support suspicious activity, such as
