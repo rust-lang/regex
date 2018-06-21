@@ -9,11 +9,18 @@ cargo build --verbose
 cargo doc --verbose
 
 # Run tests. If we have nightly, then enable our nightly features.
+# Right now there are no nightly features, but that may change in the
+# future.
+CARGO_TEST_EXTRA_FLAGS=""
 if [ "$TRAVIS_RUST_VERSION" = "nightly" ]; then
-  cargo test --verbose --features unstable
-else
-  cargo test --verbose
+  CARGO_TEST_EXTRA_FLAGS=""
 fi
+cargo test --verbose ${CARGO_TEST_EXTRA_FLAGS}
+
+# Run the random tests in release mode, as this is faster.
+RUST_REGEX_RANDOM_TEST=1 \
+    cargo test --release --verbose \
+    ${CARGO_TEST_EXTRA_FLAGS} --test crates-regex
 
 # Run a test that confirms the shootout benchmarks are correct.
 ci/run-shootout-test
