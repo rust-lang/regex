@@ -15,13 +15,9 @@ fn main() {
 }
 
 fn enable_simd_optimizations(version: &str) {
-    // If we're using nightly Rust, then we can enable vector optimizations.
-    // Note that these aren't actually activated unless the `unstable` feature
-    // is enabled.
-    //
-    // We also don't activate these if we've explicitly disabled auto
-    // optimizations. Disabling auto optimizations is intended for use in
-    // tests, so that we can reliably test fallback implementations.
+    // We don't activate SIMD optimizations these if we've explicitly disabled
+    // them. Disabling auto optimizations is intended for use in tests, so that
+    // we can reliably test fallback implementations.
     if env::var_os("CARGO_CFG_REGEX_DISABLE_AUTO_OPTIMIZATIONS").is_some() {
         return;
     }
