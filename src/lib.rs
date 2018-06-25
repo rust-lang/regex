@@ -542,11 +542,11 @@ pub use re_builder::set_unicode::*;
 #[cfg(feature = "use_std")]
 pub use re_set::unicode::*;
 #[cfg(feature = "use_std")]
-pub use re_trait::Locations;
 #[cfg(feature = "use_std")]
 pub use re_unicode::{
     Regex, Match, Captures,
     CaptureNames, Matches, CaptureMatches, SubCaptureMatches,
+    CaptureLocations, Locations,
     Replacer, ReplacerRef, NoExpand, Split, SplitN,
     escape,
 };
@@ -644,7 +644,6 @@ pub mod bytes {
     pub use re_builder::set_bytes::*;
     pub use re_bytes::*;
     pub use re_set::bytes::*;
-    pub use re_trait::Locations;
 }
 
 mod backtrack;
