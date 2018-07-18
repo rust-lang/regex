@@ -228,7 +228,7 @@ impl<'p, W: fmt::Write> Writer<'p, W> {
     fn write_literal_byte(&mut self, b: u8) -> fmt::Result {
         let c = b as char;
         if c <= 0x7F as char && !c.is_control() && !c.is_whitespace() {
-            self.wtr.write_char(c)
+            self.write_literal_char(c)
         } else {
             write!(self.wtr, "(?-u:\\x{:02X})", b)
         }
@@ -237,7 +237,7 @@ impl<'p, W: fmt::Write> Writer<'p, W> {
     fn write_literal_class_byte(&mut self, b: u8) -> fmt::Result {
         let c = b as char;
         if c <= 0x7F as char && !c.is_control() && !c.is_whitespace() {
-            self.wtr.write_char(c)
+            self.write_literal_char(c)
         } else {
             write!(self.wtr, "\\x{:02X}", b)
         }
@@ -267,6 +267,10 @@ mod tests {
         let mut printer = Printer::new();
         let mut dst = String::new();
         printer.print(&hir, &mut dst).unwrap();
+
+        // Check that the result is actually valid.
+        builder.build().parse(&dst).unwrap();
+
         assert_eq!(expected, dst);
     }
 
@@ -291,6 +295,18 @@ mod tests {
         roundtrip(r"(?-u)[a]", r"(?-u:[a])");
         roundtrip(r"(?-u)[a-z]", r"(?-u:[a-z])");
         roundtrip_bytes(r"(?-u)[a-\xFF]", r"(?-u:[a-\xFF])");
+
+        // The following test that the printer escapes meta characters
+        // in character classes.
+        roundtrip(r"[\[]", r"[\[]");
+        roundtrip(r"[Z-_]", r"[Z-_]");
+        roundtrip(r"[Z-_--Z]", r"[\[-_]");
+
+        // The following test that the printer escapes meta characters
+        // in byte oriented character classes.
+        roundtrip_bytes(r"(?-u)[\[]", r"(?-u:[\[])");
+        roundtrip_bytes(r"(?-u)[Z-_]", r"(?-u:[Z-_])");
+        roundtrip_bytes(r"(?-u)[Z-_--Z]", r"(?-u:[\[-_])");
     }
 
     #[test]
