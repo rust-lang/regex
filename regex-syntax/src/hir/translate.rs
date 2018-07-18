@@ -59,10 +59,10 @@ impl TranslatorBuilder {
     /// an expression that will only ever match valid UTF-8 (otherwise, the
     /// translator will return an error).
     ///
-    /// Note that currently, even when invalid UTF-8 is banned, the translator
-    /// will permit a negated ASCII word boundary (i.e., `(?-u:\B)`) even
-    /// though it can actually match at invalid UTF-8 boundaries. This bug
-    /// will be fixed on the next semver release.
+    /// Perhaps surprisingly, when invalid UTF-8 isn't allowed, a negated ASCII
+    /// word boundary (uttered as `(?-u:\B)` in the concrete syntax) will cause
+    /// the parser to return an error. Namely, a negated ASCII word boundary
+    /// can result in matching positions that aren't valid UTF-8 boundaries.
     pub fn allow_invalid_utf8(
         &mut self,
         yes: bool,
