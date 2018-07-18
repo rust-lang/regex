@@ -1,3 +1,28 @@
+1.0.2 (2018-07-18)
+==================
+This release exposes some new lower level APIs on `Regex` that permit
+amortizing allocation and controlling the location at which a search is
+performed in a more granular way. Most users of the regex crate will not
+need or want to use these APIs.
+
+New features:
+
+* [FEATURE #493](https://github.com/rust-lang/regex/pull/493):
+  Add a few lower level APIs for amortizing allocation and more fine grained
+  searching.
+
+Bug fixes:
+
+* [BUG 3981d2ad](https://github.com/rust-lang/regex/commit/3981d2ad):
+  Correct outdated documentation on `RegexBuilder::dot_matches_new_line`.
+* [BUG 7ebe4ae0](https://github.com/rust-lang/regex/commit/7ebe4ae0):
+  Correct outdated documentation on `Parser::allow_invalid_utf8` in the
+  `regex-syntax` crate.
+* [BUG 24c7770b](https://github.com/rust-lang/regex/commit/24c7770b):
+  Fix a bug in the HIR printer where it wouldn't correctly escape meta
+  characters in character classes.
+
+
 1.0.1 (2018-06-19)
 ==================
 This release upgrades regex's Unicode tables to Unicode 11, and enables SIMD
