@@ -12,12 +12,12 @@ build = "build.rs"
 workspace = ".."
 
 [dependencies]
-docopt = "0.8"
+docopt = "1"
 lazy_static = "1"
 libc = "0.2"
 onig = { version = "3", optional = true }
 libpcre-sys = { version = "0.2", optional = true }
-memmap = "0.6"
+memmap = "0.6.2"
 regex = { version = "1", path = ".." }
 regex-syntax = { version = "0.6.0", path = "../regex-syntax" }
 serde = "1"
