@@ -289,8 +289,8 @@ impl Regex {
     ///                .unwrap();
     /// let text = "Not my favorite movie: 'Citizen Kane' (1941).";
     /// let caps = re.captures(text).unwrap();
-    /// assert_eq!(&caps["title"], "Citizen Kane");
-    /// assert_eq!(&caps["year"], "1941");
+    /// assert_eq!(caps.name("title").unwrap().as_str(), "Citizen Kane");
+    /// assert_eq!(caps.name("year").unwrap().as_str(), "1941");
     /// assert_eq!(caps.get(0).unwrap().as_str(), "'Citizen Kane' (1941)");
     /// // You can also access the groups by name using the Index notation.
     /// // Note that this will panic on an invalid group name.

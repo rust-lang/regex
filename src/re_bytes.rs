@@ -209,9 +209,9 @@ impl Regex {
     /// let re = Regex::new(r"'([^']+)'\s+\((\d{4})\)").unwrap();
     /// let text = b"Not my favorite movie: 'Citizen Kane' (1941).";
     /// let caps = re.captures(text).unwrap();
-    /// assert_eq!(&caps[1], &b"Citizen Kane"[..]);
-    /// assert_eq!(&caps[2], &b"1941"[..]);
-    /// assert_eq!(&caps[0], &b"'Citizen Kane' (1941)"[..]);
+    /// assert_eq!(caps.get(1).unwrap().as_bytes(), &b"Citizen Kane"[..]);
+    /// assert_eq!(caps.get(2).unwrap().as_bytes(), &b"1941"[..]);
+    /// assert_eq!(caps.get(0).unwrap().as_bytes(), &b"'Citizen Kane' (1941)"[..]);
     /// // You can also access the groups by index using the Index notation.
     /// // Note that this will panic on an invalid index.
     /// assert_eq!(&caps[1], b"Citizen Kane");
@@ -232,9 +232,9 @@ impl Regex {
     ///                .unwrap();
     /// let text = b"Not my favorite movie: 'Citizen Kane' (1941).";
     /// let caps = re.captures(text).unwrap();
-    /// assert_eq!(&caps["title"], &b"Citizen Kane"[..]);
-    /// assert_eq!(&caps["year"], &b"1941"[..]);
-    /// assert_eq!(&caps[0], &b"'Citizen Kane' (1941)"[..]);
+    /// assert_eq!(caps.name("title").unwrap().as_bytes(), b"Citizen Kane");
+    /// assert_eq!(caps.name("year").unwrap().as_bytes(), b"1941");
+    /// assert_eq!(caps.get(0).unwrap().as_bytes(), &b"'Citizen Kane' (1941)"[..]);
     /// // You can also access the groups by name using the Index notation.
     /// // Note that this will panic on an invalid group name.
     /// assert_eq!(&caps["title"], b"Citizen Kane");
