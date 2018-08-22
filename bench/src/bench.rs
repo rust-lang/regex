@@ -44,9 +44,9 @@ pub use ffi::re2::Regex;
 #[cfg(feature = "re-dphobos")]
 pub use ffi::d_phobos::Regex;
 #[cfg(feature = "re-rust")]
-pub use regex::Regex;
+pub use regex::{Regex, RegexSet};
 #[cfg(feature = "re-rust-bytes")]
-pub use regex::bytes::Regex;
+pub use regex::bytes::{Regex, RegexSet};
 #[cfg(feature = "re-tcl")]
 pub use ffi::tcl::Regex;
 
@@ -266,6 +266,58 @@ macro_rules! bench_captures {
                 match re.captures(&text) {
                     None => assert!(false, "no captures"),
                     Some(caps) => assert_eq!($count + 1, caps.len()),
+                }
+            });
+        }
+    }
+}
+
+// USAGE: bench_is_match_set!(name, is_match, regex, haystack)
+macro_rules! bench_is_match_set {
+    ($name:ident, $is_match:expr, $re:expr, $haystack:expr) => {
+        #[bench]
+        fn $name(b: &mut Bencher) {
+            use std::sync::Mutex;
+            lazy_static! {
+                static ref RE: Mutex<RegexSet> = Mutex::new($re);
+                static ref TEXT: Mutex<Text> = Mutex::new(text!($haystack));
+            };
+            let re = RE.lock().unwrap();
+            let text = TEXT.lock().unwrap();
+            b.bytes = text.len() as u64;
+            b.iter(|| {
+                if re.is_match(&text) != $is_match {
+                    if $is_match {
+                        panic!("expected match, got not match");
+                    } else {
+                        panic!("expected no match, got match");
+                    }
+                }
+            });
+        }
+    }
+}
+
+// USAGE: bench_matches_set!(name, is_match, regex, haystack)
+macro_rules! bench_matches_set {
+    ($name:ident, $is_match:expr, $re:expr, $haystack:expr) => {
+        #[bench]
+        fn $name(b: &mut Bencher) {
+            use std::sync::Mutex;
+            lazy_static! {
+                static ref RE: Mutex<RegexSet> = Mutex::new($re);
+                static ref TEXT: Mutex<Text> = Mutex::new(text!($haystack));
+            };
+            let re = RE.lock().unwrap();
+            let text = TEXT.lock().unwrap();
+            b.bytes = text.len() as u64;
+            b.iter(|| {
+                if re.matches(&text).matched_any() != $is_match {
+                    if $is_match {
+                        panic!("expected match, got not match");
+                    } else {
+                        panic!("expected no match, got match");
+                    }
                 }
             });
         }
