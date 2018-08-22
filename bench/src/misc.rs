@@ -14,7 +14,7 @@ use std::iter::repeat;
 
 use test::Bencher;
 
-use {Regex, Text};
+use {Regex, RegexSet, Text};
 
 #[cfg(not(feature = "re-onig"))]
 #[cfg(not(feature = "re-pcre1"))]
@@ -278,3 +278,21 @@ bench_captures!(short_haystack_1000000x,
             repeat("aaaa").take(1000000).collect::<String>(),
             repeat("dddd").take(1000000).collect::<String>(),
             ));
+
+#[cfg(any(feature = "re-rust", feature = "re-rust-bytes"))]
+bench_is_match_set!(is_match_set,
+    true,
+    RegexSet::new(vec!["aaaaaaaaaaaaaaaaaaa", "abc579", "def.+", "e24fg", "a.*2c", "23."]).unwrap(),
+    format!("{}a482c{}",
+            repeat('a').take(10).collect::<String>(),
+            repeat('b').take(10).collect::<String>())
+    );
+
+#[cfg(any(feature = "re-rust", feature = "re-rust-bytes"))]
+bench_matches_set!(matches_set,
+    true,
+    RegexSet::new(vec!["aaaaaaaaaaaaaaaaaaa", "abc579", "def.+", "e24fg", "a.*2c", "23."]).unwrap(),
+    format!("{}a482c{}",
+            repeat('a').take(10).collect::<String>(),
+            repeat('b').take(10).collect::<String>())
+    );
