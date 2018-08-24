@@ -287,7 +287,7 @@ regexes.
 The syntax supported in this crate is documented below.
 
 Note that the regular expression parser and abstract syntax are exposed in
-a separate crate, [`regex-syntax`](../regex_syntax/index.html).
+a separate crate, [`regex-syntax`](https://docs.rs/regex-syntax).
 
 ## Matching one character
 
