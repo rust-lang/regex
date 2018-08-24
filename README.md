@@ -192,6 +192,8 @@ assert!(matches.matched(6));
 ### Usage: enable SIMD optimizations
 
 SIMD optimizations are enabled automatically on Rust stable 1.27 and newer.
+For nightly versions of Rust, this requires a recent version with the SIMD
+features stabilized.
 
 
 ### Usage: a regular expression parser
