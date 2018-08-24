@@ -155,6 +155,9 @@ struct CacheInner {
     /// The total heap size of the DFA's cache. We use this to determine when
     /// we should flush the cache.
     size: usize,
+    /// Scratch space used when building instruction pointer lists for new
+    /// states. This helps amortize allocation.
+    insts_scratch_space: Vec<u8>,
 }
 
 /// The transition table.
@@ -435,6 +438,7 @@ impl Cache {
                 stack: vec![],
                 flush_count: 0,
                 size: 0,
+                insts_scratch_space: vec![],
             },
             qcur: SparseSet::new(prog.insts.len()),
             qnext: SparseSet::new(prog.insts.len()),
@@ -1219,8 +1223,14 @@ impl<'a> Fsm<'a> {
         // are conditional, we need to make them part of a state's key in the
         // cache.
 
+        let mut insts = mem::replace(
+            &mut self.cache.insts_scratch_space,
+            vec![],
+        );
+        insts.clear();
         // Reserve 1 byte for flags.
-        let mut insts = vec![0];
+        insts.push(0);
+
         let mut prev = 0;
         for &ip in q {
             let ip = usize_to_u32(ip);
@@ -1244,13 +1254,16 @@ impl<'a> Fsm<'a> {
         // see a match when expanding NFA states previously, then this is a
         // dead state and no amount of additional input can transition out
         // of this state.
-        if insts.len() == 1 && !state_flags.is_match() {
-            None
-        } else {
-            let StateFlags(f) = *state_flags;
-            insts[0] = f;
-            Some(State { data: insts.into_boxed_slice() })
-        }
+        let opt_state =
+            if insts.len() == 1 && !state_flags.is_match() {
+                None
+            } else {
+                let StateFlags(f) = *state_flags;
+                insts[0] = f;
+                Some(State { data: insts.clone().into_boxed_slice() })
+            };
+        self.cache.insts_scratch_space = insts;
+        opt_state
     }
 
     /// Clears the cache, but saves and restores current_state if it is not
