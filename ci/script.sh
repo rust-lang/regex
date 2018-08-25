@@ -8,6 +8,15 @@ set -ex
 cargo build --verbose
 cargo doc --verbose
 
+# If we're testing on an older version of Rust, then only check that we
+# can build the crate. This is because the dev dependencies might be updated
+# more frequently, and therefore might require a newer version of Rust.
+#
+# This isn't ideal. It's a compromise.
+if [ "$TRAVIS_RUST_VERSION" = "1.20.0" ]; then
+  exit
+fi
+
 # Run tests. If we have nightly, then enable our nightly features.
 # Right now there are no nightly features, but that may change in the
 # future.
@@ -39,4 +48,9 @@ if [ "$TRAVIS_RUST_VERSION" = "nightly" ]; then
   for x in rust rust-bytes pcre1 onig; do
     (cd bench && ./run $x --no-run --verbose)
   done
+
+  # Test minimal versions.
+  cargo +nightly generate-lockfile -Z minimal-versions
+  cargo build --verbose
+  cargo test --verbose
 fi
