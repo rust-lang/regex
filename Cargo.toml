@@ -25,23 +25,23 @@ members = [
 
 [dependencies]
 # For very fast prefix literal matching.
-aho-corasick = "0.6.0"
+aho-corasick = "0.6.7"
 # For skipping along search text quickly when a leading byte is known.
-memchr = "2.0.0"
+memchr = "2.0.2"
 # For managing regex caches quickly across multiple threads.
 thread_local = "0.3.6"
 # For parsing regular expressions.
-regex-syntax = { path = "regex-syntax", version = "0.6.0" }
+regex-syntax = { path = "regex-syntax", version = "0.6.2" }
 # For compiling UTF-8 decoding into automata.
-utf8-ranges = "1.0.0"
+utf8-ranges = "1.0.1"
 
 [dev-dependencies]
 # For examples.
 lazy_static = "1"
 # For property based tests.
-quickcheck = { version = "0.6", default-features = false }
+quickcheck = { version = "0.7", default-features = false }
 # For generating random test data.
-rand = "0.4"
+rand = "0.5"
 
 [features]
 default = ["use_std"]
