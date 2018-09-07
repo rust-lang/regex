@@ -1271,7 +1271,7 @@ enum MatchNfaType {
 /// available to a particular program.
 pub type ProgramCache = RefCell<ProgramCacheInner>;
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct ProgramCacheInner {
     pub pikevm: pikevm::Cache,
     pub backtrack: backtrack::Cache,

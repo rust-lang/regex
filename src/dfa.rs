@@ -88,7 +88,7 @@ pub fn can_exec(insts: &Program) -> bool {
 /// This cache is reused between multiple invocations of the same regex
 /// program. (It is not shared simultaneously between threads. If there is
 /// contention, then new caches are created.)
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct Cache {
     /// Group persistent DFA related cache state together. The sparse sets
     /// listed below are used as scratch space while computing uncached states.
@@ -107,7 +107,7 @@ pub struct Cache {
 /// `CacheInner` is logically just a part of Cache, but groups together fields
 /// that aren't passed as function parameters throughout search. (This split
 /// is mostly an artifact of the borrow checker. It is happily paid.)
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 struct CacheInner {
     /// A cache of pre-compiled DFA states, keyed by the set of NFA states
     /// and the set of empty-width flags set at the byte in the input when the
