@@ -47,14 +47,16 @@ implementation.)
 */
 
 use std::borrow::Borrow;
-use std::collections::HashMap;
 use std::fmt;
 use std::iter::repeat;
 use std::mem;
+use std::sync::Arc;
 
 use exec::ProgramCache;
 use prog::{Inst, Program};
 use sparse::SparseSet;
+
+use self::state_map::StateMap;
 
 /// Return true if and only if the given program can be executed by a DFA.
 ///
@@ -118,7 +120,7 @@ struct CacheInner {
     /// things, we just pass indexes around manually. The performance impact of
     /// this is probably an instruction or two in the inner loop. However, on
     /// 64 bit, each StatePtr is half the size of a *State.
-    compiled: HashMap<State, StatePtr>,
+    compiled: StateMap,
     /// The transition table.
     ///
     /// The transition table is laid out in row-major order, where states are
@@ -135,9 +137,6 @@ struct CacheInner {
     /// bytes that never discriminate a distinct path through the DFA from each
     /// other.
     trans: Transitions,
-    /// Our set of states. Note that `StatePtr / num_byte_classes` indexes
-    /// this Vec rather than just a `StatePtr`.
-    states: Vec<State>,
     /// A set of cached start states, which are limited to the number of
     /// permutations of flags set just before the initial byte of input. (The
     /// index into this vec is a `EmptyFlags`.)
@@ -270,13 +269,20 @@ impl<T> Result<T> {
 /// it is packed into a single byte; Otherwise the byte 128 (-128 as an i8)
 /// is coded as a flag, followed by 4 bytes encoding the delta.
 #[derive(Clone, Eq, Hash, PartialEq)]
-struct State {
-    data: Box<[u8]>,
+pub struct State {
+    data: Arc<[u8]>,
 }
 
 impl Borrow<[u8]> for State {
     fn borrow(&self) -> &[u8] {
         &self.data
+    }
+}
+
+impl State {
+    fn heap_size(&self) -> usize {
+        // 2 * Reference counters
+        2 * mem::size_of::<usize>() + self.data.len()
     }
 }
 
@@ -437,9 +443,8 @@ impl Cache {
         let starts = vec![STATE_UNKNOWN; 256];
         let mut cache = Cache {
             inner: CacheInner {
-                compiled: HashMap::new(),
+                compiled: StateMap::new(),
                 trans: Transitions::new(num_byte_classes),
-                states: vec![],
                 start_states: starts,
                 stack: vec![],
                 flush_count: 0,
@@ -1157,7 +1162,11 @@ impl<'a> Fsm<'a> {
             Some(v) => v,
         }
         // In the cache? Cool. Done.
-        if let Some(&si) = self.cache.compiled.get(&self.cache.insts_scratch_space[..]) {
+        if let Some(si) = self
+            .cache
+            .compiled
+            .get_ptr(&self.cache.insts_scratch_space[..])
+        {
             return Some(si);
         }
 
@@ -1170,7 +1179,7 @@ impl<'a> Fsm<'a> {
         }
 
         let key = State {
-            data: self.cache.insts_scratch_space.clone().into_boxed_slice(),
+            data: Arc::from(&self.cache.insts_scratch_space[..]),
         };
         // Allocate room for our state and add it.
         self.add_state(key)
@@ -1246,7 +1255,7 @@ impl<'a> Fsm<'a> {
     /// This returns false if the cache is not cleared and the DFA should
     /// give up.
     fn clear_cache_and_save(&mut self, current_state: Option<&mut StatePtr>) -> bool {
-        if self.cache.states.is_empty() {
+        if self.cache.compiled.is_empty() {
             // Nothing to clear...
             return true;
         }
@@ -1276,7 +1285,7 @@ impl<'a> Fsm<'a> {
         // 10 or fewer bytes per state.
         // Additionally, we permit the cache to be flushed a few times before
         // caling it quits.
-        let nstates = self.cache.states.len();
+        let nstates = self.cache.compiled.len();
         if self.cache.flush_count >= 3
             && self.at >= self.last_cache_flush
             && (self.at - self.last_cache_flush) <= 10 * nstates
@@ -1296,7 +1305,6 @@ impl<'a> Fsm<'a> {
         };
         self.cache.reset_size();
         self.cache.trans.clear();
-        self.cache.states.clear();
         self.cache.compiled.clear();
         for s in &mut self.cache.start_states {
             *s = STATE_UNKNOWN;
@@ -1316,7 +1324,7 @@ impl<'a> Fsm<'a> {
     fn restore_state(&mut self, state: State) -> Option<StatePtr> {
         // If we've already stored this state, just return a pointer to it.
         // None will be the wiser.
-        if let Some(&si) = self.cache.compiled.get(&state) {
+        if let Some(si) = self.cache.compiled.get_ptr(&state.data) {
             return Some(si);
         }
         self.add_state(state)
@@ -1451,7 +1459,10 @@ impl<'a> Fsm<'a> {
 
     /// Returns a reference to a State given a pointer to it.
     fn state(&self, si: StatePtr) -> &State {
-        &self.cache.states[si as usize / self.num_byte_classes()]
+        self.cache
+            .compiled
+            .get_state(si as usize / self.num_byte_classes())
+            .unwrap()
     }
 
     /// Adds the given state to the DFA.
@@ -1483,14 +1494,12 @@ impl<'a> Fsm<'a> {
         // Finally, put our actual state on to our heap of states and index it
         // so we can find it later.
         self.cache.size += self.cache.trans.state_heap_size()
-            + (2 * state.data.len())
+            + state.heap_size()
             + (2 * mem::size_of::<State>())
             + mem::size_of::<StatePtr>();
-        self.cache.states.push(state.clone());
         self.cache.compiled.insert(state, si);
         // Transition table and set of states and map should all be in sync.
-        debug_assert!(self.cache.states.len() == self.cache.trans.num_states());
-        debug_assert!(self.cache.states.len() == self.cache.compiled.len());
+        debug_assert!(self.cache.compiled.len() == self.cache.trans.num_states());
         Some(si)
     }
 
@@ -1818,9 +1827,63 @@ fn read_varu32(data: &[u8]) -> (u32, usize) {
     (0, 0)
 }
 
+mod state_map {
+    use std::collections::HashMap;
+
+    use super::{State, StatePtr};
+
+    #[derive(Debug)]
+    pub struct StateMap {
+        /// The keys are not actually static but rely on always pointing to a buffer in `states`
+        /// which will never be moved except when clearing the map or on drop, in which case the
+        /// keys of this map will be removed before
+        map: HashMap<State, StatePtr>,
+        /// Our set of states. Note that `StatePtr / num_byte_classes` indexes
+        /// this Vec rather than just a `StatePtr`.
+        states: Vec<State>,
+    }
+
+    impl StateMap {
+        pub fn new() -> StateMap {
+            StateMap {
+                map: HashMap::new(),
+                states: Vec::new(),
+            }
+        }
+
+        pub fn len(&self) -> usize {
+            self.states.len()
+        }
+
+        pub fn is_empty(&self) -> bool {
+            self.states.is_empty()
+        }
+
+        pub fn get_ptr(&self, index: &[u8]) -> Option<StatePtr> {
+            self.map.get(index).cloned()
+        }
+
+        pub fn get_state(&self, index: usize) -> Option<&State> {
+            self.states.get(index)
+        }
+
+        pub fn insert(&mut self, state: State, si: StatePtr) {
+            self.map.insert(state.clone(), si);
+            self.states.push(state);
+        }
+
+        pub fn clear(&mut self) {
+            self.map.clear();
+            self.states.clear();
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     extern crate rand;
+
+    use std::sync::Arc;
 
     use super::{
         push_inst_ptr, read_vari32, read_varu32, write_vari32, write_varu32, State, StateFlags,
@@ -1836,7 +1899,7 @@ mod tests {
                 push_inst_ptr(&mut data, &mut prev, ip);
             }
             let state = State {
-                data: data.into_boxed_slice(),
+                data: Arc::from(&data[..]),
             };
 
             let expected: Vec<usize> = ips.into_iter().map(|ip| ip as usize).collect();
