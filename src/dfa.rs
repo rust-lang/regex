@@ -117,7 +117,7 @@ struct CacheInner {
     /// things, we just pass indexes around manually. The performance impact of
     /// this is probably an instruction or two in the inner loop. However, on
     /// 64 bit, each StatePtr is half the size of a *State.
-    compiled: HashMap<State, StatePtr>,
+    compiled: HashMap<Box<[u8]>, StatePtr>,
     /// The transition table.
     ///
     /// The transition table is laid out in row-major order, where states are
@@ -1177,14 +1177,15 @@ impl<'a> Fsm<'a> {
         // in q. We use this as an optimization in exec_byte to determine when
         // we should follow epsilon transitions at the empty string preceding
         // the current byte.
-        let key = match self.cached_state_key(q, &mut state_flags) {
+        match self.cached_state_key(q, &mut state_flags) {
             None => return Some(STATE_DEAD),
             Some(v) => v,
-        };
+        }
         // In the cache? Cool. Done.
-        if let Some(&si) = self.cache.compiled.get(&key) {
+        if let Some(&si) = self.cache.compiled.get(&self.cache.insts_scratch_space[..]) {
             return Some(si);
         }
+
         // If the cache has gotten too big, wipe it.
         if self.approximate_size() > self.prog.dfa_size_limit
             && !self.clear_cache_and_save(current_state)
@@ -1192,6 +1193,10 @@ impl<'a> Fsm<'a> {
                 // Ooops. DFA is giving up.
                 return None;
             }
+
+        let key = State {
+            data: self.cache.insts_scratch_space.clone().into_boxed_slice()
+        };
         // Allocate room for our state and add it.
         self.add_state(key)
     }
@@ -1210,7 +1215,7 @@ impl<'a> Fsm<'a> {
         &mut self,
         q: &SparseSet,
         state_flags: &mut StateFlags,
-    ) -> Option<State> {
+    ) -> Option<()> {
         use prog::Inst::*;
 
         // We need to build up enough information to recognize pre-built states
@@ -1255,7 +1260,7 @@ impl<'a> Fsm<'a> {
         } else {
             let StateFlags(f) = *state_flags;
             insts[0] = f;
-            Some(State { data: insts.clone().into_boxed_slice() })
+            Some(())
         };
         self.cache.insts_scratch_space = insts;
         opt_state
@@ -1342,7 +1347,7 @@ impl<'a> Fsm<'a> {
     fn restore_state(&mut self, state: State) -> Option<StatePtr> {
         // If we've already stored this state, just return a pointer to it.
         // None will be the wiser.
-        if let Some(&si) = self.cache.compiled.get(&state) {
+        if let Some(&si) = self.cache.compiled.get(&state.data) {
             return Some(si);
         }
         self.add_state(state)
@@ -1520,7 +1525,7 @@ impl<'a> Fsm<'a> {
             + (2 * mem::size_of::<State>())
             + mem::size_of::<StatePtr>();
         self.cache.states.push(state.clone());
-        self.cache.compiled.insert(state, si);
+        self.cache.compiled.insert(state.data, si);
         // Transition table and set of states and map should all be in sync.
         debug_assert!(self.cache.states.len()
                       == self.cache.trans.num_states());
