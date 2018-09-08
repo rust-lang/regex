@@ -263,11 +263,11 @@ impl Compiler {
         match *expr.kind() {
             Empty => Ok(Patch { hole: Hole::None, entry: self.insts.len() }),
             Literal(hir::Literal::Unicode(c)) => {
-                self.c_literal(&[c])
+                self.c_char(c)
             }
             Literal(hir::Literal::Byte(b)) => {
                 assert!(self.compiled.uses_bytes());
-                self.c_bytes(&[b])
+                self.c_byte(b)
             }
             Class(hir::Class::Unicode(ref cls)) => {
                 self.c_class(cls.ranges())
@@ -395,24 +395,6 @@ impl Compiler {
         })
     }
 
-    fn c_literal(&mut self, chars: &[char]) -> Result {
-        debug_assert!(!chars.is_empty());
-        let mut chars: Box<Iterator<Item=&char>> =
-            if self.compiled.is_reverse {
-                Box::new(chars.iter().rev())
-            } else {
-                Box::new(chars.iter())
-            };
-        let first = *chars.next().expect("non-empty literal");
-        let Patch { mut hole, entry } = self.c_char(first)?;
-        for &c in chars {
-            let p = self.c_char(c)?;
-            self.fill(hole, p.entry);
-            hole = p.hole;
-        }
-        Ok(Patch { hole: hole, entry: entry })
-    }
-
     fn c_char(&mut self, c: char) -> Result {
         self.c_class(&[hir::ClassUnicodeRange::new(c, c)])
     }
@@ -434,24 +416,6 @@ impl Compiler {
             };
             Ok(Patch { hole: hole, entry: self.insts.len() - 1 })
         }
-    }
-
-    fn c_bytes(&mut self, bytes: &[u8]) -> Result {
-        debug_assert!(!bytes.is_empty());
-        let mut bytes: Box<Iterator<Item=&u8>> =
-            if self.compiled.is_reverse {
-                Box::new(bytes.iter().rev())
-            } else {
-                Box::new(bytes.iter())
-            };
-        let first = *bytes.next().expect("non-empty literal");
-        let Patch { mut hole, entry } = self.c_byte(first)?;
-        for &b in bytes {
-            let p = self.c_byte(b)?;
-            self.fill(hole, p.entry);
-            hole = p.hole;
-        }
-        Ok(Patch { hole: hole, entry: entry })
     }
 
     fn c_byte(&mut self, b: u8) -> Result {
