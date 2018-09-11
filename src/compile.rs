@@ -944,20 +944,19 @@ impl<'a, 'b> CompileClass<'a, 'b> {
 ///
 /// Note that a HashMap could be trivially used for this, but we don't need its
 /// overhead. Some small bounded space (LRU style) is more than enough.
+///
+/// This uses similar idea to [`SparseSet`](../sparse/struct.SparseSet.html),
+/// except it uses hashes as original indices and then compares full keys for
+/// validation against `dense` array.
 struct SuffixCache {
-    table: Vec<SuffixCacheEntry>,
-    // Every time the cache is cleared, we increment the version number instead
-    // of actually zeroing memory. Since we store a copy of the current version
-    // in every element, all we need to do is make sure to invalidate any stale
-    // entries upon access. This saves quite a bit of time!
-    version: usize,
+    sparse: Box<[usize]>,
+    dense: Vec<SuffixCacheEntry>,
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
 struct SuffixCacheEntry {
     key: SuffixCacheKey,
     pc: InstPtr,
-    version: usize,
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
@@ -970,28 +969,29 @@ struct SuffixCacheKey {
 impl SuffixCache {
     fn new(size: usize) -> Self {
         SuffixCache {
-            table: vec![SuffixCacheEntry::default(); size],
-            version: 0,
+            sparse: vec![0usize; size].into(),
+            dense: Vec::with_capacity(size),
         }
     }
 
     fn get(&mut self, key: SuffixCacheKey, pc: InstPtr) -> Option<InstPtr> {
-        let h = self.hash(&key);
-        let e = self.table[h];
-        if e.key == key && e.version == self.version {
-            Some(e.pc)
-        } else {
-            self.table[h] = SuffixCacheEntry {
-                key: key,
-                pc: pc,
-                version: self.version,
-            };
-            None
+        let hash = self.hash(&key);
+        let pos = &mut self.sparse[hash];
+        if let Some(entry) = self.dense.get(*pos) {
+            if entry.key == key {
+                return Some(entry.pc);
+            }
         }
+        *pos = self.dense.len();
+        self.dense.push(SuffixCacheEntry {
+            key: key,
+            pc: pc,
+        });
+        None
     }
 
     fn clear(&mut self) {
-        self.version += 1;
+        self.dense.clear();
     }
 
     fn hash(&self, suffix: &SuffixCacheKey) -> usize {
@@ -1002,7 +1002,7 @@ impl SuffixCache {
         h = (h ^ (suffix.from_inst as u64)).wrapping_mul(FNV_PRIME);
         h = (h ^ (suffix.start as u64)).wrapping_mul(FNV_PRIME);
         h = (h ^ (suffix.end as u64)).wrapping_mul(FNV_PRIME);
-        (h as usize) % self.table.len()
+        (h as usize) % self.sparse.len()
     }
 }
 
