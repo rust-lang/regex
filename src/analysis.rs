@@ -401,26 +401,29 @@ impl<'a> Iterator for NestedConcat<'a> {
     type Item = &'a Hir;
 
     fn next(&mut self) -> Option<&'a Hir> {
-        if self.0.len() == 0 {
-            return None;
-        }
-
-        let tip = self.0.len() - 1;
-        let (es, idx) = self.0[tip];
-
-        if idx >= es.len() {
-            self.0.pop();
-            return self.next();
-        }
-
-        self.0[tip].1 += 1;
-
-        match es[idx].kind() {
-            &HirKind::Concat(ref es) => {
-                self.0.push((es, 0));
-                self.next()
+        loop {
+            if self.0.len() == 0 {
+                return None;
             }
-            _ => Some(&es[idx]),
+
+            let tip = self.0.len() - 1;
+            let (es, idx) = self.0[tip];
+
+            if idx >= es.len() {
+                self.0.pop();
+                continue;
+            }
+
+            self.0[tip].1 += 1;
+
+            match es[idx].kind() {
+                &HirKind::Concat(ref es) => {
+                    self.0.push((es, 0));
+                    continue;
+                    // self.next()
+                }
+                _ => return Some(&es[idx]),
+            }
         }
     }
 }
