@@ -5,7 +5,49 @@ use syntax::hir::{
 use syntax::hir;
 use utf8_ranges::Utf8Sequences;
 
-/// True iff the given expression is one-pass
+/// True iff the given expression is onepass
+///
+/// The general approach here is to find all the places in
+/// the given Hir where any sort of branching occurs,
+/// and examine the start of each expression at the branch
+/// to see if there is an ambiguity.
+///
+/// For example, given the regex `a|b`, we would examine
+/// both branches of the alternation `a` and `b` and
+/// notice that they don't clash, so the regex is onepass.
+/// On the other hand the branches of `a|a` do clash,
+/// so that regex is not onepass.
+///
+/// Alternations are not the only branch points in a regex.
+/// We also have to make sure to consider repetitions like
+/// `a*a`, which is not onepass because there is no way
+/// to tell whether we have to loop back to the repeated
+/// expression or continue on by looking at just one byte.
+/// `a*b` is onepass because you can figure out what to do.
+/// If you see an `a`, go back to the start of the loop,
+/// and if you see a `b` continue onward.
+///
+/// A third, more subtle case is the case of concatenations
+/// of expressions where some of the expressions can
+/// accept the empty string. Consider `a(b|)ba`. This
+/// regex is not onepass because it is not clear what to
+/// do upon seeing the input `ab`. The problem is that `(b|)`
+/// and `ba` clash with one other.
+///
+/// To get a bit more specific about what it means for two
+/// expressions to clash, we introduce the concept of first
+/// sets. The first set of an expression is the set of
+/// bytes which might begin a word in the language of that
+/// expression. If the expression can accept the empty string,
+/// the first set takes note of that as well.
+///
+/// To handle these three cases, we use a visitor to
+/// find the alternations, repetitions, and concatenations.
+/// Whenever we find one of the above cases, we compute
+/// the first set of the various branches involved,
+/// then check to see if the first sets intersect. If
+/// we ever find a non-empty intersection, the regex
+/// is not onepass.
 pub fn is_onepass(expr: &Hir) -> bool {
     hir::visit(expr, IsOnePassVisitor::new()).unwrap()
 }
@@ -100,7 +142,7 @@ impl IsOnePassVisitor {
 
 }
 
-/// Check if a list of first sets is incompatable.
+/// Check if a list of first sets is incompatible.
 ///
 /// O(n^2), but n will usually be quite small.
 fn fsets_clash(es: &[&Hir]) -> bool {
