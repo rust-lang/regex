@@ -11,3 +11,5 @@ workspace = ".."
 
 [dependencies]
 ucd-util = "0.1.0"
+# For extracting the first set from a unicode class
+utf8-ranges = "1.0.1"

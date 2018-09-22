@@ -20,14 +20,15 @@ use std::u8;
 use ast::Span;
 use hir::interval::{Interval, IntervalSet, IntervalSetIter};
 use unicode;
+use utf8_ranges::Utf8Sequences;
 
 pub use hir::visitor::{Visitor, visit};
 
 mod interval;
+mod visitor;
 pub mod literal;
 pub mod print;
 pub mod translate;
-mod visitor;
 
 /// An error that can occur while translating an `Ast` to a `Hir`.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -217,7 +218,9 @@ impl Hir {
     ///
     /// An empty HIR expression always matches, including the empty string.
     pub fn empty() -> Hir {
-        let mut info = HirInfo::new();
+        let mut info = HirInfo::new(FirstSet::epsilon());
+        info.first_set.accepts_empty = true;
+        info.set_onepass(true);
         info.set_always_utf8(true);
         info.set_all_assertions(true);
         info.set_anchored_start(false);
@@ -240,8 +243,9 @@ impl Hir {
         if let Literal::Byte(b) = lit {
             assert!(b > 0x7F);
         }
-
-        let mut info = HirInfo::new();
+        let mut info = HirInfo::new(Self::literal_first_set(&lit));
+        info.first_set.accepts_empty = false;
+        info.set_onepass(true);
         info.set_always_utf8(lit.is_unicode());
         info.set_all_assertions(false);
         info.set_anchored_start(false);
@@ -254,10 +258,24 @@ impl Hir {
             info: info,
         }
     }
+    fn literal_first_set(lit: &Literal) -> FirstSet {
+        fn singleton(b: u8) -> FirstSet {
+            let mut f = FirstSet::empty();
+            f.push_bytes(ClassBytesRange::new(b, b));
+            f
+        }
+
+        match lit {
+            &Literal::Unicode(c) => singleton(first_byte(c)),
+            &Literal::Byte(b) => singleton(b),
+        }
+    }
 
     /// Creates a class HIR expression.
     pub fn class(class: Class) -> Hir {
-        let mut info = HirInfo::new();
+        let mut info = HirInfo::new(Self::class_first_set(&class));
+        info.first_set.accepts_empty = false;
+        info.set_onepass(Self::class_is_onepass(&class));
         info.set_always_utf8(class.is_always_utf8());
         info.set_all_assertions(false);
         info.set_anchored_start(false);
@@ -270,10 +288,67 @@ impl Hir {
             info: info,
         }
     }
+    fn class_first_set(class: &Class) -> FirstSet {
+        match class {
+            &Class::Unicode(ref c) => {
+                // Get all the bytes which might begin this unicode
+                // class.
+                let mut cb = FirstSet::empty();
+                for cr in c.iter() {
+                    for br in Utf8Sequences::new(cr.start(), cr.end()) {
+                        let first = br.as_slice()[0];
+                        cb.push_bytes(
+                            ClassBytesRange::new(first.start, first.end));
+                    }
+                }
+                cb
+            }
+            &Class::Bytes(ref b) =>
+                FirstSet::new(b.iter().map(|x| *x), false),
+        }
+    }
+    // Unicode classes are really just big alternatives from the byte
+    // oriented point of view.
+    //
+    // This function translates a unicode class into the
+    // byte space and checks for intersecting first sets.
+    //
+    // Byte classes are always onepass
+    fn class_is_onepass(cls: &Class) -> bool {
+        match cls {
+            &Class::Unicode(ref ucls) => {
+                let mut seen_char: [bool; 256] = [false; 256];
+
+                for cr in ucls.iter() {
+                    for br in Utf8Sequences::new(cr.start(), cr.end()) {
+                        let first = br.as_slice()[0];
+                        for b in first.start..(first.end+1) {
+                            if seen_char[b as usize] {
+                                return false;
+                            }
+                            seen_char[b as usize] = true;
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+
+        true
+    }
+
 
     /// Creates an anchor assertion HIR expression.
     pub fn anchor(anchor: Anchor) -> Hir {
-        let mut info = HirInfo::new();
+        // When an empty look (Anchor or WordBoundary) is at the start of
+        // a concatenation, we conservatively assume that the assertion
+        // will pass, so we just scan forward to the next Hir to
+        // compute the first set. Then this first set won't spread
+        // to concatenations that an anchor starts.
+        let mut info = HirInfo::new(FirstSet::anychar());
+
+        info.first_set.accepts_empty = true;
+        info.set_onepass(true);
         info.set_always_utf8(true);
         info.set_all_assertions(true);
         info.set_anchored_start(false);
@@ -297,7 +372,11 @@ impl Hir {
 
     /// Creates a word boundary assertion HIR expression.
     pub fn word_boundary(word_boundary: WordBoundary) -> Hir {
-        let mut info = HirInfo::new();
+        // We use FirstSet::anychar here for the same reason as
+        // we do for an anchor.
+        let mut info = HirInfo::new(FirstSet::anychar());
+        info.first_set.accepts_empty = false;
+        info.set_onepass(true);
         info.set_always_utf8(true);
         info.set_all_assertions(true);
         info.set_anchored_start(false);
@@ -319,7 +398,18 @@ impl Hir {
 
     /// Creates a repetition HIR expression.
     pub fn repetition(rep: Repetition) -> Hir {
-        let mut info = HirInfo::new();
+        let mut info = HirInfo::new(
+            rep.hir.info.first_set.clone());
+
+        info.first_set.accepts_empty =
+            Self::repetition_accepts_empty(&rep);
+        info.set_onepass(
+            rep.hir.info.is_onepass() &&
+            // If we are repeating an expression with no
+            // trigger bytes, DFA construction will run into
+            // trouble when it tries to figure out the forwarding
+            // cycle.
+            !rep.hir.info.first_set.is_empty());
         info.set_always_utf8(rep.hir.is_always_utf8());
         info.set_all_assertions(rep.hir.is_all_assertions());
         // If this operator can match the empty string, then it can never
@@ -338,10 +428,30 @@ impl Hir {
             info: info,
         }
     }
+    fn repetition_accepts_empty(rep: &Repetition) -> bool {
+        match rep.kind {
+            RepetitionKind::ZeroOrOne => true,
+            RepetitionKind::ZeroOrMore => true,
+            RepetitionKind::OneOrMore => rep.hir.info.first_set.accepts_empty,
+            RepetitionKind::Range(ref range) => {
+                match range {
+                    &RepetitionRange::Exactly(0)
+                    | &RepetitionRange::AtLeast(0)
+                    | &RepetitionRange::Bounded(0, _) => true,
+                    _ => rep.hir.info.first_set.accepts_empty,
+                }
+            }
+        }
+    }
 
     /// Creates a group HIR expression.
     pub fn group(group: Group) -> Hir {
-        let mut info = HirInfo::new();
+        let mut info = HirInfo::new(
+            group.hir.info.first_set.clone());
+
+        // We already know accepts_empty from our inner Hir.
+        // No need to compute it here.
+        info.set_onepass(group.hir.info.is_onepass());
         info.set_always_utf8(group.hir.is_always_utf8());
         info.set_all_assertions(group.hir.is_all_assertions());
         info.set_anchored_start(group.hir.is_anchored_start());
@@ -363,7 +473,9 @@ impl Hir {
             0 => Hir::empty(),
             1 => exprs.pop().unwrap(),
             _ => {
-                let mut info = HirInfo::new();
+                let mut info = HirInfo::new(
+                    Self::concat_first_set(&exprs));
+                info.set_onepass(Self::concat_is_onepass(&exprs));
                 info.set_always_utf8(true);
                 info.set_all_assertions(true);
                 info.set_any_anchored_start(false);
@@ -425,6 +537,68 @@ impl Hir {
             }
         }
     }
+    fn concat_first_set(es: &[Hir]) -> FirstSet {
+        debug_assert!(es.len() >= 2);
+
+        let mut fset = FirstSet::empty();
+        for (i, e) in NestedConcat::new(es).enumerate() {
+            match e.kind() {
+                &HirKind::Anchor(_) | &HirKind::WordBoundary(_)
+                    if i < es.len() - 1 => {
+                        continue;
+                    }
+                _ => {} // FALLTHROUGH
+            }
+
+            fset.union(&e.info.first_set);
+
+            if ! e.info.first_set.accepts_empty {
+                fset.accepts_empty = false;
+                // We can stop accumulating after we stop seeing
+                // first sets which contain epsilon.
+                break;
+            }
+        }
+        fset
+    }
+    fn concat_is_onepass(es: &[Hir]) -> bool {
+        let mut empty_run = vec![];
+
+        for (i, e) in NestedConcat::new(es).enumerate() {
+            match e.kind() {
+                &HirKind::Anchor(_) | &HirKind::WordBoundary(_)
+                    if i < es.len() - 1 => {
+                        continue;
+                    }
+                _ => {} // FALLTHROUGH
+            }
+
+            if !e.info.is_onepass() {
+                return false;
+            }
+
+            let is_real_rep = match e.kind() {
+                &HirKind::Repetition(ref rep) => {
+                    match rep.kind {
+                        RepetitionKind::Range(
+                            RepetitionRange::Exactly(_)) => false,
+                        _ => true,
+                    }
+                },
+                _ => false,
+            };
+
+            empty_run.push(e);
+            if !(e.info.first_set.accepts_empty || is_real_rep) {
+                if FirstSet::fsets_clash_ref(&empty_run) {
+                    return false;
+                }
+                empty_run.clear();
+            }
+        }
+
+        ! FirstSet::fsets_clash_ref(&empty_run)
+    }
 
     /// Returns the alternation of the given expressions.
     ///
@@ -434,7 +608,12 @@ impl Hir {
             0 => Hir::empty(),
             1 => exprs.pop().unwrap(),
             _ => {
-                let mut info = HirInfo::new();
+                let mut info = HirInfo::new(
+                    Self::alternation_first_set(&exprs));
+                // The union operate should make sure that we have
+                // the correct value for accepts_empty here. There is
+                // no special fixup like in concat.
+                info.set_onepass(!FirstSet::fsets_clash_value(&exprs));
                 info.set_always_utf8(true);
                 info.set_all_assertions(true);
                 info.set_anchored_start(true);
@@ -477,6 +656,13 @@ impl Hir {
             }
         }
     }
+    fn alternation_first_set(es: &[Hir]) -> FirstSet {
+        let mut fset = FirstSet::empty();
+        for e in es {
+            fset.union(&e.info.first_set);
+        }
+        fset
+    }
 
     /// Build an HIR expression for `.`.
     ///
@@ -518,6 +704,12 @@ impl Hir {
             cls.push(ClassUnicodeRange::new('\0', '\u{10FFFF}'));
             Hir::class(Class::Unicode(cls))
         }
+    }
+
+    /// Return true if and only if this HIR contains no byte-level
+    /// ambiguities.
+    pub fn is_onepass(&self) -> bool {
+        self.info.is_onepass()
     }
 
     /// Return true if and only if this HIR will always match valid UTF-8.
@@ -1114,6 +1306,147 @@ impl fmt::Debug for ClassBytesRange {
     }
 }
 
+/// A representation of all the possible ways a word in the language
+/// of a regex could begin. ClassBytes has no way to express the empty
+/// string, so we add an extra flag to indicate if a FirstSet includes
+/// epsilon. Put in a more theoretical way all firstsets are subsets of
+/// SIGMA `union` { epsilon }.
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct FirstSet {
+    /// The bytes which might start a word in the language.
+    bytes: ClassBytes,
+    /// True iff the language accepts the empty string.
+    accepts_empty: bool,
+}
+
+/// A macro to define the fsets_clash associated functions,
+/// parameterized over the type of the inner slice. This lets
+/// us avoid allocating an extra vector when we check
+/// alternations for onepassness.
+macro_rules! def_fsets_clash {
+    ($fun_name:ident, $slice_inner:ty) => {
+        /// Check if a list of first sets is incompatible.
+        fn $fun_name(es: &[$slice_inner]) -> bool {
+            let mut seen_so_far = FirstSet::empty();
+
+            for e in es.iter() {
+                let mut snapshot = seen_so_far.clone();
+                snapshot.intersect(&e.info.first_set);
+                if ! snapshot.is_empty() {
+                    return true;
+                }
+
+                seen_so_far.union(&e.info.first_set);
+            }
+
+            false
+        }
+    }
+}
+impl FirstSet {
+    /// A convenience method to create a FirstSet which accepts
+    /// nothing.
+    fn empty() -> Self {
+        FirstSet {
+            bytes: ClassBytes::empty(),
+            accepts_empty: false,
+        }
+    }
+
+    /// A convenience method to create a FirstSet which accepts
+    /// everything, but can't be empty.
+    fn anychar() -> FirstSet {
+        let mut f = FirstSet::empty();
+        f.push_bytes(ClassBytesRange::new(b'\0', b'\xFF'));
+        f
+    }
+
+    /// A convenience method to create a FirstSet which accepts
+    /// nothing but the empty string.
+    fn epsilon() -> FirstSet {
+        FirstSet {
+            bytes: ClassBytes::empty(),
+            accepts_empty: true,
+        }
+    }
+
+    /// Direct constructor.
+    pub fn new<I>(ranges: I, accepts_empty: bool) -> Self
+    where I: IntoIterator<Item=ClassBytesRange>
+    {
+        FirstSet {
+            bytes: ClassBytes::new(ranges),
+            accepts_empty: accepts_empty,
+        }
+    }
+
+    /// Add a byte range to the byte ranges that the  FirstSet
+    /// accepts.
+    fn push_bytes(&mut self, byte_range: ClassBytesRange) {
+        self.bytes.push(byte_range);
+    }
+
+    /// Take the set union of two FirstSets, mutating the lhs
+    /// to contain the result.
+    fn union(&mut self, other: &FirstSet) {
+        self.bytes.union(&other.bytes);
+        self.accepts_empty = self.accepts_empty || other.accepts_empty;
+    }
+
+    /// Take the set intersection of two FirstSets, mutating the lhs
+    /// to contain the result.
+    fn intersect(&mut self, other: &FirstSet) {
+        self.bytes.intersect(&other.bytes);
+        self.accepts_empty = self.accepts_empty && other.accepts_empty;
+    }
+
+    /// True iff the FirstSet accepts nothing, not even the empty string.
+    fn is_empty(&self) -> bool {
+        self.bytes.is_empty() && !self.accepts_empty
+    }
+
+    def_fsets_clash!(fsets_clash_ref, &Hir);
+    def_fsets_clash!(fsets_clash_value, Hir);
+}
+
+/// An iterator over a concatenation of expressions which
+/// drills down into other embedded concatenations.
+struct NestedConcat<'a>(Vec<(&'a [Hir], usize)>);
+impl<'a> NestedConcat<'a> {
+    fn new(es: &'a [Hir]) -> Self {
+        NestedConcat(vec![(es, 0)])
+    }
+}
+impl<'a> Iterator for NestedConcat<'a> {
+    type Item = &'a Hir;
+
+    fn next(&mut self) -> Option<&'a Hir> {
+        loop {
+            if self.0.len() == 0 {
+                return None;
+            }
+
+            let tip = self.0.len() - 1;
+            let (es, idx) = self.0[tip];
+
+            if idx >= es.len() {
+                self.0.pop();
+                continue;
+            }
+
+            self.0[tip].1 += 1;
+
+            match es[idx].kind() {
+                &HirKind::Concat(ref es) => {
+                    self.0.push((es, 0));
+                    continue;
+                }
+                _ => return Some(&es[idx]),
+            }
+        }
+    }
+}
+
 /// The high-level intermediate representation for an anchor assertion.
 ///
 /// A matching anchor assertion is always zero-length.
@@ -1320,6 +1653,9 @@ struct HirInfo {
     /// If more attributes need to be added, it is OK to increase the size of
     /// this as appropriate.
     bools: u8,
+    /// A description of how words in the language of this expression
+    /// might start.
+    first_set: FirstSet,
 }
 
 // A simple macro for defining bitfield accessors/mutators.
@@ -1340,9 +1676,10 @@ macro_rules! define_bool {
 }
 
 impl HirInfo {
-    fn new() -> HirInfo {
+    fn new(fs: FirstSet) -> HirInfo {
         HirInfo {
             bools: 0,
+            first_set: fs,
         }
     }
 
@@ -1353,11 +1690,25 @@ impl HirInfo {
     define_bool!(4, is_any_anchored_start, set_any_anchored_start);
     define_bool!(5, is_any_anchored_end, set_any_anchored_end);
     define_bool!(6, is_match_empty, set_match_empty);
+    define_bool!(7, is_onepass, set_onepass);
+}
+
+/// The first byte of a unicode code point.
+///
+/// We only ever care about the first byte of a particular character
+/// because the onepass DFA is implemented in the byte space not the
+/// character space. This means, for example, that a branch between
+/// lowercase delta and uppercase delta is actually non-deterministic.
+fn first_byte(c: char) -> u8 {
+    let mut b: [u8; 4] = [0; 4];
+    c.encode_utf8(&mut b);
+    b[0]
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use parser::Parser;
 
     fn uclass(ranges: &[(char, char)]) -> ClassUnicode {
         let ranges: Vec<ClassUnicodeRange> = ranges
@@ -2053,11 +2404,11 @@ mod tests {
 
                 expr = Hir {
                     kind: HirKind::Concat(vec![expr]),
-                    info: HirInfo::new(),
+                    info: HirInfo::new(FirstSet::empty()),
                 };
                 expr = Hir {
                     kind: HirKind::Alternation(vec![expr]),
-                    info: HirInfo::new(),
+                    info: HirInfo::new(FirstSet::empty()),
                 };
             }
             assert!(!expr.kind.is_empty());
@@ -2072,4 +2423,208 @@ mod tests {
             .join()
             .unwrap();
     }
+
+    //
+    // First Set intersection smoke tests
+    //
+
+    fn is_intersecting_fset(e1: &Hir, e2: &Hir) -> bool {
+        let mut fset = e1.info.first_set.clone();
+        fset.intersect(&e2.info.first_set);
+        ! fset.is_empty()
+    }
+
+    #[test]
+    fn fset_lit() {
+        let e1 = Parser::new().parse("a").unwrap();
+        let e2 = Parser::new().parse("a").unwrap();
+        let e3 = Parser::new().parse("b").unwrap();
+
+        assert!(is_intersecting_fset(&e1, &e2));
+        assert!(!is_intersecting_fset(&e1, &e3));
+    }
+
+    #[test]
+    fn fset_class() {
+        let e1 = Parser::new().parse("[a]").unwrap();
+        let e2 = Parser::new().parse("[a]").unwrap();
+        let e3 = Parser::new().parse("[b]").unwrap();
+
+        assert!(is_intersecting_fset(&e1, &e2));
+        assert!(!is_intersecting_fset(&e1, &e3));
+    }
+
+    #[test]
+    fn fset_class_n() {
+        let e1 = Parser::new().parse("[xamn]").unwrap();
+        let e2 = Parser::new().parse("[rlwa]").unwrap();
+        let e3 = Parser::new().parse("[bcq]").unwrap();
+
+        assert!(is_intersecting_fset(&e1, &e2));
+        assert!(!is_intersecting_fset(&e1, &e3));
+    }
+
+    #[test]
+    fn fset_alt() {
+        let e1 = Parser::new().parse("ab|bc|ad").unwrap();
+        let e2 = Parser::new().parse("yyyy|am|zz").unwrap();
+        let e3 = Parser::new().parse("cc|ww").unwrap();
+
+        assert!(is_intersecting_fset(&e1, &e2));
+        assert!(!is_intersecting_fset(&e1, &e3));
+    }
+
+    #[test]
+    fn fset_group() {
+        let e1 = Parser::new().parse("(?:ab)").unwrap();
+        let e2 = Parser::new().parse("(?:aq)").unwrap();
+        let e3 = Parser::new().parse("(?:m)").unwrap();
+
+        assert!(is_intersecting_fset(&e1, &e2));
+        assert!(!is_intersecting_fset(&e1, &e3));
+    }
+
+    #[test]
+    fn fset_concat() {
+        let e1 = Parser::new().parse("aa(?:nb)").unwrap();
+        let e2 = Parser::new().parse("aa(?:rq)").unwrap();
+        let e3 = Parser::new().parse("bb(?:m)").unwrap();
+
+        assert!(is_intersecting_fset(&e1, &e2));
+        assert!(!is_intersecting_fset(&e1, &e3));
+    }
+
+    #[test]
+    fn fset_word_boundary_dropped() {
+        let e1 = Parser::new().parse(r"aa").unwrap();
+        let e2 = Parser::new().parse(r"\baa").unwrap();
+        let e3 = Parser::new().parse(r"\bbb").unwrap();
+
+        assert!(is_intersecting_fset(&e1, &e2));
+        assert!(!is_intersecting_fset(&e1, &e3));
+    }
+
+    #[test]
+    fn fset_word_boundary_all() {
+        let e1 = Parser::new().parse(r"aa").unwrap();
+        let e2 = Parser::new().parse(r"\b").unwrap();
+
+        assert!(is_intersecting_fset(&e1, &e2));
+    }
+
+    #[test]
+    fn fset_not_word_boundary_dropped() {
+        let e1 = Parser::new().parse(r"aa").unwrap();
+        let e2 = Parser::new().parse(r"\Baa").unwrap();
+        let e3 = Parser::new().parse(r"\Bbb").unwrap();
+
+        assert!(is_intersecting_fset(&e1, &e2));
+        assert!(!is_intersecting_fset(&e1, &e3));
+    }
+
+    #[test]
+    fn fset_not_word_boundary_all() {
+        let e1 = Parser::new().parse(r"aa").unwrap();
+        let e2 = Parser::new().parse(r"\B").unwrap();
+
+        assert!(is_intersecting_fset(&e1, &e2));
+    }
+
+    #[test]
+    fn fset_start_anchor_dropped() {
+        let e1 = Parser::new().parse(r"aa").unwrap();
+        let e2 = Parser::new().parse(r"^aa").unwrap();
+        let e3 = Parser::new().parse(r"^bb").unwrap();
+
+        assert!(is_intersecting_fset(&e1, &e2));
+        assert!(!is_intersecting_fset(&e1, &e3));
+    }
+
+    #[test]
+    fn fset_terminal_emptylook_all() {
+        let e = Parser::new().parse(r"a*\b").unwrap();
+
+        assert_eq!(FirstSet::anychar(), e.info.first_set);
+    }
+
+    #[test]
+    fn fset_empty_alt() {
+        let e1 = Parser::new().parse(r"(?:a|())b").unwrap();
+        let e2 = Parser::new().parse(r"b").unwrap();
+
+        assert!(is_intersecting_fset(&e1, &e2));
+    }
+
+    //
+    // Onepass Unit Tests
+    //
+
+    macro_rules! test_onepass {
+        ($fun_name:ident, $re_str:expr) => {
+            #[test]
+            fn $fun_name() {
+                let e = Parser::new().parse($re_str).unwrap();
+                assert!(
+                    e.info.is_onepass(),
+                    "info={:?}", e.info);
+            }
+        }
+    }
+
+    macro_rules! test_not_onepass {
+        ($fun_name:ident, $re_str:expr) => {
+            #[test]
+            fn $fun_name() {
+                let e = Parser::new().parse($re_str).unwrap();
+                assert!(
+                    !e.info.is_onepass(),
+                    "info={:?}", e.info);
+            }
+        }
+    }
+
+    test_onepass!(onepass_smoke_1_, r"[^x]x(.*)");
+    test_not_onepass!(onepass_smoke_2_, r"(.*)x(.*)");
+
+    test_not_onepass!(onepass_alt_1_, r"a|b|c|a|d");
+    test_not_onepass!(onepass_alt_2_, r"a|b|c|((m|a|x)|g)|d");
+    test_onepass!(onepass_alt_3_, r"a|b|c|x|d");
+    test_onepass!(onepass_alt_4_, r"a|b|c|((m|x)|g)|d");
+
+    test_not_onepass!(onepass_not_in_rust, r"(\d+)-(\d+)");
+
+    test_onepass!(onepass_empty_alt_1_, r"(a|())b");
+    test_not_onepass!(onepass_empty_alt_2_, r"(a|())a");
+
+    test_not_onepass!(onepass_rep_1_, r"a*a");
+    test_not_onepass!(onepass_rep_2_, r"a+a");
+    test_not_onepass!(onepass_rep_3_, r"a{4,8}a");
+    test_not_onepass!(onepass_rep_4_, r"a{4,}a");
+    test_onepass!(onepass_rep_5_, r"a{4}a");
+    test_not_onepass!(onepass_rep_6_, r"a?a");
+
+    test_onepass!(onepass_rep_7_, r"a*b");
+    test_onepass!(onepass_rep_8_, r"a+b");
+    test_onepass!(onepass_rep_9_, r"a{4,8}b");
+    test_onepass!(onepass_rep_10_, r"a{4,}b");
+    test_onepass!(onepass_rep_11_, r"a{4}b");
+    test_onepass!(onepass_rep_12_, r"a?b");
+
+    test_not_onepass!(onepass_concat_middle_1_, r"ab?bc");
+    test_onepass!(onepass_concat_middle_2_, r"a(?:b|c)dc");
+
+    test_not_onepass!(onepass_unicode_class_1_, r"\d");
+    test_not_onepass!(onepass_unicode_class_2_, r"\s");
+    test_not_onepass!(onepass_unicode_class_3_, r"\w");
+    test_not_onepass!(onepass_unicode_class_4_, r"inthe\wmiddle");
+
+    test_not_onepass!(onepass_unicode_clash_1_, r"Δ|δ");
+
+    test_not_onepass!(onepass_empty_assert_1_, r"a|^a");
+    test_onepass!(onepass_empty_assert_2_, r"\ba");
+    test_onepass!(onepass_empty_assert_3_, r"^a");
+    test_onepass!(onepass_empty_assert_4_, r"a$");
+
+    test_not_onepass!(onepass_naked_empty_assert_1_, r"\w|a");
+
 }
