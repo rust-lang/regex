@@ -668,6 +668,7 @@ mod re_unicode;
 mod sparse;
 #[cfg(any(regex_runtime_teddy_ssse3, regex_runtime_teddy_avx2))]
 mod vector;
+mod analysis;
 mod onepass;
 
 /// The `internal` module exists to support suspicious activity, such as

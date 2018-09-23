@@ -27,6 +27,7 @@ use prog::{Program, Inst, EmptyLook};
 use literal::LiteralSearcher;
 use re_trait::Slot;
 use input::{ByteInput, Input};
+use analysis;
 use compile::Compiler;
 use syntax::hir::Hir;
 use re_builder::RegexOptions;
@@ -529,7 +530,7 @@ impl OnePassCompiler {
             return Err(OnePassError::RegexSetUnsupported);
         }
 
-        if ! es[0].is_onepass() {
+        if ! analysis::is_onepass(&es[0]) {
             return Err(OnePassError::HasNondeterminism);
         }
 

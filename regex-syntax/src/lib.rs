@@ -106,7 +106,6 @@ done automatically in the `regex` crate.
 #![deny(missing_docs)]
 
 extern crate ucd_util;
-extern crate utf8_ranges;
 
 pub use error::{Error, Result};
 pub use parser::{Parser, ParserBuilder};
