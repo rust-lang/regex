@@ -587,7 +587,7 @@ impl OnePassCompiler {
         // instructions which get states.
         let mut state_edge = vec![0];
         while let Some(i) = state_edge.pop() {
-            state_edge.extend(self.inst_trans(i, &mut forwards)?);
+            self.inst_trans(i, &mut forwards, &mut state_edge)?;
         }
 
         // Solve the dependency relationships between all the
@@ -623,11 +623,13 @@ impl OnePassCompiler {
         &mut self,
         inst_idx: usize,
         forwards: &mut Forwards,
-    ) -> Result<Vec<usize>, OnePassError> {
+        state_edge: &mut Vec<usize>,
+    ) -> Result<(), OnePassError> {
         trace!("::inst_trans inst_idx={}", inst_idx);
 
         if self.transitions[inst_idx].is_some() {
-            return Ok(vec![]);
+            // we've already computed the transition table for this state.
+            return Ok(());
         }
 
         // Iterate over the children, visiting lower priority
@@ -637,7 +639,7 @@ impl OnePassCompiler {
             &Inst::EmptyLook(ref inst) => vec![inst.goto],
             &Inst::Bytes(ref inst) => vec![inst.goto],
             &Inst::Split(ref inst) => vec![inst.goto1, inst.goto2],
-            &Inst::Match(_) => return Ok(vec![]), // no kids
+            &Inst::Match(_) => return Ok(()), // no kids
             &Inst::Ranges(_) | &Inst::Char(_) => unreachable!(),
         };
 
@@ -649,12 +651,11 @@ impl OnePassCompiler {
         // the initial list of `TransitionTarget::Die` pointers.
         let mut priority = 1;
 
-        let mut children = vec![];
         while let Some(child_idx) = resume.pop() {
             match &self.prog[child_idx] {
                 &Inst::EmptyLook(_) | &Inst::Save(_) => {
                     forwards.forward(inst_idx, child_idx, priority);
-                    children.push(child_idx);
+                    state_edge.push(child_idx);
                 }
                 &Inst::Bytes(ref inst) => {
                     // Weird usize casting shenanigans because a Bytes
@@ -668,7 +669,7 @@ impl OnePassCompiler {
                             priority: priority
                         };
                     }
-                    children.push(child_idx);
+                    state_edge.push(child_idx);
                 }
                 &Inst::Split(ref inst) => {
                     resume.push(inst.goto1);
@@ -693,7 +694,7 @@ impl OnePassCompiler {
 
         self.transitions[inst_idx] = Some(trans);
 
-        Ok(children)
+        Ok(())
     }
 
     /// Execute a forwarding job.
