@@ -14,7 +14,9 @@ use std::iter::repeat;
 
 use test::Bencher;
 
-use {Regex, RegexSet, Text};
+#[cfg(any(feature = "re-rust", feature = "re-rust-bytes"))]
+use RegexSet;
+use {Regex, Text};
 
 #[cfg(not(feature = "re-onig"))]
 #[cfg(not(feature = "re-pcre1"))]
