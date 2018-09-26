@@ -46,6 +46,7 @@ articles on regexes is strongly recommended: https://swtch.com/~rsc/regexp/
 implementation.)
 */
 
+use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::fmt;
 use std::iter::repeat;
@@ -117,7 +118,7 @@ struct CacheInner {
     /// things, we just pass indexes around manually. The performance impact of
     /// this is probably an instruction or two in the inner loop. However, on
     /// 64 bit, each StatePtr is half the size of a *State.
-    compiled: HashMap<Box<[u8]>, StatePtr>,
+    compiled: HashMap<State, StatePtr>,
     /// The transition table.
     ///
     /// The transition table is laid out in row-major order, where states are
@@ -156,7 +157,7 @@ struct CacheInner {
     /// we should flush the cache.
     size: usize,
 
-    insts_scratch_space: Vec<u8>,   
+    insts_scratch_space: Vec<u8>,
 }
 
 /// The transition table.
@@ -269,8 +270,14 @@ impl<T> Result<T> {
 /// it is packed into a single byte; Otherwise the byte 128 (-128 as an i8)
 /// is coded as a flag, followed by 4 bytes encoding the delta.
 #[derive(Clone, Eq, Hash, PartialEq)]
-struct State{
+struct State {
     data: Box<[u8]>,
+}
+
+impl Borrow<[u8]> for State {
+    fn borrow(&self) -> &[u8] {
+        &self.data
+    }
 }
 
 /// `InstPtr` is a 32 bit pointer into a sequence of opcodes (i.e., it indexes
@@ -294,7 +301,7 @@ struct InstPtrs<'a> {
     data: &'a [u8],
 }
 
-impl <'a>Iterator for InstPtrs<'a> {
+impl<'a> Iterator for InstPtrs<'a> {
     type Item = usize;
 
     fn next(&mut self) -> Option<usize> {
@@ -372,7 +379,7 @@ type StatePtr = u32;
 
 /// An unknown state means that the state has not been computed yet, and that
 /// the only way to progress is to compute it.
-const STATE_UNKNOWN: StatePtr = 1<<31;
+const STATE_UNKNOWN: StatePtr = 1 << 31;
 
 /// A dead state means that the state has been computed and it is known that
 /// once it is entered, no future match can ever occur.
@@ -386,12 +393,12 @@ const STATE_QUIT: StatePtr = STATE_DEAD + 1;
 /// A start state is a state that the DFA can start in.
 ///
 /// Note that start states have their lower bits set to a state pointer.
-const STATE_START: StatePtr = 1<<30;
+const STATE_START: StatePtr = 1 << 30;
 
 /// A match state means that the regex has successfully matched.
 ///
 /// Note that match states have their lower bits set to a state pointer.
-const STATE_MATCH: StatePtr = 1<<29;
+const STATE_MATCH: StatePtr = 1 << 29;
 
 /// The maximum state pointer. This is useful to mask out the "valid" state
 /// pointer from a state with the "start" or "match" bits set.
@@ -451,8 +458,7 @@ impl CacheInner {
     /// Resets the cache size to account for fixed costs, such as the program
     /// and stack sizes.
     fn reset_size(&mut self) {
-        self.size =
-            (self.start_states.len() * mem::size_of::<StatePtr>())
+        self.size = (self.start_states.len() * mem::size_of::<StatePtr>())
             + (self.stack.len() * mem::size_of::<InstPtr>());
     }
 }
@@ -478,11 +484,7 @@ impl<'a> Fsm<'a> {
             cache: &mut cache.inner,
         };
         let (empty_flags, state_flags) = dfa.start_flags(text, at);
-        dfa.start = match dfa.start_state(
-            &mut cache.qcur,
-            empty_flags,
-            state_flags,
-        ) {
+        dfa.start = match dfa.start_state(&mut cache.qcur, empty_flags, state_flags) {
             None => return Result::Quit,
             Some(STATE_DEAD) => return Result::NoMatch(at),
             Some(si) => si,
@@ -511,11 +513,7 @@ impl<'a> Fsm<'a> {
             cache: &mut cache.inner,
         };
         let (empty_flags, state_flags) = dfa.start_flags_reverse(text, at);
-        dfa.start = match dfa.start_state(
-            &mut cache.qcur,
-            empty_flags,
-            state_flags,
-        ) {
+        dfa.start = match dfa.start_state(&mut cache.qcur, empty_flags, state_flags) {
             None => return Result::Quit,
             Some(STATE_DEAD) => return Result::NoMatch(at),
             Some(si) => si,
@@ -545,11 +543,7 @@ impl<'a> Fsm<'a> {
             cache: &mut cache.inner,
         };
         let (empty_flags, state_flags) = dfa.start_flags(text, at);
-        dfa.start = match dfa.start_state(
-            &mut cache.qcur,
-            empty_flags,
-            state_flags,
-        ) {
+        dfa.start = match dfa.start_state(&mut cache.qcur, empty_flags, state_flags) {
             None => return Result::Quit,
             Some(STATE_DEAD) => return Result::NoMatch(at),
             Some(si) => si,
@@ -677,8 +671,7 @@ impl<'a> Fsm<'a> {
                 // match states are final. Therefore, we can quit.
                 if self.prog.matches.len() > 1 {
                     let state = self.state(next_si);
-                    let just_matches = state.inst_ptrs()
-                         .all(|ip| self.prog[ip].is_match());
+                    let just_matches = state.inst_ptrs().all(|ip| self.prog[ip].is_match());
                     if just_matches {
                         return result;
                     }
@@ -689,12 +682,9 @@ impl<'a> Fsm<'a> {
                 // very quickly, and only recording the match location once
                 // we've left this particular state.
                 let cur = at;
-                while (next_si & !STATE_MATCH) == prev_si
-                    && at + 2 < text.len() {
+                while (next_si & !STATE_MATCH) == prev_si && at + 2 < text.len() {
                     // Argument for safety is in the definition of next_si.
-                    next_si = unsafe {
-                        self.next_si(next_si & !STATE_MATCH, text, at)
-                    };
+                    next_si = unsafe { self.next_si(next_si & !STATE_MATCH, text, at) };
                     at += 1;
                 }
                 if at > cur {
@@ -811,7 +801,7 @@ impl<'a> Fsm<'a> {
                 next_si &= !STATE_MATCH;
                 result = Result::Match(at + 1);
                 if self.quit_after_match {
-                    return result
+                    return result;
                 }
                 self.last_match_si = next_si;
                 prev_si = next_si;
@@ -819,9 +809,7 @@ impl<'a> Fsm<'a> {
                 while (next_si & !STATE_MATCH) == prev_si && at >= 2 {
                     // Argument for safety is in the definition of next_si.
                     at -= 1;
-                    next_si = unsafe {
-                        self.next_si(next_si & !STATE_MATCH, text, at)
-                    };
+                    next_si = unsafe { self.next_si(next_si & !STATE_MATCH, text, at) };
                 }
                 if at < cur {
                     result = Result::Match(at + 2);
@@ -988,8 +976,7 @@ impl<'a> Fsm<'a> {
                     state_flags.set_match();
                     if !self.continue_past_first_match() {
                         break;
-                    } else if self.prog.matches.len() > 1
-                            && !qnext.contains(ip as usize) {
+                    } else if self.prog.matches.len() > 1 && !qnext.contains(ip as usize) {
                         // If we are continuing on to find other matches,
                         // then keep a record of the match states we've seen.
                         qnext.insert(ip);
@@ -997,25 +984,23 @@ impl<'a> Fsm<'a> {
                 }
                 Bytes(ref inst) => {
                     if b.as_byte().map_or(false, |b| inst.matches(b)) {
-                        self.follow_epsilons(
-                            inst.goto as InstPtr, qnext, empty_flags);
+                        self.follow_epsilons(inst.goto as InstPtr, qnext, empty_flags);
                     }
                 }
             }
         }
 
-        let cache =
-            if b.is_eof() && self.prog.matches.len() > 1 {
-                // If we're processing the last byte of the input and we're
-                // matching a regex set, then make the next state contain the
-                // previous states transitions. We do this so that the main
-                // matching loop can extract all of the match instructions.
-                mem::swap(qcur, qnext);
-                // And don't cache this state because it's totally bunk.
-                false
-            } else {
-                true
-            };
+        let cache = if b.is_eof() && self.prog.matches.len() > 1 {
+            // If we're processing the last byte of the input and we're
+            // matching a regex set, then make the next state contain the
+            // previous states transitions. We do this so that the main
+            // matching loop can extract all of the match instructions.
+            mem::swap(qcur, qnext);
+            // And don't cache this state because it's totally bunk.
+            false
+        } else {
+            true
+        };
 
         // We've now built up the set of NFA states that ought to comprise the
         // next DFA state, so try to find it in the cache, and if it doesn't
@@ -1024,11 +1009,7 @@ impl<'a> Fsm<'a> {
         // N.B. We pass `&mut si` here because the cache may clear itself if
         // it has gotten too full. When that happens, the location of the
         // current state may change.
-        let mut next = match self.cached_state(
-            qnext,
-            state_flags,
-            Some(&mut si),
-        ) {
+        let mut next = match self.cached_state(qnext, state_flags, Some(&mut si)) {
             None => return None,
             Some(next) => next,
         };
@@ -1073,14 +1054,9 @@ impl<'a> Fsm<'a> {
     /// line should be set if the preceding byte is `\n`. End line should never
     /// be set in this case. (Even if the proceding byte is a `\n`, it will
     /// be handled in a subsequent DFA state.)
-    fn follow_epsilons(
-        &mut self,
-        ip: InstPtr,
-        q: &mut SparseSet,
-        flags: EmptyFlags,
-    ) {
-        use prog::Inst::*;
+    fn follow_epsilons(&mut self, ip: InstPtr, q: &mut SparseSet, flags: EmptyFlags) {
         use prog::EmptyLook::*;
+        use prog::Inst::*;
 
         // We need to traverse the NFA to follow epsilon transitions, so avoid
         // recursion with an explicit stack.
@@ -1127,9 +1103,8 @@ impl<'a> Fsm<'a> {
                             NotWordBoundary if flags.not_word_boundary => {
                                 ip = inst.goto as InstPtr;
                             }
-                            StartLine | EndLine | StartText | EndText
-                            | WordBoundaryAscii | NotWordBoundaryAscii
-                            | WordBoundary | NotWordBoundary => {
+                            StartLine | EndLine | StartText | EndText | WordBoundaryAscii
+                            | NotWordBoundaryAscii | WordBoundary | NotWordBoundary => {
                                 break;
                             }
                         }
@@ -1189,13 +1164,13 @@ impl<'a> Fsm<'a> {
         // If the cache has gotten too big, wipe it.
         if self.approximate_size() > self.prog.dfa_size_limit
             && !self.clear_cache_and_save(current_state)
-            {
-                // Ooops. DFA is giving up.
-                return None;
-            }
+        {
+            // Ooops. DFA is giving up.
+            return None;
+        }
 
         let key = State {
-            data: self.cache.insts_scratch_space.clone().into_boxed_slice()
+            data: self.cache.insts_scratch_space.clone().into_boxed_slice(),
         };
         // Allocate room for our state and add it.
         self.add_state(key)
@@ -1211,11 +1186,7 @@ impl<'a> Fsm<'a> {
     /// Specifically, q should be an ordered set of NFA states and is_match
     /// should be true if and only if the previous NFA states contained a match
     /// state.
-    fn cached_state_key(
-        &mut self,
-        q: &SparseSet,
-        state_flags: &mut StateFlags,
-    ) -> Option<()> {
+    fn cached_state_key(&mut self, q: &SparseSet, state_flags: &mut StateFlags) -> Option<()> {
         use prog::Inst::*;
 
         // We need to build up enough information to recognize pre-built states
@@ -1274,10 +1245,7 @@ impl<'a> Fsm<'a> {
     ///
     /// This returns false if the cache is not cleared and the DFA should
     /// give up.
-    fn clear_cache_and_save(
-        &mut self,
-        current_state: Option<&mut StatePtr>,
-    ) -> bool {
+    fn clear_cache_and_save(&mut self, current_state: Option<&mut StatePtr>) -> bool {
         if self.cache.states.is_empty() {
             // Nothing to clear...
             return true;
@@ -1311,7 +1279,8 @@ impl<'a> Fsm<'a> {
         let nstates = self.cache.states.len();
         if self.cache.flush_count >= 3
             && self.at >= self.last_cache_flush
-            && (self.at - self.last_cache_flush) <= 10 * nstates {
+            && (self.at - self.last_cache_flush) <= 10 * nstates
+        {
             return false;
         }
         // Update statistics tracking cache flushes.
@@ -1347,7 +1316,7 @@ impl<'a> Fsm<'a> {
     fn restore_state(&mut self, state: State) -> Option<StatePtr> {
         // If we've already stored this state, just return a pointer to it.
         // None will be the wiser.
-        if let Some(&si) = self.cache.compiled.get(&state.data) {
+        if let Some(&si) = self.cache.compiled.get(&state) {
             return Some(si);
         }
         self.add_state(state)
@@ -1402,14 +1371,13 @@ impl<'a> Fsm<'a> {
         // matches are delayed by one byte, start states can never be match
         // states.
         let flagi = {
-            (((empty_flags.start as u8) << 0) |
-             ((empty_flags.end as u8) << 1) |
-             ((empty_flags.start_line as u8) << 2) |
-             ((empty_flags.end_line as u8) << 3) |
-             ((empty_flags.word_boundary as u8) << 4) |
-             ((empty_flags.not_word_boundary as u8) << 5) |
-             ((state_flags.is_word() as u8) << 6))
-            as usize
+            (((empty_flags.start as u8) << 0)
+                | ((empty_flags.end as u8) << 1)
+                | ((empty_flags.start_line as u8) << 2)
+                | ((empty_flags.end_line as u8) << 3)
+                | ((empty_flags.word_boundary as u8) << 4)
+                | ((empty_flags.not_word_boundary as u8) << 5)
+                | ((state_flags.is_word() as u8) << 6)) as usize
         };
         match self.cache.start_states[flagi] {
             STATE_UNKNOWN => {}
@@ -1460,11 +1428,7 @@ impl<'a> Fsm<'a> {
     ///
     /// This should only be used when executing the DFA in reverse over the
     /// input.
-    fn start_flags_reverse(
-        &self,
-        text: &[u8],
-        at: usize,
-    ) -> (EmptyFlags, StateFlags) {
+    fn start_flags_reverse(&self, text: &[u8], at: usize) -> (EmptyFlags, StateFlags) {
         let mut empty_flags = EmptyFlags::default();
         let mut state_flags = StateFlags::default();
         empty_flags.start = at == text.len();
@@ -1472,8 +1436,7 @@ impl<'a> Fsm<'a> {
         empty_flags.start_line = at == text.len() || text[at] == b'\n';
         empty_flags.end_line = text.is_empty();
 
-        let is_word_last =
-            at < text.len() && Byte::byte(text[at]).is_ascii_word();
+        let is_word_last = at < text.len() && Byte::byte(text[at]).is_ascii_word();
         let is_word = at > 0 && Byte::byte(text[at - 1]).is_ascii_word();
         if is_word_last {
             state_flags.set_word();
@@ -1519,18 +1482,15 @@ impl<'a> Fsm<'a> {
         }
         // Finally, put our actual state on to our heap of states and index it
         // so we can find it later.
-        self.cache.size +=
-            self.cache.trans.state_heap_size()
+        self.cache.size += self.cache.trans.state_heap_size()
             + (2 * state.data.len())
             + (2 * mem::size_of::<State>())
             + mem::size_of::<StatePtr>();
         self.cache.states.push(state.clone());
-        self.cache.compiled.insert(state.data, si);
+        self.cache.compiled.insert(state, si);
         // Transition table and set of states and map should all be in sync.
-        debug_assert!(self.cache.states.len()
-                      == self.cache.trans.num_states());
-        debug_assert!(self.cache.states.len()
-                      == self.cache.compiled.len());
+        debug_assert!(self.cache.states.len() == self.cache.trans.num_states());
+        debug_assert!(self.cache.states.len() == self.cache.compiled.len());
         Some(si)
     }
 
@@ -1583,9 +1543,7 @@ impl<'a> Fsm<'a> {
 
     /// Returns true if there is a prefix we can quickly search for.
     fn has_prefix(&self) -> bool {
-        !self.prog.is_reverse
-        && !self.prog.prefixes.is_empty()
-        && !self.prog.is_anchored_start
+        !self.prog.is_reverse && !self.prog.prefixes.is_empty() && !self.prog.is_anchored_start
     }
 
     /// Sets the STATE_START bit in the given state pointer if and only if
@@ -1636,7 +1594,8 @@ impl Transitions {
         if si > STATE_MAX as usize {
             return None;
         }
-        self.table.extend(repeat(STATE_UNKNOWN).take(self.num_byte_classes));
+        self.table
+            .extend(repeat(STATE_UNKNOWN).take(self.num_byte_classes));
         Some(usize_to_u32(si))
     }
 
@@ -1695,9 +1654,15 @@ impl StateFlags {
 }
 
 impl Byte {
-    fn byte(b: u8) -> Self { Byte(b as u16) }
-    fn eof() -> Self { Byte(256) }
-    fn is_eof(&self) -> bool { self.0 == 256 }
+    fn byte(b: u8) -> Self {
+        Byte(b as u16)
+    }
+    fn eof() -> Self {
+        Byte(256)
+    }
+    fn is_eof(&self) -> bool {
+        self.0 == 256
+    }
 
     fn is_ascii_word(&self) -> bool {
         let b = match self.as_byte() {
@@ -1723,9 +1688,9 @@ impl fmt::Debug for State {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let ips: Vec<usize> = self.inst_ptrs().collect();
         f.debug_struct("State")
-         .field("flags", &self.flags())
-         .field("insts", &ips)
-         .finish()
+            .field("flags", &self.flags())
+            .field("insts", &ips)
+            .finish()
     }
 }
 
@@ -1764,10 +1729,10 @@ impl<'a> fmt::Debug for TransitionsRow<'a> {
 impl fmt::Debug for StateFlags {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("StateFlags")
-         .field("is_match", &self.is_match())
-         .field("is_word", &self.is_word())
-         .field("has_empty", &self.has_empty())
-         .finish()
+            .field("is_match", &self.is_match())
+            .field("is_word", &self.is_word())
+            .field("has_empty", &self.has_empty())
+            .finish()
     }
 }
 
@@ -1857,11 +1822,10 @@ fn read_varu32(data: &[u8]) -> (u32, usize) {
 mod tests {
     extern crate rand;
 
-    use quickcheck::{QuickCheck, StdGen, quickcheck};
     use super::{
-        StateFlags, State, push_inst_ptr,
-        write_varu32, read_varu32, write_vari32, read_vari32,
+        push_inst_ptr, read_vari32, read_varu32, write_vari32, write_varu32, State, StateFlags,
     };
+    use quickcheck::{quickcheck, QuickCheck, StdGen};
 
     #[test]
     fn prop_state_encode_decode() {
@@ -1871,10 +1835,11 @@ mod tests {
             for &ip in ips.iter() {
                 push_inst_ptr(&mut data, &mut prev, ip);
             }
-            let state = State { data: data.into_boxed_slice() };
+            let state = State {
+                data: data.into_boxed_slice(),
+            };
 
-            let expected: Vec<usize> =
-                ips.into_iter().map(|ip| ip as usize).collect();
+            let expected: Vec<usize> = ips.into_iter().map(|ip| ip as usize).collect();
             let got: Vec<usize> = state.inst_ptrs().collect();
             expected == got && state.flags() == StateFlags(flags)
         }
