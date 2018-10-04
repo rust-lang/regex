@@ -504,10 +504,10 @@ text`), which means there's no way to cause exponential blow-up like with
 some other regular expression engines. (We pay for this by disallowing
 features like arbitrary look-ahead and backreferences.)
 
-When a DFA is used, pathological cases with exponential state blow up are
+When a DFA is used, pathological cases with exponential state blow-up are
 avoided by constructing the DFA lazily or in an "online" manner. Therefore,
 at most one new state can be created for each byte of input. This satisfies
-our time complexity guarantees, but can lead to unbounded memory growth
+our time complexity guarantees, but can lead to memory growth
 proportional to the size of the input. As a stopgap, the DFA is only
 allowed to store a fixed number of states. When the limit is reached, its
 states are wiped and continues on, possibly duplicating previous work. If
