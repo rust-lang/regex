@@ -13,6 +13,7 @@ finite automata and guarantees linear time matching on all inputs.
 """
 categories = ["text-processing"]
 autotests = false
+exclude = ["/.travis.yml", "/appveyor.yml", "/ci/*", "/scripts/*"]
 
 [badges]
 travis-ci = { repository = "rust-lang/regex" }
