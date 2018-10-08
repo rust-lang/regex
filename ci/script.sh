@@ -3,7 +3,7 @@
 # This is the main CI script for testing the regex crate and its sub-crates.
 
 set -ex
-MSRV="1.20.0"
+MSRV="1.21.0"
 
 # If we're building on 1.20, then lazy_static 1.2 will fail to build since it
 # updated its MSRV to 1.24.1. In this case, we force the use of lazy_static 1.1
