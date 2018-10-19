@@ -30,3 +30,10 @@ fn regression_subsequent_matches() {
     assert!(set.matches(text).matched(1));
     assert!(set.matches(text).matched(1));
 }
+
+#[test]
+fn regexset_indexer() {
+    let set = regex_set!(&["a", "b"]);
+    assert_eq!("a", &set[0]);
+    assert_eq!("b", &set[1]);
+}

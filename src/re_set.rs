@@ -14,6 +14,7 @@ macro_rules! define_set {
         pub mod $name {
             use std::fmt;
             use std::iter;
+            use std::ops;
             use std::slice;
             use std::vec;
 
@@ -215,6 +216,14 @@ impl RegexSet {
     /// Returns the total number of regular expressions in this set.
     pub fn len(&self) -> usize {
         self.0.regex_strings().len()
+    }
+}
+
+impl ops::Index<usize> for RegexSet {
+    type Output = str;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        self.0.regex_strings()[index].as_ref()
     }
 }
 
