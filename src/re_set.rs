@@ -216,6 +216,36 @@ impl RegexSet {
     pub fn len(&self) -> usize {
         self.0.regex_strings().len()
     }
+
+    /// Returns the patterns that this set will match on.
+    ///
+    /// This function can be used to determine the match without storing it
+    /// in a seperate `Slice`. This is useful when you want to know the pattern
+    /// that matched.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// # use regex::RegexSet;
+    /// let set = RegexSet::new(&[
+    ///     r"\w+",
+    ///     r"\d+",
+    ///     r"\pL+",
+    ///     r"foo",
+    ///     r"bar",
+    ///     r"barfoo",
+    ///     r"foobar",
+    /// ]).unwrap();
+    /// let matches: Vec<_> = set
+    ///     .matches("foobar")
+    ///     .into_iter()
+    ///     .map(|match_idx| &set.patterns()[match_idx])
+    ///     .collect();
+    /// assert_eq!(matches, vec![r"\w+", r"\pL+", r"foo", r"bar", r"foobar"]);
+    /// ```
+    pub fn patterns(&self) -> &[String] {
+        self.0.regex_strings()
+    }
 }
 
 /// A set of matches returned by a regex set.
