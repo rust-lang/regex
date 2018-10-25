@@ -73,7 +73,7 @@ impl Compiler {
     /// If bytes is true, then the program is compiled as a byte based
     /// automaton, which incorporates UTF-8 decoding into the machine. If it's
     /// false, then the automaton is Unicode scalar value based, e.g., an
-    /// engine utilizing such an automaton is resposible for UTF-8 decoding.
+    /// engine utilizing such an automaton is responsible for UTF-8 decoding.
     ///
     /// The specific invariant is that when returning a byte based machine,
     /// the neither the `Char` nor `Ranges` instructions are produced.

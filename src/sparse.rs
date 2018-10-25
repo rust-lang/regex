@@ -8,7 +8,7 @@ use std::slice;
 /// in the order in which they were inserted.
 ///
 /// The data structure is based on: http://research.swtch.com/sparse
-/// Note though that we don't actually use unitialized memory. We generally
+/// Note though that we don't actually use uninitialized memory. We generally
 /// reuse allocations, so the initial allocation cost is bareable. However,
 /// its other properties listed above are extremely useful.
 #[derive(Clone, Debug)]
