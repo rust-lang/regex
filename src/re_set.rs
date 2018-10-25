@@ -219,9 +219,10 @@ impl RegexSet {
 
     /// Returns the patterns that this set will match on.
     ///
-    /// This function can be used to determine the match without storing it
-    /// in a seperate `Slice`. This is useful when you want to know the pattern
-    /// that matched.
+    /// This function can be used to determine the pattern for a match. The 
+    /// slice returned has exactly as many patterns givens to this regex set, 
+    /// and the order of the slice is the same as the order of the patterns 
+    /// provided to the set.
     ///
     /// # Example
     ///
