@@ -92,3 +92,20 @@ ismatch!(
     r"typename type\-parameter\-\d+\-\d+::.+",
     "test",
     false);
+
+// See: https://github.com/rust-lang/regex/issues/533
+ismatch!(
+    blank_matches_nothing_between_space_and_tab,
+    r"[[:blank:]]",
+    "\u{a}\u{b}\u{c}\u{d}\u{e}\u{f}\
+    \u{10}\u{11}\u{12}\u{13}\u{14}\u{15}\u{16}\u{17}\
+    \u{18}\u{19}\u{1a}\u{1b}\u{1c}\u{1d}\u{1e}\u{1f}",
+    false);
+
+ismatch!(
+    inverted_blank_matches_everything_between_space_and_tab,
+    r"^[[:^blank:]]+$",
+    "\u{a}\u{b}\u{c}\u{d}\u{e}\u{f}\
+    \u{10}\u{11}\u{12}\u{13}\u{14}\u{15}\u{16}\u{17}\
+    \u{18}\u{19}\u{1a}\u{1b}\u{1c}\u{1d}\u{1e}\u{1f}",
+    true);

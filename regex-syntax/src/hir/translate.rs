@@ -1040,7 +1040,7 @@ fn ascii_class(kind: &ast::ClassAsciiKind) -> &'static [(char, char)] {
             X
         }
         Blank => {
-            const X: T = &[(' ', '\t')];
+            const X: T = &[('\t', '\t'), (' ', ' ')];
             X
         }
         Cntrl => {
