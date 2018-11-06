@@ -10,6 +10,10 @@ MSRV="1.20.0"
 # to build on Rust 1.20.0.
 if [ "$TRAVIS_RUST_VERSION" = "$MSRV" ]; then
     cargo update -p lazy_static --precise 1.1.0
+    # On older versions of Cargo, this apparently needs to be run twice
+    # if Cargo.lock didn't previously exist. Since this command should be
+    # idempotent, we run it again unconditionally.
+    cargo update -p lazy_static --precise 1.1.0
 fi
 
 # Builds the regex crate and runs tests.
