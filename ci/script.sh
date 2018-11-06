@@ -3,6 +3,14 @@
 # This is the main CI script for testing the regex crate and its sub-crates.
 
 set -ex
+MSRV="1.20.0"
+
+# If we're building on 1.20, then lazy_static 1.2 will fail to build since it
+# updated its MSRV to 1.24.1. In this case, we force the use of lazy_static 1.1
+# to build on Rust 1.20.0.
+if [ "$TRAVIS_RUST_VERSION" = "$MSRV" ]; then
+    cargo update -p lazy_static --precise 1.1.0
+fi
 
 # Builds the regex crate and runs tests.
 cargo build --verbose
@@ -13,7 +21,7 @@ cargo doc --verbose
 # more frequently, and therefore might require a newer version of Rust.
 #
 # This isn't ideal. It's a compromise.
-if [ "$TRAVIS_RUST_VERSION" = "1.20.0" ]; then
+if [ "$TRAVIS_RUST_VERSION" = "$MSRV" ]; then
   exit
 fi
 
