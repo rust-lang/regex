@@ -570,3 +570,63 @@ ffi_fn! {
         unsafe { (*re).len() }
     }
 }
+
+ffi_fn! {
+    fn rure_escape_must(pattern: *const c_char) -> *const c_char {
+        let len = unsafe { CStr::from_ptr(pattern).to_bytes().len() };
+        let pat = pattern as *const u8;
+        let mut err = Error::new(ErrorKind::None);
+        let esc = rure_escape(pat, len, &mut err);
+        if err.is_err() {
+            let _ = writeln!(&mut io::stderr(), "{}", err);
+            let _ = writeln!(
+                &mut io::stderr(), "aborting from rure_escape_must");
+            unsafe { abort() }
+        }
+        esc
+    }
+}
+
+/// A helper function that implements fallible escaping in a way that returns
+/// an error if escaping failed.
+///
+/// This should ideally be exposed, but it needs API design work. In
+/// particular, this should not return a C string, but a `const uint8_t *`
+/// instead, since it may contain a NUL byte.
+fn rure_escape(
+    pattern: *const u8,
+    length: size_t,
+    error: *mut Error
+) -> *const c_char {
+    let pat: &[u8] = unsafe { slice::from_raw_parts(pattern, length) };
+    let str_pat = match str::from_utf8(pat) {
+        Ok(val) => val,
+        Err(err) => {
+            unsafe {
+                if !error.is_null() {
+                    *error = Error::new(ErrorKind::Str(err));
+                }
+                return ptr::null();
+            }
+        }
+    };
+    let esc_pat = regex::escape(str_pat);
+    let c_esc_pat = match CString::new(esc_pat) {
+        Ok(val) => val,
+        Err(err) => {
+            unsafe {
+                if !error.is_null() {
+                    *error = Error::new(ErrorKind::Nul(err));
+                }
+                return ptr::null();
+            }
+        }
+    };
+    c_esc_pat.into_raw() as *const c_char
+}
+
+ffi_fn! {
+    fn rure_cstring_free(s: *mut c_char) {
+        unsafe { CString::from_raw(s); }
+    }
+}
