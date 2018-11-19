@@ -1,3 +1,4 @@
+use ::std::ffi;
 use ::std::ffi::CString;
 use ::std::fmt;
 use ::std::str;
@@ -16,6 +17,7 @@ pub enum ErrorKind {
     None,
     Str(str::Utf8Error),
     Regex(regex::Error),
+    Nul(ffi::NulError),
 }
 
 impl Error {
@@ -29,7 +31,7 @@ impl Error {
     pub fn is_err(&self) -> bool {
         match self.kind {
             ErrorKind::None => false,
-            ErrorKind::Str(_) | ErrorKind::Regex(_) => true,
+            ErrorKind::Str(_) | ErrorKind::Regex(_) | ErrorKind::Nul(_) => true,
         }
     }
 }
@@ -40,6 +42,7 @@ impl fmt::Display for Error {
             ErrorKind::None => write!(f, "no error"),
             ErrorKind::Str(ref e) => e.fmt(f),
             ErrorKind::Regex(ref e) => e.fmt(f),
+            ErrorKind::Nul(ref e) => e.fmt(f),
         }
     }
 }
