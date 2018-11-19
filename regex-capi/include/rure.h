@@ -567,6 +567,38 @@ void rure_error_free(rure_error *err);
  */
 const char *rure_error_message(rure_error *err);
 
+/*
+ * rure_escape_must returns a NULL terminated string where all meta characters
+ * have been escaped. If escaping fails for any reason, an error message is
+ * printed to stderr and the process is aborted.
+ *
+ * The pattern given should be in UTF-8. For convenience, this accepts a C
+ * string, which means the pattern cannot contain NULL byte.
+ */
+const char *rure_escape_must(const char *pattern);
+
+/*
+ * rure_escape returns a NULL terminated string where all meta characters have
+ * been escaped. The pattern must be valid UTF-8 and the length corresponds to
+ * the number of bytes in the pattern.
+ *
+ * error is set if there was a problem compiling the pattern (including if the
+ * pattern is not valid UTF-8). If error is NULL, then no error information
+ * is returned. In all cases, if an error occurs, NULL is returned.
+ *
+ * The pointer returned must not be freed directly. Instead, it should be freed
+ * by calling rure_string_free.
+ */
+const char *rure_escape(const uint8_t *pattern, size_t length,
+                        rure_error *error);
+
+/*
+ * rure_string_free frees the string given.
+ *
+ * This must be called at most once per string.
+ */
+void rure_string_free(char *s);
+
 #ifdef __cplusplus
 }
 #endif

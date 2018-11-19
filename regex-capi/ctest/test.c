@@ -531,6 +531,33 @@ bool test_regex_set_options() {
     return passed;
 }
 
+bool test_escape() {
+
+    bool passed = true;
+
+    const char *pattern = "^[a-z]+.*$";
+    const char *expected_escaped = "\\^\\[a\\-z\\]\\+\\.\\*\\$";
+
+    const char *escaped = rure_escape_must(pattern);
+    if (!escaped) {
+        if (DEBUG) {
+            fprintf(stderr,
+                    "[test_captures] expected escaped, but got no escaped\n");
+        }
+        passed = false;
+    } else if(strcmp(escaped, expected_escaped) != 0) {
+        if (DEBUG) {
+            fprintf(stderr,
+                    "[test_captures] expected \"%s\", but got \"%s\"\n",
+                    expected_escaped, escaped);
+        }
+        passed = false;
+    }
+    rure_string_free((char *)escaped);
+    return passed;
+
+}
+
 void run_test(bool (test)(), const char *name, bool *passed) {
     if (!test()) {
         *passed = false;
@@ -557,6 +584,7 @@ int main() {
     run_test(test_regex_set_options, "test_regex_set_options", &passed);
     run_test(test_regex_set_match_start, "test_regex_set_match_start",
              &passed);
+    run_test(test_escape, "test_escape", &passed);
 
     if (!passed) {
         exit(1);
