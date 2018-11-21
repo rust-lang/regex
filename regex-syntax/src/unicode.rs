@@ -7,11 +7,14 @@ use hir;
 use unicode_tables::age;
 use unicode_tables::case_folding_simple::CASE_FOLDING_SIMPLE;
 use unicode_tables::general_category;
+use unicode_tables::grapheme_cluster_break;
 use unicode_tables::property_bool;
 use unicode_tables::property_names::PROPERTY_NAMES;
 use unicode_tables::property_values::PROPERTY_VALUES;
 use unicode_tables::script;
 use unicode_tables::script_extension;
+use unicode_tables::sentence_break;
+use unicode_tables::word_break;
 
 type Result<T> = result::Result<T, Error>;
 
@@ -247,6 +250,21 @@ pub fn class<'a>(query: ClassQuery<'a>) -> Result<hir::ClassUnicode> {
         }
         ByValue { property_name: "Script_Extensions", property_value } => {
             property_set(script_extension::BY_NAME, property_value)
+                .map(hir_class)
+                .ok_or(Error::PropertyValueNotFound)
+        }
+        ByValue { property_name: "Grapheme_Cluster_Break", property_value } => {
+            property_set(grapheme_cluster_break::BY_NAME, property_value)
+                .map(hir_class)
+                .ok_or(Error::PropertyValueNotFound)
+        }
+        ByValue { property_name: "Sentence_Break", property_value } => {
+            property_set(sentence_break::BY_NAME, property_value)
+                .map(hir_class)
+                .ok_or(Error::PropertyValueNotFound)
+        }
+        ByValue { property_name: "Word_Break", property_value } => {
+            property_set(word_break::BY_NAME, property_value)
                 .map(hir_class)
                 .ok_or(Error::PropertyValueNotFound)
         }
