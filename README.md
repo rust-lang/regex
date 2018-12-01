@@ -235,4 +235,4 @@ at your option.
 
 The data in `regex-syntax/src/unicode_tables/` is licensed under the Unicode
 License Agreement
-([LICENSE-UNICODE](http://www.unicode.org/copyright.html#License).
+([LICENSE-UNICODE](http://www.unicode.org/copyright.html#License)).
