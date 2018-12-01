@@ -9,7 +9,7 @@ use std::u8;
 // The primary invariant that interval sets guards is canonical ordering. That
 // is, every interval set contains an ordered sequence of intervals where
 // no two intervals are overlapping or adjacent. While this invariant is
-// ocassionally broken within the implementation, it should be impossible for
+// occasionally broken within the implementation, it should be impossible for
 // callers to observe it.
 //
 // Since case folding (as implemented below) breaks that invariant, we roll
