@@ -19,7 +19,7 @@ onig = { version = "3", optional = true }
 libpcre-sys = { version = "0.2", optional = true }
 memmap = "0.6.2"
 regex = { version = "1", path = ".." }
-regex-syntax = { version = "0.6.0", path = "../regex-syntax" }
+regex-syntax = { version = "0.6", path = "../regex-syntax" }
 serde = "1"
 serde_derive = "1"
 
