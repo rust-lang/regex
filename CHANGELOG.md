@@ -1,3 +1,70 @@
+1.1.0 (2018-11-30)
+==================
+This is a small release with a couple small enhancements. This release also
+increases the minimal supported Rust version (MSRV) to 1.24.1 (from 1.20.0). In
+accordance with this crate's MSRV policy, this release bumps the minor version
+number.
+
+Performance improvements:
+
+* [OPT #511](https://github.com/rust-lang/regex/pull/511),
+  [OPT #540](https://github.com/rust-lang/regex/pull/540):
+  Improve lazy DFA construction for large regex sets.
+
+New features:
+
+* [FEATURE #538](https://github.com/rust-lang/regex/pull/538):
+  Add Emoji and "break" Unicode properties. See [UNICODE.md](UNICODE.md).
+
+Bug fixes:
+
+* [BUG #530](https://github.com/rust-lang/regex/pull/530):
+  Add Unicode license (for data tables).
+* Various typo/doc fixups.
+
+
+1.0.6 (2018-11-06)
+==================
+This is a small release.
+
+Performance improvements:
+
+* [OPT #513](https://github.com/rust-lang/regex/pull/513):
+  Improve performance of compiling large Unicode classes by 8-10%.
+
+Bug fixes:
+
+* [BUG #533](https://github.com/rust-lang/regex/issues/533):
+  Fix definition of `[[:blank:]]` class that regressed in `regex-syntax 0.5`.
+
+
+1.0.5 (2018-09-06)
+==================
+This is a small release with an API enhancement.
+
+New features:
+
+* [FEATURE #509](https://github.com/rust-lang/regex/pull/509):
+  Generalize impls of the `Replacer` trait.
+
+
+1.0.4 (2018-08-25)
+==================
+This is a small release that bumps the quickcheck dependency.
+
+
+1.0.3 (2018-08-24)
+==================
+This is a small bug fix release.
+
+Bug fixes:
+
+* [BUG #504](https://github.com/rust-lang/regex/pull/504):
+  Fix for Cargo's "minimal version" support.
+* [BUG 1e39165f](https://github.com/rust-lang/regex/commit/1e39165f):
+  Fix doc examples for byte regexes.
+
+
 1.0.2 (2018-07-18)
 ==================
 This release exposes some new lower level APIs on `Regex` that permit
