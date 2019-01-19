@@ -58,8 +58,6 @@ If you have lots of dates in text that you'd like to iterate over, then it's
 easy to adapt the above example with an iterator:
 
 ```rust
-extern crate regex;
-
 use regex::Regex;
 
 const TO_SEARCH: &'static str = "
@@ -104,8 +102,7 @@ regular expressions are compiled exactly once.
 For example:
 
 ```rust
-#[macro_use] extern crate lazy_static;
-extern crate regex;
+use lazy_static::lazy_static;
 
 use regex::Regex;
 
