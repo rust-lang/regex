@@ -32,18 +32,10 @@ Add this to your `Cargo.toml`:
 regex = "1"
 ```
 
-and this to your crate root:
-
-```rust
-extern crate regex;
-```
-
 Here's a simple example that matches a date in YYYY-MM-DD format and prints the
 year, month and day:
 
 ```rust
-extern crate regex;
-
 use regex::Regex;
 
 fn main() {
