@@ -143,7 +143,7 @@ provides more flexibility than is seen here. (See the documentation for
 `Regex::replace` for more details.)
 
 Note that if your regex gets complicated, you can use the `x` flag to
-enable insigificant whitespace mode, which also lets you write comments:
+enable insignificant whitespace mode, which also lets you write comments:
 
 ```rust
 # extern crate regex; use regex::Regex;
