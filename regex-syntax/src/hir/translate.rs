@@ -2414,40 +2414,68 @@ mod tests {
         // Positive examples.
         assert!(t(r"^").is_anchored_start());
         assert!(t(r"$").is_anchored_end());
+        assert!(t(r"^").is_line_anchored_start());
+        assert!(t(r"$").is_line_anchored_end());
 
         assert!(t(r"^^").is_anchored_start());
         assert!(t(r"$$").is_anchored_end());
+        assert!(t(r"^^").is_line_anchored_start());
+        assert!(t(r"$$").is_line_anchored_end());
 
         assert!(t(r"^$").is_anchored_start());
         assert!(t(r"^$").is_anchored_end());
+        assert!(t(r"^$").is_line_anchored_start());
+        assert!(t(r"^$").is_line_anchored_end());
 
         assert!(t(r"^foo").is_anchored_start());
         assert!(t(r"foo$").is_anchored_end());
+        assert!(t(r"^foo").is_line_anchored_start());
+        assert!(t(r"foo$").is_line_anchored_end());
 
         assert!(t(r"^foo|^bar").is_anchored_start());
         assert!(t(r"foo$|bar$").is_anchored_end());
+        assert!(t(r"^foo|^bar").is_line_anchored_start());
+        assert!(t(r"foo$|bar$").is_line_anchored_end());
 
         assert!(t(r"^(foo|bar)").is_anchored_start());
         assert!(t(r"(foo|bar)$").is_anchored_end());
+        assert!(t(r"^(foo|bar)").is_line_anchored_start());
+        assert!(t(r"(foo|bar)$").is_line_anchored_end());
 
         assert!(t(r"^+").is_anchored_start());
         assert!(t(r"$+").is_anchored_end());
+        assert!(t(r"^+").is_line_anchored_start());
+        assert!(t(r"$+").is_line_anchored_end());
         assert!(t(r"^++").is_anchored_start());
         assert!(t(r"$++").is_anchored_end());
+        assert!(t(r"^++").is_line_anchored_start());
+        assert!(t(r"$++").is_line_anchored_end());
         assert!(t(r"(^)+").is_anchored_start());
         assert!(t(r"($)+").is_anchored_end());
+        assert!(t(r"(^)+").is_line_anchored_start());
+        assert!(t(r"($)+").is_line_anchored_end());
 
         assert!(t(r"$^").is_anchored_start());
-        assert!(t(r"$^").is_anchored_end());
+        assert!(t(r"$^").is_anchored_start());
+        assert!(t(r"$^").is_line_anchored_end());
+        assert!(t(r"$^").is_line_anchored_end());
         assert!(t(r"$^|^$").is_anchored_start());
         assert!(t(r"$^|^$").is_anchored_end());
+        assert!(t(r"$^|^$").is_line_anchored_start());
+        assert!(t(r"$^|^$").is_line_anchored_end());
 
         assert!(t(r"\b^").is_anchored_start());
         assert!(t(r"$\b").is_anchored_end());
+        assert!(t(r"\b^").is_line_anchored_start());
+        assert!(t(r"$\b").is_line_anchored_end());
         assert!(t(r"^(?m:^)").is_anchored_start());
         assert!(t(r"(?m:$)$").is_anchored_end());
+        assert!(t(r"^(?m:^)").is_line_anchored_start());
+        assert!(t(r"(?m:$)$").is_line_anchored_end());
         assert!(t(r"(?m:^)^").is_anchored_start());
         assert!(t(r"$(?m:$)").is_anchored_end());
+        assert!(t(r"(?m:^)^").is_line_anchored_start());
+        assert!(t(r"$(?m:$)").is_line_anchored_end());
 
         // Negative examples.
         assert!(!t(r"(?m)^").is_anchored_start());
@@ -2459,21 +2487,53 @@ mod tests {
 
         assert!(!t(r"a^").is_anchored_start());
         assert!(!t(r"$a").is_anchored_start());
+        assert!(!t(r"a^").is_line_anchored_start());
+        assert!(!t(r"$a").is_line_anchored_start());
 
-        assert!(!t(r"a^").is_anchored_start());
-        assert!(!t(r"$a").is_anchored_start());
+        assert!(!t(r"a^").is_anchored_end());
+        assert!(!t(r"$a").is_anchored_end());
+        assert!(!t(r"a^").is_line_anchored_end());
+        assert!(!t(r"$a").is_line_anchored_end());
 
         assert!(!t(r"^foo|bar").is_anchored_start());
         assert!(!t(r"foo|bar$").is_anchored_end());
+        assert!(!t(r"^foo|bar").is_line_anchored_start());
+        assert!(!t(r"foo|bar$").is_line_anchored_end());
 
         assert!(!t(r"^*").is_anchored_start());
         assert!(!t(r"$*").is_anchored_end());
+        assert!(!t(r"^*").is_line_anchored_start());
+        assert!(!t(r"$*").is_line_anchored_end());
         assert!(!t(r"^*+").is_anchored_start());
         assert!(!t(r"$*+").is_anchored_end());
+        assert!(!t(r"^*+").is_line_anchored_start());
+        assert!(!t(r"$*+").is_line_anchored_end());
         assert!(!t(r"^+*").is_anchored_start());
         assert!(!t(r"$+*").is_anchored_end());
+        assert!(!t(r"^+*").is_line_anchored_start());
+        assert!(!t(r"$+*").is_line_anchored_end());
         assert!(!t(r"(^)*").is_anchored_start());
         assert!(!t(r"($)*").is_anchored_end());
+        assert!(!t(r"(^)*").is_line_anchored_start());
+        assert!(!t(r"($)*").is_line_anchored_end());
+    }
+
+    #[test]
+    fn analysis_is_line_anchored() {
+        assert!(t(r"(?m)^(foo|bar)").is_line_anchored_start());
+        assert!(t(r"(?m)(foo|bar)$").is_line_anchored_end());
+
+        assert!(t(r"(?m)^foo|^bar").is_line_anchored_start());
+        assert!(t(r"(?m)foo$|bar$").is_line_anchored_end());
+
+        assert!(t(r"(?m)^").is_line_anchored_start());
+        assert!(t(r"(?m)$").is_line_anchored_end());
+
+        assert!(t(r"(?m:^$)|$^").is_line_anchored_start());
+        assert!(t(r"(?m:^$)|$^").is_line_anchored_end());
+
+        assert!(t(r"$^|(?m:^$)").is_line_anchored_start());
+        assert!(t(r"$^|(?m:^$)").is_line_anchored_end());
     }
 
     #[test]
