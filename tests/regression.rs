@@ -82,6 +82,9 @@ mat!(wb_start_x, r"(?u:\b)^(?-u:X)", "X", Some((0, 1)));
 ismatch!(strange_anchor_non_complete_prefix, r"a^{2}", "", false);
 ismatch!(strange_anchor_non_complete_suffix, r"${2}a", "", false);
 
+// See: https://github.com/BurntSushi/ripgrep/issues/1203
+ismatch!(wat1, r"[0-4][0-4][0-4]000", "153.230000", true);
+
 // See: https://github.com/rust-lang/regex/issues/334
 mat!(captures_after_dfa_premature_end, r"a(b*(X|$))?", "abcbX",
      Some((0, 1)), None, None);
