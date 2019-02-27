@@ -1,3 +1,15 @@
+1.1.1 (2019-02-27)
+==================
+This is a small release with one fix for a bug caused by literal optimizations.
+
+Bug fixes:
+
+* [BUG 661bf53d](https://github.com/rust-lang/regex/commit/661bf53d):
+  Fixes a bug in the reverse suffix literal optimization. This was originally
+  reported
+  [against ripgrep](https://github.com/BurntSushi/ripgrep/issues/1203).
+
+
 1.1.0 (2018-11-30)
 ==================
 This is a small release with a couple small enhancements. This release also
