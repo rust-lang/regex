@@ -83,7 +83,9 @@ ismatch!(strange_anchor_non_complete_prefix, r"a^{2}", "", false);
 ismatch!(strange_anchor_non_complete_suffix, r"${2}a", "", false);
 
 // See: https://github.com/BurntSushi/ripgrep/issues/1203
-ismatch!(wat1, r"[0-4][0-4][0-4]000", "153.230000", true);
+ismatch!(reverse_suffix1, r"[0-4][0-4][0-4]000", "153.230000", true);
+ismatch!(reverse_suffix2, r"\d\d\d000", "153.230000\n", true);
+matiter!(reverse_suffix3, r"\d\d\d000", "153.230000\n", (4, 10));
 
 // See: https://github.com/rust-lang/regex/issues/334
 mat!(captures_after_dfa_premature_end, r"a(b*(X|$))?", "abcbX",

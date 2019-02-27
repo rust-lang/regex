@@ -745,13 +745,13 @@ impl<'c> ExecNoSync<'c> {
         debug_assert!(lcs.len() >= 1);
         let mut start = original_start;
         let mut end = start;
-        let mut last_literal_match = 0;
+        let mut last_literal = start;
         while end <= text.len() {
-            last_literal_match += match lcs.find(&text[last_literal_match..]) {
+            last_literal += match lcs.find(&text[last_literal..]) {
                 None => return Some(NoMatch(text.len())),
                 Some(i) => i,
             };
-            end = last_literal_match + lcs.len();
+            end = last_literal + lcs.len();
             match dfa::Fsm::reverse(
                 &self.ro.dfa_reverse,
                 self.cache,
@@ -760,10 +760,10 @@ impl<'c> ExecNoSync<'c> {
                 end - start,
             ) {
                 Match(0) | NoMatch(0) => return None,
-                Match(s) => return Some(Match((s + start, end))),
+                Match(i) => return Some(Match((start + i, end))),
                 NoMatch(i) => {
-                    start = i;
-                    last_literal_match += 1;
+                    start += i;
+                    last_literal += 1;
                     continue;
                 }
                 Quit => return Some(Quit),
