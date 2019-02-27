@@ -1,3 +1,13 @@
+1.1.2 (2019-02-27)
+==================
+This release fixes a bug found in the fix introduced in 1.1.1.
+
+Bug fixes:
+
+* [BUG edf45e6f](https://github.com/rust-lang/regex/commit/edf45e6f):
+  Fix bug introduced in reverse suffix literal matcher in the 1.1.1 release.
+
+
 1.1.1 (2019-02-27)
 ==================
 This is a small release with one fix for a bug caused by literal optimizations.
