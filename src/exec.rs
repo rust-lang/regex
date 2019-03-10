@@ -556,7 +556,8 @@ impl<'c> RegularExpression for ExecNoSync<'c> {
         match self.ro.match_type {
             MatchType::Literal(ty) => {
                 self.find_literals(ty, text, start).and_then(|(s, e)| {
-                    self.captures_nfa_type(MatchNfaType::Auto, slots, text, s, e)
+                    self.captures_nfa_type(
+                        MatchNfaType::Auto, slots, text, s, e)
                 })
             }
             MatchType::Dfa => {
@@ -565,7 +566,8 @@ impl<'c> RegularExpression for ExecNoSync<'c> {
                 } else {
                     match self.find_dfa_forward(text, start) {
                         dfa::Result::Match((s, e)) => {
-                            self.captures_nfa_type(MatchNfaType::Auto, slots, text, s, e)
+                            self.captures_nfa_type(
+                                MatchNfaType::Auto, slots, text, s, e)
                         }
                         dfa::Result::NoMatch(_) => None,
                         dfa::Result::Quit => self.captures_nfa(slots, text, start),
@@ -575,7 +577,8 @@ impl<'c> RegularExpression for ExecNoSync<'c> {
             MatchType::DfaAnchoredReverse => {
                 match self.find_dfa_anchored_reverse(text, start) {
                     dfa::Result::Match((s, e)) => {
-                        self.captures_nfa_type(MatchNfaType::Auto, slots, text, s, e)
+                        self.captures_nfa_type(
+                            MatchNfaType::Auto, slots, text, s, e)
                     }
                     dfa::Result::NoMatch(_) => None,
                     dfa::Result::Quit => self.captures_nfa(slots, text, start),
@@ -584,7 +587,8 @@ impl<'c> RegularExpression for ExecNoSync<'c> {
             MatchType::DfaSuffix => {
                 match self.find_dfa_reverse_suffix(text, start) {
                     dfa::Result::Match((s, e)) => {
-                        self.captures_nfa_type(MatchNfaType::Auto, slots, text, s, e)
+                        self.captures_nfa_type(
+                            MatchNfaType::Auto, slots, text, s, e)
                     }
                     dfa::Result::NoMatch(_) => None,
                     dfa::Result::Quit => self.captures_nfa(slots, text, start),
@@ -845,7 +849,15 @@ impl<'c> ExecNoSync<'c> {
         start: usize,
     ) -> Option<usize> {
         let mut slots = [None, None];
-        if self.exec_nfa(ty, &mut [false], &mut slots, true, text, start, text.len()) {
+        if self.exec_nfa(
+            ty,
+            &mut [false],
+            &mut slots,
+            true,
+            text,
+            start,
+            text.len()
+        ) {
             slots[1]
         } else {
             None
@@ -860,7 +872,15 @@ impl<'c> ExecNoSync<'c> {
         start: usize,
     ) -> Option<(usize, usize)> {
         let mut slots = [None, None];
-        if self.exec_nfa(ty, &mut [false], &mut slots, false, text, start, text.len()) {
+        if self.exec_nfa(
+            ty,
+            &mut [false],
+            &mut slots,
+            false,
+            text,
+            start,
+            text.len()
+        ) {
             match (slots[0], slots[1]) {
                 (Some(s), Some(e)) => Some((s, e)),
                 _ => None,
@@ -879,7 +899,8 @@ impl<'c> ExecNoSync<'c> {
         text: &[u8],
         start: usize,
     ) -> Option<(usize, usize)> {
-        self.captures_nfa_type(MatchNfaType::Auto, slots, text, start, text.len())
+        self.captures_nfa_type(
+            MatchNfaType::Auto, slots, text, start, text.len())
     }
 
     /// Like captures_nfa, but allows specification of type of NFA engine.
@@ -1037,7 +1058,10 @@ impl<'c> ExecNoSync<'c> {
                     }
                 }
             }
-            Nfa(ty) => self.exec_nfa(ty, matches, &mut [], false, text, start, text.len()),
+            Nfa(ty) => {
+                self.exec_nfa(
+                    ty, matches, &mut [], false, text, start, text.len())
+            }
             Nothing => false,
         }
     }
