@@ -8,6 +8,11 @@ Performance improvements:
 * [OPT #566](https://github.com/rust-lang/regex/pull/566):
   Upgrades `aho-corasick` to 0.7 and uses it for `foo|bar|...|quux` regexes.
 
+Bug fixes:
+
+* [BUG #557](https://github.com/rust-lang/regex/issues/557):
+  Fix a bug where captures could lead to an incorrect match.
+
 
 1.1.2 (2019-02-27)
 ==================

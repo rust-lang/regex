@@ -88,8 +88,13 @@ ismatch!(reverse_suffix2, r"\d\d\d000", "153.230000\n", true);
 matiter!(reverse_suffix3, r"\d\d\d000", "153.230000\n", (4, 10));
 
 // See: https://github.com/rust-lang/regex/issues/334
-mat!(captures_after_dfa_premature_end, r"a(b*(X|$))?", "abcbX",
+// See: https://github.com/rust-lang/regex/issues/557
+mat!(captures_after_dfa_premature_end1, r"a(b*(X|$))?", "abcbX",
      Some((0, 1)), None, None);
+mat!(captures_after_dfa_premature_end2, r"a(bc*(X|$))?", "abcbX",
+     Some((0, 1)), None, None);
+mat!(captures_after_dfa_premature_end3, r"(aa$)?", "aaz",
+     Some((0, 0)));
 
 // See: https://github.com/rust-lang/regex/issues/437
 ismatch!(
