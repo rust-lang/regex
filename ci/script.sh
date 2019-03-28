@@ -46,9 +46,7 @@ ci/test-regex-capi
 # very long time. Also, check that we can build the regex-debug tool.
 if [ "$TRAVIS_RUST_VERSION" = "nightly" ]; then
   cargo build --verbose --manifest-path regex-debug/Cargo.toml
-  for x in rust rust-bytes pcre1 onig; do
-    (cd bench && ./run $x --no-run --verbose)
-  done
+  (cd bench && ./run rust --no-run --verbose)
 
   # Test minimal versions.
   cargo +nightly generate-lockfile -Z minimal-versions
