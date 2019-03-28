@@ -9,7 +9,7 @@ basically the same as the SSSE3 version, but using 256-bit vectors instead of
 
 use std::cmp;
 
-use aho_corasick::{Automaton, AcAutomaton, FullAcAutomaton};
+use aho_corasick::{AhoCorasick, AhoCorasickBuilder};
 use syntax::hir::literal::Literals;
 
 use vector::avx2::{AVX2VectorBuilder, u8x32};
@@ -38,7 +38,7 @@ pub struct Teddy {
     pats: Vec<Vec<u8>>,
     /// An Aho-Corasick automaton of the patterns. We use this when we need to
     /// search pieces smaller than the Teddy block size.
-    ac: FullAcAutomaton<Vec<u8>>,
+    ac: AhoCorasick,
     /// A set of 8 buckets. Each bucket corresponds to a single member of a
     /// bitset. A bucket contains zero or more substrings. This is useful
     /// when the number of substrings exceeds 8, since our bitsets cannot have
@@ -88,10 +88,14 @@ impl Teddy {
             buckets[bucket].push(pati);
             masks.add(bucket as u8, pat);
         }
+        let ac = AhoCorasickBuilder::new()
+            .dfa(true)
+            .prefilter(false)
+            .build(&pats);
         Some(Teddy {
             vb: vb,
             pats: pats.to_vec(),
-            ac: AcAutomaton::new(pats.to_vec()).into_full(),
+            ac: ac,
             buckets: buckets,
             masks: masks,
         })
@@ -341,11 +345,11 @@ impl Teddy {
     /// block based approach.
     #[inline(never)]
     fn slow(&self, haystack: &[u8], pos: usize) -> Option<Match> {
-        self.ac.find(&haystack[pos..]).next().map(|m| {
+        self.ac.find(&haystack[pos..]).map(|m| {
             Match {
-                pat: m.pati,
-                start: pos + m.start,
-                end: pos + m.end,
+                pat: m.pattern(),
+                start: pos + m.start(),
+                end: pos + m.end(),
             }
         })
     }
