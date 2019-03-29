@@ -13,6 +13,7 @@ use std::collections::HashMap;
 use std::cmp;
 use std::sync::Arc;
 
+use aho_corasick::{AhoCorasick, AhoCorasickBuilder, MatchKind};
 use thread_local::CachedThreadLocal;
 use syntax::ParserBuilder;
 use syntax::hir::Hir;
@@ -86,6 +87,16 @@ struct ExecReadOnly {
     /// Prefix literals are stored on the `Program`, since they are used inside
     /// the matching engines.
     suffixes: LiteralSearcher,
+    /// An Aho-Corasick automaton with leftmost-first match semantics.
+    ///
+    /// This is only set when the entire regex is a simple unanchored
+    /// alternation of literals. We could probably use it more circumstances,
+    /// but this is already hacky enough in this architecture.
+    ///
+    /// N.B. We use u32 as a state ID representation under the assumption that
+    /// if we were to exhaust the ID space, we probably would have long
+    /// surpassed the compilation size limit.
+    ac: Option<AhoCorasick<u32>>,
     /// match_type encodes as much upfront knowledge about how we're going to
     /// execute a search as possible.
     match_type: MatchType,
@@ -287,6 +298,7 @@ impl ExecBuilder {
                 dfa: Program::new(),
                 dfa_reverse: Program::new(),
                 suffixes: LiteralSearcher::empty(),
+                ac: None,
                 match_type: MatchType::Nothing,
             });
             return Ok(Exec { ro: ro, cache: CachedThreadLocal::new() });
@@ -319,12 +331,32 @@ impl ExecBuilder {
         dfa.dfa_size_limit = self.options.dfa_size_limit;
         dfa_reverse.dfa_size_limit = self.options.dfa_size_limit;
 
+        let mut ac = None;
+        if parsed.exprs.len() == 1 {
+            if let Some(lits) = alternation_literals(&parsed.exprs[0]) {
+                // If we have a small number of literals, then let Teddy
+                // handle things (see literal/mod.rs).
+                if lits.len() > 32 {
+                    let fsm = AhoCorasickBuilder::new()
+                        .match_kind(MatchKind::LeftmostFirst)
+                        .auto_configure(&lits)
+                        // We always want this to reduce size, regardless of
+                        // what auto-configure does.
+                        .byte_classes(true)
+                        .build_with_size::<u32, _, _>(&lits)
+                        .expect("AC automaton too big");
+                    ac = Some(fsm);
+                }
+            }
+        }
+
         let mut ro = ExecReadOnly {
             res: self.options.pats,
             nfa: nfa,
             dfa: dfa,
             dfa_reverse: dfa_reverse,
             suffixes: LiteralSearcher::suffixes(suffixes),
+            ac: ac,
             match_type: MatchType::Nothing,
         };
         ro.match_type = ro.choose_match_type(self.match_type);
@@ -632,6 +664,11 @@ impl<'c> ExecNoSync<'c> {
                 let lits = &self.ro.suffixes;
                 lits.find_end(&text[start..])
                     .map(|(s, e)| (start + s, start + e))
+            }
+            AhoCorasick => {
+                self.ro.ac.as_ref().unwrap()
+                    .find(&text[start..])
+                    .map(|m| (start + m.start(), start + m.end()))
             }
         }
     }
@@ -1163,6 +1200,9 @@ impl ExecReadOnly {
         // aren't anchored. We would then only search for all of them when at
         // the beginning of the input and use the subset in all other cases.
         if self.res.len() == 1 {
+            if self.ac.is_some() {
+                return Literal(MatchLiteralType::AhoCorasick);
+            }
             if self.nfa.prefixes.complete() {
                 return if self.nfa.is_anchored_start {
                     Literal(MatchLiteralType::AnchoredStart)
@@ -1254,6 +1294,9 @@ enum MatchLiteralType {
     AnchoredStart,
     /// Match literals only at the end of text.
     AnchoredEnd,
+    /// Use an Aho-Corasick automaton. This requires `ac` to be Some on
+    /// ExecReadOnly.
+    AhoCorasick,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -1293,6 +1336,59 @@ impl ProgramCacheInner {
             dfa_reverse: dfa::Cache::new(&ro.dfa_reverse),
         }
     }
+}
+
+/// Alternation literals checks if the given HIR is a simple alternation of
+/// literals, and if so, returns them. Otherwise, this returns None.
+fn alternation_literals(expr: &Hir) -> Option<Vec<Vec<u8>>> {
+    use syntax::hir::{HirKind, Literal};
+
+    // This is pretty hacky, but basically, if `is_alternation_literal` is
+    // true, then we can make several assumptions about the structure of our
+    // HIR. This is what justifies the `unreachable!` statements below.
+    //
+    // This code should be refactored once we overhaul this crate's
+    // optimization pipeline, because this is a terribly inflexible way to go
+    // about things.
+
+    if !expr.is_alternation_literal() {
+        return None;
+    }
+    let alts = match *expr.kind() {
+        HirKind::Alternation(ref alts) => alts,
+        _ => return None, // one literal isn't worth it
+    };
+
+    let extendlit = |lit: &Literal, dst: &mut Vec<u8>| {
+        match *lit {
+            Literal::Unicode(c) => {
+                let mut buf = [0; 4];
+                dst.extend_from_slice(c.encode_utf8(&mut buf).as_bytes());
+            }
+            Literal::Byte(b) => {
+                dst.push(b);
+            }
+        }
+    };
+
+    let mut lits = vec![];
+    for alt in alts {
+        let mut lit = vec![];
+        match *alt.kind() {
+            HirKind::Literal(ref x) => extendlit(x, &mut lit),
+            HirKind::Concat(ref exprs) => {
+                for e in exprs {
+                    match *e.kind() {
+                        HirKind::Literal(ref x) => extendlit(x, &mut lit),
+                        _ => unreachable!("expected literal, got {:?}", e),
+                    }
+                }
+            }
+            _ => unreachable!("expected literal or concat, got {:?}", alt),
+        }
+        lits.push(lit);
+    }
+    Some(lits)
 }
 
 #[cfg(test)]

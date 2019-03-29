@@ -114,3 +114,13 @@ ismatch!(
     \u{10}\u{11}\u{12}\u{13}\u{14}\u{15}\u{16}\u{17}\
     \u{18}\u{19}\u{1a}\u{1b}\u{1c}\u{1d}\u{1e}\u{1f}",
     true);
+
+// Tests that our Aho-Corasick optimization works correctly. It only
+// kicks in when we have >32 literals.
+mat!(
+    ahocorasick1,
+    "samwise|sam|a|b|c|d|e|f|g|h|i|j|k|l|m|n|o|p|q|r|s|t|u|v|w|x|y|z|\
+     A|B|C|D|E|F|G|H|I|J|K|L|M|N|O|P|Q|R|S|T|U|V|W|X|Y|Z",
+    "samwise",
+    Some((0, 7))
+);
