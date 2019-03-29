@@ -227,6 +227,8 @@ impl Hir {
         info.set_any_anchored_start(false);
         info.set_any_anchored_end(false);
         info.set_match_empty(true);
+        info.set_literal(true);
+        info.set_alternation_literal(true);
         Hir {
             kind: HirKind::Empty,
             info: info,
@@ -253,6 +255,8 @@ impl Hir {
         info.set_any_anchored_start(false);
         info.set_any_anchored_end(false);
         info.set_match_empty(false);
+        info.set_literal(true);
+        info.set_alternation_literal(true);
         Hir {
             kind: HirKind::Literal(lit),
             info: info,
@@ -271,6 +275,8 @@ impl Hir {
         info.set_any_anchored_start(false);
         info.set_any_anchored_end(false);
         info.set_match_empty(false);
+        info.set_literal(false);
+        info.set_alternation_literal(false);
         Hir {
             kind: HirKind::Class(class),
             info: info,
@@ -289,6 +295,8 @@ impl Hir {
         info.set_any_anchored_start(false);
         info.set_any_anchored_end(false);
         info.set_match_empty(true);
+        info.set_literal(false);
+        info.set_alternation_literal(false);
         if let Anchor::StartText = anchor {
             info.set_anchored_start(true);
             info.set_line_anchored_start(true);
@@ -322,6 +330,8 @@ impl Hir {
         info.set_line_anchored_end(false);
         info.set_any_anchored_start(false);
         info.set_any_anchored_end(false);
+        info.set_literal(false);
+        info.set_alternation_literal(false);
         // A negated word boundary matches the empty string, but a normal
         // word boundary does not!
         info.set_match_empty(word_boundary.is_negated());
@@ -357,6 +367,8 @@ impl Hir {
         info.set_any_anchored_start(rep.hir.is_any_anchored_start());
         info.set_any_anchored_end(rep.hir.is_any_anchored_end());
         info.set_match_empty(rep.is_match_empty() || rep.hir.is_match_empty());
+        info.set_literal(false);
+        info.set_alternation_literal(false);
         Hir {
             kind: HirKind::Repetition(rep),
             info: info,
@@ -375,6 +387,8 @@ impl Hir {
         info.set_any_anchored_start(group.hir.is_any_anchored_start());
         info.set_any_anchored_end(group.hir.is_any_anchored_end());
         info.set_match_empty(group.hir.is_match_empty());
+        info.set_literal(false);
+        info.set_alternation_literal(false);
         Hir {
             kind: HirKind::Group(group),
             info: info,
@@ -395,6 +409,8 @@ impl Hir {
                 info.set_any_anchored_start(false);
                 info.set_any_anchored_end(false);
                 info.set_match_empty(true);
+                info.set_literal(true);
+                info.set_alternation_literal(true);
 
                 // Some attributes require analyzing all sub-expressions.
                 for e in &exprs {
@@ -416,6 +432,14 @@ impl Hir {
 
                     let x = info.is_match_empty() && e.is_match_empty();
                     info.set_match_empty(x);
+
+                    let x = info.is_literal() && e.is_literal();
+                    info.set_literal(x);
+
+                    let x =
+                        info.is_alternation_literal()
+                        && e.is_alternation_literal();
+                    info.set_alternation_literal(x);
                 }
                 // Anchored attributes require something slightly more
                 // sophisticated. Normally, WLOG, to determine whether an
@@ -488,6 +512,8 @@ impl Hir {
                 info.set_any_anchored_start(false);
                 info.set_any_anchored_end(false);
                 info.set_match_empty(false);
+                info.set_literal(false);
+                info.set_alternation_literal(true);
 
                 // Some attributes require analyzing all sub-expressions.
                 for e in &exprs {
@@ -523,6 +549,11 @@ impl Hir {
 
                     let x = info.is_match_empty() || e.is_match_empty();
                     info.set_match_empty(x);
+
+                    let x =
+                        info.is_alternation_literal()
+                        && e.is_literal();
+                    info.set_alternation_literal(x);
                 }
                 Hir {
                     kind: HirKind::Alternation(exprs),
@@ -654,6 +685,28 @@ impl Hir {
     /// but not `a`, `a+` or `\b`.
     pub fn is_match_empty(&self) -> bool {
         self.info.is_match_empty()
+    }
+
+    /// Return true if and only if this HIR is a simple literal. This is only
+    /// true when this HIR expression is either itself a `Literal` or a
+    /// concatenation of only `Literal`s.
+    ///
+    /// For example, `f` and `foo` are literals, but `f+`, `(foo)`, `foo()`
+    /// are not (even though that contain sub-expressions that are literals).
+    pub fn is_literal(&self) -> bool {
+        self.info.is_literal()
+    }
+
+    /// Return true if and only if this HIR is either a simple literal or an
+    /// alternation of simple literals. This is only
+    /// true when this HIR expression is either itself a `Literal` or a
+    /// concatenation of only `Literal`s or an alternation of only `Literal`s.
+    ///
+    /// For example, `f`, `foo`, `a|b|c`, and `foo|bar|baz` are alternaiton
+    /// literals, but `f+`, `(foo)`, `foo()`
+    /// are not (even though that contain sub-expressions that are literals).
+    pub fn is_alternation_literal(&self) -> bool {
+        self.info.is_alternation_literal()
     }
 }
 
@@ -1415,6 +1468,8 @@ impl HirInfo {
     define_bool!(6, is_any_anchored_start, set_any_anchored_start);
     define_bool!(7, is_any_anchored_end, set_any_anchored_end);
     define_bool!(8, is_match_empty, set_match_empty);
+    define_bool!(9, is_literal, set_literal);
+    define_bool!(10, is_alternation_literal, set_alternation_literal);
 }
 
 #[cfg(test)]
