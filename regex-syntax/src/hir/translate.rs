@@ -240,11 +240,6 @@ impl<'t, 'p> Visitor for TranslatorI<'t, 'p> {
     type Err = Error;
 
     fn finish(self) -> Result<Hir> {
-        if self.trans().stack.borrow().is_empty() {
-            // This can happen if the Ast given consists of a single set of
-            // flags. e.g., `(?i)`. /shrug
-            return Ok(Hir::empty());
-        }
         // ... otherwise, we should have exactly one HIR on the stack.
         assert_eq!(self.trans().stack.borrow().len(), 1);
         Ok(self.pop().unwrap().unwrap_expr())
@@ -287,6 +282,16 @@ impl<'t, 'p> Visitor for TranslatorI<'t, 'p> {
             }
             Ast::Flags(ref x) => {
                 self.set_flags(&x.flags);
+                // Flags in the AST are generally considered directives and
+                // not actual sub-expressions. However, they can be used in
+                // the concrete syntax like `((?i))`, and we need some kind of
+                // indication of an expression there, and Empty is the correct
+                // choice.
+                //
+                // There can also be things like `(?i)+`, but we rule those out
+                // in the parser. In the future, we might allow them for
+                // consistency sake.
+                self.push(HirFrame::Expr(Hir::empty()));
             }
             Ast::Literal(ref x) => {
                 self.push(HirFrame::Expr(self.hir_literal(x)?));
@@ -1547,6 +1552,10 @@ mod tests {
             hir_group_name(2, "foo", hir_lit("b")),
             hir_group(3, hir_lit("c")),
         ]));
+        assert_eq!(t("()"), hir_group(1, Hir::empty()));
+        assert_eq!(t("((?i))"), hir_group(1, Hir::empty()));
+        assert_eq!(t("((?x))"), hir_group(1, Hir::empty()));
+        assert_eq!(t("(((?x)))"), hir_group(1, hir_group(2, Hir::empty())));
     }
 
     #[test]
