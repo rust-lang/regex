@@ -32,7 +32,7 @@ Add this to your `Cargo.toml`:
 regex = "1"
 ```
 
-and this to your crate root:
+and this to your crate root (if you're using Rust 2015):
 
 ```rust
 extern crate regex;
@@ -42,8 +42,6 @@ Here's a simple example that matches a date in YYYY-MM-DD format and prints the
 year, month and day:
 
 ```rust
-extern crate regex;
-
 use regex::Regex;
 
 fn main() {
@@ -66,8 +64,6 @@ If you have lots of dates in text that you'd like to iterate over, then it's
 easy to adapt the above example with an iterator:
 
 ```rust
-extern crate regex;
-
 use regex::Regex;
 
 const TO_SEARCH: &'static str = "
@@ -112,9 +108,6 @@ regular expressions are compiled exactly once.
 For example:
 
 ```rust
-#[macro_use] extern crate lazy_static;
-extern crate regex;
-
 use regex::Regex;
 
 fn some_helper_function(text: &str) -> bool {
