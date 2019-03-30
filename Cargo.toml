@@ -42,7 +42,7 @@ lazy_static = "1"
 # For property based tests.
 quickcheck = { version = "0.7", default-features = false }
 # For generating random test data.
-rand = "0.5"
+rand = "0.6.5"
 
 [features]
 default = ["use_std"]
