@@ -49,7 +49,19 @@ if [ "$TRAVIS_RUST_VERSION" = "nightly" ]; then
   (cd bench && ./run rust --no-run --verbose)
 
   # Test minimal versions.
-  cargo +nightly generate-lockfile -Z minimal-versions
-  cargo build --verbose
-  cargo test --verbose
+  #
+  # For now, we remove this check, because it doesn't seem possible to convince
+  # some maintainers of *core* crates that this is a worthwhile test to add.
+  # In particular, this test uncovers any *incorrect* dependency specification
+  # in the chain of dependencies.
+  #
+  # We might consider figuring out how to migrate off of rand in order to get
+  # this check working. (This will be hard, since it either requires dropping
+  # quickcheck or migrating quickcheck off of rand, which is just probably
+  # not practical.)
+  #
+  # So frustrating.
+  # cargo +nightly generate-lockfile -Z minimal-versions
+  # cargo build --verbose
+  # cargo test --verbose
 fi
