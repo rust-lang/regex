@@ -1100,6 +1100,13 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
                 ast::ErrorKind::RepetitionMissing,
             )),
         };
+        match ast {
+            Ast::Empty(_) | Ast::Flags(_) => return Err(self.error(
+                self.span(),
+                ast::ErrorKind::RepetitionMissing,
+            )),
+            _ => {}
+        }
         if !self.bump_and_bump_space() {
             return Err(self.error(
                 Span::new(start, self.pos()),
@@ -3124,6 +3131,18 @@ bar
                 ast: Box::new(lit('a', 0)),
             })));
 
+        assert_eq!(
+            parser(r"(?i){0}").parse().unwrap_err(),
+            TestError {
+                span: span(4..4),
+                kind: ast::ErrorKind::RepetitionMissing,
+            });
+        assert_eq!(
+            parser(r"(?m){1,1}").parse().unwrap_err(),
+            TestError {
+                span: span(4..4),
+                kind: ast::ErrorKind::RepetitionMissing,
+            });
         assert_eq!(
             parser(r"a{").parse().unwrap_err(),
             TestError {

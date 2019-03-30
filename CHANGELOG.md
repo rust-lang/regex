@@ -10,6 +10,8 @@ Performance improvements:
 
 Bug fixes:
 
+* [BUG #555](https://github.com/rust-lang/regex/issues/555):
+  Fix a bug where the parser would panic on patterns like `(?m){1,1}`.
 * [BUG #557](https://github.com/rust-lang/regex/issues/557):
   Fix a bug where captures could lead to an incorrect match.
 
