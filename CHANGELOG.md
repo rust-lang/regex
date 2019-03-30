@@ -1,3 +1,14 @@
+1.1.3 (2019-03-30)
+==================
+This releases fixes a few bugs and adds a performance improvement when a regex
+is a simple alternation of literals.
+
+Performance improvements:
+
+* [OPT #566](https://github.com/rust-lang/regex/pull/566):
+  Upgrades `aho-corasick` to 0.7 and uses it for `foo|bar|...|quux` regexes.
+
+
 1.1.2 (2019-02-27)
 ==================
 This release fixes a bug found in the fix introduced in 1.1.1.
