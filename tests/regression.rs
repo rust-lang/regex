@@ -14,6 +14,12 @@ fn regression_many_repeat_stack_overflow() {
     assert_eq!(vec![(0, 1)], findall!(re, "a"));
 }
 
+// See: https://github.com/rust-lang/regex/issues/555
+#[test]
+fn regression_invalid_repetition_expr() {
+    assert!(regex_new!("(?m){1,1}").is_err());
+}
+
 // See: https://github.com/rust-lang/regex/issues/75
 mat!(regression_unsorted_binary_search_1, r"(?i)[a_]+", "A_", Some((0, 2)));
 mat!(regression_unsorted_binary_search_2, r"(?i)[A_]+", "a_", Some((0, 2)));
