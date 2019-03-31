@@ -1,3 +1,16 @@
+1.1.4 (2019-03-31)
+==================
+This release fixes a backwards compatibility regression where Regex was no
+longer UnwindSafe. This was caused by the upgrade to aho-corasick 0.7, whose
+AhoCorasick type was itself not UnwindSafe. This has been fixed in aho-corasick
+0.7.4, which we now require.
+
+Bug fixes:
+
+* [BUG #568](https://github.com/rust-lang/regex/pull/568):
+  Fix an API regression where Regex was no longer UnwindSafe.
+
+
 1.1.3 (2019-03-30)
 ==================
 This releases fixes a few bugs and adds a performance improvement when a regex
