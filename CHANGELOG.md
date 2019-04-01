@@ -1,3 +1,17 @@
+1.1.5 (2019-04-01)
+==================
+This releases fixes a bug in regex's dependency specification where it requires
+a newer version of regex-syntax, but this wasn't communicated correctly in the
+Cargo.toml. This would have been caught by a minimal version check, but this
+check was disabled because the `rand` crate itself advertises incorrect
+dependency specifications.
+
+Bug fixes:
+
+* [BUG #570](https://github.com/rust-lang/regex/pull/570):
+  Fix regex-syntax minimal version.
+
+
 1.1.4 (2019-03-31)
 ==================
 This release fixes a backwards compatibility regression where Regex was no
