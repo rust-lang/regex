@@ -778,8 +778,6 @@ impl BoyerMooreSearch {
         mut window_end: usize,
         backstop: usize,
     ) -> Option<usize> {
-        use std::mem;
-
         let window_end_snapshot = window_end;
         let skip_of = |we: usize| -> usize {
             // Unsafe might make this faster, but the benchmarks
