@@ -8,7 +8,7 @@ Background
 ----------
 
 The key idea of Teddy is to do *packed* substring matching. In the literature,
-packed substring matching is the idea of examing multiple bytes in a haystack
+packed substring matching is the idea of examining multiple bytes in a haystack
 at a time to detect matches. Implementations of, for example, memchr (which
 detects matches of a single byte) have been doing this for years. Only
 recently, with the introduction of various SIMD instructions, has this been
