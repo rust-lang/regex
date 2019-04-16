@@ -98,7 +98,7 @@ impl<'a, 'm, 'r, 's, I: Input> Bounded<'a, 'm, 'r, 's, I> {
         slots: &'s mut [Slot],
         input: I,
         start: usize,
-        end: usize, 
+        end: usize,
     ) -> bool {
         let mut cache = cache.borrow_mut();
         let cache = &mut cache.backtrack;
@@ -171,7 +171,7 @@ impl<'a, 'm, 'r, 's, I: Input> Bounded<'a, 'm, 'r, 's, I> {
             if matched && self.prog.matches.len() == 1 {
                 return true;
             }
-            if at.pos() == end {
+            if at.pos() == end || at.is_end() {
                 break;
             }
             at = self.input.at(at.next_pos());

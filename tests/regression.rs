@@ -141,3 +141,10 @@ mat!(
     "samwise",
     Some((0, 7))
 );
+
+// See: https://github.com/BurntSushi/ripgrep/issues/1247
+#[test]
+fn regression_nfa_stops1() {
+    let re = ::regex::bytes::Regex::new(r"\bs(?:[ab])").unwrap();
+    assert_eq!(0, re.find_iter(b"s\xE4").count());
+}

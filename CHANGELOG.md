@@ -1,6 +1,14 @@
+1.1.6 (2019-04-16)
+==================
+This release fixes a regression introduced by a bug fix (for
+[BUG #557](https://github.com/rust-lang/regex/issues/557)) which could cause
+the regex engine to enter an infinite loop. This bug was originally
+[reported against ripgrep](https://github.com/BurntSushi/ripgrep/issues/1247).
+
+
 1.1.5 (2019-04-01)
 ==================
-This releases fixes a bug in regex's dependency specification where it requires
+This release fixes a bug in regex's dependency specification where it requires
 a newer version of regex-syntax, but this wasn't communicated correctly in the
 Cargo.toml. This would have been caught by a minimal version check, but this
 check was disabled because the `rand` crate itself advertises incorrect
