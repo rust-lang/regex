@@ -87,7 +87,7 @@ fn main() {
 
 This example outputs:
 
-```
+```text
 year: 2010, month: 03, day: 14
 year: 2014, month: 10, day: 14
 ```
@@ -107,7 +107,7 @@ regular expressions are compiled exactly once.
 
 For example:
 
-```rust
+```rust,ignore
 use regex::Regex;
 
 fn some_helper_function(text: &str) -> bool {
