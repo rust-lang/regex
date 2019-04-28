@@ -43,6 +43,8 @@ lazy_static = "1"
 quickcheck = { version = "0.7", default-features = false }
 # For generating random test data.
 rand = "0.6.5"
+# To check README's example
+doc-comment = "0.3"
 
 [features]
 default = ["use_std"]

@@ -532,6 +532,11 @@ extern crate thread_local;
 extern crate quickcheck;
 extern crate regex_syntax as syntax;
 extern crate utf8_ranges;
+#[cfg(test)]
+extern crate doc_comment;
+
+#[cfg(test)]
+doc_comment::doctest!("../README.md");
 
 #[cfg(feature = "use_std")]
 pub use error::Error;
