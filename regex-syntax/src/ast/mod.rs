@@ -153,6 +153,9 @@ pub enum ErrorKind {
     /// The range provided in a counted repetition operator is invalid. The
     /// range is invalid if the start is greater than the end.
     RepetitionCountInvalid,
+    /// An opening `{` was not followed by a valid decimal value.
+    /// For example, `x{}` or `x{]}` would fail.
+    RepetitionQuantifierDecimalMissing,
     /// An opening `{` was found with no corresponding closing `}`.
     RepetitionCountUnclosed,
     /// A repetition operator was applied to a missing sub-expression. This
@@ -306,6 +309,9 @@ impl fmt::Display for ErrorKind {
             RepetitionCountInvalid => {
                 write!(f, "invalid repetition count range, \
                            the start must be <= the end")
+            }
+            RepetitionQuantifierDecimalMissing => {
+                write!(f, "Repetition quantifier expects a valid decimal")
             }
             RepetitionCountUnclosed => {
                 write!(f, "unclosed counted repetition")
