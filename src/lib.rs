@@ -518,6 +518,7 @@ another matching engine with fixed memory requirements.
 */
 
 #![deny(missing_docs)]
+#![allow(ellipsis_inclusive_range_patterns)]
 #![cfg_attr(test, deny(warnings))]
 #![cfg_attr(feature = "pattern", feature(pattern))]
 
