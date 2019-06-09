@@ -104,6 +104,7 @@ done automatically in the `regex` crate.
 */
 
 #![deny(missing_docs)]
+#![allow(ellipsis_inclusive_range_patterns)]
 
 extern crate ucd_util;
 

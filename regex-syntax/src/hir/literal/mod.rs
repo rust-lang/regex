@@ -684,7 +684,7 @@ fn suffixes(expr: &Hir, lits: &mut Literals) {
         HirKind::Literal(hir::Literal::Unicode(c)) => {
             let mut buf = [0u8; 4];
             let i = c.encode_utf8(&mut buf).len();
-            let mut buf = &mut buf[..i];
+            let buf = &mut buf[..i];
             buf.reverse();
             lits.cross_add(buf);
         }
