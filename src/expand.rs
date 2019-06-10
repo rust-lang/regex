@@ -213,8 +213,8 @@ mod tests {
     find!(find_cap_ref11, "$");
     find!(find_cap_ref12, " ");
     find!(find_cap_ref13, "");
-    find!(find_cap_ref16, "$x-$y", c!("x",2));
-    find!(find_cap_ref17, "$x_$y", c!("x_",3));
     find!(find_cap_ref14, "$1-$2", c!(1,2));
     find!(find_cap_ref15, "$1_$2", c!("1_",3));
+    find!(find_cap_ref16, "$x-$y", c!("x",2));
+    find!(find_cap_ref17, "$x_$y", c!("x_",3));
 }
