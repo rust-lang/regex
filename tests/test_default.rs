@@ -67,6 +67,7 @@ mod suffix_reverse;
 mod unicode;
 mod word_boundary;
 mod word_boundary_unicode;
+mod error_messages;
 
 #[test]
 fn disallow_non_utf8() {
