@@ -95,7 +95,10 @@ pub enum ErrorKind {
     ClassRangeLiteral,
     /// An opening `[` was found with no corresponding closing `]`.
     ClassUnclosed,
-    /// An empty decimal number was given where one was expected.
+    /// Note that this error variant is no longer used. Namely, a decimal
+    /// number can only appear as a repetition quantifier. When the number
+    /// in a repetition quantifier is empty, then it gets its own specialized
+    /// error, `RepetitionCountDecimalEmpty`.
     DecimalEmpty,
     /// An invalid decimal number was given where one was expected.
     DecimalInvalid,
@@ -153,6 +156,9 @@ pub enum ErrorKind {
     /// The range provided in a counted repetition operator is invalid. The
     /// range is invalid if the start is greater than the end.
     RepetitionCountInvalid,
+    /// An opening `{` was not followed by a valid decimal value.
+    /// For example, `x{}` or `x{]}` would fail.
+    RepetitionCountDecimalEmpty,
     /// An opening `{` was found with no corresponding closing `}`.
     RepetitionCountUnclosed,
     /// A repetition operator was applied to a missing sub-expression. This
@@ -306,6 +312,9 @@ impl fmt::Display for ErrorKind {
             RepetitionCountInvalid => {
                 write!(f, "invalid repetition count range, \
                            the start must be <= the end")
+            }
+            RepetitionCountDecimalEmpty => {
+                write!(f, "repetition quantifier expects a valid decimal")
             }
             RepetitionCountUnclosed => {
                 write!(f, "unclosed counted repetition")
