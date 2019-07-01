@@ -58,12 +58,14 @@ impl AVX2VectorBuilder {
 #[derive(Clone, Copy)]
 #[allow(non_camel_case_types)]
 #[repr(transparent)]
-pub struct u8x32(__m256i);
+pub struct u8x32 {
+    vector: __m256i
+}
 
 impl u8x32 {
     #[inline]
     unsafe fn splat(n: u8) -> u8x32 {
-        u8x32(_mm256_set1_epi8(n as i8))
+        u8x32 { vector: _mm256_set1_epi8(n as i8) }
     }
 
     #[inline]
@@ -75,7 +77,7 @@ impl u8x32 {
     #[inline]
     unsafe fn load_unchecked_unaligned(slice: &[u8]) -> u8x32 {
         let p = slice.as_ptr() as *const u8 as *const __m256i;
-        u8x32(_mm256_loadu_si256(p))
+        u8x32 { vector: _mm256_loadu_si256(p) }
     }
 
     #[inline]
@@ -88,14 +90,14 @@ impl u8x32 {
     #[inline]
     unsafe fn load_unchecked(slice: &[u8]) -> u8x32 {
         let p = slice.as_ptr() as *const u8 as *const __m256i;
-        u8x32(_mm256_load_si256(p))
+        u8x32 { vector: _mm256_load_si256(p) }
     }
 
     #[inline]
     pub fn shuffle(self, indices: u8x32) -> u8x32 {
         // Safe because we know AVX2 is enabled.
         unsafe {
-            u8x32(_mm256_shuffle_epi8(self.0, indices.0))
+            u8x32 { vector: _mm256_shuffle_epi8(self.vector, indices.vector) }
         }
     }
 
@@ -103,9 +105,9 @@ impl u8x32 {
     pub fn ne(self, other: u8x32) -> u8x32 {
         // Safe because we know AVX2 is enabled.
         unsafe {
-            let boolv = _mm256_cmpeq_epi8(self.0, other.0);
+            let boolv = _mm256_cmpeq_epi8(self.vector, other.vector);
             let ones = _mm256_set1_epi8(0xFF as u8 as i8);
-            u8x32(_mm256_andnot_si256(boolv, ones))
+            u8x32 { vector: _mm256_andnot_si256(boolv, ones) }
         }
     }
 
@@ -113,7 +115,7 @@ impl u8x32 {
     pub fn and(self, other: u8x32) -> u8x32 {
         // Safe because we know AVX2 is enabled.
         unsafe {
-            u8x32(_mm256_and_si256(self.0, other.0))
+            u8x32 { vector: _mm256_and_si256(self.vector, other.vector) }
         }
     }
 
@@ -121,7 +123,7 @@ impl u8x32 {
     pub fn movemask(self) -> u32 {
         // Safe because we know AVX2 is enabled.
         unsafe {
-            _mm256_movemask_epi8(self.0) as u32
+            _mm256_movemask_epi8(self.vector) as u32
         }
     }
 
@@ -135,9 +137,9 @@ impl u8x32 {
             // TL;DR avx2's PALIGNR instruction is actually just two 128-bit
             // PALIGNR instructions, which is not what we want, so we need to
             // do some extra shuffling.
-            let v = _mm256_permute2x128_si256(other.0, self.0, 0x21);
-            let v = _mm256_alignr_epi8(self.0, v, 14);
-            u8x32(v)
+            let v = _mm256_permute2x128_si256(other.vector, self.vector, 0x21);
+            let v = _mm256_alignr_epi8(self.vector, v, 14);
+            u8x32 { vector: v }
         }
     }
 
@@ -151,9 +153,9 @@ impl u8x32 {
             // TL;DR avx2's PALIGNR instruction is actually just two 128-bit
             // PALIGNR instructions, which is not what we want, so we need to
             // do some extra shuffling.
-            let v = _mm256_permute2x128_si256(other.0, self.0, 0x21);
-            let v = _mm256_alignr_epi8(self.0, v, 15);
-            u8x32(v)
+            let v = _mm256_permute2x128_si256(other.vector, self.vector, 0x21);
+            let v = _mm256_alignr_epi8(self.vector, v, 15);
+            u8x32 { vector: v }
         }
     }
 
@@ -161,7 +163,7 @@ impl u8x32 {
     pub fn bit_shift_right_4(self) -> u8x32 {
         // Safe because we know AVX2 is enabled.
         unsafe {
-            u8x32(_mm256_srli_epi16(self.0, 4))
+            u8x32 { vector: _mm256_srli_epi16(self.vector, 4) }
         }
     }
 
@@ -174,7 +176,7 @@ impl u8x32 {
     #[inline]
     pub fn replace_bytes(&mut self, value: [u8; 32]) {
         // Safe because __m256i and [u8; 32] are layout compatible
-        self.0 = unsafe { mem::transmute(value) };
+        self.vector = unsafe { mem::transmute(value) };
     }
 }
 
