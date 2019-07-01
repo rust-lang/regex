@@ -596,6 +596,7 @@ impl Teddy {
         res: u8x16,
         mut bitfield: u32,
     ) -> Option<Match> {
+        let patterns = res.bytes();
         while bitfield != 0 {
             // The next offset, relative to pos, where some fingerprint
             // matched.
@@ -607,7 +608,7 @@ impl Teddy {
 
             // The bitfield telling us which patterns had fingerprints that
             // match at this starting position.
-            let mut patterns = res.extract(byte_pos);
+            let mut patterns = patterns[byte_pos];
             while patterns != 0 {
                 let bucket = patterns.trailing_zeros() as usize;
                 patterns &= !(1 << bucket);
@@ -772,10 +773,17 @@ impl Mask {
         let byte_lo = (byte & 0xF) as usize;
         let byte_hi = (byte >> 4) as usize;
 
-        let lo = self.lo.extract(byte_lo);
-        self.lo.replace(byte_lo, ((1 << bucket) as u8) | lo);
-
-        let hi = self.hi.extract(byte_hi);
-        self.hi.replace(byte_hi, ((1 << bucket) as u8) | hi);
+        {
+            let mut lo_bytes = self.lo.bytes();
+            let lo = lo_bytes[byte_lo];
+            lo_bytes[byte_lo] = ((1 << bucket) as u8) | lo;
+            self.lo.replace_bytes(lo_bytes);
+        }
+        {
+            let mut hi_bytes = self.hi.bytes();
+            let hi = hi_bytes[byte_hi];
+            hi_bytes[byte_hi] = ((1 << bucket) as u8) | hi;
+            self.hi.replace_bytes(hi_bytes);
+        }
     }
 }
