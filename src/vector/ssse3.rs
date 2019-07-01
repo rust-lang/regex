@@ -2,6 +2,7 @@
 
 use std::arch::x86_64::*;
 use std::fmt;
+use std::mem;
 
 /// A builder for SSSE3 empowered vectors.
 ///
@@ -77,15 +78,13 @@ impl SSSE3VectorBuilder {
 /// inlined, otherwise you probably have a performance bug.
 #[derive(Clone, Copy)]
 #[allow(non_camel_case_types)]
-pub union u8x16 {
-    vector: __m128i,
-    bytes: [u8; 16],
-}
+#[repr(transparent)]
+pub struct u8x16(__m128i);
 
 impl u8x16 {
     #[inline]
     unsafe fn splat(n: u8) -> u8x16 {
-        u8x16 { vector: _mm_set1_epi8(n as i8) }
+        u8x16(_mm_set1_epi8(n as i8))
     }
 
     #[inline]
@@ -97,7 +96,7 @@ impl u8x16 {
     #[inline]
     unsafe fn load_unchecked_unaligned(slice: &[u8]) -> u8x16 {
         let v = _mm_loadu_si128(slice.as_ptr() as *const u8 as *const __m128i);
-        u8x16 { vector: v }
+        u8x16(v)
     }
 
     #[inline]
@@ -110,26 +109,14 @@ impl u8x16 {
     #[inline]
     unsafe fn load_unchecked(slice: &[u8]) -> u8x16 {
         let v = _mm_load_si128(slice.as_ptr() as *const u8 as *const __m128i);
-        u8x16 { vector: v }
-    }
-
-    #[inline]
-    pub fn extract(self, i: usize) -> u8 {
-        // Safe because `bytes` is always accessible.
-        unsafe { self.bytes[i] }
-    }
-
-    #[inline]
-    pub fn replace(&mut self, i: usize, byte: u8) {
-        // Safe because `bytes` is always accessible.
-        unsafe { self.bytes[i] = byte; }
+        u8x16(v)
     }
 
     #[inline]
     pub fn shuffle(self, indices: u8x16) -> u8x16 {
         // Safe because we know SSSE3 is enabled.
         unsafe {
-            u8x16 { vector: _mm_shuffle_epi8(self.vector, indices.vector) }
+            u8x16(_mm_shuffle_epi8(self.0, indices.0))
         }
     }
 
@@ -137,9 +124,9 @@ impl u8x16 {
     pub fn ne(self, other: u8x16) -> u8x16 {
         // Safe because we know SSSE3 is enabled.
         unsafe {
-            let boolv = _mm_cmpeq_epi8(self.vector, other.vector);
+            let boolv = _mm_cmpeq_epi8(self.0, other.0);
             let ones = _mm_set1_epi8(0xFF as u8 as i8);
-            u8x16 { vector: _mm_andnot_si128(boolv, ones) }
+            u8x16(_mm_andnot_si128(boolv, ones))
         }
     }
 
@@ -147,7 +134,7 @@ impl u8x16 {
     pub fn and(self, other: u8x16) -> u8x16 {
         // Safe because we know SSSE3 is enabled.
         unsafe {
-            u8x16 { vector: _mm_and_si128(self.vector, other.vector) }
+            u8x16(_mm_and_si128(self.0, other.0))
         }
     }
 
@@ -155,7 +142,7 @@ impl u8x16 {
     pub fn movemask(self) -> u32 {
         // Safe because we know SSSE3 is enabled.
         unsafe {
-            _mm_movemask_epi8(self.vector) as u32
+            _mm_movemask_epi8(self.0) as u32
         }
     }
 
@@ -163,7 +150,7 @@ impl u8x16 {
     pub fn alignr_14(self, other: u8x16) -> u8x16 {
         // Safe because we know SSSE3 is enabled.
         unsafe {
-            u8x16 { vector: _mm_alignr_epi8(self.vector, other.vector, 14) }
+            u8x16(_mm_alignr_epi8(self.0, other.0, 14))
         }
     }
 
@@ -171,7 +158,7 @@ impl u8x16 {
     pub fn alignr_15(self, other: u8x16) -> u8x16 {
         // Safe because we know SSSE3 is enabled.
         unsafe {
-            u8x16 { vector: _mm_alignr_epi8(self.vector, other.vector, 15) }
+            u8x16(_mm_alignr_epi8(self.0, other.0, 15))
         }
     }
 
@@ -179,14 +166,25 @@ impl u8x16 {
     pub fn bit_shift_right_4(self) -> u8x16 {
         // Safe because we know SSSE3 is enabled.
         unsafe {
-            u8x16 { vector: _mm_srli_epi16(self.vector, 4) }
+            u8x16(_mm_srli_epi16(self.0, 4))
         }
+    }
+
+    #[inline]
+    pub fn bytes(self) -> [u8; 16] {
+        // Safe because __m128i and [u8; 16] are layout compatible
+        unsafe { mem::transmute(self) }
+    }
+
+    #[inline]
+    pub fn replace_bytes(&mut self, value: [u8; 16]) {
+        // Safe because __m128i and [u8; 16] are layout compatible
+        self.0 = unsafe { mem::transmute(value) };
     }
 }
 
 impl fmt::Debug for u8x16 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        // Safe because `bytes` is always accessible.
-        unsafe { self.bytes.fmt(f) }
+        self.bytes().fmt(f)
     }
 }
