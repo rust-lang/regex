@@ -22,6 +22,7 @@ regex = { version = "1", path = ".." }
 regex-syntax = { version = "0.6", path = "../regex-syntax" }
 serde = "1"
 serde_derive = "1"
+cfg-if = "0.1"
 
 [build-dependencies]
 cc = "1"

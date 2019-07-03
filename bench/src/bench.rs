@@ -13,42 +13,44 @@
 
 #[macro_use]
 extern crate lazy_static;
+#[macro_use]
+extern crate cfg_if;
+
 #[cfg(not(any(feature = "re-rust", feature = "re-rust-bytes")))]
 extern crate libc;
-#[cfg(feature = "re-pcre1")]
-extern crate libpcre_sys;
-#[cfg(feature = "re-onig")]
-extern crate onig;
-#[cfg(any(
-    feature = "re-rust",
-    feature = "re-rust-bytes",
-  ))]
-extern crate regex;
-#[cfg(feature = "re-rust")]
+
 extern crate regex_syntax;
 extern crate test;
 
-#[cfg(feature = "re-onig")]
-pub use ffi::onig::Regex;
-#[cfg(feature = "re-pcre1")]
-pub use ffi::pcre1::Regex;
-#[cfg(feature = "re-pcre2")]
-pub use ffi::pcre2::Regex;
-#[cfg(any(
-    feature = "re-stdcpp",
-    feature = "re-boost",
-  ))]
-pub use ffi::stdcpp::Regex;
-#[cfg(feature = "re-re2")]
-pub use ffi::re2::Regex;
-#[cfg(feature = "re-dphobos")]
-pub use ffi::d_phobos::Regex;
-#[cfg(feature = "re-rust")]
-pub use regex::{Regex, RegexSet};
-#[cfg(feature = "re-rust-bytes")]
-pub use regex::bytes::{Regex, RegexSet};
-#[cfg(feature = "re-tcl")]
-pub use ffi::tcl::Regex;
+cfg_if! {
+    if #[cfg(feature = "re-pcre1")] {
+        extern crate libpcre_sys;
+        pub use ffi::pcre1::Regex;
+    } else if #[cfg(feature = "re-onig")] {
+        extern crate onig;
+        pub use ffi::onig::Regex;
+    } else if #[cfg(any(feature = "re-rust"))] {
+        extern crate regex;
+        pub use regex::{Regex, RegexSet};
+    } else if #[cfg(feature = "re-rust-bytes")] {
+        extern crate regex;
+        pub use regex::bytes::{Regex, RegexSet};
+    } else if #[cfg(feature = "re-re2")] {
+        pub use ffi::re2::Regex;
+    } else if #[cfg(feature = "re-dphobos")] {
+        pub use ffi::d_phobos::Regex;
+    } else if #[cfg(feature = "re-pcre2")] {
+        pub use ffi::pcre2::Regex;
+    } else if #[cfg(any(feature = "re-stdcpp", feature = "re-boost"))] {
+        pub use ffi::stdcpp::Regex;
+    } else if #[cfg(feature = "re-tcl")] {
+        pub use ffi::tcl::Regex;
+    } else {
+        compile_error!(
+            "To run the benchmarks, see `./run -h` or the HACKING.md document"
+        );
+    }
+}
 
 // Usage: regex!(pattern)
 //
@@ -61,65 +63,43 @@ macro_rules! regex {
     ($re:expr) => { ::Regex::new(&$re.to_owned()).unwrap() }
 }
 
-// Usage: text!(haystack)
-//
-// Builds a ::Text from an owned string.
-//
-// This macro is called on every input searched in every benchmark. It is
-// called exactly once per benchmark and its time is not included in the
-// benchmark timing.
-//
-// The text given to the macro is always a String, which is guaranteed to be
-// valid UTF-8.
-//
-// The return type should be an owned value that can deref to whatever the
-// regex accepts in its `is_match` and `find_iter` methods.
-#[cfg(feature = "re-tcl")]
-macro_rules! text {
-    ($text:expr) => {{
-        use ffi::tcl::Text;
-        Text::new($text)
-    }}
+cfg_if! {
+    if #[cfg(feature = "re-tcl")] {
+        // Usage: text!(haystack)
+        //
+        // Builds a ::Text from an owned string.
+        //
+        // This macro is called on every input searched in every benchmark. It is
+        // called exactly once per benchmark and its time is not included in the
+        // benchmark timing.
+        //
+        // The text given to the macro is always a String, which is guaranteed to be
+        // valid UTF-8.
+        //
+        // The return type should be an owned value that can deref to whatever the
+        // regex accepts in its `is_match` and `find_iter` methods.
+        macro_rules! text {
+            ($text:expr) => {{
+                use ffi::tcl::Text;
+                Text::new($text)
+            }}
+        }
+        type Text = ffi::tcl::Text;
+    } else if #[cfg(feature = "re-rust-bytes")] {
+        macro_rules! text {
+            ($text:expr) => {{
+                let text: String = $text;
+                text.into_bytes()
+            }}
+        }
+        type Text = Vec<u8>;
+    } else {
+        macro_rules! text {
+            ($text:expr) => { $text }
+        }
+        type Text = String;
+    }
 }
-
-#[cfg(feature = "re-rust-bytes")]
-macro_rules! text {
-    ($text:expr) => {{
-        let text: String = $text;
-        text.into_bytes()
-    }}
-}
-
-#[cfg(any(
-    feature = "re-onig",
-    feature = "re-pcre1",
-    feature = "re-pcre2",
-    feature = "re-stdcpp",
-    feature = "re-boost",
-    feature = "re-re2",
-    feature = "re-dphobos",
-    feature = "re-rust",
-  ))]
-macro_rules! text {
-    ($text:expr) => { $text }
-}
-
-// The type of the value yielded by the `text!` macro defined above.
-#[cfg(feature = "re-tcl")]
-type Text = ffi::tcl::Text;
-#[cfg(feature = "re-rust-bytes")]
-type Text = Vec<u8>;
-#[cfg(any(
-    feature = "re-onig",
-    feature = "re-pcre1",
-    feature = "re-pcre2",
-    feature = "re-stdcpp",
-    feature = "re-boost",
-    feature = "re-re2",
-    feature = "re-dphobos",
-    feature = "re-rust",
-  ))]
-type Text = String;
 
 // Macros for writing benchmarks easily. We provide macros for benchmarking
 // matches, non-matches and for finding all successive non-overlapping matches
@@ -297,7 +277,7 @@ macro_rules! bench_is_match_set {
         }
     }
 }
-
+ 
 // USAGE: bench_matches_set!(name, is_match, regex, haystack)
 macro_rules! bench_matches_set {
     ($name:ident, $is_match:expr, $re:expr, $haystack:expr) => {
@@ -324,7 +304,22 @@ macro_rules! bench_matches_set {
     }
 }
 
-mod ffi;
-mod misc;
-mod regexdna;
-mod sherlock;
+cfg_if! {
+    if #[cfg(any(
+        feature = "re-pcre1",
+        feature = "re-onig",
+        feature = "re-rust",
+        feature = "re-rust-bytes",
+        feature = "re-re2",
+        feature = "re-dphobos",
+        feature = "re-pcre2",
+        feature = "re-stdcpp",
+        feature = "re-boost",
+        feature = "re-tcl"
+    ))] {
+        mod ffi;
+        mod misc;
+        mod regexdna;
+        mod sherlock;
+    }
+}
