@@ -133,7 +133,9 @@ ismatch!(
     true);
 
 // Tests that our Aho-Corasick optimization works correctly. It only
-// kicks in when we have >32 literals.
+// kicks in when we have >32 literals. By "works correctly," we mean that
+// leftmost-first match semantics are properly respected. That is, samwise
+// should match, not sam.
 mat!(
     ahocorasick1,
     "samwise|sam|a|b|c|d|e|f|g|h|i|j|k|l|m|n|o|p|q|r|s|t|u|v|w|x|y|z|\

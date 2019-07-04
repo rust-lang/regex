@@ -323,9 +323,7 @@ impl ExecBuilder {
                      .reverse(true)
                      .compile(&parsed.exprs)?;
 
-        let prefixes = parsed.prefixes.unambiguous_prefixes();
-        let suffixes = parsed.suffixes.unambiguous_suffixes();
-        nfa.prefixes = LiteralSearcher::prefixes(prefixes);
+        nfa.prefixes = LiteralSearcher::prefixes(parsed.prefixes);
         dfa.prefixes = nfa.prefixes.clone();
         dfa.dfa_size_limit = self.options.dfa_size_limit;
         dfa_reverse.dfa_size_limit = self.options.dfa_size_limit;
@@ -354,7 +352,7 @@ impl ExecBuilder {
             nfa: nfa,
             dfa: dfa,
             dfa_reverse: dfa_reverse,
-            suffixes: LiteralSearcher::suffixes(suffixes),
+            suffixes: LiteralSearcher::suffixes(parsed.suffixes),
             ac: ac,
             match_type: MatchType::Nothing,
         };
@@ -1286,7 +1284,7 @@ impl ExecReadOnly {
 #[derive(Clone, Copy, Debug)]
 enum MatchType {
     /// A single or multiple literal search. This is only used when the regex
-    /// can be decomposed into unambiguous literal search.
+    /// can be decomposed into a literal search.
     Literal(MatchLiteralType),
     /// A normal DFA search.
     Dfa,

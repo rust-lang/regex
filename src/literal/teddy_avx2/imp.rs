@@ -9,7 +9,7 @@ basically the same as the SSSE3 version, but using 256-bit vectors instead of
 
 use std::cmp;
 
-use aho_corasick::{AhoCorasick, AhoCorasickBuilder};
+use aho_corasick::{self, AhoCorasick, AhoCorasickBuilder};
 use syntax::hir::literal::Literals;
 
 use vector::avx2::{AVX2VectorBuilder, u8x32};
@@ -89,6 +89,7 @@ impl Teddy {
             masks.add(bucket as u8, pat);
         }
         let ac = AhoCorasickBuilder::new()
+            .match_kind(aho_corasick::MatchKind::LeftmostFirst)
             .dfa(true)
             .prefilter(false)
             .build(&pats);
