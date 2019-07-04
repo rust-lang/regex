@@ -1,3 +1,23 @@
+1.1.8 (2019-07-04)
+==================
+This release contains a few small internal refactorings. One of which fixes
+an instance of undefined behavior in a part of the SIMD code.
+
+Bug fixes:
+
+* [BUG #545](https://github.com/rust-lang/regex/pull/545):
+  Improves error messages when a repetition operator is used without a number.
+* [BUG #588](https://github.com/rust-lang/regex/pull/588):
+  Removes use of a repr(Rust) union used for type punning in the Teddy matcher.
+* [BUG #591](https://github.com/rust-lang/regex/pull/591):
+  Update docs for running benchmarks and improve failure modes.
+
+
+1.1.7 (2019-06-09)
+==================
+This release fixes up a few warnings as a result of recent deprecations.
+
+
 1.1.6 (2019-04-16)
 ==================
 This release fixes a regression introduced by a bug fix (for
