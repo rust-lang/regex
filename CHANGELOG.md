@@ -1,3 +1,12 @@
+1.1.9 (2019-07-06)
+==================
+This release contains a bug fix that caused regex's tests to fail, due to a
+dependency on an unreleased behavior in regex-syntax.
+
+* [BUG #593](https://github.com/rust-lang/regex/issues/593):
+  Move an integration-style test on error messages into regex-syntax.
+
+
 1.1.8 (2019-07-04)
 ==================
 This release contains a few small internal refactorings. One of which fixes
@@ -5,11 +14,11 @@ an instance of undefined behavior in a part of the SIMD code.
 
 Bug fixes:
 
-* [BUG #545](https://github.com/rust-lang/regex/pull/545):
+* [BUG #545](https://github.com/rust-lang/regex/issues/545):
   Improves error messages when a repetition operator is used without a number.
-* [BUG #588](https://github.com/rust-lang/regex/pull/588):
+* [BUG #588](https://github.com/rust-lang/regex/issues/588):
   Removes use of a repr(Rust) union used for type punning in the Teddy matcher.
-* [BUG #591](https://github.com/rust-lang/regex/pull/591):
+* [BUG #591](https://github.com/rust-lang/regex/issues/591):
   Update docs for running benchmarks and improve failure modes.
 
 
