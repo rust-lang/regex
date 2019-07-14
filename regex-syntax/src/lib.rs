@@ -26,7 +26,7 @@ This crate defines two primary types:
   syntax and the low level compiled opcodes that are eventually responsible for
   executing a regular expression search. Given some high-level IR, it is not
   possible to produce the original concrete syntax (although it is possible to
-  produce an equivalent conrete syntax, but it will likely scarcely resemble
+  produce an equivalent concrete syntax, but it will likely scarcely resemble
   the original pattern). To a first approximation, the high-level IR is simple
   and easy to analyze.
 
