@@ -1,3 +1,10 @@
+1.2.0 (2019-07-20)
+==================
+This release updates regex's minimum supported Rust version to 1.28, which was
+release almost 1 year ago. This release also updates regex's Unicode data
+tables to 12.1.0.
+
+
 1.1.9 (2019-07-06)
 ==================
 This release contains a bug fix that caused regex's tests to fail, due to a
