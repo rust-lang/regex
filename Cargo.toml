@@ -28,11 +28,11 @@ members = [
 # For very fast prefix literal matching.
 aho-corasick = "0.7.4"
 # For skipping along search text quickly when a leading byte is known.
-memchr = "2.0.2"
+memchr = "2.2.1"
 # For managing regex caches quickly across multiple threads.
 thread_local = "0.3.6"
 # For parsing regular expressions.
-regex-syntax = { path = "regex-syntax", version = "0.6.6" }
+regex-syntax = { path = "regex-syntax", version = "0.6.9" }
 # For compiling UTF-8 decoding into automata.
 utf8-ranges = "1.0.1"
 
