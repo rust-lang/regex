@@ -518,7 +518,6 @@ another matching engine with fixed memory requirements.
 */
 
 #![deny(missing_docs)]
-#![allow(unknown_lints, ellipsis_inclusive_range_patterns)]
 #![cfg_attr(test, deny(warnings))]
 #![cfg_attr(feature = "pattern", feature(pattern))]
 
@@ -672,7 +671,6 @@ mod re_set;
 mod re_trait;
 mod re_unicode;
 mod sparse;
-#[cfg(any(regex_runtime_teddy_ssse3, regex_runtime_teddy_avx2))]
 mod vector;
 
 /// The `internal` module exists to support suspicious activity, such as

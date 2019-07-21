@@ -11,7 +11,7 @@ by [RE2](https://github.com/google/re2).
 [![Build status](https://ci.appveyor.com/api/projects/status/github/rust-lang/regex?svg=true)](https://ci.appveyor.com/project/rust-lang-libs/regex)
 [![Coverage Status](https://coveralls.io/repos/github/rust-lang/regex/badge.svg?branch=master)](https://coveralls.io/github/rust-lang/regex?branch=master)
 [![](https://meritbadge.herokuapp.com/regex)](https://crates.io/crates/regex)
-[![Rust](https://img.shields.io/badge/rust-1.24.1%2B-blue.svg?maxAge=3600)](https://github.com/rust-lang/regex)
+[![Rust](https://img.shields.io/badge/rust-1.28.0%2B-blue.svg?maxAge=3600)](https://github.com/rust-lang/regex)
 
 ### Documentation
 
@@ -203,7 +203,7 @@ recommended for general use.
 
 ### Minimum Rust version policy
 
-This crate's minimum supported `rustc` version is `1.24.1`.
+This crate's minimum supported `rustc` version is `1.28.1`.
 
 The current **tentative** policy is that the minimum Rust version required
 to use this crate can be increased in minor version updates. For example, if

@@ -1457,7 +1457,7 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
         let c = self.char();
         // Put some of the more complicated routines into helpers.
         match c {
-            '0'...'7' => {
+            '0'..='7' => {
                 if !self.parser().octal {
                     return Err(self.error(
                         Span::new(start, self.span_char().end),
@@ -1468,7 +1468,7 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
                 lit.span.start = start;
                 return Ok(Primitive::Literal(lit));
             }
-            '8'...'9' if !self.parser().octal => {
+            '8'..='9' if !self.parser().octal => {
                 return Err(self.error(
                     Span::new(start, self.span_char().end),
                     ast::ErrorKind::UnsupportedBackreference,

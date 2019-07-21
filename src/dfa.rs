@@ -1762,7 +1762,7 @@ impl Byte {
             Some(b) => b,
         };
         match b {
-            b'A'...b'Z' | b'a'...b'z' | b'0'...b'9' | b'_' => true,
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'_' => true,
             _ => false,
         }
     }

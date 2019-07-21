@@ -3,7 +3,7 @@
 # This is the main CI script for testing the regex crate and its sub-crates.
 
 set -ex
-MSRV="1.24.1"
+MSRV="1.28.0"
 
 # Builds the regex crate and runs tests.
 cargo build --verbose

@@ -56,7 +56,7 @@ pub fn decode_utf8(src: &[u8]) -> Option<(char, usize)> {
         Some(&b) => b,
     };
     match b0 {
-        0b110_00000 ... 0b110_11111 => {
+        0b110_00000 ..= 0b110_11111 => {
             if src.len() < 2 {
                 return None;
             }
@@ -67,11 +67,11 @@ pub fn decode_utf8(src: &[u8]) -> Option<(char, usize)> {
             let cp = ((b0 & !TAG_TWO) as u32) << 6
                      | ((b1 & !TAG_CONT) as u32);
             match cp {
-                0x80 ... 0x7FF => char::from_u32(cp).map(|cp| (cp, 2)),
+                0x80 ..= 0x7FF => char::from_u32(cp).map(|cp| (cp, 2)),
                 _ => None,
             }
         }
-        0b1110_0000 ... 0b1110_1111 => {
+        0b1110_0000 ..= 0b1110_1111 => {
             if src.len() < 3 {
                 return None;
             }
@@ -87,11 +87,11 @@ pub fn decode_utf8(src: &[u8]) -> Option<(char, usize)> {
                      | ((b2 & !TAG_CONT) as u32);
             match cp {
                 // char::from_u32 will disallow surrogate codepoints.
-                0x800 ... 0xFFFF => char::from_u32(cp).map(|cp| (cp, 3)),
+                0x800 ..= 0xFFFF => char::from_u32(cp).map(|cp| (cp, 3)),
                 _ => None,
             }
         }
-        0b11110_000 ... 0b11110_111 => {
+        0b11110_000 ..= 0b11110_111 => {
             if src.len() < 4 {
                 return None;
             }
@@ -110,7 +110,7 @@ pub fn decode_utf8(src: &[u8]) -> Option<(char, usize)> {
                      | ((b2 & !TAG_CONT) as u32) << 6
                      | ((b3 & !TAG_CONT) as u32);
             match cp {
-                0x10000 ... 0x10FFFF => char::from_u32(cp).map(|cp| (cp, 4)),
+                0x10000 ..= 0x10FFFF => char::from_u32(cp).map(|cp| (cp, 4)),
                 _ => None,
             }
         }
