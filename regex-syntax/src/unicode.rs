@@ -1,8 +1,6 @@
 use std::cmp::Ordering;
 use std::result;
 
-use ucd_util::{self, PropertyValues};
-
 use hir;
 use unicode_tables::age;
 use unicode_tables::case_folding_simple::CASE_FOLDING_SIMPLE;
@@ -122,8 +120,8 @@ impl<'a> ClassQuery<'a> {
             ClassQuery::OneLetter(c) => self.canonical_binary(&c.to_string()),
             ClassQuery::Binary(name) => self.canonical_binary(name),
             ClassQuery::ByValue { property_name, property_value } => {
-                let property_name = normalize(property_name);
-                let property_value = normalize(property_value);
+                let property_name = symbolic_name_normalize(property_name);
+                let property_value = symbolic_name_normalize(property_value);
 
                 let canon_name = match canonical_prop(&property_name) {
                     None => return Err(Error::PropertyNotFound),
@@ -167,7 +165,7 @@ impl<'a> ClassQuery<'a> {
     }
 
     fn canonical_binary(&self, name: &str) -> Result<CanonicalClassQuery> {
-        let norm = normalize(name);
+        let norm = symbolic_name_normalize(name);
 
         if let Some(canon) = canonical_prop(&norm) {
             return Ok(CanonicalClassQuery::Binary(canon));
@@ -276,9 +274,12 @@ pub fn hir_class(ranges: &[(char, char)]) -> hir::ClassUnicode {
     hir::ClassUnicode::new(hir_ranges)
 }
 
-fn canonical_prop(normalized_name: &str) -> Option<&'static str> {
-    ucd_util::canonical_property_name(PROPERTY_NAMES, normalized_name)
-}
+/// A mapping of property values for a specific property.
+///
+/// The first element of each tuple is a normalized property value while the
+/// second element of each tuple is the corresponding canonical property
+/// value.
+type PropertyValues = &'static [(&'static str, &'static str)];
 
 fn canonical_gencat(normalized_value: &str) -> Option<&'static str> {
     match normalized_value {
@@ -297,23 +298,45 @@ fn canonical_script(normalized_value: &str) -> Option<&'static str> {
     canonical_value(scripts, normalized_value)
 }
 
+/// Find the canonical property name for the given normalized property name.
+///
+/// If no such property exists, then `None` is returned.
+///
+/// The normalized property name must have been normalized according to
+/// UAX44 LM3, which can be done using `symbolic_name_normalize`.
+fn canonical_prop(normalized_name: &str) -> Option<&'static str> {
+    PROPERTY_NAMES
+        .binary_search_by_key(&normalized_name, |&(n, _)| n)
+        .ok()
+        .map(|i| PROPERTY_NAMES[i].1)
+}
+
+/// Find the canonical property value for the given normalized property
+/// value.
+///
+/// The given property values should correspond to the values for the property
+/// under question, which can be found using `property_values`.
+///
+/// If no such property value exists, then `None` is returned.
+///
+/// The normalized property value must have been normalized according to
+/// UAX44 LM3, which can be done using `symbolic_name_normalize`.
 fn canonical_value(
     vals: PropertyValues,
     normalized_value: &str,
 ) -> Option<&'static str> {
-    ucd_util::canonical_property_value(vals, normalized_value)
-}
-
-fn normalize(x: &str) -> String {
-    let mut x = x.to_string();
-    ucd_util::symbolic_name_normalize(&mut x);
-    x
+    vals.binary_search_by_key(&normalized_value, |&(n, _)| n)
+        .ok()
+        .map(|i| vals[i].1)
 }
 
 fn property_values(
     canonical_property_name: &'static str,
 ) -> Option<PropertyValues> {
-    ucd_util::property_values(PROPERTY_VALUES, canonical_property_name)
+    PROPERTY_VALUES
+        .binary_search_by_key(&canonical_property_name, |&(n, _)| n)
+        .ok()
+        .map(|i| PROPERTY_VALUES[i].1)
 }
 
 fn property_set(
@@ -382,9 +405,80 @@ impl Iterator for AgeIter {
     }
 }
 
+/// Like symbolic_name_normalize_bytes, but operates on a string.
+fn symbolic_name_normalize(x: &str) -> String {
+    let mut tmp = x.as_bytes().to_vec();
+    let len = symbolic_name_normalize_bytes(&mut tmp).len();
+    tmp.truncate(len);
+    // This should always succeed because `symbolic_name_normalize_bytes`
+    // guarantees that `&tmp[..len]` is always valid UTF-8.
+    //
+    // N.B. We could use unsafe here to avoid the additional UTF-8 check here,
+    // but it's unlikely to be worth it. A benchmark must justify it first.
+    String::from_utf8(tmp).unwrap()
+}
+
+/// Normalize the given symbolic name in place according to UAX44-LM3.
+///
+/// A "symbolic name" typically corresponds to property names and property
+/// value aliases. Note, though, that it should not be applied to property
+/// string values.
+///
+/// The slice returned is guaranteed to be valid UTF-8 for all possible values
+/// of `slice`.
+///
+/// See: http://unicode.org/reports/tr44/#UAX44-LM3
+fn symbolic_name_normalize_bytes(slice: &mut [u8]) -> &mut [u8] {
+    // I couldn't find a place in the standard that specified that property
+    // names/aliases had a particular structure (unlike character names), but
+    // we assume that it's ASCII only and drop anything that isn't ASCII.
+    let mut start = 0;
+    let mut starts_with_is = false;
+    if slice.len() >= 2 {
+        // Ignore any "is" prefix.
+        starts_with_is = slice[0..2] == b"is"[..]
+            || slice[0..2] == b"IS"[..]
+            || slice[0..2] == b"iS"[..]
+            || slice[0..2] == b"Is"[..];
+        if starts_with_is {
+            start = 2;
+        }
+    }
+    let mut next_write = 0;
+    for i in start..slice.len() {
+        // SAFETY ARGUMENT: To guarantee that the resulting slice is valid
+        // UTF-8, we ensure that the slice contains only ASCII bytes. In
+        // particular, we drop every non-ASCII byte from the normalized string.
+        let b = slice[i];
+        if b == b' ' || b == b'_' || b == b'-' {
+            continue;
+        } else if b'A' <= b && b <= b'Z' {
+            slice[next_write] = b + (b'a' - b'A');
+            next_write += 1;
+        } else if b <= 0x7F {
+            slice[next_write] = b;
+            next_write += 1;
+        }
+    }
+    // Special case: ISO_Comment has a 'isc' abbreviation. Since we generally
+    // ignore 'is' prefixes, the 'isc' abbreviation gets caught in the cross
+    // fire and ends up creating an alias for 'c' to 'ISO_Comment', but it
+    // is actually an alias for the 'Other' general category.
+    if starts_with_is && next_write == 1 && slice[0] == b'c' {
+        slice[0] = b'i';
+        slice[1] = b's';
+        slice[2] = b'c';
+        next_write = 3;
+    }
+    &mut slice[..next_write]
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{contains_simple_case_mapping, simple_fold};
+    use super::{
+        contains_simple_case_mapping, simple_fold, symbolic_name_normalize,
+        symbolic_name_normalize_bytes,
+    };
 
     #[test]
     fn simple_fold_k() {
@@ -445,5 +539,29 @@ mod tests {
             q.canonicalize().unwrap(),
             CanonicalClassQuery::GeneralCategory("Other")
         );
+    }
+
+    #[test]
+    fn sym_normalize() {
+        let sym_norm = symbolic_name_normalize;
+
+        assert_eq!(sym_norm("Line_Break"), "linebreak");
+        assert_eq!(sym_norm("Line-break"), "linebreak");
+        assert_eq!(sym_norm("linebreak"), "linebreak");
+        assert_eq!(sym_norm("BA"), "ba");
+        assert_eq!(sym_norm("ba"), "ba");
+        assert_eq!(sym_norm("Greek"), "greek");
+        assert_eq!(sym_norm("isGreek"), "greek");
+        assert_eq!(sym_norm("IS_Greek"), "greek");
+        assert_eq!(sym_norm("isc"), "isc");
+        assert_eq!(sym_norm("is c"), "isc");
+        assert_eq!(sym_norm("is_c"), "isc");
+    }
+
+    #[test]
+    fn valid_utf8_symbolic() {
+        let mut x = b"abc\xFFxyz".to_vec();
+        let y = symbolic_name_normalize_bytes(&mut x);
+        assert_eq!(y, b"abcxyz");
     }
 }
