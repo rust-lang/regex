@@ -1,16 +1,11 @@
 use std::cmp;
 use std::mem;
 
-use aho_corasick::{self, AhoCorasick, AhoCorasickBuilder};
+use aho_corasick::{self, packed, AhoCorasick, AhoCorasickBuilder};
 use memchr::{memchr, memchr2, memchr3};
 use syntax::hir::literal::{Literal, Literals};
 
-use self::teddy_avx2::Teddy as TeddyAVX2;
-use self::teddy_ssse3::Teddy as TeddySSSE3;
 use freqs::BYTE_FREQUENCIES;
-
-mod teddy_avx2;
-mod teddy_ssse3;
 
 /// A prefix extracted from a compiled regular expression.
 ///
@@ -37,12 +32,13 @@ enum Matcher {
     BoyerMoore(BoyerMooreSearch),
     /// An Aho-Corasick automaton.
     AC { ac: AhoCorasick<u32>, lits: Vec<Literal> },
-    /// A simd accelerated multiple string matcher. Used only for a small
-    /// number of small literals.
-    TeddySSSE3(TeddySSSE3),
-    /// A simd accelerated multiple string matcher. Used only for a small
-    /// number of small literals. This uses 256-bit vectors.
-    TeddyAVX2(TeddyAVX2),
+    /// A packed multiple substring searcher, using SIMD.
+    ///
+    /// Note that Aho-Corasick will actually use this packed searcher
+    /// internally automatically, however, there is some overhead associated
+    /// with going through the Aho-Corasick machinery. So using the packed
+    /// searcher directly results in some gains.
+    Packed { s: packed::Searcher, lits: Vec<Literal> },
 }
 
 impl LiteralSearcher {
@@ -95,8 +91,9 @@ impl LiteralSearcher {
             AC { ref ac, .. } => {
                 ac.find(haystack).map(|m| (m.start(), m.end()))
             }
-            TeddySSSE3(ref t) => t.find(haystack).map(|m| (m.start, m.end)),
-            TeddyAVX2(ref t) => t.find(haystack).map(|m| (m.start, m.end)),
+            Packed { ref s, .. } => {
+                s.find(haystack).map(|m| (m.start(), m.end()))
+            }
         }
     }
 
@@ -134,12 +131,7 @@ impl LiteralSearcher {
             Matcher::FreqyPacked(ref s) => LiteralIter::Single(&s.pat),
             Matcher::BoyerMoore(ref s) => LiteralIter::Single(&s.pattern),
             Matcher::AC { ref lits, .. } => LiteralIter::AC(lits),
-            Matcher::TeddySSSE3(ref ted) => {
-                LiteralIter::TeddySSSE3(ted.patterns())
-            }
-            Matcher::TeddyAVX2(ref ted) => {
-                LiteralIter::TeddyAVX2(ted.patterns())
-            }
+            Matcher::Packed { ref lits, .. } => LiteralIter::Packed(lits),
         }
     }
 
@@ -167,8 +159,7 @@ impl LiteralSearcher {
             FreqyPacked(_) => 1,
             BoyerMoore(_) => 1,
             AC { ref ac, .. } => ac.pattern_count(),
-            TeddySSSE3(ref ted) => ted.len(),
-            TeddyAVX2(ref ted) => ted.len(),
+            Packed { ref lits, .. } => lits.len(),
         }
     }
 
@@ -181,8 +172,7 @@ impl LiteralSearcher {
             FreqyPacked(ref single) => single.approximate_size(),
             BoyerMoore(ref single) => single.approximate_size(),
             AC { ref ac, .. } => ac.heap_bytes(),
-            TeddySSSE3(ref ted) => ted.approximate_size(),
-            TeddyAVX2(ref ted) => ted.approximate_size(),
+            Packed { ref s, .. } => s.heap_bytes(),
         }
     }
 }
@@ -222,34 +212,17 @@ impl Matcher {
                 return Matcher::FreqyPacked(FreqyPacked::new(lit));
             }
         }
-        let is_aho_corasick_fast = sset.dense.len() == 1 && sset.all_ascii;
-        if TeddyAVX2::available() && !is_aho_corasick_fast {
-            const MAX_TEDDY_LITERALS: usize = 32;
-            if lits.literals().len() <= MAX_TEDDY_LITERALS {
-                if let Some(ted) = TeddyAVX2::new(lits) {
-                    return Matcher::TeddyAVX2(ted);
-                }
-            }
-        }
-        if TeddySSSE3::available() && !is_aho_corasick_fast {
-            // Only try Teddy if Aho-Corasick can't use memchr on an ASCII
-            // byte. Also, in its current form, Teddy doesn't scale well to
-            // lots of literals.
-            //
-            // We impose the ASCII restriction since an alternation of
-            // non-ASCII string literals in the same language is likely to all
-            // start with the same byte. Even worse, the corpus being searched
-            // probably has a similar composition, which ends up completely
-            // negating the benefit of memchr.
-            const MAX_TEDDY_LITERALS: usize = 32;
-            if lits.literals().len() <= MAX_TEDDY_LITERALS {
-                if let Some(ted) = TeddySSSE3::new(lits) {
-                    return Matcher::TeddySSSE3(ted);
-                }
-            }
-            // Fallthrough to ol' reliable Aho-Corasick...
-        }
+
         let pats = lits.literals().to_owned();
+        let is_aho_corasick_fast = sset.dense.len() <= 1 && sset.all_ascii;
+        if lits.literals().len() <= 100 && !is_aho_corasick_fast {
+            let mut builder = packed::Config::new()
+                .match_kind(packed::MatchKind::LeftmostFirst)
+                .builder();
+            if let Some(s) = builder.extend(&pats).build() {
+                return Matcher::Packed { s, lits: pats };
+            }
+        }
         let ac = AhoCorasickBuilder::new()
             .match_kind(aho_corasick::MatchKind::LeftmostFirst)
             .dfa(true)
@@ -264,8 +237,7 @@ pub enum LiteralIter<'a> {
     Bytes(&'a [u8]),
     Single(&'a [u8]),
     AC(&'a [Literal]),
-    TeddySSSE3(&'a [Vec<u8>]),
-    TeddyAVX2(&'a [Vec<u8>]),
+    Packed(&'a [Literal]),
 }
 
 impl<'a> Iterator for LiteralIter<'a> {
@@ -301,16 +273,7 @@ impl<'a> Iterator for LiteralIter<'a> {
                     Some(&**next)
                 }
             }
-            LiteralIter::TeddySSSE3(ref mut lits) => {
-                if lits.is_empty() {
-                    None
-                } else {
-                    let next = &lits[0];
-                    *lits = &lits[1..];
-                    Some(&**next)
-                }
-            }
-            LiteralIter::TeddyAVX2(ref mut lits) => {
+            LiteralIter::Packed(ref mut lits) => {
                 if lits.is_empty() {
                     None
                 } else {
@@ -809,8 +772,9 @@ impl BoyerMooreSearch {
                         if window_end - window_end_snapshot
                             > 16 * mem::size_of::<usize>()
                         {
-                            // Returning a window_end >= backstop will immediatly
-                            // break us out of the inner loop in `find`.
+                            // Returning a window_end >= backstop will
+                            // immediatly break us out of the inner loop in
+                            // `find`.
                             if window_end >= backstop {
                                 return Some(window_end);
                             }
