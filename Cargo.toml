@@ -32,7 +32,7 @@ memchr = "2.2.1"
 # For managing regex caches quickly across multiple threads.
 thread_local = "0.3.6"
 # For parsing regular expressions.
-regex-syntax = { path = "regex-syntax", version = "0.6.9" }
+regex-syntax = { path = "regex-syntax", version = "0.6.11" }
 
 [dev-dependencies]
 # For examples.
