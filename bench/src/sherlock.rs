@@ -1,17 +1,6 @@
-// Copyright 2014 The Rust Project Developers. See the COPYRIGHT
-// file at the top-level directory of this distribution and at
-// http://rust-lang.org/COPYRIGHT.
-//
-// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
-// http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
-// <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
-// option. This file may not be copied, modified, or distributed
-// except according to those terms.
-
 use test::Bencher;
 
 use {Regex, Text};
-
 
 // USAGE: sherlock!(name, pattern, count)
 //
@@ -19,10 +8,12 @@ use {Regex, Text};
 macro_rules! sherlock {
     ($name:ident, $pattern:expr, $count:expr) => {
         bench_find!(
-            $name, $pattern, $count,
+            $name,
+            $pattern,
+            $count,
             include_str!("data/sherlock.txt").to_owned()
         );
-    }
+    };
 }
 
 // These patterns are all single string literals that compile down to a variant
@@ -66,7 +57,8 @@ sherlock!(name_alt3, r"Sherlock|Holmes|Watson|Irene|Adler|John|Baker", 740);
 sherlock!(
     name_alt3_nocase,
     r"(?i)Sherlock|Holmes|Watson|Irene|Adler|John|Baker",
-    753);
+    753
+);
 // Should still use Aho-Corasick for the prefixes in each alternate, but
 // we need to use the lazy DFA to complete it.
 sherlock!(name_alt4, r"Sher[a-z]+|Hol[a-z]+", 582);
@@ -110,10 +102,7 @@ sherlock!(the_whitespace, r"the\s+\w+", 5410);
 #[cfg(not(feature = "re-tcl"))]
 sherlock!(everything_greedy, r".*", 13053);
 // std::regex . does not match \r
-#[cfg(any(
-    feature = "re-stdcpp",
-    feature = "re-boost",
-  ))]
+#[cfg(any(feature = "re-stdcpp", feature = "re-boost",))]
 sherlock!(everything_greedy, r"[^\n]*", 13053);
 #[cfg(not(feature = "re-dphobos"))]
 #[cfg(not(feature = "re-onig"))]
@@ -149,11 +138,7 @@ sherlock!(letters_lower, r"\p{Ll}", 432980);
 #[cfg(not(feature = "re-boost"))]
 #[cfg(not(feature = "re-re2"))]
 sherlock!(words, r"\w+", 109214);
-#[cfg(any(
-    feature = "re-stdcpp",
-    feature = "re-boost",
-    feature = "re-re2",
-  ))]
+#[cfg(any(feature = "re-stdcpp", feature = "re-boost", feature = "re-re2",))]
 sherlock!(words, r"\w+", 109222); // hmm, why does RE2 diverge here?
 
 // Find complete words before Holmes. The `\w` defeats any prefix
@@ -183,7 +168,8 @@ sherlock!(holmes_cochar_watson, r"Holmes.{0,25}Watson|Watson.{0,25}Holmes", 7);
 sherlock!(
     holmes_coword_watson,
     r"Holmes(?:\s*.+\s*){0,10}Watson|Watson(?:\s*.+\s*){0,10}Holmes",
-    51);
+    51
+);
 
 // Find some subset of quotes in the text.
 // This does detect the `"` or `'` prefix literal and does a quick scan for
@@ -200,16 +186,15 @@ sherlock!(quotes, r#"["'][^"']{0,30}[?!.]["']"#, 767);
 sherlock!(
     line_boundary_sherlock_holmes,
     r"(?m)^Sherlock Holmes|Sherlock Holmes$",
-    34);
+    34
+);
 // D matches both \r\n and \n as EOL
-#[cfg(any(
-    feature = "re-boost",
-    feature = "re-dphobos",
-  ))]
+#[cfg(any(feature = "re-boost", feature = "re-dphobos",))]
 sherlock!(
     line_boundary_sherlock_holmes,
     r"(?m)^Sherlock Holmes|Sherlock Holmes$",
-    37);
+    37
+);
 
 // All words ending in `n`. This uses Unicode word boundaries, which the DFA
 // can speculatively handle. Since this benchmark is on mostly ASCII text, it

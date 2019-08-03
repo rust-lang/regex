@@ -1,13 +1,3 @@
-// Copyright 2014 The Rust Project Developers. See the COPYRIGHT
-// file at the top-level directory of this distribution and at
-// http://rust-lang.org/COPYRIGHT.
-//
-// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
-// http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
-// <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
-// option. This file may not be copied, modified, or distributed
-// except according to those terms.
-
 #![allow(non_snake_case)]
 
 use std::iter::repeat;
@@ -24,19 +14,24 @@ use {Regex, Text};
 #[cfg(not(feature = "re-stdcpp"))]
 #[cfg(not(feature = "re-dphobos-dmd-ct"))]
 #[cfg(not(feature = "re-dphobos-ldc-ct"))]
-bench_match!(no_exponential, {
-    format!(
-        "{}{}",
-        repeat("a?").take(100).collect::<String>(),
-        repeat("a").take(100).collect::<String>())
-}, repeat("a").take(100).collect());
+bench_match!(
+    no_exponential,
+    {
+        format!(
+            "{}{}",
+            repeat("a?").take(100).collect::<String>(),
+            repeat("a").take(100).collect::<String>()
+        )
+    },
+    repeat("a").take(100).collect()
+);
 
 bench_match!(literal, r"y", {
-   format!("{}y", repeat("x").take(50).collect::<String>())
+    format!("{}y", repeat("x").take(50).collect::<String>())
 });
 
 bench_match!(not_literal, r".y", {
-   format!("{}y", repeat("x").take(50).collect::<String>())
+    format!("{}y", repeat("x").take(50).collect::<String>())
 });
 
 bench_match!(match_class, "[abcdw]", {
@@ -127,7 +122,11 @@ fn easy0_suffix() -> String {
     "ABCDEFGHIJKLMNOPQRSTUVWXYZ".to_string()
 }
 
-macro_rules! easy0 { () => ("ABCDEFGHIJKLMNOPQRSTUVWXYZ$") }
+macro_rules! easy0 {
+    () => {
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZ$"
+    };
+}
 
 bench_match!(easy0_32, easy0!(), get_text(TXT_32, easy0_suffix()));
 bench_match!(easy0_1K, easy0!(), get_text(TXT_1K, easy0_suffix()));
@@ -139,7 +138,9 @@ fn easy1_suffix() -> String {
 }
 
 macro_rules! easy1 {
-    () => (r"A[AB]B[BC]C[CD]D[DE]E[EF]F[FG]G[GH]H[HI]I[IJ]J$")
+    () => {
+        r"A[AB]B[BC]C[CD]D[DE]E[EF]F[FG]G[GH]H[HI]I[IJ]J$"
+    };
 }
 
 bench_match!(easy1_32, easy1!(), get_text(TXT_32, easy1_suffix()));
@@ -151,7 +152,11 @@ fn medium_suffix() -> String {
     "XABCDEFGHIJKLMNOPQRSTUVWXYZ".to_string()
 }
 
-macro_rules! medium { () => (r"[XYZ]ABCDEFGHIJKLMNOPQRSTUVWXYZ$") }
+macro_rules! medium {
+    () => {
+        r"[XYZ]ABCDEFGHIJKLMNOPQRSTUVWXYZ$"
+    };
+}
 
 bench_match!(medium_32, medium!(), get_text(TXT_32, medium_suffix()));
 bench_match!(medium_1K, medium!(), get_text(TXT_1K, medium_suffix()));
@@ -162,7 +167,11 @@ fn hard_suffix() -> String {
     "ABCDEFGHIJKLMNOPQRSTUVWXYZ".to_string()
 }
 
-macro_rules! hard { () => (r"[ -~]*ABCDEFGHIJKLMNOPQRSTUVWXYZ$") }
+macro_rules! hard {
+    () => {
+        r"[ -~]*ABCDEFGHIJKLMNOPQRSTUVWXYZ$"
+    };
+}
 
 bench_match!(hard_32, hard!(), get_text(TXT_32, hard_suffix()));
 bench_match!(hard_1K, hard!(), get_text(TXT_1K, hard_suffix()));
@@ -178,27 +187,45 @@ macro_rules! reallyhard {
         // The point of this being "really" hard is that it should completely
         // thwart any prefix or suffix literal optimizations.
         r"[ -~]*ABCDEFGHIJKLMNOPQRSTUVWXYZ.*"
-    }
+    };
 }
 
-bench_match!(reallyhard_32, reallyhard!(),
-             get_text(TXT_32, reallyhard_suffix()));
-bench_match!(reallyhard_1K, reallyhard!(),
-             get_text(TXT_1K, reallyhard_suffix()));
-bench_match!(reallyhard_32K, reallyhard!(),
-             get_text(TXT_32K, reallyhard_suffix()));
-bench_match!(reallyhard_1MB, reallyhard!(),
-             get_text(TXT_1MB, reallyhard_suffix()));
+bench_match!(
+    reallyhard_32,
+    reallyhard!(),
+    get_text(TXT_32, reallyhard_suffix())
+);
+bench_match!(
+    reallyhard_1K,
+    reallyhard!(),
+    get_text(TXT_1K, reallyhard_suffix())
+);
+bench_match!(
+    reallyhard_32K,
+    reallyhard!(),
+    get_text(TXT_32K, reallyhard_suffix())
+);
+bench_match!(
+    reallyhard_1MB,
+    reallyhard!(),
+    get_text(TXT_1MB, reallyhard_suffix())
+);
 
 fn reallyhard2_suffix() -> String {
     "Sherlock Holmes".to_string()
 }
 
-macro_rules! reallyhard2 { () => (r"\w+\s+Holmes") }
+macro_rules! reallyhard2 {
+    () => {
+        r"\w+\s+Holmes"
+    };
+}
 
-bench_match!(reallyhard2_1K, reallyhard2!(),
-             get_text(TXT_1K, reallyhard2_suffix()));
-
+bench_match!(
+    reallyhard2_1K,
+    reallyhard2!(),
+    get_text(TXT_1K, reallyhard2_suffix())
+);
 
 //
 // Benchmarks to justify the short-haystack NFA fallthrough optimization
@@ -223,82 +250,139 @@ bench_match!(reallyhard2_1K, reallyhard2!(),
 // Instead there was no noticeable change in the bench results, so
 // I've opted to just do the more conservative anchor optimization.
 //
-bench_captures!(short_haystack_1x,
-    Regex::new(r"(bbbb)cccc(bbb)").unwrap(), 2,
-    String::from("aaaabbbbccccbbbdddd"));
-bench_captures!(short_haystack_2x,
-    Regex::new(r"(bbbb)cccc(bbb)").unwrap(), 2,
-    format!("{}bbbbccccbbb{}",
-            repeat("aaaa").take(2).collect::<String>(),
-            repeat("dddd").take(2).collect::<String>(),
-            ));
-bench_captures!(short_haystack_3x,
-    Regex::new(r"(bbbb)cccc(bbb)").unwrap(), 2,
-    format!("{}bbbbccccbbb{}",
-            repeat("aaaa").take(3).collect::<String>(),
-            repeat("dddd").take(3).collect::<String>(),
-            ));
-bench_captures!(short_haystack_4x,
-    Regex::new(r"(bbbb)cccc(bbb)").unwrap(), 2,
-    format!("{}bbbbccccbbb{}",
-            repeat("aaaa").take(4).collect::<String>(),
-            repeat("dddd").take(4).collect::<String>(),
-            ));
-bench_captures!(short_haystack_10x,
-    Regex::new(r"(bbbb)cccc(bbb)").unwrap(), 2,
-    format!("{}bbbbccccbbb{}",
-            repeat("aaaa").take(10).collect::<String>(),
-            repeat("dddd").take(10).collect::<String>(),
-            ));
-bench_captures!(short_haystack_100x,
-    Regex::new(r"(bbbb)cccc(bbb)").unwrap(), 2,
-    format!("{}bbbbccccbbb{}",
-            repeat("aaaa").take(100).collect::<String>(),
-            repeat("dddd").take(100).collect::<String>(),
-            ));
-bench_captures!(short_haystack_1000x,
-    Regex::new(r"(bbbb)cccc(bbb)").unwrap(), 2,
-    format!("{}bbbbccccbbb{}",
-            repeat("aaaa").take(1000).collect::<String>(),
-            repeat("dddd").take(1000).collect::<String>(),
-            ));
-bench_captures!(short_haystack_10000x,
-    Regex::new(r"(bbbb)cccc(bbb)").unwrap(), 2,
-    format!("{}bbbbccccbbb{}",
-            repeat("aaaa").take(10000).collect::<String>(),
-            repeat("dddd").take(10000).collect::<String>(),
-            ));
-bench_captures!(short_haystack_100000x,
-    Regex::new(r"(bbbb)cccc(bbb)").unwrap(), 2,
-    format!("{}bbbbccccbbb{}",
-            repeat("aaaa").take(100000).collect::<String>(),
-            repeat("dddd").take(100000).collect::<String>(),
-            ));
-bench_captures!(short_haystack_1000000x,
-    Regex::new(r"(bbbb)cccc(bbb)").unwrap(), 2,
-    format!("{}bbbbccccbbb{}",
-            repeat("aaaa").take(1000000).collect::<String>(),
-            repeat("dddd").take(1000000).collect::<String>(),
-            ));
+bench_captures!(
+    short_haystack_1x,
+    Regex::new(r"(bbbb)cccc(bbb)").unwrap(),
+    2,
+    String::from("aaaabbbbccccbbbdddd")
+);
+bench_captures!(
+    short_haystack_2x,
+    Regex::new(r"(bbbb)cccc(bbb)").unwrap(),
+    2,
+    format!(
+        "{}bbbbccccbbb{}",
+        repeat("aaaa").take(2).collect::<String>(),
+        repeat("dddd").take(2).collect::<String>(),
+    )
+);
+bench_captures!(
+    short_haystack_3x,
+    Regex::new(r"(bbbb)cccc(bbb)").unwrap(),
+    2,
+    format!(
+        "{}bbbbccccbbb{}",
+        repeat("aaaa").take(3).collect::<String>(),
+        repeat("dddd").take(3).collect::<String>(),
+    )
+);
+bench_captures!(
+    short_haystack_4x,
+    Regex::new(r"(bbbb)cccc(bbb)").unwrap(),
+    2,
+    format!(
+        "{}bbbbccccbbb{}",
+        repeat("aaaa").take(4).collect::<String>(),
+        repeat("dddd").take(4).collect::<String>(),
+    )
+);
+bench_captures!(
+    short_haystack_10x,
+    Regex::new(r"(bbbb)cccc(bbb)").unwrap(),
+    2,
+    format!(
+        "{}bbbbccccbbb{}",
+        repeat("aaaa").take(10).collect::<String>(),
+        repeat("dddd").take(10).collect::<String>(),
+    )
+);
+bench_captures!(
+    short_haystack_100x,
+    Regex::new(r"(bbbb)cccc(bbb)").unwrap(),
+    2,
+    format!(
+        "{}bbbbccccbbb{}",
+        repeat("aaaa").take(100).collect::<String>(),
+        repeat("dddd").take(100).collect::<String>(),
+    )
+);
+bench_captures!(
+    short_haystack_1000x,
+    Regex::new(r"(bbbb)cccc(bbb)").unwrap(),
+    2,
+    format!(
+        "{}bbbbccccbbb{}",
+        repeat("aaaa").take(1000).collect::<String>(),
+        repeat("dddd").take(1000).collect::<String>(),
+    )
+);
+bench_captures!(
+    short_haystack_10000x,
+    Regex::new(r"(bbbb)cccc(bbb)").unwrap(),
+    2,
+    format!(
+        "{}bbbbccccbbb{}",
+        repeat("aaaa").take(10000).collect::<String>(),
+        repeat("dddd").take(10000).collect::<String>(),
+    )
+);
+bench_captures!(
+    short_haystack_100000x,
+    Regex::new(r"(bbbb)cccc(bbb)").unwrap(),
+    2,
+    format!(
+        "{}bbbbccccbbb{}",
+        repeat("aaaa").take(100000).collect::<String>(),
+        repeat("dddd").take(100000).collect::<String>(),
+    )
+);
+bench_captures!(
+    short_haystack_1000000x,
+    Regex::new(r"(bbbb)cccc(bbb)").unwrap(),
+    2,
+    format!(
+        "{}bbbbccccbbb{}",
+        repeat("aaaa").take(1000000).collect::<String>(),
+        repeat("dddd").take(1000000).collect::<String>(),
+    )
+);
 
 #[cfg(any(feature = "re-rust", feature = "re-rust-bytes"))]
-bench_is_match_set!(is_match_set,
+bench_is_match_set!(
+    is_match_set,
     true,
     RegexSet::new(vec![
-        "aaaaaaaaaaaaaaaaaaa", "abc579", "def.+", "e24fg", "a.*2c", "23.",
-    ]).unwrap(),
-    format!("{}a482c{}",
-            repeat('a').take(10).collect::<String>(),
-            repeat('b').take(10).collect::<String>())
-    );
+        "aaaaaaaaaaaaaaaaaaa",
+        "abc579",
+        "def.+",
+        "e24fg",
+        "a.*2c",
+        "23.",
+    ])
+    .unwrap(),
+    format!(
+        "{}a482c{}",
+        repeat('a').take(10).collect::<String>(),
+        repeat('b').take(10).collect::<String>()
+    )
+);
 
 #[cfg(any(feature = "re-rust", feature = "re-rust-bytes"))]
-bench_matches_set!(matches_set,
+bench_matches_set!(
+    matches_set,
     true,
     RegexSet::new(vec![
-        "aaaaaaaaaaaaaaaaaaa", "abc579", "def.+", "e24fg", "a.*2c", "23.",
-    ]).unwrap(),
-    format!("{}a482c{}",
-            repeat('a').take(10).collect::<String>(),
-            repeat('b').take(10).collect::<String>())
-    );
+        "aaaaaaaaaaaaaaaaaaa",
+        "abc579",
+        "def.+",
+        "e24fg",
+        "a.*2c",
+        "23.",
+    ])
+    .unwrap(),
+    format!(
+        "{}a482c{}",
+        repeat('a').take(10).collect::<String>(),
+        repeat('b').take(10).collect::<String>()
+    )
+);
