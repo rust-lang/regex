@@ -8,6 +8,3 @@ documentation = "https://docs.rs/regex-syntax"
 homepage = "https://github.com/rust-lang/regex"
 description = "A regular expression parser."
 workspace = ".."
-
-[dependencies]
-ucd-util = "0.1.4"
