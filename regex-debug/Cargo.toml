@@ -16,4 +16,3 @@ regex = { version = "1.1", path = ".." }
 regex-syntax = { version = "0.6", path = "../regex-syntax" }
 serde = "1"
 serde_derive = "1"
-utf8-ranges = "1"

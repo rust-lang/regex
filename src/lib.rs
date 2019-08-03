@@ -523,7 +523,6 @@ extern crate quickcheck;
 #[cfg(test)]
 extern crate doc_comment;
 extern crate regex_syntax as syntax;
-extern crate utf8_ranges;
 
 #[cfg(test)]
 doc_comment::doctest!("../README.md");

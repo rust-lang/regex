@@ -4,7 +4,6 @@ extern crate regex_syntax as syntax;
 extern crate serde;
 #[macro_use]
 extern crate serde_derive;
-extern crate utf8_ranges;
 
 use std::error;
 use std::io::{self, Write};
@@ -207,8 +206,8 @@ fn cmd_compile(args: &Args) -> Result<()> {
 
 fn cmd_utf8_ranges(args: &Args) -> Result<()> {
     use syntax::hir::{self, HirKind};
+    use syntax::utf8::Utf8Sequences;
     use syntax::ParserBuilder;
-    use utf8_ranges::Utf8Sequences;
 
     let hir = ParserBuilder::new()
         .build()

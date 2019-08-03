@@ -33,8 +33,6 @@ memchr = "2.2.1"
 thread_local = "0.3.6"
 # For parsing regular expressions.
 regex-syntax = { path = "regex-syntax", version = "0.6.9" }
-# For compiling UTF-8 decoding into automata.
-utf8-ranges = "1.0.1"
 
 [dev-dependencies]
 # For examples.

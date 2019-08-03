@@ -107,6 +107,7 @@ pub mod hir;
 mod parser;
 mod unicode;
 mod unicode_tables;
+pub mod utf8;
 
 /// Escapes all regular expression meta characters in `text`.
 ///
