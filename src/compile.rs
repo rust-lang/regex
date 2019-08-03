@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use syntax::hir::{self, Hir};
 use syntax::is_word_byte;
-use utf8_ranges::{Utf8Range, Utf8Sequence, Utf8Sequences};
+use syntax::utf8::{Utf8Range, Utf8Sequence, Utf8Sequences};
 
 use prog::{
     EmptyLook, Inst, InstBytes, InstChar, InstEmptyLook, InstPtr, InstRanges,
