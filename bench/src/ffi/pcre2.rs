@@ -14,7 +14,7 @@ use std::fmt;
 use std::ptr;
 use std::str;
 
-use libc::{c_int, c_void, size_t, uint8_t, uint32_t};
+use libc::{c_int, c_void, size_t, uint32_t, uint8_t};
 
 pub struct Regex {
     code: *mut code,
@@ -42,32 +42,30 @@ impl Regex {
     pub fn new(pattern: &str) -> Result<Regex, Error> {
         let mut error_code: c_int = 0;
         let mut error_offset: size_t = 0;
-        let code = unsafe { pcre2_compile_8(
-            pattern.as_ptr(),
-            pattern.len(),
-            // PCRE2 can get significantly faster in some cases depending
-            // on the permutation of these options (in particular, dropping
-            // UCP). We should endeavor to have a separate "ASCII compatible"
-            // benchmark.
-            PCRE2_UCP | PCRE2_UTF,
-            &mut error_code,
-            &mut error_offset,
-            ptr::null_mut(),
-        ) };
+        let code = unsafe {
+            pcre2_compile_8(
+                pattern.as_ptr(),
+                pattern.len(),
+                // PCRE2 can get significantly faster in some cases depending
+                // on the permutation of these options (in particular, dropping
+                // UCP). We should endeavor to have a separate "ASCII compatible"
+                // benchmark.
+                PCRE2_UCP | PCRE2_UTF,
+                &mut error_code,
+                &mut error_offset,
+                ptr::null_mut(),
+            )
+        };
         if code.is_null() {
-            return Err(Error {
-                code: error_code,
-                offset: error_offset,
-            });
+            return Err(Error { code: error_code, offset: error_offset });
         }
         let err = unsafe { pcre2_jit_compile_8(code, PCRE2_JIT_COMPLETE) };
         if err < 0 {
             panic!("pcre2_jit_compile_8 failed with error: {:?}", err);
         }
-        let match_data = unsafe { pcre2_match_data_create_from_pattern_8(
-            code,
-            ptr::null_mut(),
-        ) };
+        let match_data = unsafe {
+            pcre2_match_data_create_from_pattern_8(code, ptr::null_mut())
+        };
         if match_data.is_null() {
             panic!("could not allocate match_data");
         }
@@ -83,11 +81,7 @@ impl Regex {
     }
 
     pub fn find_iter<'r, 't>(&'r self, text: &'t str) -> FindMatches<'r, 't> {
-        FindMatches {
-            re: self,
-            text: text,
-            last_match_end: 0,
-        }
+        FindMatches { re: self, text: text, last_match_end: 0 }
     }
 
     fn find_at(&self, text: &str, start: usize) -> Option<(usize, usize)> {
@@ -95,15 +89,17 @@ impl Regex {
         // way to execute a JIT match because it skips sanity checks. We also
         // explicitly disable the UTF-8 validity check, but it's probably not
         // necessary.
-        let err = unsafe { pcre2_jit_match_8(
-            self.code,
-            text.as_ptr(),
-            text.len(),
-            start,
-            PCRE2_NO_UTF_CHECK,
-            self.match_data,
-            ptr::null_mut(),
-        ) };
+        let err = unsafe {
+            pcre2_jit_match_8(
+                self.code,
+                text.as_ptr(),
+                text.len(),
+                start,
+                PCRE2_NO_UTF_CHECK,
+                self.match_data,
+                ptr::null_mut(),
+            )
+        };
         if err == PCRE2_ERROR_NOMATCH {
             None
         } else if err < 0 {
@@ -138,14 +134,15 @@ impl fmt::Debug for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         const BUF_LEN: size_t = 256;
         let mut buf = [0; BUF_LEN];
-        let len = unsafe { pcre2_get_error_message_8(
-            self.code,
-            buf.as_mut_ptr(),
-            BUF_LEN,
-        ) };
+        let len = unsafe {
+            pcre2_get_error_message_8(self.code, buf.as_mut_ptr(), BUF_LEN)
+        };
         if len < 0 {
-            write!(f, "Unknown PCRE error. (code: {:?}, offset: {:?})",
-                   self.code, self.offset)
+            write!(
+                f,
+                "Unknown PCRE error. (code: {:?}, offset: {:?})",
+                self.code, self.offset
+            )
         } else {
             let msg = str::from_utf8(&buf[..len as usize]).unwrap();
             write!(f, "error at {:?}: {}", self.offset, msg)
@@ -171,7 +168,7 @@ type general_context = c_void; // unused
 
 type match_context = c_void; // unused
 
-extern {
+extern "C" {
     fn pcre2_compile_8(
         pattern: *const uint8_t,
         len: size_t,
@@ -181,27 +178,19 @@ extern {
         context: *mut compile_context,
     ) -> *mut code;
 
-    fn pcre2_code_free_8(
-        code: *mut code,
-    );
+    fn pcre2_code_free_8(code: *mut code);
 
     fn pcre2_match_data_create_from_pattern_8(
         code: *const code,
         context: *mut general_context,
     ) -> *mut match_data;
 
-    fn pcre2_match_data_free_8(
-        match_data: *mut match_data,
-    );
+    fn pcre2_match_data_free_8(match_data: *mut match_data);
 
-    fn pcre2_get_ovector_pointer_8(
-        match_data: *mut match_data,
-    ) -> *mut size_t;
+    fn pcre2_get_ovector_pointer_8(match_data: *mut match_data)
+        -> *mut size_t;
 
-    fn pcre2_jit_compile_8(
-        code: *const code,
-        options: uint32_t,
-    ) -> c_int;
+    fn pcre2_jit_compile_8(code: *const code, options: uint32_t) -> c_int;
 
     fn pcre2_jit_match_8(
         code: *const code,

@@ -75,9 +75,7 @@ impl<'c> Iterator for SubCapturesPosIter<'c> {
         }
         let x = match self.locs.pos(self.idx) {
             None => Some(None),
-            Some((s, e)) => {
-                Some(Some((s, e)))
-            }
+            Some((s, e)) => Some(Some((s, e))),
         };
         self.idx += 1;
         x
@@ -124,11 +122,7 @@ pub trait RegularExpression: Sized {
     ) -> Option<usize>;
 
     /// Returns whether the regex matches the text given.
-    fn is_match_at(
-        &self,
-        text: &Self::Text,
-        start: usize,
-    ) -> bool;
+    fn is_match_at(&self, text: &Self::Text, start: usize) -> bool;
 
     /// Returns the leftmost-first match location if one exists.
     fn find_at(
@@ -148,37 +142,34 @@ pub trait RegularExpression: Sized {
 
     /// Returns an iterator over all non-overlapping successive leftmost-first
     /// matches.
-    fn find_iter (
-        self,
-        text: &Self::Text,
-    ) -> Matches<Self> {
-        Matches {
-            re: self,
-            text: text,
-            last_end: 0,
-            last_match: None,
-        }
+    fn find_iter(self, text: &Self::Text) -> Matches<Self> {
+        Matches { re: self, text: text, last_end: 0, last_match: None }
     }
 
     /// Returns an iterator over all non-overlapping successive leftmost-first
     /// matches with captures.
-    fn captures_iter(
-        self,
-        text: &Self::Text,
-    ) -> CaptureMatches<Self> {
+    fn captures_iter(self, text: &Self::Text) -> CaptureMatches<Self> {
         CaptureMatches(self.find_iter(text))
     }
 }
 
 /// An iterator over all non-overlapping successive leftmost-first matches.
-pub struct Matches<'t, R> where R: RegularExpression, R::Text: 't {
+pub struct Matches<'t, R>
+where
+    R: RegularExpression,
+    R::Text: 't,
+{
     re: R,
     text: &'t R::Text,
     last_end: usize,
     last_match: Option<usize>,
 }
 
-impl<'t, R> Matches<'t, R> where R: RegularExpression, R::Text: 't {
+impl<'t, R> Matches<'t, R>
+where
+    R: RegularExpression,
+    R::Text: 't,
+{
     /// Return the text being searched.
     pub fn text(&self) -> &'t R::Text {
         self.text
@@ -191,7 +182,10 @@ impl<'t, R> Matches<'t, R> where R: RegularExpression, R::Text: 't {
 }
 
 impl<'t, R> Iterator for Matches<'t, R>
-        where R: RegularExpression, R::Text: 't + AsRef<[u8]> {
+where
+    R: RegularExpression,
+    R::Text: 't + AsRef<[u8]>,
+{
     type Item = (usize, usize);
 
     fn next(&mut self) -> Option<(usize, usize)> {
@@ -223,9 +217,15 @@ impl<'t, R> Iterator for Matches<'t, R>
 /// An iterator over all non-overlapping successive leftmost-first matches with
 /// captures.
 pub struct CaptureMatches<'t, R>(Matches<'t, R>)
-    where R: RegularExpression, R::Text: 't;
+where
+    R: RegularExpression,
+    R::Text: 't;
 
-impl<'t, R> CaptureMatches<'t, R> where R: RegularExpression, R::Text: 't {
+impl<'t, R> CaptureMatches<'t, R>
+where
+    R: RegularExpression,
+    R::Text: 't,
+{
     /// Return the text being searched.
     pub fn text(&self) -> &'t R::Text {
         self.0.text()
@@ -238,12 +238,15 @@ impl<'t, R> CaptureMatches<'t, R> where R: RegularExpression, R::Text: 't {
 }
 
 impl<'t, R> Iterator for CaptureMatches<'t, R>
-        where R: RegularExpression, R::Text: 't + AsRef<[u8]> {
+where
+    R: RegularExpression,
+    R::Text: 't + AsRef<[u8]>,
+{
     type Item = Locations;
 
     fn next(&mut self) -> Option<Locations> {
         if self.0.last_end > self.0.text.as_ref().len() {
-            return None
+            return None;
         }
         let mut locs = self.0.re.locations();
         let (s, e) = match self.0.re.captures_read_at(

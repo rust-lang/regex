@@ -152,8 +152,8 @@ pub fn escape_into(text: &str, buf: &mut String) {
 /// `false` is fixed and won't change in a semver compatible release.
 pub fn is_meta_character(c: char) -> bool {
     match c {
-        '\\' | '.' | '+' | '*' | '?' | '(' | ')' | '|' |
-        '[' | ']' | '{' | '}' | '^' | '$' | '#' | '&' | '-' | '~' => true,
+        '\\' | '.' | '+' | '*' | '?' | '(' | ')' | '|' | '[' | ']' | '{'
+        | '}' | '^' | '$' | '#' | '&' | '-' | '~' => true,
         _ => false,
     }
 }
@@ -183,7 +183,8 @@ pub fn is_word_character(c: char) -> bool {
             } else {
                 Ordering::Less
             }
-        }).is_ok()
+        })
+        .is_ok()
 }
 
 /// Returns true if and only if the given character is an ASCII word character.
@@ -192,7 +193,7 @@ pub fn is_word_character(c: char) -> bool {
 /// `[_0-9a-zA-Z]'.
 pub fn is_word_byte(c: u8) -> bool {
     match c {
-        b'_' | b'0' ..= b'9' | b'a' ..= b'z' | b'A' ..= b'Z'  => true,
+        b'_' | b'0'..=b'9' | b'a'..=b'z' | b'A'..=b'Z' => true,
         _ => false,
     }
 }
@@ -205,7 +206,8 @@ mod tests {
     fn escape_meta() {
         assert_eq!(
             escape(r"\.+*?()|[]{}^$#&-~"),
-            r"\\\.\+\*\?\(\)\|\[\]\{\}\^\$\#\&\-\~".to_string());
+            r"\\\.\+\*\?\(\)\|\[\]\{\}\^\$\#\&\-\~".to_string()
+        );
     }
 
     #[test]

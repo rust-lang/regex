@@ -530,10 +530,10 @@ extern crate thread_local;
 #[cfg(test)]
 #[macro_use]
 extern crate quickcheck;
-extern crate regex_syntax as syntax;
-extern crate utf8_ranges;
 #[cfg(test)]
 extern crate doc_comment;
+extern crate regex_syntax as syntax;
+extern crate utf8_ranges;
 
 #[cfg(test)]
 doc_comment::doctest!("../README.md");
@@ -541,19 +541,17 @@ doc_comment::doctest!("../README.md");
 #[cfg(feature = "use_std")]
 pub use error::Error;
 #[cfg(feature = "use_std")]
-pub use re_builder::unicode::*;
-#[cfg(feature = "use_std")]
 pub use re_builder::set_unicode::*;
+#[cfg(feature = "use_std")]
+pub use re_builder::unicode::*;
 #[cfg(feature = "use_std")]
 pub use re_set::unicode::*;
 #[cfg(feature = "use_std")]
 #[cfg(feature = "use_std")]
 pub use re_unicode::{
-    Regex, Match, Captures,
-    CaptureNames, Matches, CaptureMatches, SubCaptureMatches,
-    CaptureLocations, Locations,
-    Replacer, ReplacerRef, NoExpand, Split, SplitN,
-    escape,
+    escape, CaptureLocations, CaptureMatches, CaptureNames, Captures,
+    Locations, Match, Matches, NoExpand, Regex, Replacer, ReplacerRef, Split,
+    SplitN, SubCaptureMatches,
 };
 
 /**
@@ -652,7 +650,6 @@ pub mod bytes {
 }
 
 mod backtrack;
-mod utf8;
 mod compile;
 mod dfa;
 mod error;
@@ -671,6 +668,7 @@ mod re_set;
 mod re_trait;
 mod re_unicode;
 mod sparse;
+mod utf8;
 mod vector;
 
 /// The `internal` module exists to support suspicious activity, such as
@@ -681,7 +679,7 @@ mod vector;
 pub mod internal {
     pub use compile::Compiler;
     pub use exec::{Exec, ExecBuilder};
-    pub use input::{Char, Input, CharInput, InputAt};
+    pub use input::{Char, CharInput, Input, InputAt};
     pub use literal::LiteralSearcher;
-    pub use prog::{Program, Inst, EmptyLook, InstRanges};
+    pub use prog::{EmptyLook, Inst, InstRanges, Program};
 }

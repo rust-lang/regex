@@ -1,9 +1,9 @@
 use std::collections::HashMap;
-use std::ops::Deref;
 use std::ffi::{CStr, CString};
+use std::ops::Deref;
 use std::ptr;
-use std::str;
 use std::slice;
+use std::str;
 
 use libc::{c_char, size_t};
 use regex::bytes;
@@ -56,20 +56,21 @@ pub struct IterCaptureNames {
 
 impl Deref for Regex {
     type Target = bytes::Regex;
-    fn deref(&self) -> &bytes::Regex { &self.re }
+    fn deref(&self) -> &bytes::Regex {
+        &self.re
+    }
 }
 
 impl Deref for RegexSet {
     type Target = bytes::RegexSet;
-    fn deref(&self) -> &bytes::RegexSet { &self.re }
+    fn deref(&self) -> &bytes::RegexSet {
+        &self.re
+    }
 }
 
 impl Default for Options {
     fn default() -> Options {
-        Options {
-            size_limit: 10 * (1<<20),
-            dfa_size_limit: 2 * (1<<20),
-        }
+        Options { size_limit: 10 * (1 << 20), dfa_size_limit: 2 * (1 << 20) }
     }
 }
 
@@ -596,31 +597,27 @@ ffi_fn! {
 fn rure_escape(
     pattern: *const u8,
     length: size_t,
-    error: *mut Error
+    error: *mut Error,
 ) -> *const c_char {
     let pat: &[u8] = unsafe { slice::from_raw_parts(pattern, length) };
     let str_pat = match str::from_utf8(pat) {
         Ok(val) => val,
-        Err(err) => {
-            unsafe {
-                if !error.is_null() {
-                    *error = Error::new(ErrorKind::Str(err));
-                }
-                return ptr::null();
+        Err(err) => unsafe {
+            if !error.is_null() {
+                *error = Error::new(ErrorKind::Str(err));
             }
-        }
+            return ptr::null();
+        },
     };
     let esc_pat = regex::escape(str_pat);
     let c_esc_pat = match CString::new(esc_pat) {
         Ok(val) => val,
-        Err(err) => {
-            unsafe {
-                if !error.is_null() {
-                    *error = Error::new(ErrorKind::Nul(err));
-                }
-                return ptr::null();
+        Err(err) => unsafe {
+            if !error.is_null() {
+                *error = Error::new(ErrorKind::Nul(err));
             }
-        }
+            return ptr::null();
+        },
     };
     c_esc_pat.into_raw() as *const c_char
 }

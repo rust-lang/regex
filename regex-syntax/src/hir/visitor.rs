@@ -140,7 +140,7 @@ impl<'a> HeapVisitor<'a> {
                 // If this is a concat/alternate, then we might have additional
                 // inductive steps to process.
                 if let Some(x) = self.pop(frame) {
-                    if let Frame::Alternation {..} = x {
+                    if let Frame::Alternation { .. } = x {
                         visitor.visit_alternation_in()?;
                     }
                     hir = x.child();
@@ -162,17 +162,11 @@ impl<'a> HeapVisitor<'a> {
             HirKind::Group(ref x) => Some(Frame::Group(x)),
             HirKind::Concat(ref x) if x.is_empty() => None,
             HirKind::Concat(ref x) => {
-                Some(Frame::Concat {
-                    head: &x[0],
-                    tail: &x[1..],
-                })
+                Some(Frame::Concat { head: &x[0], tail: &x[1..] })
             }
             HirKind::Alternation(ref x) if x.is_empty() => None,
             HirKind::Alternation(ref x) => {
-                Some(Frame::Alternation {
-                    head: &x[0],
-                    tail: &x[1..],
-                })
+                Some(Frame::Alternation { head: &x[0], tail: &x[1..] })
             }
             _ => None,
         }
@@ -188,10 +182,7 @@ impl<'a> HeapVisitor<'a> {
                 if tail.is_empty() {
                     None
                 } else {
-                    Some(Frame::Concat {
-                        head: &tail[0],
-                        tail: &tail[1..],
-                    })
+                    Some(Frame::Concat { head: &tail[0], tail: &tail[1..] })
                 }
             }
             Frame::Alternation { tail, .. } => {

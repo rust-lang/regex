@@ -15,9 +15,9 @@ use aho_corasick::{self, AhoCorasick, AhoCorasickBuilder};
 use memchr::{memchr, memchr2, memchr3};
 use syntax::hir::literal::{Literal, Literals};
 
+use self::teddy_avx2::Teddy as TeddyAVX2;
+use self::teddy_ssse3::Teddy as TeddySSSE3;
 use freqs::BYTE_FREQUENCIES;
-use self::teddy_avx2::{Teddy as TeddyAVX2};
-use self::teddy_ssse3::{Teddy as TeddySSSE3};
 
 mod teddy_avx2;
 mod teddy_ssse3;
@@ -409,7 +409,7 @@ impl SingleByteSet {
 
     fn approximate_size(&self) -> usize {
         (self.dense.len() * mem::size_of::<u8>())
-        + (self.sparse.len() * mem::size_of::<bool>())
+            + (self.sparse.len() * mem::size_of::<bool>())
     }
 }
 
@@ -652,12 +652,14 @@ impl BoyerMooreSearch {
 
         if haystack.len() > short_circut {
             // just 1 for the md2 shift
-            let backstop = haystack.len() - ((NUM_UNROLL + 1) * self.pattern.len());
+            let backstop =
+                haystack.len() - ((NUM_UNROLL + 1) * self.pattern.len());
             loop {
-                window_end = match self.skip_loop(haystack, window_end, backstop) {
-                    Some(i) => i,
-                    None => return None,
-                };
+                window_end =
+                    match self.skip_loop(haystack, window_end, backstop) {
+                        Some(i) => i,
+                        None => return None,
+                    };
                 if window_end >= backstop {
                     break;
                 }
@@ -690,7 +692,7 @@ impl BoyerMooreSearch {
     }
 
     fn len(&self) -> usize {
-        return self.pattern.len()
+        return self.pattern.len();
     }
 
     /// The key heuristic behind which the BoyerMooreSearch lives.
@@ -774,7 +776,8 @@ impl BoyerMooreSearch {
     /// if it never reappears. If `skip_loop` hits the backstop
     /// it will leave early.
     #[inline]
-    fn skip_loop(&self,
+    fn skip_loop(
+        &self,
         haystack: &[u8],
         mut window_end: usize,
         backstop: usize,
@@ -787,25 +790,35 @@ impl BoyerMooreSearch {
         };
 
         loop {
-            let mut skip = skip_of(window_end); window_end += skip;
-            skip = skip_of(window_end); window_end += skip;
+            let mut skip = skip_of(window_end);
+            window_end += skip;
+            skip = skip_of(window_end);
+            window_end += skip;
             if skip != 0 {
-                skip = skip_of(window_end); window_end += skip;
-                skip = skip_of(window_end); window_end += skip;
-                skip = skip_of(window_end); window_end += skip;
+                skip = skip_of(window_end);
+                window_end += skip;
+                skip = skip_of(window_end);
+                window_end += skip;
+                skip = skip_of(window_end);
+                window_end += skip;
                 if skip != 0 {
-                    skip = skip_of(window_end); window_end += skip;
-                    skip = skip_of(window_end); window_end += skip;
-                    skip = skip_of(window_end); window_end += skip;
+                    skip = skip_of(window_end);
+                    window_end += skip;
+                    skip = skip_of(window_end);
+                    window_end += skip;
+                    skip = skip_of(window_end);
+                    window_end += skip;
                     if skip != 0 {
-                        skip = skip_of(window_end); window_end += skip;
-                        skip = skip_of(window_end); window_end += skip;
+                        skip = skip_of(window_end);
+                        window_end += skip;
+                        skip = skip_of(window_end);
+                        window_end += skip;
 
                         // If ten iterations did not make at least 16 words
                         // worth of progress, we just fall back on memchr.
-                        if window_end - window_end_snapshot >
-                             16 * mem::size_of::<usize>() {
-
+                        if window_end - window_end_snapshot
+                            > 16 * mem::size_of::<usize>()
+                        {
                             // Returning a window_end >= backstop will immediatly
                             // break us out of the inner loop in `find`.
                             if window_end >= backstop {
@@ -823,7 +836,11 @@ impl BoyerMooreSearch {
                             match memchr(self.guard, &haystack[window_end..]) {
                                 None => return None,
                                 Some(g_idx) => {
-                                    return Some(window_end + g_idx + self.guard_reverse_idx);
+                                    return Some(
+                                        window_end
+                                            + g_idx
+                                            + self.guard_reverse_idx,
+                                    );
                                 }
                             }
                         }
@@ -961,11 +978,12 @@ mod tests {
     #[test]
     fn bm_memchr_fallback_indexing_bug() {
         let mut haystack = vec![
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 87, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 87, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        ];
         let needle = vec![1, 1, 1, 1, 32, 32, 87];
         let needle_start = haystack.len();
         haystack.extend(needle.clone());
@@ -981,7 +999,8 @@ mod tests {
 e_data.clone_created(entity_id, entity_to_add.entity_id);
 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-".to_vec();
+"
+        .to_vec();
         let needle = b"clone_created".to_vec();
 
         let searcher = BoyerMooreSearch::new(needle);
@@ -992,10 +1011,11 @@ aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
     #[test]
     fn bm_win_gnu_indexing_bug() {
         let haystack_raw = vec![
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        ];
         let needle = vec![1, 1, 1, 1, 1, 1, 1];
         let haystack = haystack_raw.as_slice();
 
@@ -1013,8 +1033,9 @@ aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 
         for i in 0..(haystack.len() - (needle.len() - 1)) {
             if haystack[i] == needle[0]
-                && &haystack[i..(i+needle.len())] == needle {
-                return Some(i)
+                && &haystack[i..(i + needle.len())] == needle
+            {
+                return Some(i);
             }
         }
 

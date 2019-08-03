@@ -14,8 +14,8 @@ This module provides a regular expression printer for `Ast`.
 
 use std::fmt;
 
-use ast::{self, Ast};
 use ast::visitor::{self, Visitor};
+use ast::{self, Ast};
 
 /// A builder for constructing a printer.
 ///
@@ -34,15 +34,11 @@ impl Default for PrinterBuilder {
 
 impl PrinterBuilder {
     fn new() -> PrinterBuilder {
-        PrinterBuilder {
-            _priv: (),
-        }
+        PrinterBuilder { _priv: () }
     }
 
     fn build(&self) -> Printer {
-        Printer {
-            _priv: (),
-        }
+        Printer { _priv: () }
     }
 }
 
@@ -95,7 +91,7 @@ impl<'p, W: fmt::Write> Visitor for Writer<'p, W> {
             Ast::Class(ast::Class::Bracketed(ref x)) => {
                 self.fmt_class_bracketed_pre(x)
             }
-            _ => Ok(())
+            _ => Ok(()),
         }
     }
 
@@ -253,9 +249,7 @@ impl<'p, W: fmt::Write> Writer<'p, W> {
             Special(ast::SpecialLiteralKind::FormFeed) => {
                 self.wtr.write_str(r"\f")
             }
-            Special(ast::SpecialLiteralKind::Tab) => {
-                self.wtr.write_str(r"\t")
-            }
+            Special(ast::SpecialLiteralKind::Tab) => self.wtr.write_str(r"\t"),
             Special(ast::SpecialLiteralKind::LineFeed) => {
                 self.wtr.write_str(r"\n")
             }
@@ -296,16 +290,14 @@ impl<'p, W: fmt::Write> Writer<'p, W> {
         for item in &ast.items {
             match item.kind {
                 FlagsItemKind::Negation => self.wtr.write_str("-"),
-                FlagsItemKind::Flag(ref flag) => {
-                    match *flag {
-                        Flag::CaseInsensitive => self.wtr.write_str("i"),
-                        Flag::MultiLine => self.wtr.write_str("m"),
-                        Flag::DotMatchesNewLine => self.wtr.write_str("s"),
-                        Flag::SwapGreed => self.wtr.write_str("U"),
-                        Flag::Unicode => self.wtr.write_str("u"),
-                        Flag::IgnoreWhitespace => self.wtr.write_str("x"),
-                    }
-                }
+                FlagsItemKind::Flag(ref flag) => match *flag {
+                    Flag::CaseInsensitive => self.wtr.write_str("i"),
+                    Flag::MultiLine => self.wtr.write_str("m"),
+                    Flag::DotMatchesNewLine => self.wtr.write_str("s"),
+                    Flag::SwapGreed => self.wtr.write_str("U"),
+                    Flag::Unicode => self.wtr.write_str("u"),
+                    Flag::IgnoreWhitespace => self.wtr.write_str("x"),
+                },
             }?;
         }
         Ok(())
@@ -414,15 +406,16 @@ impl<'p, W: fmt::Write> Writer<'p, W> {
 
 #[cfg(test)]
 mod tests {
-    use ast::parse::ParserBuilder;
     use super::Printer;
+    use ast::parse::ParserBuilder;
 
     fn roundtrip(given: &str) {
         roundtrip_with(|b| b, given);
     }
 
     fn roundtrip_with<F>(mut f: F, given: &str)
-    where F: FnMut(&mut ParserBuilder) -> &mut ParserBuilder
+    where
+        F: FnMut(&mut ParserBuilder) -> &mut ParserBuilder,
     {
         let mut builder = ParserBuilder::new();
         f(&mut builder);

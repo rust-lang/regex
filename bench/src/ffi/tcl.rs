@@ -80,8 +80,8 @@ pub struct Error(());
 
 impl Regex {
     pub fn new(pattern: &str) -> Result<Regex, Error> {
-        ONCE.call_once(|| {
-            unsafe { Tcl_CreateInterp(); }
+        ONCE.call_once(|| unsafe {
+            Tcl_CreateInterp();
         });
 
         let pat = Text::new(pattern.to_owned());
@@ -91,21 +91,13 @@ impl Regex {
         if re.is_null() {
             return Err(Error(()));
         }
-        Ok(Regex {
-            pat: pat,
-            re: re,
-        })
+        Ok(Regex { pat: pat, re: re })
     }
 
     pub fn is_match(&self, text: &Text) -> bool {
-        let result = unsafe { Tcl_RegExpExecObj(
-            ptr::null_mut(),
-            self.re,
-            text.obj,
-            0,
-            1,
-            0,
-        ) };
+        let result = unsafe {
+            Tcl_RegExpExecObj(ptr::null_mut(), self.re, text.obj, 0, 1, 0)
+        };
         if result == -1 {
             panic!("Tcl_RegExpExecObj failed");
         }
@@ -113,22 +105,20 @@ impl Regex {
     }
 
     pub fn find_iter<'r, 't>(&'r self, text: &'t Text) -> FindMatches<'r, 't> {
-        FindMatches {
-            re: self,
-            text: text,
-            last_match: 0,
-        }
+        FindMatches { re: self, text: text, last_match: 0 }
     }
 
     fn find_at(&self, text: &Text, start: usize) -> Option<(usize, usize)> {
-        let result = unsafe { Tcl_RegExpExecObj(
-            ptr::null_mut(),
-            self.re,
-            text.obj,
-            start as c_int,
-            1,
-            0,
-        ) };
+        let result = unsafe {
+            Tcl_RegExpExecObj(
+                ptr::null_mut(),
+                self.re,
+                text.obj,
+                start as c_int,
+                1,
+                0,
+            )
+        };
         if result == -1 {
             panic!("Tcl_RegExpExecObj failed");
         } else if result == 0 {
@@ -207,17 +197,12 @@ struct tcl_regexp_indices {
     end: c_long,
 }
 
-extern {
+extern "C" {
     fn Tcl_CreateInterp() -> *mut tcl_interp;
 
-    fn Tcl_NewStringObj(
-        pat: *const c_char,
-        len: c_int,
-    ) -> *mut tcl_obj;
+    fn Tcl_NewStringObj(pat: *const c_char, len: c_int) -> *mut tcl_obj;
 
-    fn TclFreeObj(
-        obj: *mut tcl_obj,
-    );
+    fn TclFreeObj(obj: *mut tcl_obj);
 
     fn Tcl_GetRegExpFromObj(
         int: *mut tcl_interp,
@@ -234,8 +219,5 @@ extern {
         flags: c_int,
     ) -> c_int;
 
-    fn Tcl_RegExpGetInfo(
-        re: *mut tcl_regexp,
-        info: *mut tcl_regexp_info,
-    );
+    fn Tcl_RegExpGetInfo(re: *mut tcl_regexp, info: *mut tcl_regexp_info);
 }

@@ -15,10 +15,7 @@ extern crate libpcre_sys;
 extern crate memmap;
 #[cfg(feature = "re-onig")]
 extern crate onig;
-#[cfg(any(
-    feature = "re-rust",
-    feature = "re-rust-bytes",
-  ))]
+#[cfg(any(feature = "re-rust", feature = "re-rust-bytes",))]
 extern crate regex;
 #[cfg(feature = "re-rust")]
 extern crate regex_syntax;
@@ -71,9 +68,8 @@ fn main() {
         .and_then(|d| d.deserialize())
         .unwrap_or_else(|e| e.exit());
 
-    let mmap = unsafe {
-        Mmap::map(&File::open(&args.arg_file).unwrap()).unwrap()
-    };
+    let mmap =
+        unsafe { Mmap::map(&File::open(&args.arg_file).unwrap()).unwrap() };
     let haystack = unsafe { str::from_utf8_unchecked(&mmap) };
 
     println!("{}", args.count(&haystack));
@@ -108,10 +104,13 @@ macro_rules! nada {
     ($feature:expr, $name:ident) => {
         #[cfg(not(feature = $feature))]
         fn $name(_pat: &str, _haystack: &str) -> usize {
-            panic!("Support not enabled. Re-compile with '--features {}' \
-                    to enable.", $feature)
+            panic!(
+                "Support not enabled. Re-compile with '--features {}' \
+                 to enable.",
+                $feature
+            )
         }
-    }
+    };
 }
 
 nada!("re-onig", count_onig);
@@ -135,15 +134,9 @@ fn count_pcre2(pat: &str, haystack: &str) -> usize {
     Regex::new(pat).unwrap().find_iter(haystack).count()
 }
 
-#[cfg(not(any(
-    feature = "re-stdcpp",
-    feature = "re-boost",
-  )))]
+#[cfg(not(any(feature = "re-stdcpp", feature = "re-boost",)))]
 nada!("re-stdcpp", count_stdcpp);
-#[cfg(any(
-    feature = "re-stdcpp",
-    feature = "re-boost",
-  ))]
+#[cfg(any(feature = "re-stdcpp", feature = "re-boost",))]
 fn count_stdcpp(pat: &str, haystack: &str) -> usize {
     use ffi::stdcpp::Regex;
     Regex::new(pat).unwrap().find_iter(haystack).count()

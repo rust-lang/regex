@@ -40,7 +40,7 @@ impl<I: Interval> IntervalSet<I> {
     ///
     /// The given ranges do not need to be in any specific order, and ranges
     /// may overlap.
-    pub fn new<T: IntoIterator<Item=I>>(intervals: T) -> IntervalSet<I> {
+    pub fn new<T: IntoIterator<Item = I>>(intervals: T) -> IntervalSet<I> {
         let mut set = IntervalSet { ranges: intervals.into_iter().collect() };
         set.canonicalize();
         set
@@ -146,8 +146,7 @@ impl<I: Interval> IntervalSet<I> {
         // each class.
         let drain_end = self.ranges.len();
         let (mut a, mut b) = (0, 0);
-    'LOOP:
-        while a < drain_end && b < other.ranges.len() {
+        'LOOP: while a < drain_end && b < other.ranges.len() {
             // Basically, the easy cases are when neither range overlaps with
             // each other. If the `b` range is less than our current `a`
             // range, then we can skip it and move on.
@@ -447,11 +446,13 @@ pub trait Interval:
         let (lower1, upper1) = (self.lower(), self.upper());
         let (lower2, upper2) = (other.lower(), other.upper());
         (lower2 <= lower1 && lower1 <= upper2)
-        && (lower2 <= upper1 && upper1 <= upper2)
+            && (lower2 <= upper1 && upper1 <= upper2)
     }
 }
 
-pub trait Bound: Copy + Clone + Debug + Eq + PartialEq + PartialOrd + Ord {
+pub trait Bound:
+    Copy + Clone + Debug + Eq + PartialEq + PartialOrd + Ord
+{
     fn min_value() -> Self;
     fn max_value() -> Self;
     fn as_u32(self) -> u32;
@@ -460,17 +461,33 @@ pub trait Bound: Copy + Clone + Debug + Eq + PartialEq + PartialOrd + Ord {
 }
 
 impl Bound for u8 {
-    fn min_value() -> Self { u8::MIN }
-    fn max_value() -> Self { u8::MAX }
-    fn as_u32(self) -> u32 { self as u32 }
-    fn increment(self) -> Self { self.checked_add(1).unwrap() }
-    fn decrement(self) -> Self { self.checked_sub(1).unwrap() }
+    fn min_value() -> Self {
+        u8::MIN
+    }
+    fn max_value() -> Self {
+        u8::MAX
+    }
+    fn as_u32(self) -> u32 {
+        self as u32
+    }
+    fn increment(self) -> Self {
+        self.checked_add(1).unwrap()
+    }
+    fn decrement(self) -> Self {
+        self.checked_sub(1).unwrap()
+    }
 }
 
 impl Bound for char {
-    fn min_value() -> Self { '\x00' }
-    fn max_value() -> Self { '\u{10FFFF}' }
-    fn as_u32(self) -> u32 { self as u32 }
+    fn min_value() -> Self {
+        '\x00'
+    }
+    fn max_value() -> Self {
+        '\u{10FFFF}'
+    }
+    fn as_u32(self) -> u32 {
+        self as u32
+    }
 
     fn increment(self) -> Self {
         match self {

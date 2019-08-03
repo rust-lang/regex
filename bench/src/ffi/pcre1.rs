@@ -10,15 +10,14 @@
 
 #![allow(non_snake_case)]
 
-use std::ffi::{CString, CStr};
+use std::ffi::{CStr, CString};
 use std::fmt;
 use std::ptr;
 
 use libc::{c_char, c_int, c_void};
 use libpcre_sys::{
-    PCRE_UTF8, PCRE_NO_UTF8_CHECK, PCRE_ERROR_NOMATCH,
-    pcre, pcre_extra,
-    pcre_compile, pcre_free, pcre_study, pcre_free_study, pcre_exec,
+    pcre, pcre_compile, pcre_exec, pcre_extra, pcre_free, pcre_free_study,
+    pcre_study, PCRE_ERROR_NOMATCH, PCRE_NO_UTF8_CHECK, PCRE_UTF8,
 };
 
 const PCRE_UCP: c_int = 0x20000000;
@@ -53,32 +52,29 @@ impl Regex {
         let pattern = CString::new(pattern.to_owned()).unwrap();
         let mut errptr: *const c_char = ptr::null();
         let mut erroffset: c_int = 0;
-        let code = unsafe { pcre_compile(
-            pattern.as_ptr(),
-            PCRE_UCP | PCRE_UTF8,
-            &mut errptr,
-            &mut erroffset,
-            ptr::null(),
-        ) };
+        let code = unsafe {
+            pcre_compile(
+                pattern.as_ptr(),
+                PCRE_UCP | PCRE_UTF8,
+                &mut errptr,
+                &mut erroffset,
+                ptr::null(),
+            )
+        };
         if code.is_null() {
-            let msg = unsafe {
-                CStr::from_ptr(errptr).to_str().unwrap().to_owned()
-            };
+            let msg =
+                unsafe { CStr::from_ptr(errptr).to_str().unwrap().to_owned() };
             return Err(Error { msg: msg, offset: erroffset });
         }
 
-        let extra = unsafe { pcre_study(
-            code,
-            PCRE_STUDY_JIT_COMPLETE,
-            &mut errptr,
-        ) };
+        let extra =
+            unsafe { pcre_study(code, PCRE_STUDY_JIT_COMPLETE, &mut errptr) };
         if extra.is_null() {
             if errptr.is_null() {
                 panic!("unexpected error. Maybe JIT support isn't enabled?");
             }
-            let msg = unsafe {
-                CStr::from_ptr(errptr).to_str().unwrap().to_owned()
-            };
+            let msg =
+                unsafe { CStr::from_ptr(errptr).to_str().unwrap().to_owned() };
             return Err(Error { msg: msg, offset: 0 });
         }
         Ok(Regex { code: code, extra: extra })
@@ -89,26 +85,24 @@ impl Regex {
     }
 
     pub fn find_iter<'r, 't>(&'r self, text: &'t str) -> FindMatches<'r, 't> {
-        FindMatches {
-            re: self,
-            text: text,
-            last_match_end: 0,
-        }
+        FindMatches { re: self, text: text, last_match_end: 0 }
     }
 
     fn find_at(&self, text: &str, start: usize) -> Option<(usize, usize)> {
         const OVEC_SIZE: usize = 15 * 3; // hopefully enough for benchmarks?
         let mut ovec: [c_int; OVEC_SIZE] = [0; OVEC_SIZE];
-        let err = unsafe { pcre_exec(
-            self.code,
-            self.extra,
-            text.as_ptr() as *const i8,
-            text.len() as c_int,
-            start as c_int,
-            PCRE_NO_UTF8_CHECK,
-            ovec.as_mut_ptr(),
-            OVEC_SIZE as c_int,
-        ) };
+        let err = unsafe {
+            pcre_exec(
+                self.code,
+                self.extra,
+                text.as_ptr() as *const i8,
+                text.len() as c_int,
+                start as c_int,
+                PCRE_NO_UTF8_CHECK,
+                ovec.as_mut_ptr(),
+                OVEC_SIZE as c_int,
+            )
+        };
         if err == PCRE_ERROR_NOMATCH {
             None
         } else if err < 0 {

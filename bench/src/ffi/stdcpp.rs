@@ -10,7 +10,7 @@
 
 #![allow(non_camel_case_types)]
 
-use libc::{c_uchar, c_int, c_void};
+use libc::{c_int, c_uchar, c_void};
 
 /// Regex wraps a std::regex regular expression.
 ///
@@ -23,7 +23,9 @@ unsafe impl Send for Regex {}
 
 impl Drop for Regex {
     fn drop(&mut self) {
-        unsafe { stdcpp_regexp_free(self.re); }
+        unsafe {
+            stdcpp_regexp_free(self.re);
+        }
     }
 }
 
@@ -42,12 +44,7 @@ impl Regex {
     }
 
     pub fn find_iter<'r, 't>(&'r self, text: &'t str) -> FindMatches<'r, 't> {
-        FindMatches {
-            re: self,
-            text: text,
-            last_end: 0,
-            last_match: None,
-        }
+        FindMatches { re: self, text: text, last_end: 0, last_match: None }
     }
 
     fn find_at(&self, text: &str, start: usize) -> Option<(usize, usize)> {
@@ -143,7 +140,7 @@ impl<'a> From<&'a str> for stdcpp_string {
     }
 }
 
-extern {
+extern "C" {
     fn stdcpp_regexp_new(pat: stdcpp_string) -> *mut stdcpp_regexp;
     fn stdcpp_regexp_free(re: *mut stdcpp_regexp);
     fn stdcpp_regexp_match(

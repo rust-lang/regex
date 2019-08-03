@@ -19,13 +19,13 @@ macro_rules! regex_new {
             .only_utf8(false)
             .build()
             .map(|e| e.into_byte_regex())
-    }}
+    }};
 }
 
 macro_rules! regex {
     ($re:expr) => {
         regex_new!($re).unwrap()
-    }
+    };
 }
 
 macro_rules! regex_set_new {
@@ -36,13 +36,13 @@ macro_rules! regex_set_new {
             .only_utf8(false)
             .build()
             .map(|e| e.into_byte_regex_set())
-    }}
+    }};
 }
 
 macro_rules! regex_set {
     ($res:expr) => {
         regex_set_new!($res).unwrap()
-    }
+    };
 }
 
 // Must come before other module definitions.

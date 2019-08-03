@@ -80,7 +80,7 @@ impl SSSE3VectorBuilder {
 #[allow(non_camel_case_types)]
 #[repr(transparent)]
 pub struct u8x16 {
-    vector: __m128i
+    vector: __m128i,
 }
 
 impl u8x16 {
@@ -135,17 +135,13 @@ impl u8x16 {
     #[inline]
     pub fn and(self, other: u8x16) -> u8x16 {
         // Safe because we know SSSE3 is enabled.
-        unsafe {
-            u8x16 { vector: _mm_and_si128(self.vector, other.vector) }
-        }
+        unsafe { u8x16 { vector: _mm_and_si128(self.vector, other.vector) } }
     }
 
     #[inline]
     pub fn movemask(self) -> u32 {
         // Safe because we know SSSE3 is enabled.
-        unsafe {
-            _mm_movemask_epi8(self.vector) as u32
-        }
+        unsafe { _mm_movemask_epi8(self.vector) as u32 }
     }
 
     #[inline]
@@ -167,9 +163,7 @@ impl u8x16 {
     #[inline]
     pub fn bit_shift_right_4(self) -> u8x16 {
         // Safe because we know SSSE3 is enabled.
-        unsafe {
-            u8x16 { vector: _mm_srli_epi16(self.vector, 4) }
-        }
+        unsafe { u8x16 { vector: _mm_srli_epi16(self.vector, 4) } }
     }
 
     #[inline]

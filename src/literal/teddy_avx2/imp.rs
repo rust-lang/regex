@@ -12,7 +12,7 @@ use std::cmp;
 use aho_corasick::{self, AhoCorasick, AhoCorasickBuilder};
 use syntax::hir::literal::Literals;
 
-use vector::avx2::{AVX2VectorBuilder, u8x32};
+use vector::avx2::{u8x32, AVX2VectorBuilder};
 
 /// Corresponds to the number of bytes read at a time in the haystack.
 const BLOCK_SIZE: usize = 32;
@@ -70,7 +70,8 @@ impl Teddy {
             return None;
         }
 
-        let pats: Vec<_> = pats.literals().iter().map(|p|p.to_vec()).collect();
+        let pats: Vec<_> =
+            pats.literals().iter().map(|p| p.to_vec()).collect();
         let min_len = pats.iter().map(|p| p.len()).min().unwrap_or(0);
         // Don't allow any empty patterns and require that we have at
         // least one pattern.
@@ -347,12 +348,10 @@ impl Teddy {
     /// block based approach.
     #[inline(never)]
     fn slow(&self, haystack: &[u8], pos: usize) -> Option<Match> {
-        self.ac.find(&haystack[pos..]).map(|m| {
-            Match {
-                pat: m.pattern(),
-                start: pos + m.start(),
-                end: pos + m.end(),
-            }
+        self.ac.find(&haystack[pos..]).map(|m| Match {
+            pat: m.pattern(),
+            start: pos + m.start(),
+            end: pos + m.end(),
         })
     }
 }
@@ -450,10 +449,7 @@ struct Mask {
 impl Mask {
     /// Create a new mask with no members.
     fn new(vb: AVX2VectorBuilder) -> Mask {
-        Mask {
-            lo: vb.u8x32_splat(0),
-            hi: vb.u8x32_splat(0),
-        }
+        Mask { lo: vb.u8x32_splat(0), hi: vb.u8x32_splat(0) }
     }
 
     /// Adds the given byte to the given bucket.

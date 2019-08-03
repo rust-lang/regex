@@ -60,7 +60,9 @@ cfg_if! {
 // defined below. Effectively, it allows us to use the same tests for both
 // native and dynamic regexes.
 macro_rules! regex {
-    ($re:expr) => { ::Regex::new(&$re.to_owned()).unwrap() }
+    ($re:expr) => {
+        ::Regex::new(&$re.to_owned()).unwrap()
+    };
 }
 
 cfg_if! {
@@ -119,7 +121,7 @@ cfg_if! {
 macro_rules! bench_match {
     ($name:ident, $pattern:expr, $haystack:expr) => {
         bench_is_match!($name, true, regex!($pattern), $haystack);
-    }
+    };
 }
 
 // USAGE: bench_not_match!(name, pattern, haystack)
@@ -136,7 +138,7 @@ macro_rules! bench_match {
 macro_rules! bench_not_match {
     ($name:ident, $pattern:expr, $haystack:expr) => {
         bench_is_match!($name, false, regex!($pattern), $haystack);
-    }
+    };
 }
 
 // USAGE: bench_is_match!(name, is_match, regex, haystack)
@@ -182,7 +184,7 @@ macro_rules! bench_is_match {
                 }
             });
         }
-    }
+    };
 }
 
 // USAGE: bench_find!(name, pattern, count, haystack)
@@ -214,7 +216,7 @@ macro_rules! bench_find {
                 assert_eq!($count, count)
             });
         }
-    }
+    };
 }
 
 // USAGE: bench_captures!(name, pattern, groups, haystack);
@@ -229,7 +231,6 @@ macro_rules! bench_find {
 //   the capture groups in question.
 macro_rules! bench_captures {
     ($name:ident, $pattern:expr, $count:expr, $haystack:expr) => {
-
         #[cfg(feature = "re-rust")]
         #[bench]
         fn $name(b: &mut Bencher) {
@@ -242,14 +243,12 @@ macro_rules! bench_captures {
             let re = RE.lock().unwrap();
             let text = TEXT.lock().unwrap();
             b.bytes = text.len() as u64;
-            b.iter(|| {
-                match re.captures(&text) {
-                    None => assert!(false, "no captures"),
-                    Some(caps) => assert_eq!($count + 1, caps.len()),
-                }
+            b.iter(|| match re.captures(&text) {
+                None => assert!(false, "no captures"),
+                Some(caps) => assert_eq!($count + 1, caps.len()),
             });
         }
-    }
+    };
 }
 
 // USAGE: bench_is_match_set!(name, is_match, regex, haystack)
@@ -275,9 +274,9 @@ macro_rules! bench_is_match_set {
                 }
             });
         }
-    }
+    };
 }
- 
+
 // USAGE: bench_matches_set!(name, is_match, regex, haystack)
 macro_rules! bench_matches_set {
     ($name:ident, $is_match:expr, $re:expr, $haystack:expr) => {
@@ -301,7 +300,7 @@ macro_rules! bench_matches_set {
                 }
             });
         }
-    }
+    };
 }
 
 cfg_if! {

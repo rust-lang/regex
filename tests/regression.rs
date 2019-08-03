@@ -64,11 +64,31 @@ mat!(anchored_prefix2, r"^a\S", "foo boo a ", None);
 mat!(anchored_prefix3, r"^-[a-z]", "r-f", None);
 
 // See: https://github.com/rust-lang/regex/issues/204
-split!(split_on_word_boundary, r"\b", r"Should this (work?)",
-       &[t!(""), t!("Should"), t!(" "), t!("this"),
-         t!(" ("), t!("work"), t!("?)")]);
-matiter!(word_boundary_dfa, r"\b", "a b c",
-         (0, 0), (1, 1), (2, 2), (3, 3), (4, 4), (5, 5));
+split!(
+    split_on_word_boundary,
+    r"\b",
+    r"Should this (work?)",
+    &[
+        t!(""),
+        t!("Should"),
+        t!(" "),
+        t!("this"),
+        t!(" ("),
+        t!("work"),
+        t!("?)")
+    ]
+);
+matiter!(
+    word_boundary_dfa,
+    r"\b",
+    "a b c",
+    (0, 0),
+    (1, 1),
+    (2, 2),
+    (3, 3),
+    (4, 4),
+    (5, 5)
+);
 
 // See: https://github.com/rust-lang/regex/issues/268
 matiter!(partial_anchor, r"^a|b", "ba", (0, 1));
@@ -81,8 +101,16 @@ ismatch!(partial_anchor_alternate_end, r"a$|z", "ayyyyy", false);
 mat!(lits_unambiguous1, r"(ABC|CDA|BC)X", "CDAX", Some((0, 4)));
 
 // See: https://github.com/rust-lang/regex/issues/291
-mat!(lits_unambiguous2, r"((IMG|CAM|MG|MB2)_|(DSCN|CIMG))(?P<n>[0-9]+)$",
-     "CIMG2341", Some((0, 8)), Some((0, 4)), None, Some((0, 4)), Some((4, 8)));
+mat!(
+    lits_unambiguous2,
+    r"((IMG|CAM|MG|MB2)_|(DSCN|CIMG))(?P<n>[0-9]+)$",
+    "CIMG2341",
+    Some((0, 8)),
+    Some((0, 4)),
+    None,
+    Some((0, 4)),
+    Some((4, 8))
+);
 
 // See: https://github.com/rust-lang/regex/issues/271
 mat!(endl_or_wb, r"(?m:$)|(?-u:\b)", "\u{6084e}", Some((4, 4)));
@@ -101,36 +129,50 @@ matiter!(reverse_suffix3, r"\d\d\d000", "153.230000\n", (4, 10));
 
 // See: https://github.com/rust-lang/regex/issues/334
 // See: https://github.com/rust-lang/regex/issues/557
-mat!(captures_after_dfa_premature_end1, r"a(b*(X|$))?", "abcbX",
-     Some((0, 1)), None, None);
-mat!(captures_after_dfa_premature_end2, r"a(bc*(X|$))?", "abcbX",
-     Some((0, 1)), None, None);
-mat!(captures_after_dfa_premature_end3, r"(aa$)?", "aaz",
-     Some((0, 0)));
+mat!(
+    captures_after_dfa_premature_end1,
+    r"a(b*(X|$))?",
+    "abcbX",
+    Some((0, 1)),
+    None,
+    None
+);
+mat!(
+    captures_after_dfa_premature_end2,
+    r"a(bc*(X|$))?",
+    "abcbX",
+    Some((0, 1)),
+    None,
+    None
+);
+mat!(captures_after_dfa_premature_end3, r"(aa$)?", "aaz", Some((0, 0)));
 
 // See: https://github.com/rust-lang/regex/issues/437
 ismatch!(
     literal_panic,
     r"typename type\-parameter\-\d+\-\d+::.+",
     "test",
-    false);
+    false
+);
 
 // See: https://github.com/rust-lang/regex/issues/533
 ismatch!(
     blank_matches_nothing_between_space_and_tab,
     r"[[:blank:]]",
     "\u{a}\u{b}\u{c}\u{d}\u{e}\u{f}\
-    \u{10}\u{11}\u{12}\u{13}\u{14}\u{15}\u{16}\u{17}\
-    \u{18}\u{19}\u{1a}\u{1b}\u{1c}\u{1d}\u{1e}\u{1f}",
-    false);
+     \u{10}\u{11}\u{12}\u{13}\u{14}\u{15}\u{16}\u{17}\
+     \u{18}\u{19}\u{1a}\u{1b}\u{1c}\u{1d}\u{1e}\u{1f}",
+    false
+);
 
 ismatch!(
     inverted_blank_matches_everything_between_space_and_tab,
     r"^[[:^blank:]]+$",
     "\u{a}\u{b}\u{c}\u{d}\u{e}\u{f}\
-    \u{10}\u{11}\u{12}\u{13}\u{14}\u{15}\u{16}\u{17}\
-    \u{18}\u{19}\u{1a}\u{1b}\u{1c}\u{1d}\u{1e}\u{1f}",
-    true);
+     \u{10}\u{11}\u{12}\u{13}\u{14}\u{15}\u{16}\u{17}\
+     \u{18}\u{19}\u{1a}\u{1b}\u{1c}\u{1d}\u{1e}\u{1f}",
+    true
+);
 
 // Tests that our Aho-Corasick optimization works correctly. It only
 // kicks in when we have >32 literals. By "works correctly," we mean that

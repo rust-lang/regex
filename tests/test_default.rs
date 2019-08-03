@@ -24,26 +24,26 @@ macro_rules! regex_new {
     ($re:expr) => {{
         use regex::Regex;
         Regex::new($re)
-    }}
+    }};
 }
 
 macro_rules! regex {
     ($re:expr) => {
         regex_new!($re).unwrap()
-    }
+    };
 }
 
 macro_rules! regex_set_new {
     ($re:expr) => {{
         use regex::RegexSet;
         RegexSet::new($re)
-    }}
+    }};
 }
 
 macro_rules! regex_set {
     ($res:expr) => {
         regex_set_new!($res).unwrap()
-    }
+    };
 }
 
 // Must come before other module definitions.
@@ -88,9 +88,9 @@ fn allow_octal() {
 
 #[test]
 fn oibits() {
-    use std::panic::UnwindSafe;
-    use regex::{Regex, RegexBuilder};
     use regex::bytes;
+    use regex::{Regex, RegexBuilder};
+    use std::panic::UnwindSafe;
 
     fn assert_send<T: Send>() {}
     fn assert_sync<T: Sync>() {}
@@ -114,8 +114,8 @@ fn oibits() {
 // See: https://github.com/rust-lang/regex/issues/568
 #[test]
 fn oibits_regression() {
-    use std::panic;
     use regex::Regex;
+    use std::panic;
 
     let _ = panic::catch_unwind(|| Regex::new("a").unwrap());
 }

@@ -117,8 +117,11 @@ impl<'e, E: fmt::Display> fmt::Display for Formatter<'e, E> {
                 for span in &spans.multi_line {
                     notes.push(format!(
                         "on line {} (column {}) through line {} (column {})",
-                        span.start.line, span.start.column,
-                        span.end.line, span.end.column - 1));
+                        span.start.line,
+                        span.start.column,
+                        span.end.line,
+                        span.end.column - 1
+                    ));
                 }
                 writeln!(f, "{}", notes.join("\n"))?;
             }
@@ -174,11 +177,7 @@ impl<'p> Spans<'p> {
             line_count += 1;
         }
         let line_number_width =
-            if line_count <= 1 {
-                0
-            } else {
-                line_count.to_string().len()
-            };
+            if line_count <= 1 { 0 } else { line_count.to_string().len() };
         let mut spans = Spans {
             pattern: &fmter.pattern,
             line_number_width: line_number_width,
@@ -310,11 +309,14 @@ mod tests {
     // See: https://github.com/rust-lang/regex/issues/545
     #[test]
     fn repetition_quantifier_expects_a_valid_decimal() {
-        assert_panic_message(r"\\u{[^}]*}", r#"
+        assert_panic_message(
+            r"\\u{[^}]*}",
+            r#"
 regex parse error:
     \\u{[^}]*}
         ^
 error: repetition quantifier expects a valid decimal
-"#);
+"#,
+        );
     }
 }

@@ -1,10 +1,10 @@
-use ::std::ffi;
-use ::std::ffi::CString;
-use ::std::fmt;
-use ::std::str;
+use std::ffi;
+use std::ffi::CString;
+use std::fmt;
+use std::str;
 
-use ::libc::c_char;
-use ::regex;
+use libc::c_char;
+use regex;
 
 #[derive(Debug)]
 pub struct Error {
@@ -22,16 +22,15 @@ pub enum ErrorKind {
 
 impl Error {
     pub fn new(kind: ErrorKind) -> Error {
-        Error {
-            message: None,
-            kind: kind,
-        }
+        Error { message: None, kind: kind }
     }
 
     pub fn is_err(&self) -> bool {
         match self.kind {
             ErrorKind::None => false,
-            ErrorKind::Str(_) | ErrorKind::Regex(_) | ErrorKind::Nul(_) => true,
+            ErrorKind::Str(_) | ErrorKind::Regex(_) | ErrorKind::Nul(_) => {
+                true
+            }
         }
     }
 }

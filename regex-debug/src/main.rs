@@ -12,9 +12,9 @@ use std::process;
 use std::result;
 
 use docopt::Docopt;
-use syntax::hir::Hir;
-use syntax::hir::literal::Literals;
 use regex::internal::{Compiler, LiteralSearcher};
+use syntax::hir::literal::Literals;
+use syntax::hir::Hir;
 
 const USAGE: &'static str = "
 Usage:
@@ -83,8 +83,8 @@ type Result<T> = result::Result<T, Box<error::Error + Send + Sync>>;
 
 fn main() {
     let mut args: Args = Docopt::new(USAGE)
-                                .and_then(|d| d.deserialize())
-                                .unwrap_or_else(|e| e.exit());
+        .and_then(|d| d.deserialize())
+        .unwrap_or_else(|e| e.exit());
     if args.flag_dfa_reverse {
         args.flag_dfa = true;
     }
@@ -131,9 +131,7 @@ fn cmd_ast(args: &Args) -> Result<()> {
 fn cmd_hir(args: &Args) -> Result<()> {
     use syntax::ParserBuilder;
 
-    let mut parser = ParserBuilder::new()
-        .allow_invalid_utf8(false)
-        .build();
+    let mut parser = ParserBuilder::new().allow_invalid_utf8(false).build();
     let hir = parser.parse(&args.arg_pattern)?;
     println!("{:#?}", hir);
     Ok(())
@@ -141,12 +139,11 @@ fn cmd_hir(args: &Args) -> Result<()> {
 
 fn cmd_literals(args: &Args) -> Result<()> {
     let exprs = args.parse_many()?;
-    let mut lits =
-        if args.cmd_prefixes {
-            args.literals(&exprs, |lits, e| lits.union_prefixes(e))
-        } else {
-            args.literals(&exprs, |lits, e| lits.union_suffixes(e))
-        };
+    let mut lits = if args.cmd_prefixes {
+        args.literals(&exprs, |lits, e| lits.union_prefixes(e))
+    } else {
+        args.literals(&exprs, |lits, e| lits.union_suffixes(e))
+    };
     if !args.flag_all_literals {
         if args.cmd_prefixes {
             lits = lits.unambiguous_prefixes();
@@ -197,20 +194,20 @@ fn cmd_captures(args: &Args) -> Result<()> {
 
 fn cmd_compile(args: &Args) -> Result<()> {
     let exprs = args.parse_many()?;
-    let compiler =
-        args.compiler()
-            .bytes(args.flag_bytes)
-            .only_utf8(!args.flag_bytes)
-            .dfa(args.flag_dfa)
-            .reverse(args.flag_dfa_reverse);
+    let compiler = args
+        .compiler()
+        .bytes(args.flag_bytes)
+        .only_utf8(!args.flag_bytes)
+        .dfa(args.flag_dfa)
+        .reverse(args.flag_dfa_reverse);
     let prog = compiler.compile(&exprs)?;
     print!("{:?}", prog);
     Ok(())
 }
 
 fn cmd_utf8_ranges(args: &Args) -> Result<()> {
-    use syntax::ParserBuilder;
     use syntax::hir::{self, HirKind};
+    use syntax::ParserBuilder;
     use utf8_ranges::Utf8Sequences;
 
     let hir = ParserBuilder::new()
@@ -218,9 +215,11 @@ fn cmd_utf8_ranges(args: &Args) -> Result<()> {
         .parse(&format!("[{}]", args.arg_class))?;
     let cls = match hir.into_kind() {
         HirKind::Class(hir::Class::Unicode(cls)) => cls,
-        _ => return Err(
-            format!("unexpected HIR, expected Unicode class").into(),
-        ),
+        _ => {
+            return Err(
+                format!("unexpected HIR, expected Unicode class").into()
+            )
+        }
     };
     let mut char_count = 0;
     for (i, range) in cls.iter().enumerate() {

@@ -25,10 +25,7 @@ impl ParserBuilder {
 
     /// Build a parser from this configuration with the given pattern.
     pub fn build(&self) -> Parser {
-        Parser {
-            ast: self.ast.build(),
-            hir: self.hir.build(),
-        }
+        Parser { ast: self.ast.build(), hir: self.hir.build() }
     }
 
     /// Set the nesting limit for this parser.
@@ -132,10 +129,7 @@ impl ParserBuilder {
     ///
     /// By default this is disabled. It may alternatively be selectively
     /// enabled in the regular expression itself via the `s` flag.
-    pub fn dot_matches_new_line(
-        &mut self,
-        yes: bool,
-    ) -> &mut ParserBuilder {
+    pub fn dot_matches_new_line(&mut self, yes: bool) -> &mut ParserBuilder {
         self.hir.dot_matches_new_line(yes);
         self
     }

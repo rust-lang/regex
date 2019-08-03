@@ -19,7 +19,14 @@ matset!(set18, &["a", "β"], "β", 1);
 
 nomatset!(nset1, &["a", "a"], "b");
 nomatset!(nset2, &["^foo", "bar$"], "bar foo");
-nomatset!(nset3, { let xs: &[&str] = &[]; xs }, "a");
+nomatset!(
+    nset3,
+    {
+        let xs: &[&str] = &[];
+        xs
+    },
+    "a"
+);
 nomatset!(nset4, &[r"^rooted$", r"\.log$"], "notrooted");
 
 // See: https://github.com/rust-lang/regex/issues/187

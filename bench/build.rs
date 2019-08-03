@@ -62,16 +62,18 @@ fn main() {
 
     if env::var("CARGO_FEATURE_RE_DPHOBOS_DMD").is_ok() {
         process::Command::new("dmd")
-                    .arg("--version")
-                    .stdout(process::Stdio::null())
-                    .stderr(process::Stdio::null())
-                    .spawn()
-                    .unwrap();
+            .arg("--version")
+            .stdout(process::Stdio::null())
+            .stderr(process::Stdio::null())
+            .spawn()
+            .unwrap();
 
         let out_dir = env::var("OUT_DIR").unwrap();
         let out_file = &format!("-of={}/libdphobos-dmd.a", out_dir);
-        let is_compile_time = env::var("CARGO_FEATURE_RE_DPHOBOS_DMD_CT").is_ok();
-        let extra_args = if is_compile_time { vec!["-version=CtRegex"] } else { vec![] };
+        let is_compile_time =
+            env::var("CARGO_FEATURE_RE_DPHOBOS_DMD_CT").is_ok();
+        let extra_args =
+            if is_compile_time { vec!["-version=CtRegex"] } else { vec![] };
 
         let res = process::Command::new("dmd")
             .arg("-w")
@@ -99,17 +101,19 @@ fn main() {
 
     if env::var("CARGO_FEATURE_RE_DPHOBOS_LDC").is_ok() {
         process::Command::new("ldc")
-                    .arg("--version")
-                    .stdout(process::Stdio::null())
-                    .stderr(process::Stdio::null())
-                    .spawn()
-                    .unwrap();
+            .arg("--version")
+            .stdout(process::Stdio::null())
+            .stderr(process::Stdio::null())
+            .spawn()
+            .unwrap();
 
         let out_dir = env::var("OUT_DIR").unwrap();
         let out_file = &format!("-of={}/libdphobos-ldc.a", out_dir);
 
-        let is_compile_time = env::var("CARGO_FEATURE_RE_DPHOBOS_LDC_CT").is_ok();
-        let extra_args = if is_compile_time { vec!["-d-version=CtRegex"] } else { vec![] };
+        let is_compile_time =
+            env::var("CARGO_FEATURE_RE_DPHOBOS_LDC_CT").is_ok();
+        let extra_args =
+            if is_compile_time { vec!["-d-version=CtRegex"] } else { vec![] };
 
         let res = process::Command::new("ldc")
             .arg("-w")

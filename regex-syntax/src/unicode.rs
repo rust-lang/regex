@@ -78,7 +78,8 @@ pub fn contains_simple_case_mapping(start: char, end: char) -> bool {
             } else {
                 Ordering::Less
             }
-        }).is_ok()
+        })
+        .is_ok()
 }
 
 /// A query for finding a character class defined by Unicode. This supports
@@ -148,13 +149,13 @@ impl<'a> ClassQuery<'a> {
                             None => return Err(Error::PropertyValueNotFound),
                             Some(vals) => vals,
                         };
-                        let canon_val = match canonical_value(
-                            vals,
-                            &property_value,
-                        ) {
-                            None => return Err(Error::PropertyValueNotFound),
-                            Some(canon_val) => canon_val,
-                        };
+                        let canon_val =
+                            match canonical_value(vals, &property_value) {
+                                None => {
+                                    return Err(Error::PropertyValueNotFound)
+                                }
+                                Some(canon_val) => canon_val,
+                            };
                         CanonicalClassQuery::ByValue {
                             property_name: canon_name,
                             property_value: canon_val,
@@ -212,14 +213,10 @@ pub fn class<'a>(query: ClassQuery<'a>) -> Result<hir::ClassUnicode> {
     use self::CanonicalClassQuery::*;
 
     match query.canonicalize()? {
-        Binary(name) => {
-            property_set(property_bool::BY_NAME, name)
-                .map(hir_class)
-                .ok_or(Error::PropertyNotFound)
-        }
-        GeneralCategory("Any") => {
-            Ok(hir_class(&[('\0', '\u{10FFFF}')]))
-        }
+        Binary(name) => property_set(property_bool::BY_NAME, name)
+            .map(hir_class)
+            .ok_or(Error::PropertyNotFound),
+        GeneralCategory("Any") => Ok(hir_class(&[('\0', '\u{10FFFF}')])),
         GeneralCategory("Assigned") => {
             let mut cls =
                 property_set(general_category::BY_NAME, "Unassigned")
@@ -228,19 +225,13 @@ pub fn class<'a>(query: ClassQuery<'a>) -> Result<hir::ClassUnicode> {
             cls.negate();
             Ok(cls)
         }
-        GeneralCategory("ASCII") => {
-            Ok(hir_class(&[('\0', '\x7F')]))
-        }
-        GeneralCategory(name) => {
-            property_set(general_category::BY_NAME, name)
-                .map(hir_class)
-                .ok_or(Error::PropertyValueNotFound)
-        }
-        Script(name) => {
-            property_set(script::BY_NAME, name)
-                .map(hir_class)
-                .ok_or(Error::PropertyValueNotFound)
-        }
+        GeneralCategory("ASCII") => Ok(hir_class(&[('\0', '\x7F')])),
+        GeneralCategory(name) => property_set(general_category::BY_NAME, name)
+            .map(hir_class)
+            .ok_or(Error::PropertyValueNotFound),
+        Script(name) => property_set(script::BY_NAME, name)
+            .map(hir_class)
+            .ok_or(Error::PropertyValueNotFound),
         ByValue { property_name: "Age", property_value } => {
             let mut class = hir::ClassUnicode::empty();
             for set in ages(property_value)? {
@@ -253,11 +244,12 @@ pub fn class<'a>(query: ClassQuery<'a>) -> Result<hir::ClassUnicode> {
                 .map(hir_class)
                 .ok_or(Error::PropertyValueNotFound)
         }
-        ByValue { property_name: "Grapheme_Cluster_Break", property_value } => {
-            property_set(grapheme_cluster_break::BY_NAME, property_value)
-                .map(hir_class)
-                .ok_or(Error::PropertyValueNotFound)
-        }
+        ByValue {
+            property_name: "Grapheme_Cluster_Break",
+            property_value,
+        } => property_set(grapheme_cluster_break::BY_NAME, property_value)
+            .map(hir_class)
+            .ok_or(Error::PropertyValueNotFound),
         ByValue { property_name: "Sentence_Break", property_value } => {
             property_set(sentence_break::BY_NAME, property_value)
                 .map(hir_class)
@@ -320,8 +312,7 @@ fn normalize(x: &str) -> String {
 
 fn property_values(
     canonical_property_name: &'static str,
-) -> Option<PropertyValues>
-{
+) -> Option<PropertyValues> {
     ucd_util::property_values(PROPERTY_VALUES, canonical_property_name)
 }
 
@@ -373,7 +364,7 @@ fn ages(canonical_age: &str) -> Result<AgeIter> {
     let pos = AGES.iter().position(|&(age, _)| canonical_age == age);
     match pos {
         None => Err(Error::PropertyValueNotFound),
-        Some(i) => Ok(AgeIter { ages: &AGES[..i+1] }),
+        Some(i) => Ok(AgeIter { ages: &AGES[..i + 1] }),
     }
 }
 
@@ -452,6 +443,7 @@ mod tests {
         let q = ClassQuery::OneLetter('C');
         assert_eq!(
             q.canonicalize().unwrap(),
-            CanonicalClassQuery::GeneralCategory("Other"));
+            CanonicalClassQuery::GeneralCategory("Other")
+        );
     }
 }

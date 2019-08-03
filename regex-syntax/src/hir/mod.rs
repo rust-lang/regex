@@ -21,7 +21,7 @@ use ast::Span;
 use hir::interval::{Interval, IntervalSet, IntervalSetIter};
 use unicode;
 
-pub use hir::visitor::{Visitor, visit};
+pub use hir::visitor::{visit, Visitor};
 
 mod interval;
 pub mod literal;
@@ -229,10 +229,7 @@ impl Hir {
         info.set_match_empty(true);
         info.set_literal(true);
         info.set_alternation_literal(true);
-        Hir {
-            kind: HirKind::Empty,
-            info: info,
-        }
+        Hir { kind: HirKind::Empty, info: info }
     }
 
     /// Creates a literal HIR expression.
@@ -257,10 +254,7 @@ impl Hir {
         info.set_match_empty(false);
         info.set_literal(true);
         info.set_alternation_literal(true);
-        Hir {
-            kind: HirKind::Literal(lit),
-            info: info,
-        }
+        Hir { kind: HirKind::Literal(lit), info: info }
     }
 
     /// Creates a class HIR expression.
@@ -277,10 +271,7 @@ impl Hir {
         info.set_match_empty(false);
         info.set_literal(false);
         info.set_alternation_literal(false);
-        Hir {
-            kind: HirKind::Class(class),
-            info: info,
-        }
+        Hir { kind: HirKind::Class(class), info: info }
     }
 
     /// Creates an anchor assertion HIR expression.
@@ -313,10 +304,7 @@ impl Hir {
         if let Anchor::EndLine = anchor {
             info.set_line_anchored_end(true);
         }
-        Hir {
-            kind: HirKind::Anchor(anchor),
-            info: info,
-        }
+        Hir { kind: HirKind::Anchor(anchor), info: info }
     }
 
     /// Creates a word boundary assertion HIR expression.
@@ -339,10 +327,7 @@ impl Hir {
         if let WordBoundary::AsciiNegate = word_boundary {
             info.set_always_utf8(false);
         }
-        Hir {
-            kind: HirKind::WordBoundary(word_boundary),
-            info: info,
-        }
+        Hir { kind: HirKind::WordBoundary(word_boundary), info: info }
     }
 
     /// Creates a repetition HIR expression.
@@ -353,26 +338,23 @@ impl Hir {
         // If this operator can match the empty string, then it can never
         // be anchored.
         info.set_anchored_start(
-            !rep.is_match_empty() && rep.hir.is_anchored_start()
+            !rep.is_match_empty() && rep.hir.is_anchored_start(),
         );
         info.set_anchored_end(
-            !rep.is_match_empty() && rep.hir.is_anchored_end()
+            !rep.is_match_empty() && rep.hir.is_anchored_end(),
         );
         info.set_line_anchored_start(
-            !rep.is_match_empty() && rep.hir.is_anchored_start()
+            !rep.is_match_empty() && rep.hir.is_anchored_start(),
         );
         info.set_line_anchored_end(
-            !rep.is_match_empty() && rep.hir.is_anchored_end()
+            !rep.is_match_empty() && rep.hir.is_anchored_end(),
         );
         info.set_any_anchored_start(rep.hir.is_any_anchored_start());
         info.set_any_anchored_end(rep.hir.is_any_anchored_end());
         info.set_match_empty(rep.is_match_empty() || rep.hir.is_match_empty());
         info.set_literal(false);
         info.set_alternation_literal(false);
-        Hir {
-            kind: HirKind::Repetition(rep),
-            info: info,
-        }
+        Hir { kind: HirKind::Repetition(rep), info: info }
     }
 
     /// Creates a group HIR expression.
@@ -389,10 +371,7 @@ impl Hir {
         info.set_match_empty(group.hir.is_match_empty());
         info.set_literal(false);
         info.set_alternation_literal(false);
-        Hir {
-            kind: HirKind::Group(group),
-            info: info,
-        }
+        Hir { kind: HirKind::Group(group), info: info }
     }
 
     /// Returns the concatenation of the given expressions.
@@ -401,7 +380,7 @@ impl Hir {
     pub fn concat(mut exprs: Vec<Hir>) -> Hir {
         match exprs.len() {
             0 => Hir::empty(),
-            1 => { exprs.pop().unwrap() }
+            1 => exprs.pop().unwrap(),
             _ => {
                 let mut info = HirInfo::new();
                 info.set_always_utf8(true);
@@ -420,14 +399,12 @@ impl Hir {
                     let x = info.is_all_assertions() && e.is_all_assertions();
                     info.set_all_assertions(x);
 
-                    let x =
-                        info.is_any_anchored_start()
+                    let x = info.is_any_anchored_start()
                         || e.is_any_anchored_start();
                     info.set_any_anchored_start(x);
 
                     let x =
-                        info.is_any_anchored_end()
-                        || e.is_any_anchored_end();
+                        info.is_any_anchored_end() || e.is_any_anchored_end();
                     info.set_any_anchored_end(x);
 
                     let x = info.is_match_empty() && e.is_match_empty();
@@ -436,8 +413,7 @@ impl Hir {
                     let x = info.is_literal() && e.is_literal();
                     info.set_literal(x);
 
-                    let x =
-                        info.is_alternation_literal()
+                    let x = info.is_alternation_literal()
                         && e.is_alternation_literal();
                     info.set_alternation_literal(x);
                 }
@@ -451,45 +427,42 @@ impl Hir {
                 // is actually one that is either not an assertion or is
                 // specifically the StartText assertion.
                 info.set_anchored_start(
-                    exprs.iter()
+                    exprs
+                        .iter()
                         .take_while(|e| {
                             e.is_anchored_start() || e.is_all_assertions()
                         })
-                        .any(|e| {
-                            e.is_anchored_start()
-                        }));
+                        .any(|e| e.is_anchored_start()),
+                );
                 // Similarly for the end anchor, but in reverse.
                 info.set_anchored_end(
-                    exprs.iter()
+                    exprs
+                        .iter()
                         .rev()
                         .take_while(|e| {
                             e.is_anchored_end() || e.is_all_assertions()
                         })
-                        .any(|e| {
-                            e.is_anchored_end()
-                        }));
+                        .any(|e| e.is_anchored_end()),
+                );
                 // Repeat the process for line anchors.
                 info.set_line_anchored_start(
-                    exprs.iter()
+                    exprs
+                        .iter()
                         .take_while(|e| {
                             e.is_line_anchored_start() || e.is_all_assertions()
                         })
-                        .any(|e| {
-                            e.is_line_anchored_start()
-                        }));
+                        .any(|e| e.is_line_anchored_start()),
+                );
                 info.set_line_anchored_end(
-                    exprs.iter()
+                    exprs
+                        .iter()
                         .rev()
                         .take_while(|e| {
                             e.is_line_anchored_end() || e.is_all_assertions()
                         })
-                        .any(|e| {
-                            e.is_line_anchored_end()
-                        }));
-                Hir {
-                    kind: HirKind::Concat(exprs),
-                    info: info,
-                }
+                        .any(|e| e.is_line_anchored_end()),
+                );
+                Hir { kind: HirKind::Concat(exprs), info: info }
             }
         }
     }
@@ -537,28 +510,21 @@ impl Hir {
                         && e.is_line_anchored_end();
                     info.set_line_anchored_end(x);
 
-                    let x =
-                        info.is_any_anchored_start()
+                    let x = info.is_any_anchored_start()
                         || e.is_any_anchored_start();
                     info.set_any_anchored_start(x);
 
                     let x =
-                        info.is_any_anchored_end()
-                        || e.is_any_anchored_end();
+                        info.is_any_anchored_end() || e.is_any_anchored_end();
                     info.set_any_anchored_end(x);
 
                     let x = info.is_match_empty() || e.is_match_empty();
                     info.set_match_empty(x);
 
-                    let x =
-                        info.is_alternation_literal()
-                        && e.is_literal();
+                    let x = info.is_alternation_literal() && e.is_literal();
                     info.set_alternation_literal(x);
                 }
-                Hir {
-                    kind: HirKind::Alternation(exprs),
-                    info: info,
-                }
+                Hir { kind: HirKind::Alternation(exprs), info: info }
             }
         }
     }
@@ -860,7 +826,8 @@ impl ClassUnicode {
     /// The given ranges do not need to be in any specific order, and ranges
     /// may overlap.
     pub fn new<I>(ranges: I) -> ClassUnicode
-    where I: IntoIterator<Item=ClassUnicodeRange>
+    where
+        I: IntoIterator<Item = ClassUnicodeRange>,
     {
         ClassUnicode { set: IntervalSet::new(ranges) }
     }
@@ -958,32 +925,43 @@ pub struct ClassUnicodeRange {
 
 impl fmt::Debug for ClassUnicodeRange {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let start =
-            if !self.start.is_whitespace() && !self.start.is_control() {
-                self.start.to_string()
-            } else {
-                format!("0x{:X}", self.start as u32)
-            };
-        let end =
-            if !self.end.is_whitespace() && !self.end.is_control() {
-                self.end.to_string()
-            } else {
-                format!("0x{:X}", self.end as u32)
-            };
+        let start = if !self.start.is_whitespace() && !self.start.is_control()
+        {
+            self.start.to_string()
+        } else {
+            format!("0x{:X}", self.start as u32)
+        };
+        let end = if !self.end.is_whitespace() && !self.end.is_control() {
+            self.end.to_string()
+        } else {
+            format!("0x{:X}", self.end as u32)
+        };
         f.debug_struct("ClassUnicodeRange")
-         .field("start", &start)
-         .field("end", &end)
-         .finish()
+            .field("start", &start)
+            .field("end", &end)
+            .finish()
     }
 }
 
 impl Interval for ClassUnicodeRange {
     type Bound = char;
 
-    #[inline] fn lower(&self) -> char { self.start }
-    #[inline] fn upper(&self) -> char { self.end }
-    #[inline] fn set_lower(&mut self, bound: char) { self.start = bound; }
-    #[inline] fn set_upper(&mut self, bound: char) { self.end = bound; }
+    #[inline]
+    fn lower(&self) -> char {
+        self.start
+    }
+    #[inline]
+    fn upper(&self) -> char {
+        self.end
+    }
+    #[inline]
+    fn set_lower(&mut self, bound: char) {
+        self.start = bound;
+    }
+    #[inline]
+    fn set_upper(&mut self, bound: char) {
+        self.end = bound;
+    }
 
     /// Apply simple case folding to this Unicode scalar value range.
     ///
@@ -1053,7 +1031,8 @@ impl ClassBytes {
     /// The given ranges do not need to be in any specific order, and ranges
     /// may overlap.
     pub fn new<I>(ranges: I) -> ClassBytes
-    where I: IntoIterator<Item=ClassBytesRange>
+    where
+        I: IntoIterator<Item = ClassBytesRange>,
     {
         ClassBytes { set: IntervalSet::new(ranges) }
     }
@@ -1160,10 +1139,22 @@ pub struct ClassBytesRange {
 impl Interval for ClassBytesRange {
     type Bound = u8;
 
-    #[inline] fn lower(&self) -> u8 { self.start }
-    #[inline] fn upper(&self) -> u8 { self.end }
-    #[inline] fn set_lower(&mut self, bound: u8) { self.start = bound; }
-    #[inline] fn set_upper(&mut self, bound: u8) { self.end = bound; }
+    #[inline]
+    fn lower(&self) -> u8 {
+        self.start
+    }
+    #[inline]
+    fn upper(&self) -> u8 {
+        self.end
+    }
+    #[inline]
+    fn set_lower(&mut self, bound: u8) {
+        self.start = bound;
+    }
+    #[inline]
+    fn set_upper(&mut self, bound: u8) {
+        self.end = bound;
+    }
 
     /// Apply simple case folding to this byte range. Only ASCII case mappings
     /// (for a-z) are applied.
@@ -1271,8 +1262,8 @@ impl WordBoundary {
     /// Returns true if and only if this word boundary assertion is negated.
     pub fn is_negated(&self) -> bool {
         match *self {
-            WordBoundary::Unicode |  WordBoundary::Ascii => false,
-            WordBoundary::UnicodeNegate |  WordBoundary::AsciiNegate => true,
+            WordBoundary::Unicode | WordBoundary::Ascii => false,
+            WordBoundary::UnicodeNegate | WordBoundary::AsciiNegate => true,
         }
     }
 }
@@ -1454,9 +1445,7 @@ macro_rules! define_bool {
 
 impl HirInfo {
     fn new() -> HirInfo {
-        HirInfo {
-            bools: 0,
-        }
+        HirInfo { bools: 0 }
     }
 
     define_bool!(0, is_always_utf8, set_always_utf8);
@@ -1485,10 +1474,8 @@ mod tests {
     }
 
     fn bclass(ranges: &[(u8, u8)]) -> ClassBytes {
-        let ranges: Vec<ClassBytesRange> = ranges
-            .iter()
-            .map(|&(s, e)| ClassBytesRange::new(s, e))
-            .collect();
+        let ranges: Vec<ClassBytesRange> =
+            ranges.iter().map(|&(s, e)| ClassBytesRange::new(s, e)).collect();
         ClassBytes::new(ranges)
     }
 
@@ -1520,7 +1507,10 @@ mod tests {
         cls_
     }
 
-    fn usymdifference(cls1: &ClassUnicode, cls2: &ClassUnicode) -> ClassUnicode {
+    fn usymdifference(
+        cls1: &ClassUnicode,
+        cls2: &ClassUnicode,
+    ) -> ClassUnicode {
         let mut cls_ = cls1.clone();
         cls_.symmetric_difference(cls2);
         cls_
@@ -1601,8 +1591,12 @@ mod tests {
         assert_eq!(expected, uranges(&cls));
 
         let cls = uclass(&[
-            ('c', 'f'), ('a', 'g'), ('d', 'j'), ('a', 'c'),
-            ('m', 'p'), ('l', 's'),
+            ('c', 'f'),
+            ('a', 'g'),
+            ('d', 'j'),
+            ('a', 'c'),
+            ('m', 'p'),
+            ('l', 's'),
         ]);
         let expected = vec![('a', 'j'), ('l', 's')];
         assert_eq!(expected, uranges(&cls));
@@ -1614,7 +1608,6 @@ mod tests {
         let cls = uclass(&[('\x00', '\u{10FFFF}'), ('\x00', '\u{10FFFF}')]);
         let expected = vec![('\x00', '\u{10FFFF}')];
         assert_eq!(expected, uranges(&cls));
-
 
         let cls = uclass(&[('a', 'a'), ('b', 'b')]);
         let expected = vec![('a', 'b')];
@@ -1636,8 +1629,12 @@ mod tests {
         assert_eq!(expected, branges(&cls));
 
         let cls = bclass(&[
-            (b'c', b'f'), (b'a', b'g'), (b'd', b'j'), (b'a', b'c'),
-            (b'm', b'p'), (b'l', b's'),
+            (b'c', b'f'),
+            (b'a', b'g'),
+            (b'd', b'j'),
+            (b'a', b'c'),
+            (b'm', b'p'),
+            (b'l', b's'),
         ]);
         let expected = vec![(b'a', b'j'), (b'l', b's')];
         assert_eq!(expected, branges(&cls));
@@ -1658,19 +1655,27 @@ mod tests {
     #[test]
     fn class_case_fold_unicode() {
         let cls = uclass(&[
-            ('C', 'F'), ('A', 'G'), ('D', 'J'), ('A', 'C'),
-            ('M', 'P'), ('L', 'S'), ('c', 'f'),
+            ('C', 'F'),
+            ('A', 'G'),
+            ('D', 'J'),
+            ('A', 'C'),
+            ('M', 'P'),
+            ('L', 'S'),
+            ('c', 'f'),
         ]);
         let expected = uclass(&[
-            ('A', 'J'), ('L', 'S'),
-            ('a', 'j'), ('l', 's'),
+            ('A', 'J'),
+            ('L', 'S'),
+            ('a', 'j'),
+            ('l', 's'),
             ('\u{17F}', '\u{17F}'),
         ]);
         assert_eq!(expected, ucasefold(&cls));
 
         let cls = uclass(&[('A', 'Z')]);
         let expected = uclass(&[
-            ('A', 'Z'), ('a', 'z'),
+            ('A', 'Z'),
+            ('a', 'z'),
             ('\u{17F}', '\u{17F}'),
             ('\u{212A}', '\u{212A}'),
         ]);
@@ -1678,7 +1683,8 @@ mod tests {
 
         let cls = uclass(&[('a', 'z')]);
         let expected = uclass(&[
-            ('A', 'Z'), ('a', 'z'),
+            ('A', 'Z'),
+            ('a', 'z'),
             ('\u{17F}', '\u{17F}'),
             ('\u{212A}', '\u{212A}'),
         ]);
@@ -1696,9 +1702,8 @@ mod tests {
         assert_eq!(cls, ucasefold(&cls));
 
         let cls = uclass(&[('k', 'k')]);
-        let expected = uclass(&[
-            ('K', 'K'), ('k', 'k'), ('\u{212A}', '\u{212A}'),
-        ]);
+        let expected =
+            uclass(&[('K', 'K'), ('k', 'k'), ('\u{212A}', '\u{212A}')]);
         assert_eq!(expected, ucasefold(&cls));
 
         let cls = uclass(&[('@', '@')]);
@@ -1708,13 +1713,16 @@ mod tests {
     #[test]
     fn class_case_fold_bytes() {
         let cls = bclass(&[
-            (b'C', b'F'), (b'A', b'G'), (b'D', b'J'), (b'A', b'C'),
-            (b'M', b'P'), (b'L', b'S'), (b'c', b'f'),
+            (b'C', b'F'),
+            (b'A', b'G'),
+            (b'D', b'J'),
+            (b'A', b'C'),
+            (b'M', b'P'),
+            (b'L', b'S'),
+            (b'c', b'f'),
         ]);
-        let expected = bclass(&[
-            (b'A', b'J'), (b'L', b'S'),
-            (b'a', b'j'), (b'l', b's'),
-        ]);
+        let expected =
+            bclass(&[(b'A', b'J'), (b'L', b'S'), (b'a', b'j'), (b'l', b's')]);
         assert_eq!(expected, bcasefold(&cls));
 
         let cls = bclass(&[(b'A', b'Z')]);
@@ -1756,7 +1764,9 @@ mod tests {
 
         let cls = uclass(&[('a', 'c'), ('x', 'z')]);
         let expected = uclass(&[
-            ('\x00', '\x60'), ('\x64', '\x77'), ('\x7B', '\u{10FFFF}'),
+            ('\x00', '\x60'),
+            ('\x64', '\x77'),
+            ('\x7B', '\u{10FFFF}'),
         ]);
         assert_eq!(expected, unegate(&cls));
 
@@ -1776,9 +1786,8 @@ mod tests {
         let expected = uclass(&[('\x00', '\u{10FFFF}')]);
         assert_eq!(expected, unegate(&cls));
 
-        let cls = uclass(&[
-            ('\x00', '\u{10FFFD}'), ('\u{10FFFF}', '\u{10FFFF}'),
-        ]);
+        let cls =
+            uclass(&[('\x00', '\u{10FFFD}'), ('\u{10FFFF}', '\u{10FFFF}')]);
         let expected = uclass(&[('\u{10FFFE}', '\u{10FFFE}')]);
         assert_eq!(expected, unegate(&cls));
 
@@ -1811,7 +1820,9 @@ mod tests {
 
         let cls = bclass(&[(b'a', b'c'), (b'x', b'z')]);
         let expected = bclass(&[
-            (b'\x00', b'\x60'), (b'\x64', b'\x77'), (b'\x7B', b'\xFF'),
+            (b'\x00', b'\x60'),
+            (b'\x64', b'\x77'),
+            (b'\x7B', b'\xFF'),
         ]);
         assert_eq!(expected, bnegate(&cls));
 
@@ -2183,7 +2194,7 @@ mod tests {
         // We run our test on a thread with a small stack size so we can
         // force the issue more easily.
         thread::Builder::new()
-            .stack_size(1<<10)
+            .stack_size(1 << 10)
             .spawn(run)
             .unwrap()
             .join()

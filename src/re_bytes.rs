@@ -17,9 +17,9 @@ use std::sync::Arc;
 
 use memchr::memchr;
 
+use error::Error;
 use exec::{Exec, ExecNoSync};
 use expand::expand_bytes;
-use error::Error;
 use re_builder::bytes::RegexBuilder;
 use re_trait::{self, RegularExpression, SubCapturesPosIter};
 
@@ -55,11 +55,7 @@ impl<'t> Match<'t> {
     /// Creates a new match from the given haystack and byte offsets.
     #[inline]
     fn new(haystack: &'t [u8], start: usize, end: usize) -> Match<'t> {
-        Match {
-            text: haystack,
-            start: start,
-            end: end,
-        }
+        Match { text: haystack, start: start, end: end }
     }
 }
 
@@ -314,10 +310,7 @@ impl Regex {
     /// # }
     /// ```
     pub fn split<'r, 't>(&'r self, text: &'t [u8]) -> Split<'r, 't> {
-        Split {
-            finder: self.find_iter(text),
-            last: 0,
-        }
+        Split { finder: self.find_iter(text), last: 0 }
     }
 
     /// Returns an iterator of at most `limit` substrings of `text` delimited
@@ -345,10 +338,7 @@ impl Regex {
         text: &'t [u8],
         limit: usize,
     ) -> SplitN<'r, 't> {
-        SplitN {
-            splits: self.split(text),
-            n: limit,
-        }
+        SplitN { splits: self.split(text), n: limit }
     }
 
     /// Replaces the leftmost-first match with the replacement provided. The
@@ -502,7 +492,7 @@ impl Regex {
             let mut last_match = 0;
             for (i, m) in it {
                 if limit > 0 && i >= limit {
-                    break
+                    break;
                 }
                 new.extend_from_slice(&text[last_match..m.start()]);
                 new.extend_from_slice(&rep);
@@ -522,7 +512,7 @@ impl Regex {
         let mut last_match = 0;
         for (i, cap) in it {
             if limit > 0 && i >= limit {
-                break
+                break;
             }
             // unwrap on 0 is OK because captures only reports matches
             let m = cap.get(0).unwrap();
@@ -597,7 +587,9 @@ impl Regex {
         text: &'t [u8],
         start: usize,
     ) -> Option<Match<'t>> {
-        self.0.searcher().find_at(text, start)
+        self.0
+            .searcher()
+            .find_at(text, start)
             .map(|(s, e)| Match::new(text, s, e))
     }
 
@@ -712,7 +704,9 @@ impl<'r, 't> Iterator for Matches<'r, 't> {
 ///
 /// `'r` is the lifetime of the compiled regular expression and `'t` is the
 /// lifetime of the matched byte string.
-pub struct CaptureMatches<'r, 't>(re_trait::CaptureMatches<'t, ExecNoSync<'r>>);
+pub struct CaptureMatches<'r, 't>(
+    re_trait::CaptureMatches<'t, ExecNoSync<'r>>,
+);
 
 impl<'r, 't> Iterator for CaptureMatches<'r, 't> {
     type Item = Captures<'t>;
@@ -775,7 +769,7 @@ impl<'r, 't> Iterator for SplitN<'r, 't> {
 
     fn next(&mut self) -> Option<&'t [u8]> {
         if self.n == 0 {
-            return None
+            return None;
         }
         self.n -= 1;
         if self.n == 0 {
@@ -799,7 +793,9 @@ impl<'r> Iterator for CaptureNames<'r> {
     type Item = Option<&'r str>;
 
     fn next(&mut self) -> Option<Option<&'r str>> {
-        self.0.next().as_ref()
+        self.0
+            .next()
+            .as_ref()
             .map(|slot| slot.as_ref().map(|name| name.as_ref()))
     }
 
@@ -918,10 +914,7 @@ impl<'t> Captures<'t> {
     ///
     /// The first match always corresponds to the overall match of the regex.
     pub fn iter<'c>(&'c self) -> SubCaptureMatches<'c, 't> {
-        SubCaptureMatches {
-            caps: self,
-            it: self.locs.iter(),
-        }
+        SubCaptureMatches { caps: self, it: self.locs.iter() }
     }
 
     /// Expands all instances of `$name` in `replacement` to the corresponding
@@ -1011,7 +1004,8 @@ impl<'t> Index<usize> for Captures<'t> {
     type Output = [u8];
 
     fn index(&self, i: usize) -> &[u8] {
-        self.get(i).map(|m| m.as_bytes())
+        self.get(i)
+            .map(|m| m.as_bytes())
             .unwrap_or_else(|| panic!("no group at index '{}'", i))
     }
 }
@@ -1032,7 +1026,8 @@ impl<'t, 'i> Index<&'i str> for Captures<'t> {
     type Output = [u8];
 
     fn index<'a>(&'a self, name: &'i str) -> &'a [u8] {
-        self.name(name).map(|m| m.as_bytes())
+        self.name(name)
+            .map(|m| m.as_bytes())
             .unwrap_or_else(|| panic!("no group named '{}'", name))
     }
 }
@@ -1055,7 +1050,8 @@ impl<'c, 't> Iterator for SubCaptureMatches<'c, 't> {
     type Item = Option<Match<'t>>;
 
     fn next(&mut self) -> Option<Option<Match<'t>>> {
-        self.it.next()
+        self.it
+            .next()
             .map(|cap| cap.map(|(s, e)| Match::new(self.caps.text, s, e)))
     }
 }
@@ -1142,7 +1138,11 @@ impl<'a> Replacer for &'a [u8] {
     }
 }
 
-impl<F, T> Replacer for F where F: FnMut(&Captures) -> T, T: AsRef<[u8]> {
+impl<F, T> Replacer for F
+where
+    F: FnMut(&Captures) -> T,
+    T: AsRef<[u8]>,
+{
     fn replace_append(&mut self, caps: &Captures, dst: &mut Vec<u8>) {
         dst.extend_from_slice((*self)(caps).as_ref());
     }

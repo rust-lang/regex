@@ -59,7 +59,7 @@ impl AVX2VectorBuilder {
 #[allow(non_camel_case_types)]
 #[repr(transparent)]
 pub struct u8x32 {
-    vector: __m256i
+    vector: __m256i,
 }
 
 impl u8x32 {
@@ -122,9 +122,7 @@ impl u8x32 {
     #[inline]
     pub fn movemask(self) -> u32 {
         // Safe because we know AVX2 is enabled.
-        unsafe {
-            _mm256_movemask_epi8(self.vector) as u32
-        }
+        unsafe { _mm256_movemask_epi8(self.vector) as u32 }
     }
 
     #[inline]
@@ -162,9 +160,7 @@ impl u8x32 {
     #[inline]
     pub fn bit_shift_right_4(self) -> u8x32 {
         // Safe because we know AVX2 is enabled.
-        unsafe {
-            u8x32 { vector: _mm256_srli_epi16(self.vector, 4) }
-        }
+        unsafe { u8x32 { vector: _mm256_srli_epi16(self.vector, 4) } }
     }
 
     #[inline]
