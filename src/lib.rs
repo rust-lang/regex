@@ -659,7 +659,6 @@ mod re_trait;
 mod re_unicode;
 mod sparse;
 mod utf8;
-mod vector;
 
 /// The `internal` module exists to support suspicious activity, such as
 /// testing different matching engines and supporting the `regex-debug` CLI

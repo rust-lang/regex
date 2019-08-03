@@ -26,7 +26,7 @@ members = [
 
 [dependencies]
 # For very fast prefix literal matching.
-aho-corasick = "0.7.4"
+aho-corasick = "0.7.6"
 # For skipping along search text quickly when a leading byte is known.
 memchr = "2.2.1"
 # For managing regex caches quickly across multiple threads.
