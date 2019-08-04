@@ -1,3 +1,32 @@
+1.2.1 (2019-08-03)
+==================
+This release does a bit of house cleaning. Namely:
+
+* This repository is now using rustfmt.
+* License headers have been removed from all files, in following suit with the
+  Rust project.
+* Teddy has been removed from the `regex` crate, and is now part of the
+  `aho-corasick` crate.
+  [See `aho-corasick`'s new `packed` sub-module for details](https://docs.rs/aho-corasick/0.7.6/aho_corasick/packed/index.html).
+* The `utf8-ranges` crate has been deprecated, with its functionality moving
+  into the
+  [`utf8` sub-module of `regex-syntax`](https://docs.rs/regex-syntax/0.6.11/regex_syntax/utf8/index.html).
+* The `ucd-util` dependency has been dropped, in favor of implementing what
+  little we need inside of `regex-syntax` itself.
+
+In general, this is part of an ongoing (long term) effort to make optimizations
+in the regex engine easier to reason about. The current code is too convoluted
+and thus it is very easy to introduce new bugs. This simplification effort is
+the primary motivation behind re-working the `aho-corasick` crate to not only
+bundle algorithms like Teddy, but to also provide regex-like match semantics
+automatically.
+
+Moving forward, the plan is to join up with the `bstr` and `regex-automata`
+crates, with the former providing more sophisticated substring search
+algorithms (thereby deleting existing code in `regex`) and the latter providing
+ahead-of-time compiled DFAs for cases where they are inexpensive to compute.
+
+
 1.2.0 (2019-07-20)
 ==================
 This release updates regex's minimum supported Rust version to 1.28, which was
