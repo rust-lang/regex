@@ -228,6 +228,7 @@ impl Regex {
     /// # }
     /// ```
     pub fn find_iter<'r, 't>(&'r self, text: &'t str) -> Matches<'r, 't> {
+        dbg!(text);
         Matches(self.0.searcher_str().find_iter(text))
     }
 
@@ -804,7 +805,12 @@ impl<'r, 't> Iterator for SplitN<'r, 't> {
         self.n -= 1;
         if self.n == 0 {
             let text = self.splits.finder.0.text();
-            Some(&text[self.splits.last..])
+            let remaining = &text[self.splits.last..];
+            if remaining.is_empty() {
+                None
+            } else {
+                Some(remaining)
+            }
         } else {
             self.splits.next()
         }

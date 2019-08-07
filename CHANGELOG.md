@@ -1,3 +1,14 @@
+1.2.2 (Unreleased)
+==================
+
+
+Bug fixes:
+
+* [BUG #521](https://github.com/rust-lang/regex/issues/521):
+  Fixes `SplitN` returning an additional empty string where `n` is one greater than
+  the number of splits.
+
+
 1.2.1 (2019-08-03)
 ==================
 This release does a bit of house cleaning. Namely:

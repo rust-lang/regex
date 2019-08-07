@@ -78,6 +78,8 @@ split!(
         t!("?)")
     ]
 );
+// See: https://github.com/rust-lang/regex/issues/521
+split!(splitn_remaining_text, r" ", r"a", &[t!("a")]);
 matiter!(
     word_boundary_dfa,
     r"\b",
