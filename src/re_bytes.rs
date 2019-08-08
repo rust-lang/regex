@@ -758,13 +758,18 @@ impl<'r, 't> Iterator for SplitN<'r, 't> {
     type Item = &'t [u8];
 
     fn next(&mut self) -> Option<&'t [u8]> {
-        if self.n == 0 {
+        if self.n <= 0 {
             return None;
         }
         self.n -= 1;
         if self.n == 0 {
             let text = self.splits.finder.0.text();
-            Some(&text[self.splits.last..])
+            let remaining = &text[self.splits.last..];
+            if remaining.is_empty() {
+                None
+            } else {
+                Some(remaining)
+            }
         } else {
             self.splits.next()
         }

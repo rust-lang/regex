@@ -78,8 +78,23 @@ split!(
         t!("?)")
     ]
 );
+
 // See: https://github.com/rust-lang/regex/issues/521
-split!(splitn_remaining_text, r" ", r"a", &[t!("a")]);
+#[test]
+fn splitn_remaining_text() {
+    let text = t!("a");
+    let re = regex!(r" ");
+    let result: Vec<_> = re.splitn(text, 2).collect();
+    assert_eq!(result, vec![t!("a")]);
+
+    // check the iterator continues returning None
+    let mut result = re.splitn(text, 2);
+    assert_eq!(result.next(), Some(t!("a")));
+    assert_eq!(result.next(), None);
+    assert_eq!(result.next(), None);
+    assert_eq!(result.next(), None);
+}
+
 matiter!(
     word_boundary_dfa,
     r"\b",
