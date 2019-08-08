@@ -757,7 +757,7 @@ pub struct SplitN<'r, 't> {
 impl<'r, 't> Iterator for SplitN<'r, 't> {
     type Item = &'t [u8];
 
-    fn next(&mut self) -> Option<&'t [u8]> {
+    fn next(&mut self) -> Option<Self::Item> {
         if self.n <= 0 {
             return None;
         }
