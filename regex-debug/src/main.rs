@@ -43,6 +43,7 @@ Options:
                          of all literals extracted. [default: 250]
     --class-limit ARG    A limit on the size of character classes used to
                          extract literals. [default: 10]
+    --literal-bytes      Show raw literal bytes instead of Unicode chars.
     --lcp                Show the longest common prefix of all the literals
                          extracted.
     --lcs                Show the longest common suffix of all the literals
@@ -73,6 +74,7 @@ struct Args {
     flag_all_literals: bool,
     flag_literal_limit: usize,
     flag_class_limit: usize,
+    flag_literal_bytes: bool,
     flag_lcp: bool,
     flag_lcs: bool,
     flag_searcher: bool,
@@ -162,7 +164,15 @@ fn cmd_literals(args: &Args) -> Result<()> {
         println!("{}", escape_unicode(lits.longest_common_suffix()));
     } else {
         for lit in lits.literals() {
-            println!("{:?}", lit);
+            if args.flag_literal_bytes {
+                if lit.is_cut() {
+                    println!("Cut({})", escape_bytes(lit));
+                } else {
+                    println!("Complete({})", escape_bytes(lit));
+                }
+            } else {
+                println!("{:?}", lit);
+            }
         }
     }
     Ok(())
