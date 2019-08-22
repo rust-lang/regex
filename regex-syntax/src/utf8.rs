@@ -95,7 +95,7 @@ const MAX_UTF8_BYTES: usize = 4;
 ///
 /// For example, if there are two ranges, `[C2-DF][80-BF]`, then the byte
 /// sequence `\xDD\x61` would not match because `0x61 < 0x80`.
-#[derive(Copy, Clone, Eq, PartialEq)]
+#[derive(Copy, Clone, Eq, PartialEq, PartialOrd, Ord)]
 pub enum Utf8Sequence {
     /// One byte range.
     One(Utf8Range),
@@ -191,7 +191,7 @@ impl fmt::Debug for Utf8Sequence {
 }
 
 /// A single inclusive range of UTF-8 bytes.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Eq, PartialEq, PartialOrd, Ord)]
 pub struct Utf8Range {
     /// Start of byte range (inclusive).
     pub start: u8,
