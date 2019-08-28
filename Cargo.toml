@@ -116,7 +116,9 @@ path = "tests/test_crates_regex.rs"
 name = "crates-regex"
 
 [profile.release]
-debug = true
+lto = true
+codegen-units = 1
+opt-level = "z"
 
 [profile.bench]
 debug = true
