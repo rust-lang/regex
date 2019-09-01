@@ -47,3 +47,6 @@ ucd-generate sentence-break "$ucddir" \
     --chars > "$out/sentence_break.rs"
 ucd-generate word-break "$ucddir" \
     --chars > "$out/word_break.rs"
+
+# Make sure everything is formatted.
+cargo +stable fmt --all
