@@ -22,7 +22,7 @@ used by adding `regex` to your dependencies in your project's `Cargo.toml`.
 regex = "1"
 ```
 
-and this to your crate root:
+If you're using Rust 2015, then you'll also need to add it to your crate root:
 
 ```rust
 extern crate regex;
@@ -511,8 +511,8 @@ another matching engine with fixed memory requirements.
 #![cfg_attr(test, deny(warnings))]
 #![cfg_attr(feature = "pattern", feature(pattern))]
 
-#[cfg(not(feature = "use_std"))]
-compile_error!("`use_std` feature is currently required to build this crate");
+#[cfg(not(feature = "std"))]
+compile_error!("`std` feature is currently required to build this crate");
 
 extern crate aho_corasick;
 extern crate memchr;
@@ -527,16 +527,16 @@ extern crate regex_syntax as syntax;
 #[cfg(test)]
 doc_comment::doctest!("../README.md");
 
-#[cfg(feature = "use_std")]
+#[cfg(feature = "std")]
 pub use error::Error;
-#[cfg(feature = "use_std")]
+#[cfg(feature = "std")]
 pub use re_builder::set_unicode::*;
-#[cfg(feature = "use_std")]
+#[cfg(feature = "std")]
 pub use re_builder::unicode::*;
-#[cfg(feature = "use_std")]
+#[cfg(feature = "std")]
 pub use re_set::unicode::*;
-#[cfg(feature = "use_std")]
-#[cfg(feature = "use_std")]
+#[cfg(feature = "std")]
+#[cfg(feature = "std")]
 pub use re_unicode::{
     escape, CaptureLocations, CaptureMatches, CaptureNames, Captures,
     Locations, Match, Matches, NoExpand, Regex, Replacer, ReplacerRef, Split,
@@ -630,7 +630,7 @@ When the `s` flag is enabled, `.` matches any byte.
 In general, one should expect performance on `&[u8]` to be roughly similar to
 performance on `&str`.
 */
-#[cfg(feature = "use_std")]
+#[cfg(feature = "std")]
 pub mod bytes {
     pub use re_builder::bytes::*;
     pub use re_builder::set_bytes::*;
@@ -663,7 +663,7 @@ mod utf8;
 /// testing different matching engines and supporting the `regex-debug` CLI
 /// utility.
 #[doc(hidden)]
-#[cfg(feature = "use_std")]
+#[cfg(feature = "std")]
 pub mod internal {
     pub use compile::Compiler;
     pub use exec::{Exec, ExecBuilder};

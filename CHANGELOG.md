@@ -1,3 +1,14 @@
+UNRELEASED
+==========
+
+New features:
+
+* [FEATURE #474](https://github.com/rust-lang/regex/issues/474):
+  The `use_std` feature has been deprecated in favor of the `std` feature.
+  The `use_std` feature will be removed in regex 2. Until then, `use_std` will
+  remain as an alias for the `std` feature.
+
+
 1.2.1 (2019-08-03)
 ==================
 This release does a bit of house cleaning. Namely:
