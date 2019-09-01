@@ -297,7 +297,7 @@ impl<'t, 'p> Visitor for TranslatorI<'t, 'p> {
             }
             Ast::Class(ast::Class::Perl(ref x)) => {
                 if self.flags().unicode() {
-                    let cls = self.hir_perl_unicode_class(x);
+                    let cls = self.hir_perl_unicode_class(x)?;
                     let hcls = hir::Class::Unicode(cls);
                     self.push(HirFrame::Expr(Hir::class(hcls)));
                 } else {
@@ -450,7 +450,7 @@ impl<'t, 'p> Visitor for TranslatorI<'t, 'p> {
             }
             ast::ClassSetItem::Perl(ref x) => {
                 if self.flags().unicode() {
-                    let xcls = self.hir_perl_unicode_class(x);
+                    let xcls = self.hir_perl_unicode_class(x)?;
                     let mut cls = self.pop().unwrap().unwrap_class_unicode();
                     cls.union(&xcls);
                     self.push(HirFrame::ClassUnicode(cls));
@@ -800,47 +800,36 @@ impl<'t, 'p> TranslatorI<'t, 'p> {
                 property_value: value,
             },
         };
-        match unicode::class(query) {
-            Ok(mut class) => {
-                self.unicode_fold_and_negate(ast_class.negated, &mut class);
-                Ok(class)
-            }
-            Err(unicode::Error::PropertyNotFound) => {
-                Err(self
-                    .error(ast_class.span, ErrorKind::UnicodePropertyNotFound))
-            }
-            Err(unicode::Error::PropertyValueNotFound) => Err(self.error(
-                ast_class.span,
-                ErrorKind::UnicodePropertyValueNotFound,
-            )),
+        let mut result = self.convert_unicode_class_error(
+            &ast_class.span,
+            unicode::class(query),
+        );
+        if let Ok(ref mut class) = result {
+            self.unicode_fold_and_negate(ast_class.negated, class);
         }
+        result
     }
 
     fn hir_perl_unicode_class(
         &self,
         ast_class: &ast::ClassPerl,
-    ) -> hir::ClassUnicode {
+    ) -> Result<hir::ClassUnicode> {
         use ast::ClassPerlKind::*;
-        use unicode_tables::perl_word::PERL_WORD;
 
         assert!(self.flags().unicode());
-        let mut class = match ast_class.kind {
-            Digit => {
-                let query = ClassQuery::Binary("Decimal_Number");
-                unicode::class(query).unwrap()
-            }
-            Space => {
-                let query = ClassQuery::Binary("Whitespace");
-                unicode::class(query).unwrap()
-            }
-            Word => unicode::hir_class(PERL_WORD),
+        let result = match ast_class.kind {
+            Digit => unicode::perl_digit(),
+            Space => unicode::perl_space(),
+            Word => unicode::perl_word(),
         };
+        let mut class =
+            self.convert_unicode_class_error(&ast_class.span, result)?;
         // We needn't apply case folding here because the Perl Unicode classes
         // are already closed under Unicode simple case folding.
         if ast_class.negated {
             class.negate();
         }
-        class
+        Ok(class)
     }
 
     fn hir_perl_byte_class(
@@ -861,6 +850,28 @@ impl<'t, 'p> TranslatorI<'t, 'p> {
             class.negate();
         }
         class
+    }
+
+    /// Converts the given Unicode specific error to an HIR translation error.
+    ///
+    /// The span given should approximate the position at which an error would
+    /// occur.
+    fn convert_unicode_class_error(
+        &self,
+        span: &Span,
+        result: unicode::Result<hir::ClassUnicode>,
+    ) -> Result<hir::ClassUnicode> {
+        result.map_err(|err| {
+            let sp = span.clone();
+            match err {
+                unicode::Error::PropertyNotFound => {
+                    self.error(sp, ErrorKind::UnicodePropertyNotFound)
+                }
+                unicode::Error::PropertyValueNotFound => {
+                    self.error(sp, ErrorKind::UnicodePropertyValueNotFound)
+                }
+            }
+        })
     }
 
     fn unicode_fold_and_negate(
@@ -1017,74 +1028,28 @@ fn hir_ascii_class_bytes(kind: &ast::ClassAsciiKind) -> hir::ClassBytes {
 
 fn ascii_class(kind: &ast::ClassAsciiKind) -> &'static [(char, char)] {
     use ast::ClassAsciiKind::*;
-
-    // The contortions below with `const` appear necessary for older versions
-    // of Rust.
-    type T = &'static [(char, char)];
     match *kind {
-        Alnum => {
-            const X: T = &[('0', '9'), ('A', 'Z'), ('a', 'z')];
-            X
-        }
-        Alpha => {
-            const X: T = &[('A', 'Z'), ('a', 'z')];
-            X
-        }
-        Ascii => {
-            const X: T = &[('\x00', '\x7F')];
-            X
-        }
-        Blank => {
-            const X: T = &[('\t', '\t'), (' ', ' ')];
-            X
-        }
-        Cntrl => {
-            const X: T = &[('\x00', '\x1F'), ('\x7F', '\x7F')];
-            X
-        }
-        Digit => {
-            const X: T = &[('0', '9')];
-            X
-        }
-        Graph => {
-            const X: T = &[('!', '~')];
-            X
-        }
-        Lower => {
-            const X: T = &[('a', 'z')];
-            X
-        }
-        Print => {
-            const X: T = &[(' ', '~')];
-            X
-        }
-        Punct => {
-            const X: T = &[('!', '/'), (':', '@'), ('[', '`'), ('{', '~')];
-            X
-        }
-        Space => {
-            const X: T = &[
-                ('\t', '\t'),
-                ('\n', '\n'),
-                ('\x0B', '\x0B'),
-                ('\x0C', '\x0C'),
-                ('\r', '\r'),
-                (' ', ' '),
-            ];
-            X
-        }
-        Upper => {
-            const X: T = &[('A', 'Z')];
-            X
-        }
-        Word => {
-            const X: T = &[('0', '9'), ('A', 'Z'), ('_', '_'), ('a', 'z')];
-            X
-        }
-        Xdigit => {
-            const X: T = &[('0', '9'), ('A', 'F'), ('a', 'f')];
-            X
-        }
+        Alnum => &[('0', '9'), ('A', 'Z'), ('a', 'z')],
+        Alpha => &[('A', 'Z'), ('a', 'z')],
+        Ascii => &[('\x00', '\x7F')],
+        Blank => &[('\t', '\t'), (' ', ' ')],
+        Cntrl => &[('\x00', '\x1F'), ('\x7F', '\x7F')],
+        Digit => &[('0', '9')],
+        Graph => &[('!', '~')],
+        Lower => &[('a', 'z')],
+        Print => &[(' ', '~')],
+        Punct => &[('!', '/'), (':', '@'), ('[', '`'), ('{', '~')],
+        Space => &[
+            ('\t', '\t'),
+            ('\n', '\n'),
+            ('\x0B', '\x0B'),
+            ('\x0C', '\x0C'),
+            ('\r', '\r'),
+            (' ', ' '),
+        ],
+        Upper => &[('A', 'Z')],
+        Word => &[('0', '9'), ('A', 'Z'), ('_', '_'), ('a', 'z')],
+        Xdigit => &[('0', '9'), ('A', 'F'), ('a', 'f')],
     }
 }
 
