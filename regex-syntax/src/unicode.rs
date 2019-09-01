@@ -14,7 +14,8 @@ use unicode_tables::script_extension;
 use unicode_tables::sentence_break;
 use unicode_tables::word_break;
 
-type Result<T> = result::Result<T, Error>;
+/// A type alias for errors specific to Unicode handling of classes.
+pub type Result<T> = result::Result<T, Error>;
 
 /// An error that occurs when dealing with Unicode.
 ///
@@ -263,6 +264,30 @@ pub fn class<'a>(query: ClassQuery<'a>) -> Result<hir::ClassUnicode> {
             Err(Error::PropertyNotFound)
         }
     }
+}
+
+/// Returns a Unicode aware class for \w.
+///
+/// This returns an error if the data is not available for \w.
+pub fn perl_word() -> Result<hir::ClassUnicode> {
+    use unicode_tables::perl_word::PERL_WORD;
+    Ok(hir_class(PERL_WORD))
+}
+
+/// Returns a Unicode aware class for \s.
+///
+/// This returns an error if the data is not available for \s.
+pub fn perl_space() -> Result<hir::ClassUnicode> {
+    let query = ClassQuery::Binary("Whitespace");
+    class(query)
+}
+
+/// Returns a Unicode aware class for \d.
+///
+/// This returns an error if the data is not available for \d.
+pub fn perl_digit() -> Result<hir::ClassUnicode> {
+    let query = ClassQuery::Binary("Decimal_Number");
+    class(query)
 }
 
 /// Build a Unicode HIR class from a sequence of Unicode scalar value ranges.
