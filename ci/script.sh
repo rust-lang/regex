@@ -18,6 +18,12 @@ if [ "$TRAVIS_RUST_VERSION" = "$MSRV" ]; then
   exit
 fi
 
+# Check formatting, but make sure we use the stable version of rustfmt.
+if [ "$TRAVIS_RUST_VERSION" = "stable" ]; then
+  rustup component add rustfmt
+  cargo fmt --all -- --check
+fi
+
 # Run tests. If we have nightly, then enable our nightly features.
 # Right now there are no nightly features, but that may change in the
 # future.
@@ -50,17 +56,10 @@ if [ "$TRAVIS_RUST_VERSION" = "nightly" ]; then
 
   # Test minimal versions.
   #
-  # For now, we remove this check, because it doesn't seem possible to convince
-  # some maintainers of *core* crates that this is a worthwhile test to add.
-  # In particular, this test uncovers any *incorrect* dependency specification
-  # in the chain of dependencies.
-  #
-  # We might consider figuring out how to migrate off of rand in order to get
-  # this check working. (This will be hard, since it either requires dropping
-  # quickcheck or migrating quickcheck off of rand, which is just probably
-  # not practical.)
-  #
-  # So frustrating.
+  # rand has started putting the minimal version check in their CI, so we
+  # should be able to re-enable this soon. This will require upgrading to
+  # rand 0.7, which breaks our MSRV since it relies on Rust 2018 features in
+  # order to read the Cargo.toml.
   # cargo +nightly generate-lockfile -Z minimal-versions
   # cargo build --verbose
   # cargo test --verbose
