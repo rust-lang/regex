@@ -12,7 +12,7 @@ matset!(set11, &[r"[a-z]+$", "foo"], "foo 01234", 1);
 matset!(set12, &[r".*?", "a"], "zzzzzza", 0, 1);
 matset!(set13, &[r".*", "a"], "zzzzzza", 0, 1);
 matset!(set14, &[r".*", "a"], "zzzzzz", 0);
-matset!(set15, &[r"\ba\b"], "hello a bye", 0);
+matset!(set15, &[r"(?-u)\ba\b"], "hello a bye", 0);
 matset!(set16, &["a"], "a", 0);
 matset!(set17, &[".*a"], "a", 0);
 matset!(set18, &["a", "β"], "β", 1);

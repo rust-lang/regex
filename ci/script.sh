@@ -26,19 +26,15 @@ if [ "$TRAVIS_RUST_VERSION" = "stable" ]; then
   cargo fmt --all -- --check
 fi
 
-# Run tests. If we have nightly, then enable our nightly features.
-# Right now there are no nightly features, but that may change in the
-# future.
-CARGO_TEST_EXTRA_FLAGS=""
-if [ "$TRAVIS_RUST_VERSION" = "nightly" ]; then
-  CARGO_TEST_EXTRA_FLAGS=""
-fi
-cargo test --verbose ${CARGO_TEST_EXTRA_FLAGS}
+# Only run the full test suite on one job to keep build times lower.
+if [ "$TRAVIS_RUST_VERSION" = "stable" ]; then
+  ./test
 
-# Run the random tests in release mode, as this is faster.
-RUST_REGEX_RANDOM_TEST=1 \
-    cargo test --release --verbose \
-    ${CARGO_TEST_EXTRA_FLAGS} --test crates-regex
+  # Run the random tests in release mode, as this is faster.
+  RUST_REGEX_RANDOM_TEST=1 cargo test --release --verbose --test crates-regex
+else
+  cargo test --verbose --test default
+fi
 
 # Run a test that confirms the shootout benchmarks are correct.
 ci/run-shootout-test

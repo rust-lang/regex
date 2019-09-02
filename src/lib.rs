@@ -204,7 +204,8 @@ instead.)
 # Unicode
 
 This implementation executes regular expressions **only** on valid UTF-8
-while exposing match locations as byte indices into the search string.
+while exposing match locations as byte indices into the search string. (To
+relax this restriction, use the [`bytes`](bytes/index.html) sub-module.)
 
 Only simple case folding is supported. Namely, when matching
 case-insensitively, the characters are first mapped using the "simple" case
@@ -271,6 +272,12 @@ example, `(?-u:\w)` is an ASCII-only `\w` character class and is legal in an
 `&str`-based `Regex`, but `(?-u:\xFF)` will attempt to match the raw byte
 `\xFF`, which is invalid UTF-8 and therefore is illegal in `&str`-based
 regexes.
+
+Finally, since Unicode support requires bundling large Unicode data
+tables, this crate exposes knobs to disable the compilation of those
+data tables, which can be useful for shrinking binary size and reducing
+compilation times. For details on how to do that, see the section on [crate
+features](#crate-features).
 
 # Syntax
 
@@ -476,6 +483,104 @@ These classes are based on the definitions provided in
 [[:word:]]     word characters ([0-9A-Za-z_])
 [[:xdigit:]]   hex digit ([0-9A-Fa-f])
 </pre>
+
+# Crate features
+
+By default, this crate tries pretty hard to make regex matching both as fast
+as possible and as correct as it can be, within reason. This means that there
+is a lot of code dedicated to performance, the handling of Unicode data and the
+Unicode data itself. Overall, this leads to more dependencies, larger binaries
+and longer compile times.  This trade off may not be appropriate in all cases,
+and indeed, even when all Unicode and performance features are disabled, one
+is still left with a perfectly serviceable regex engine that will work well
+in many cases.
+
+This crate exposes a number of features for controlling that trade off. Some
+of these features are strictly performance oriented, such that disabling them
+won't result in a loss of functionality, but may result in worse performance.
+Other features, such as the ones controlling the presence or absence of Unicode
+data, can result in a loss of functionality. For example, if one disables the
+`unicode-case` feature (described below), then compiling the regex `(?i)a`
+will fail since Unicode case insensitivity is enabled by default. Instead,
+callers must use `(?i-u)a` instead to disable Unicode case folding. Stated
+differently, enabling or disabling any of the features below can only add or
+subtract from the total set of valid regular expressions. Enabling or disabling
+a feature will never modify the match semantics of a regular expression.
+
+All features below are enabled by default.
+
+### Ecosystem features
+
+* **std** -
+  When enabled, this will cause `regex` to use the standard library. Currently,
+  disabling this feature will always result in a compilation error. It is
+  intended to add `alloc`-only support to regex in the future.
+
+### Performance features
+
+* **perf** -
+  Enables all performance related features. This feature is enabled by default
+  and will always cover all features that improve performance, even if more
+  are added in the future.
+* **perf-cache** -
+  Enables the use of very fast thread safe caching for internal match state.
+  When this is disabled, caching is still used, but with a slower and simpler
+  implementation. Disabling this drops the `thread_local` and `lazy_static`
+  dependencies.
+* **perf-dfa** -
+  Enables the use of a lazy DFA for matching. The lazy DFA is used to compile
+  portions of a regex to a very fast DFA on an as-needed basis. This can
+  result in substantial speedups, usually by an order of magnitude on large
+  haystacks. The lazy DFA does not bring in any new dependencies, but it can
+  make compile times longer.
+* **perf-inline** -
+  Enables the use of aggressive inlining inside match routines. This reduces
+  the overhead of each match. The aggressive inlining, however, increases
+  compile times and binary size.
+* **perf-literal** -
+  Enables the use of literal optimizations for speeding up matches. In some
+  cases, literal optimizations can result in speedups of _several_ orders of
+  magnitude. Disabling this drops the `aho-corasick` and `memchr` dependencies.
+
+### Unicode features
+
+* **unicode** -
+  Enables all Unicode features. This feature is enabled by default, and will
+  always cover all Unicode features, even if more are added in the future.
+* **unicode-age** -
+  Provide the data for the
+  [Unicode `Age` property](https://www.unicode.org/reports/tr44/tr44-24.html#Character_Age).
+  This makes it possible to use classes like `\p{Age:6.0}` to refer to all
+  codepoints first introduced in Unicode 6.0
+* **unicode-bool** -
+  Provide the data for numerous Unicode boolean properties. The full list
+  is not included here, but contains properties like `Alphabetic`, `Emoji`,
+  `Lowercase`, `Math`, `Uppercase` and `White_Space`.
+* **unicode-case** -
+  Provide the data for case insensitive matching using
+  [Unicode's "simple loose matches" specification](https://www.unicode.org/reports/tr18/#Simple_Loose_Matches).
+* **unicode-gencat** -
+  Provide the data for
+  [Uncode general categories](https://www.unicode.org/reports/tr44/tr44-24.html#General_Category_Values).
+  This includes, but is not limited to, `Decimal_Number`, `Letter`,
+  `Math_Symbol`, `Number` and `Punctuation`.
+* **unicode-perl** -
+  Provide the data for supporting the Unicode-aware Perl character classes,
+  corresponding to `\w`, `\s` and `\d`. This is also necessary for using
+  Unicode-aware word boundary assertions. Note that if this feature is
+  disabled, the `\s` and `\d` character classes are still available if the
+  `unicode-bool` and `unicode-gencat` features are enabled, respectively.
+* **unicode-script** -
+  Provide the data for
+  [Unicode scripts and script extensions](https://www.unicode.org/reports/tr24/).
+  This includes, but is not limited to, `Arabic`, `Cyrillic`, `Hebrew`,
+  `Latin` and `Thai`.
+* **unicode-segment** -
+  Provide the data necessary to provide the properties used to implement the
+  [Unicode text segmentation algorithms](https://www.unicode.org/reports/tr29/).
+  This enables using classes like `\p{gcb=Extend}`, `\p{wb=Katakana}` and
+  `\p{sb=ATerm}`.
+
 
 # Untrusted input
 

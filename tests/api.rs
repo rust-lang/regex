@@ -12,13 +12,13 @@ fn empty_regex_nonempty_match() {
 
 #[test]
 fn one_zero_length_match() {
-    let re = regex!(r"\d*");
+    let re = regex!(r"[0-9]*");
     assert_eq!(vec![(0, 0), (1, 2), (3, 4)], findall!(re, "a1b2"));
 }
 
 #[test]
 fn many_zero_length_match() {
-    let re = regex!(r"\d*");
+    let re = regex!(r"[0-9]*");
     assert_eq!(
         vec![(0, 0), (1, 2), (3, 3), (4, 4), (5, 6)],
         findall!(re, "a1bbb2")
@@ -27,7 +27,7 @@ fn many_zero_length_match() {
 
 #[test]
 fn many_sequential_zero_length_match() {
-    let re = regex!(r"\d?");
+    let re = regex!(r"[0-9]?");
     assert_eq!(
         vec![(0, 0), (1, 2), (2, 3), (4, 5), (6, 6)],
         findall!(re, "a12b3c")
@@ -121,7 +121,7 @@ fn capture_index_lifetime() {
     // This is a test of whether the types on `caps["..."]` are general
     // enough. If not, this will fail to typecheck.
     fn inner(s: &str) -> usize {
-        let re = regex!(r"(?P<number>\d+)");
+        let re = regex!(r"(?P<number>[0-9]+)");
         let caps = re.captures(t!(s)).unwrap();
         caps["number"].len()
     }
@@ -172,38 +172,38 @@ fn sub_capture_matches() {
     assert_eq!(t!("5"), match_text!(subs[4].unwrap()));
 }
 
-expand!(expand1, r"(?P<foo>\w+)", "abc", "$foo", "abc");
-expand!(expand2, r"(?P<foo>\w+)", "abc", "$0", "abc");
-expand!(expand3, r"(?P<foo>\w+)", "abc", "$1", "abc");
-expand!(expand4, r"(?P<foo>\w+)", "abc", "$$1", "$1");
-expand!(expand5, r"(?P<foo>\w+)", "abc", "$$foo", "$foo");
-expand!(expand6, r"(?P<a>\w+)\s+(?P<b>\d+)", "abc 123", "$b$a", "123abc");
-expand!(expand7, r"(?P<a>\w+)\s+(?P<b>\d+)", "abc 123", "z$bz$az", "z");
+expand!(expand1, r"(?-u)(?P<foo>\w+)", "abc", "$foo", "abc");
+expand!(expand2, r"(?-u)(?P<foo>\w+)", "abc", "$0", "abc");
+expand!(expand3, r"(?-u)(?P<foo>\w+)", "abc", "$1", "abc");
+expand!(expand4, r"(?-u)(?P<foo>\w+)", "abc", "$$1", "$1");
+expand!(expand5, r"(?-u)(?P<foo>\w+)", "abc", "$$foo", "$foo");
+expand!(expand6, r"(?-u)(?P<a>\w+)\s+(?P<b>\d+)", "abc 123", "$b$a", "123abc");
+expand!(expand7, r"(?-u)(?P<a>\w+)\s+(?P<b>\d+)", "abc 123", "z$bz$az", "z");
 expand!(
     expand8,
-    r"(?P<a>\w+)\s+(?P<b>\d+)",
+    r"(?-u)(?P<a>\w+)\s+(?P<b>\d+)",
     "abc 123",
     ".$b.$a.",
     ".123.abc."
 );
 expand!(
     expand9,
-    r"(?P<a>\w+)\s+(?P<b>\d+)",
+    r"(?-u)(?P<a>\w+)\s+(?P<b>\d+)",
     "abc 123",
     " $b $a ",
     " 123 abc "
 );
-expand!(expand10, r"(?P<a>\w+)\s+(?P<b>\d+)", "abc 123", "$bz$az", "");
+expand!(expand10, r"(?-u)(?P<a>\w+)\s+(?P<b>\d+)", "abc 123", "$bz$az", "");
 
 split!(
     split1,
-    r"\s+",
+    r"(?-u)\s+",
     "a b\nc\td\n\t e",
     &[t!("a"), t!("b"), t!("c"), t!("d"), t!("e")]
 );
 split!(
     split2,
-    r"\b",
+    r"(?-u)\b",
     "a b c",
     &[t!(""), t!("a"), t!(" "), t!("b"), t!(" "), t!("c")]
 );

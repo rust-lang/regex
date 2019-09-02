@@ -362,6 +362,10 @@ impl Char {
     ///
     /// If the character is absent, then false is returned.
     pub fn is_word_char(self) -> bool {
+        // is_word_character can panic if the Unicode data for \w isn't
+        // available. However, our compiler ensures that if a Unicode word
+        // boundary is used, then the data must also be available. If it isn't,
+        // then the compiler returns an error.
         char::from_u32(self.0).map_or(false, syntax::is_word_character)
     }
 
