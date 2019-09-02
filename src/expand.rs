@@ -1,6 +1,6 @@
 use std::str;
 
-use memchr::memchr;
+use find_byte::find_byte;
 
 use re_bytes;
 use re_unicode;
@@ -11,7 +11,7 @@ pub fn expand_str(
     dst: &mut String,
 ) {
     while !replacement.is_empty() {
-        match memchr(b'$', replacement.as_bytes()) {
+        match find_byte(b'$', replacement.as_bytes()) {
             None => break,
             Some(i) => {
                 dst.push_str(&replacement[..i]);
@@ -53,7 +53,7 @@ pub fn expand_bytes(
     dst: &mut Vec<u8>,
 ) {
     while !replacement.is_empty() {
-        match memchr(b'$', replacement) {
+        match find_byte(b'$', replacement) {
             None => break,
             Some(i) => {
                 dst.extend(&replacement[..i]);

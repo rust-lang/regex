@@ -619,16 +619,18 @@ another matching engine with fixed memory requirements.
 #[cfg(not(feature = "std"))]
 compile_error!("`std` feature is currently required to build this crate");
 
+#[cfg(feature = "perf-literal")]
 extern crate aho_corasick;
-extern crate memchr;
-#[cfg(feature = "perf-cache")]
-extern crate thread_local;
-#[cfg(test)]
-#[macro_use]
-extern crate quickcheck;
 #[cfg(test)]
 extern crate doc_comment;
+#[cfg(feature = "perf-literal")]
+extern crate memchr;
+#[cfg(test)]
+#[cfg_attr(feature = "perf-literal", macro_use)]
+extern crate quickcheck;
 extern crate regex_syntax as syntax;
+#[cfg(feature = "perf-cache")]
+extern crate thread_local;
 
 #[cfg(test)]
 doc_comment::doctest!("../README.md");
@@ -751,6 +753,8 @@ mod dfa;
 mod error;
 mod exec;
 mod expand;
+mod find_byte;
+#[cfg(feature = "perf-literal")]
 mod freqs;
 mod input;
 mod literal;

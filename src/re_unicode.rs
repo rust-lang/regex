@@ -5,7 +5,7 @@ use std::ops::Index;
 use std::str::FromStr;
 use std::sync::Arc;
 
-use memchr::memchr;
+use find_byte::find_byte;
 use syntax;
 
 use error::Error;
@@ -1163,7 +1163,7 @@ impl<'a> Replacer for &'a str {
     }
 
     fn no_expansion(&mut self) -> Option<Cow<str>> {
-        match memchr(b'$', self.as_bytes()) {
+        match find_byte(b'$', self.as_bytes()) {
             Some(_) => None,
             None => Some(Cow::Borrowed(*self)),
         }

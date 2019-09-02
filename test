@@ -7,12 +7,22 @@
 echo "===== DEFAULT FEATURES ==="
 cargo test
 
+echo "===== DOC TESTS ==="
+cargo test --doc
+
 features=(
+    "std"
+    "std unicode"
+    "std unicode-perl"
     "std perf"
-    "std perf unicode-perl"
-    "std perf-cache perf-dfa perf-literal"
+    "std perf-cache"
+    "std perf-dfa"
+    "std perf-inline"
+    "std perf-literal"
 )
 for f in "${features[@]}"; do
-    echo "===== FEATURE: $f ==="
+    echo "===== FEATURE: $f (default) ==="
     cargo test --test default --no-default-features --features "$f"
+    echo "===== FEATURE: $f (default-bytes) ==="
+    cargo test --test default-bytes --no-default-features --features "$f"
 done

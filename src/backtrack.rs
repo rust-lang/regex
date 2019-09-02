@@ -156,7 +156,7 @@ impl<'a, 'm, 'r, 's, I: Input> Bounded<'a, 'm, 'r, 's, I> {
             if matched && self.prog.matches.len() == 1 {
                 return true;
             }
-            if at.pos() == end || at.is_end() {
+            if at.pos() >= end {
                 break;
             }
             at = self.input.at(at.next_pos());
