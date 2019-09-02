@@ -24,37 +24,71 @@ members = [
   "bench", "regex-capi", "regex-debug", "regex-syntax",
 ]
 
-[dependencies]
-# For very fast prefix literal matching.
-aho-corasick = "0.7.6"
-# For skipping along search text quickly when a leading byte is known.
-memchr = "2.2.1"
-# For managing regex caches quickly across multiple threads.
-thread_local = "0.3.6"
-# For parsing regular expressions.
-regex-syntax = { path = "regex-syntax", version = "0.6.11" }
+[lib]
+# There are no benchmarks in the library code itself
+bench = false
 
-[dev-dependencies]
-# For examples.
-lazy_static = "1"
-# For property based tests.
-quickcheck = { version = "0.8", default-features = false }
-# For generating random test data.
-rand = "0.6.5"
-# To check README's example
-doc-comment = "0.3"
-
+# Features are documented in the "Crate features" section of the crate docs:
+# https://docs.rs/regex/*/#crate-features
 [features]
-default = ["std"]
+default = ["std", "perf", "unicode"]
+
+# ECOSYSTEM FEATURES
+
 # The 'std' feature permits the regex crate to use the standard library. This
 # is intended to support future use cases where the regex crate may be able
 # to compile without std, and instead just rely on 'core' and 'alloc' (for
 # example). Currently, this isn't supported, and removing the 'std' feature
 # will prevent regex from compiling.
-std = []
+std = ["aho-corasick/std", "memchr/use_std"]
 # The 'use_std' feature is DEPRECATED. It will be removed in regex 2. Until
 # then, it is alias for the 'std' feature.
 use_std = ["std"]
+
+
+# PERFORMANCE FEATURES
+
+# Enables all performance features.
+perf = ["perf-cache", "perf-dfa", "perf-inline", "perf-literal"]
+# Enables fast caching. (If disabled, caching is still used, but is slower.)
+perf-cache = ["thread_local"]
+# Enables use of a lazy DFA when possible.
+perf-dfa = []
+# Enables aggressive use of inlining.
+perf-inline = []
+# Enables literal optimizations.
+perf-literal = ["aho-corasick", "memchr"]
+
+
+# UNICODE DATA FEATURES
+
+# Enables all Unicode features. This expands if new Unicode features are added.
+unicode = [
+  "unicode-age",
+  "unicode-bool",
+  "unicode-case",
+  "unicode-gencat",
+  "unicode-perl",
+  "unicode-script",
+  "unicode-segment",
+]
+# Enables use of the `Age` property, e.g., `\p{Age:3.0}`.
+unicode-age = ["regex-syntax/unicode-age"]
+# Enables use of a smattering of boolean properties, e.g., `\p{Emoji}`.
+unicode-bool = ["regex-syntax/unicode-bool"]
+# Enables Unicode-aware case insensitive matching, e.g., `(?i)β`.
+unicode-case = ["regex-syntax/unicode-case"]
+# Enables Unicode general categories, e.g., `\p{Letter}` or `\pL`.
+unicode-gencat = ["regex-syntax/unicode-gencat"]
+# Enables Unicode-aware Perl classes corresponding to `\w`, `\s` and `\d`.
+unicode-perl = ["regex-syntax/unicode-perl"]
+# Enables Unicode scripts and script extensions, e.g., `\p{Greek}`.
+unicode-script = ["regex-syntax/unicode-script"]
+# Enables Unicode segmentation properties, e.g., `\p{gcb=Extend}`.
+unicode-segment = ["regex-syntax/unicode-segment"]
+
+
+# UNSTABLE FEATURES (requires Rust nightly)
 
 # A blanket feature that governs whether unstable features are enabled or not.
 # Unstable features are disabled by default, and typically rely on unstable
@@ -65,9 +99,38 @@ unstable = ["pattern"]
 # by default if the unstable feature is enabled.
 pattern = []
 
-[lib]
-# There are no benchmarks in the library code itself
-bench = false
+# For very fast prefix literal matching.
+[dependencies.aho-corasick]
+version = "0.7.6"
+optional = true
+default-features = false
+
+# For skipping along search text quickly when a leading byte is known.
+[dependencies.memchr]
+version = "2.2.1"
+optional = true
+default-features = false
+
+# For managing regex caches quickly across multiple threads.
+[dependencies.thread_local]
+version = "0.3.6"
+optional = true
+
+# For parsing regular expressions.
+[dependencies.regex-syntax]
+path = "regex-syntax"
+version = "0.6.11"
+default-features = false
+
+[dev-dependencies]
+# For examples.
+lazy_static = "1"
+# For property based tests.
+quickcheck = { version = "0.8", default-features = false }
+# For generating random test data.
+rand = "0.6.5"
+# To check README's example
+doc-comment = "0.3"
 
 # Run the test suite on the default behavior of Regex::new.
 # This includes a mish mash of NFAs and DFAs, which are chosen automatically

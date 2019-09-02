@@ -297,11 +297,25 @@ impl Compiler {
                 self.c_empty_look(prog::EmptyLook::EndText)
             }
             WordBoundary(hir::WordBoundary::Unicode) => {
+                if !cfg!(feature = "unicode-perl") {
+                    return Err(Error::Syntax(
+                        "Unicode word boundaries are unavailable when \
+                         the unicode-perl feature is disabled"
+                            .to_string(),
+                    ));
+                }
                 self.compiled.has_unicode_word_boundary = true;
                 self.byte_classes.set_word_boundary();
                 self.c_empty_look(prog::EmptyLook::WordBoundary)
             }
             WordBoundary(hir::WordBoundary::UnicodeNegate) => {
+                if !cfg!(feature = "unicode-perl") {
+                    return Err(Error::Syntax(
+                        "Unicode word boundaries are unavailable when \
+                         the unicode-perl feature is disabled"
+                            .to_string(),
+                    ));
+                }
                 self.compiled.has_unicode_word_boundary = true;
                 self.byte_classes.set_word_boundary();
                 self.c_empty_look(prog::EmptyLook::NotWordBoundary)
