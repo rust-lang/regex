@@ -199,7 +199,7 @@ impl<'r, I: Input> Fsm<'r, I> {
                     }
                 }
             }
-            if at.pos() == end || at.is_end() {
+            if at.pos() >= end {
                 break;
             }
             at = at_next;

@@ -27,6 +27,10 @@ members = [
 [lib]
 # There are no benchmarks in the library code itself
 bench = false
+# Doc tests fail when some features aren't present. The easiest way to work
+# around this is to disable automatic doc testing, but explicitly test them
+# with `cargo test --doc`.
+doctest = false
 
 # Features are documented in the "Crate features" section of the crate docs:
 # https://docs.rs/regex/*/#crate-features
@@ -40,7 +44,7 @@ default = ["std", "perf", "unicode"]
 # to compile without std, and instead just rely on 'core' and 'alloc' (for
 # example). Currently, this isn't supported, and removing the 'std' feature
 # will prevent regex from compiling.
-std = ["aho-corasick/std", "memchr/use_std"]
+std = []
 # The 'use_std' feature is DEPRECATED. It will be removed in regex 2. Until
 # then, it is alias for the 'std' feature.
 use_std = ["std"]
@@ -103,13 +107,11 @@ pattern = []
 [dependencies.aho-corasick]
 version = "0.7.6"
 optional = true
-default-features = false
 
 # For skipping along search text quickly when a leading byte is known.
 [dependencies.memchr]
 version = "2.2.1"
 optional = true
-default-features = false
 
 # For managing regex caches quickly across multiple threads.
 [dependencies.thread_local]

@@ -2,6 +2,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+#[cfg(feature = "perf-literal")]
 use aho_corasick::{AhoCorasick, AhoCorasickBuilder, MatchKind};
 use syntax::hir::literal::Literals;
 use syntax::hir::Hir;
@@ -85,6 +86,7 @@ struct ExecReadOnly {
     /// N.B. We use u32 as a state ID representation under the assumption that
     /// if we were to exhaust the ID space, we probably would have long
     /// surpassed the compilation size limit.
+    #[cfg(feature = "perf-literal")]
     ac: Option<AhoCorasick<u32>>,
     /// match_type encodes as much upfront knowledge about how we're going to
     /// execute a search as possible.
@@ -234,39 +236,41 @@ impl ExecBuilder {
                 parser.parse(pat).map_err(|e| Error::Syntax(e.to_string()))?;
             bytes = bytes || !expr.is_always_utf8();
 
-            if !expr.is_anchored_start() && expr.is_any_anchored_start() {
-                // Partial anchors unfortunately make it hard to use prefixes,
-                // so disable them.
-                prefixes = None;
-            } else if is_set && expr.is_anchored_start() {
-                // Regex sets with anchors do not go well with literal
-                // optimizations.
-                prefixes = None;
-            }
-            prefixes = prefixes.and_then(|mut prefixes| {
-                if !prefixes.union_prefixes(&expr) {
-                    None
-                } else {
-                    Some(prefixes)
+            if cfg!(feature = "perf-literal") {
+                if !expr.is_anchored_start() && expr.is_any_anchored_start() {
+                    // Partial anchors unfortunately make it hard to use
+                    // prefixes, so disable them.
+                    prefixes = None;
+                } else if is_set && expr.is_anchored_start() {
+                    // Regex sets with anchors do not go well with literal
+                    // optimizations.
+                    prefixes = None;
                 }
-            });
+                prefixes = prefixes.and_then(|mut prefixes| {
+                    if !prefixes.union_prefixes(&expr) {
+                        None
+                    } else {
+                        Some(prefixes)
+                    }
+                });
 
-            if !expr.is_anchored_end() && expr.is_any_anchored_end() {
-                // Partial anchors unfortunately make it hard to use suffixes,
-                // so disable them.
-                suffixes = None;
-            } else if is_set && expr.is_anchored_end() {
-                // Regex sets with anchors do not go well with literal
-                // optimizations.
-                suffixes = None;
-            }
-            suffixes = suffixes.and_then(|mut suffixes| {
-                if !suffixes.union_suffixes(&expr) {
-                    None
-                } else {
-                    Some(suffixes)
+                if !expr.is_anchored_end() && expr.is_any_anchored_end() {
+                    // Partial anchors unfortunately make it hard to use
+                    // suffixes, so disable them.
+                    suffixes = None;
+                } else if is_set && expr.is_anchored_end() {
+                    // Regex sets with anchors do not go well with literal
+                    // optimizations.
+                    suffixes = None;
                 }
-            });
+                suffixes = suffixes.and_then(|mut suffixes| {
+                    if !suffixes.union_suffixes(&expr) {
+                        None
+                    } else {
+                        Some(suffixes)
+                    }
+                });
+            }
             exprs.push(expr);
         }
         Ok(Parsed {
@@ -288,6 +292,7 @@ impl ExecBuilder {
                 dfa: Program::new(),
                 dfa_reverse: Program::new(),
                 suffixes: LiteralSearcher::empty(),
+                #[cfg(feature = "perf-literal")]
                 ac: None,
                 match_type: MatchType::Nothing,
             });
@@ -311,29 +316,12 @@ impl ExecBuilder {
             .reverse(true)
             .compile(&parsed.exprs)?;
 
+        #[cfg(feature = "perf-literal")]
+        let ac = self.build_aho_corasick(&parsed);
         nfa.prefixes = LiteralSearcher::prefixes(parsed.prefixes);
         dfa.prefixes = nfa.prefixes.clone();
         dfa.dfa_size_limit = self.options.dfa_size_limit;
         dfa_reverse.dfa_size_limit = self.options.dfa_size_limit;
-
-        let mut ac = None;
-        if parsed.exprs.len() == 1 {
-            if let Some(lits) = alternation_literals(&parsed.exprs[0]) {
-                // If we have a small number of literals, then let Teddy
-                // handle things (see literal/mod.rs).
-                if lits.len() > 32 {
-                    let fsm = AhoCorasickBuilder::new()
-                        .match_kind(MatchKind::LeftmostFirst)
-                        .auto_configure(&lits)
-                        // We always want this to reduce size, regardless of
-                        // what auto-configure does.
-                        .byte_classes(true)
-                        .build_with_size::<u32, _, _>(&lits)
-                        .expect("AC automaton too big");
-                    ac = Some(fsm);
-                }
-            }
-        }
 
         let mut ro = ExecReadOnly {
             res: self.options.pats,
@@ -341,6 +329,7 @@ impl ExecBuilder {
             dfa: dfa,
             dfa_reverse: dfa_reverse,
             suffixes: LiteralSearcher::suffixes(parsed.suffixes),
+            #[cfg(feature = "perf-literal")]
             ac: ac,
             match_type: MatchType::Nothing,
         };
@@ -348,6 +337,34 @@ impl ExecBuilder {
 
         let ro = Arc::new(ro);
         Ok(Exec { ro: ro, cache: Cached::new() })
+    }
+
+    #[cfg(feature = "perf-literal")]
+    fn build_aho_corasick(&self, parsed: &Parsed) -> Option<AhoCorasick<u32>> {
+        if parsed.exprs.len() != 1 {
+            return None;
+        }
+        let lits = match alternation_literals(&parsed.exprs[0]) {
+            None => return None,
+            Some(lits) => lits,
+        };
+        // If we have a small number of literals, then let Teddy handle
+        // things (see literal/mod.rs).
+        if lits.len() <= 32 {
+            return None;
+        }
+        Some(
+            AhoCorasickBuilder::new()
+                .match_kind(MatchKind::LeftmostFirst)
+                .auto_configure(&lits)
+                // We always want this to reduce size, regardless
+                // of what auto-configure does.
+                .byte_classes(true)
+                .build_with_size::<u32, _, _>(&lits)
+                // This should never happen because we'd long exceed the
+                // compilation limit for regexes first.
+                .expect("AC automaton too big"),
+        )
     }
 }
 
@@ -410,6 +427,7 @@ impl<'c> RegularExpression for ExecNoSync<'c> {
             return None;
         }
         match self.ro.match_type {
+            #[cfg(feature = "perf-literal")]
             MatchType::Literal(ty) => {
                 self.find_literals(ty, text, start).map(|(_, e)| e)
             }
@@ -433,6 +451,7 @@ impl<'c> RegularExpression for ExecNoSync<'c> {
                     dfa::Result::Quit => self.shortest_nfa(text, start),
                 }
             }
+            #[cfg(feature = "perf-literal")]
             MatchType::DfaSuffix => {
                 match self.shortest_dfa_reverse_suffix(text, start) {
                     dfa::Result::Match(e) => Some(e),
@@ -458,6 +477,7 @@ impl<'c> RegularExpression for ExecNoSync<'c> {
         // filling in captures[1], but a RegexSet has no captures. In other
         // words, a RegexSet can't (currently) use shortest_match. ---AG
         match self.ro.match_type {
+            #[cfg(feature = "perf-literal")]
             MatchType::Literal(ty) => {
                 self.find_literals(ty, text, start).is_some()
             }
@@ -481,6 +501,7 @@ impl<'c> RegularExpression for ExecNoSync<'c> {
                     dfa::Result::Quit => self.match_nfa(text, start),
                 }
             }
+            #[cfg(feature = "perf-literal")]
             MatchType::DfaSuffix => {
                 match self.shortest_dfa_reverse_suffix(text, start) {
                     dfa::Result::Match(_) => true,
@@ -501,6 +522,7 @@ impl<'c> RegularExpression for ExecNoSync<'c> {
             return None;
         }
         match self.ro.match_type {
+            #[cfg(feature = "perf-literal")]
             MatchType::Literal(ty) => self.find_literals(ty, text, start),
             MatchType::Dfa => match self.find_dfa_forward(text, start) {
                 dfa::Result::Match((s, e)) => Some((s, e)),
@@ -518,6 +540,7 @@ impl<'c> RegularExpression for ExecNoSync<'c> {
                     }
                 }
             }
+            #[cfg(feature = "perf-literal")]
             MatchType::DfaSuffix => {
                 match self.find_dfa_reverse_suffix(text, start) {
                     dfa::Result::Match((s, e)) => Some((s, e)),
@@ -570,6 +593,7 @@ impl<'c> RegularExpression for ExecNoSync<'c> {
             return None;
         }
         match self.ro.match_type {
+            #[cfg(feature = "perf-literal")]
             MatchType::Literal(ty) => {
                 self.find_literals(ty, text, start).and_then(|(s, e)| {
                     self.captures_nfa_type(
@@ -613,6 +637,7 @@ impl<'c> RegularExpression for ExecNoSync<'c> {
                     dfa::Result::Quit => self.captures_nfa(slots, text, start),
                 }
             }
+            #[cfg(feature = "perf-literal")]
             MatchType::DfaSuffix => {
                 match self.find_dfa_reverse_suffix(text, start) {
                     dfa::Result::Match((s, e)) => self.captures_nfa_type(
@@ -639,6 +664,7 @@ impl<'c> RegularExpression for ExecNoSync<'c> {
 
 impl<'c> ExecNoSync<'c> {
     /// Finds the leftmost-first match using only literal search.
+    #[cfg(feature = "perf-literal")]
     #[cfg_attr(feature = "perf-inline", inline(always))]
     fn find_literals(
         &self,
@@ -749,7 +775,7 @@ impl<'c> ExecNoSync<'c> {
 
     /// Finds the end of the shortest match using only the DFA by scanning for
     /// suffix literals.
-    ///
+    #[cfg(feature = "perf-literal")]
     #[cfg_attr(feature = "perf-inline", inline(always))]
     fn shortest_dfa_reverse_suffix(
         &self,
@@ -775,6 +801,7 @@ impl<'c> ExecNoSync<'c> {
     ///
     /// If the result returned indicates that the DFA quit, then another
     /// matching engine should be used.
+    #[cfg(feature = "perf-literal")]
     #[cfg_attr(feature = "perf-inline", inline(always))]
     fn exec_dfa_reverse_suffix(
         &self,
@@ -819,6 +846,7 @@ impl<'c> ExecNoSync<'c> {
     ///
     /// If the result returned indicates that the DFA quit, then another
     /// matching engine should be used.
+    #[cfg(feature = "perf-literal")]
     #[cfg_attr(feature = "perf-inline", inline(always))]
     fn find_dfa_reverse_suffix(
         &self,
@@ -1079,12 +1107,35 @@ impl<'c> ExecNoSync<'c> {
             return false;
         }
         match self.ro.match_type {
+            #[cfg(feature = "perf-literal")]
             Literal(ty) => {
                 debug_assert_eq!(matches.len(), 1);
                 matches[0] = self.find_literals(ty, text, start).is_some();
                 matches[0]
             }
-            Dfa | DfaAnchoredReverse | DfaSuffix | DfaMany => {
+            Dfa | DfaAnchoredReverse | DfaMany => {
+                match dfa::Fsm::forward_many(
+                    &self.ro.dfa,
+                    self.cache.value(),
+                    matches,
+                    text,
+                    start,
+                ) {
+                    dfa::Result::Match(_) => true,
+                    dfa::Result::NoMatch(_) => false,
+                    dfa::Result::Quit => self.exec_nfa(
+                        MatchNfaType::Auto,
+                        matches,
+                        &mut [],
+                        false,
+                        text,
+                        start,
+                        text.len(),
+                    ),
+                }
+            }
+            #[cfg(feature = "perf-literal")]
+            DfaSuffix => {
                 match dfa::Fsm::forward_many(
                     &self.ro.dfa,
                     self.cache.value(),
@@ -1120,14 +1171,24 @@ impl<'c> ExecNoSync<'c> {
 
     #[cfg_attr(feature = "perf-inline", inline(always))]
     fn is_anchor_end_match(&self, text: &[u8]) -> bool {
-        // Only do this check if the haystack is big (>1MB).
-        if text.len() > (1 << 20) && self.ro.nfa.is_anchored_end {
-            let lcs = self.ro.suffixes.lcs();
-            if lcs.len() >= 1 && !lcs.is_suffix(text) {
-                return false;
-            }
+        #[cfg(not(feature = "perf-literal"))]
+        fn imp(_: &ExecReadOnly, _: &[u8]) -> bool {
+            true
         }
-        true
+
+        #[cfg(feature = "perf-literal")]
+        fn imp(ro: &ExecReadOnly, text: &[u8]) -> bool {
+            // Only do this check if the haystack is big (>1MB).
+            if text.len() > (1 << 20) && ro.nfa.is_anchored_end {
+                let lcs = ro.suffixes.lcs();
+                if lcs.len() >= 1 && !lcs.is_suffix(text) {
+                    return false;
+                }
+            }
+            true
+        }
+
+        imp(&self.ro, text)
     }
 
     pub fn capture_name_idx(&self) -> &Arc<HashMap<String, usize>> {
@@ -1214,36 +1275,8 @@ impl ExecReadOnly {
         if self.nfa.insts.is_empty() {
             return Nothing;
         }
-        // If our set of prefixes is complete, then we can use it to find
-        // a match in lieu of a regex engine. This doesn't quite work well in
-        // the presence of multiple regexes, so only do it when there's one.
-        //
-        // TODO(burntsushi): Also, don't try to match literals if the regex is
-        // partially anchored. We could technically do it, but we'd need to
-        // create two sets of literals: all of them and then the subset that
-        // aren't anchored. We would then only search for all of them when at
-        // the beginning of the input and use the subset in all other cases.
-        if self.res.len() == 1 {
-            if self.ac.is_some() {
-                return Literal(MatchLiteralType::AhoCorasick);
-            }
-            if self.nfa.prefixes.complete() {
-                return if self.nfa.is_anchored_start {
-                    Literal(MatchLiteralType::AnchoredStart)
-                } else {
-                    Literal(MatchLiteralType::Unanchored)
-                };
-            }
-            if self.suffixes.complete() {
-                return if self.nfa.is_anchored_end {
-                    Literal(MatchLiteralType::AnchoredEnd)
-                } else {
-                    // This case shouldn't happen. When the regex isn't
-                    // anchored, then complete prefixes should imply complete
-                    // suffixes.
-                    Literal(MatchLiteralType::Unanchored)
-                };
-            }
+        if let Some(literalty) = self.choose_literal_match_type() {
+            return literalty;
         }
         // If we can execute the DFA, then we totally should.
         if dfa::can_exec(&self.dfa) {
@@ -1256,16 +1289,71 @@ impl ExecReadOnly {
             if !self.nfa.is_anchored_start && self.nfa.is_anchored_end {
                 return DfaAnchoredReverse;
             }
-            // If there's a longish suffix literal, then it might be faster
-            // to look for that first.
-            if self.should_suffix_scan() {
-                return DfaSuffix;
+            #[cfg(feature = "perf-literal")]
+            {
+                // If there's a longish suffix literal, then it might be faster
+                // to look for that first.
+                if self.should_suffix_scan() {
+                    return DfaSuffix;
+                }
             }
             // Fall back to your garden variety forward searching lazy DFA.
             return Dfa;
         }
         // We're so totally hosed.
         Nfa(MatchNfaType::Auto)
+    }
+
+    /// If a plain literal scan can be used, then a corresponding literal
+    /// search type is returned.
+    fn choose_literal_match_type(&self) -> Option<MatchType> {
+        #[cfg(not(feature = "perf-literal"))]
+        fn imp(_: &ExecReadOnly) -> Option<MatchType> {
+            None
+        }
+
+        #[cfg(feature = "perf-literal")]
+        fn imp(ro: &ExecReadOnly) -> Option<MatchType> {
+            // If our set of prefixes is complete, then we can use it to find
+            // a match in lieu of a regex engine. This doesn't quite work well
+            // in the presence of multiple regexes, so only do it when there's
+            // one.
+            //
+            // TODO(burntsushi): Also, don't try to match literals if the regex
+            // is partially anchored. We could technically do it, but we'd need
+            // to create two sets of literals: all of them and then the subset
+            // that aren't anchored. We would then only search for all of them
+            // when at the beginning of the input and use the subset in all
+            // other cases.
+            if ro.res.len() != 1 {
+                return None;
+            }
+            if ro.ac.is_some() {
+                return Some(MatchType::Literal(
+                    MatchLiteralType::AhoCorasick,
+                ));
+            }
+            if ro.nfa.prefixes.complete() {
+                return if ro.nfa.is_anchored_start {
+                    Some(MatchType::Literal(MatchLiteralType::AnchoredStart))
+                } else {
+                    Some(MatchType::Literal(MatchLiteralType::Unanchored))
+                };
+            }
+            if ro.suffixes.complete() {
+                return if ro.nfa.is_anchored_end {
+                    Some(MatchType::Literal(MatchLiteralType::AnchoredEnd))
+                } else {
+                    // This case shouldn't happen. When the regex isn't
+                    // anchored, then complete prefixes should imply complete
+                    // suffixes.
+                    Some(MatchType::Literal(MatchLiteralType::Unanchored))
+                };
+            }
+            None
+        }
+
+        imp(self)
     }
 
     /// Returns true if the program is amenable to suffix scanning.
@@ -1282,6 +1370,7 @@ impl ExecReadOnly {
     /// account for but (2) is harder. As a proxy, we assume that longer
     /// strings are generally rarer, so we only enable this optimization when
     /// we have a meaty suffix.
+    #[cfg(feature = "perf-literal")]
     fn should_suffix_scan(&self) -> bool {
         if self.suffixes.is_empty() {
             return false;
@@ -1295,12 +1384,14 @@ impl ExecReadOnly {
 enum MatchType {
     /// A single or multiple literal search. This is only used when the regex
     /// can be decomposed into a literal search.
+    #[cfg(feature = "perf-literal")]
     Literal(MatchLiteralType),
     /// A normal DFA search.
     Dfa,
     /// A reverse DFA search starting from the end of a haystack.
     DfaAnchoredReverse,
     /// A reverse DFA search with suffix literal scanning.
+    #[cfg(feature = "perf-literal")]
     DfaSuffix,
     /// Use the DFA on two or more regular expressions.
     DfaMany,
@@ -1311,6 +1402,7 @@ enum MatchType {
 }
 
 #[derive(Clone, Copy, Debug)]
+#[cfg(feature = "perf-literal")]
 enum MatchLiteralType {
     /// Match literals anywhere in text.
     Unanchored,
@@ -1364,6 +1456,7 @@ impl ProgramCacheInner {
 
 /// Alternation literals checks if the given HIR is a simple alternation of
 /// literals, and if so, returns them. Otherwise, this returns None.
+#[cfg(feature = "perf-literal")]
 fn alternation_literals(expr: &Hir) -> Option<Vec<Vec<u8>>> {
     use syntax::hir::{HirKind, Literal};
 

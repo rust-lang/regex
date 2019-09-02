@@ -224,6 +224,7 @@ impl<T> Result<T> {
     /// Maps the given function onto T and returns the result.
     ///
     /// If this isn't a match, then this is a no-op.
+    #[cfg(feature = "perf-literal")]
     pub fn map<U, F: FnMut(T) -> U>(self, mut f: F) -> Result<U> {
         match self {
             Result::Match(t) => Result::Match(f(t)),

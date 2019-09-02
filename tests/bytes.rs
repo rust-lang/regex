@@ -10,15 +10,20 @@ impl<'a> R<'a> {
 }
 
 mat!(word_boundary, r"(?-u) \b", " δ", None);
+#[cfg(feature = "unicode-perl")]
 mat!(word_boundary_unicode, r" \b", " δ", Some((0, 1)));
 mat!(word_not_boundary, r"(?-u) \B", " δ", Some((0, 1)));
+#[cfg(feature = "unicode-perl")]
 mat!(word_not_boundary_unicode, r" \B", " δ", None);
 
 mat!(perl_w_ascii, r"(?-u)\w+", "aδ", Some((0, 1)));
+#[cfg(feature = "unicode-perl")]
 mat!(perl_w_unicode, r"\w+", "aδ", Some((0, 3)));
 mat!(perl_d_ascii, r"(?-u)\d+", "1२३9", Some((0, 1)));
+#[cfg(feature = "unicode-perl")]
 mat!(perl_d_unicode, r"\d+", "1२३9", Some((0, 8)));
 mat!(perl_s_ascii, r"(?-u)\s+", " \u{1680}", Some((0, 1)));
+#[cfg(feature = "unicode-perl")]
 mat!(perl_s_unicode, r"\s+", " \u{1680}", Some((0, 4)));
 
 // The first `(.+)` matches two Unicode codepoints, but can't match the 5th
@@ -35,6 +40,7 @@ mat!(
 
 mat!(case_ascii_one, r"(?i-u)a", "A", Some((0, 1)));
 mat!(case_ascii_class, r"(?i-u)[a-z]+", "AaAaA", Some((0, 5)));
+#[cfg(feature = "unicode-case")]
 mat!(case_unicode, r"(?i)[a-z]+", "aA\u{212A}aA", Some((0, 7)));
 mat!(case_not_unicode, r"(?i-u)[a-z]+", "aA\u{212A}aA", Some((0, 2)));
 

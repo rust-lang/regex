@@ -56,11 +56,11 @@ mod imp {
         /// tricky to do that right now.
         ///
         /// See also: https://github.com/rust-lang/regex/issues/576
-        _phantom: PhantomData<Box<Send + Sync + UnwindSafe>>,
+        _phantom: PhantomData<Box<dyn Send + Sync + UnwindSafe>>,
     }
 
     #[derive(Debug)]
-    pub struct CachedGuard<'a, T: Send> {
+    pub struct CachedGuard<'a, T: 'a + Send> {
         cache: &'a Cached<T>,
         value: Option<T>,
     }
