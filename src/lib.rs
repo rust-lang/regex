@@ -749,6 +749,7 @@ pub mod bytes {
 mod backtrack;
 mod cache;
 mod compile;
+#[cfg(feature = "perf-dfa")]
 mod dfa;
 mod error;
 mod exec;
