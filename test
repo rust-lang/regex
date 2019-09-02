@@ -10,6 +10,7 @@ cargo test
 features=(
     "std perf"
     "std perf unicode-perl"
+    "std perf-cache perf-dfa perf-literal"
 )
 for f in "${features[@]}"; do
     echo "===== FEATURE: $f ==="

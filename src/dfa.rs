@@ -442,7 +442,7 @@ impl CacheInner {
 }
 
 impl<'a> Fsm<'a> {
-    #[inline(always)] // reduces constant overhead
+    #[cfg_attr(feature = "perf-inline", inline(always))]
     pub fn forward(
         prog: &'a Program,
         cache: &ProgramCache,
@@ -472,7 +472,7 @@ impl<'a> Fsm<'a> {
         dfa.exec_at(&mut cache.qcur, &mut cache.qnext, text)
     }
 
-    #[inline(always)] // reduces constant overhead
+    #[cfg_attr(feature = "perf-inline", inline(always))]
     pub fn reverse(
         prog: &'a Program,
         cache: &ProgramCache,
@@ -502,7 +502,7 @@ impl<'a> Fsm<'a> {
         dfa.exec_at_reverse(&mut cache.qcur, &mut cache.qnext, text)
     }
 
-    #[inline(always)] // reduces constant overhead
+    #[cfg_attr(feature = "perf-inline", inline(always))]
     pub fn forward_many(
         prog: &'a Program,
         cache: &ProgramCache,
@@ -550,7 +550,7 @@ impl<'a> Fsm<'a> {
     /// Executes the DFA on a forward NFA.
     ///
     /// {qcur,qnext} are scratch ordered sets which may be non-empty.
-    #[inline(always)] // reduces constant overhead
+    #[cfg_attr(feature = "perf-inline", inline(always))]
     fn exec_at(
         &mut self,
         qcur: &mut SparseSet,
@@ -743,7 +743,7 @@ impl<'a> Fsm<'a> {
     }
 
     /// Executes the DFA on a reverse NFA.
-    #[inline(always)] // reduces constant overhead
+    #[cfg_attr(feature = "perf-inline", inline(always))]
     fn exec_at_reverse(
         &mut self,
         qcur: &mut SparseSet,
@@ -848,7 +848,7 @@ impl<'a> Fsm<'a> {
     /// corresponds to text[i].
     ///
     /// This elides bounds checks, and is therefore unsafe.
-    #[inline(always)]
+    #[cfg_attr(feature = "perf-inline", inline(always))]
     unsafe fn next_si(&self, si: StatePtr, text: &[u8], i: usize) -> StatePtr {
         // What is the argument for safety here?
         // We have three unchecked accesses that could possibly violate safety:
@@ -1363,7 +1363,7 @@ impl<'a> Fsm<'a> {
     /// then it is computed, cached and a pointer to it is returned.
     ///
     /// This may return STATE_DEAD but never STATE_UNKNOWN.
-    #[inline(always)] // reduces constant overhead
+    #[cfg_attr(feature = "perf-inline", inline(always))]
     fn start_state(
         &mut self,
         q: &mut SparseSet,
@@ -1525,7 +1525,7 @@ impl<'a> Fsm<'a> {
 
     /// Given an input byte or the special EOF sentinel, return its
     /// corresponding byte class.
-    #[inline(always)]
+    #[cfg_attr(feature = "perf-inline", inline(always))]
     fn byte_class(&self, b: Byte) -> usize {
         match b.as_byte() {
             None => self.num_byte_classes() - 1,
@@ -1534,7 +1534,7 @@ impl<'a> Fsm<'a> {
     }
 
     /// Like byte_class, but explicitly for u8s.
-    #[inline(always)]
+    #[cfg_attr(feature = "perf-inline", inline(always))]
     fn u8_class(&self, b: u8) -> usize {
         self.prog.byte_classes[b as usize] as usize
     }

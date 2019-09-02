@@ -80,7 +80,7 @@ impl LiteralSearcher {
     }
 
     /// Find the position of a literal in `haystack` if it exists.
-    #[inline(always)] // reduces constant overhead
+    #[cfg_attr(feature = "perf-inline", inline(always))]
     pub fn find(&self, haystack: &[u8]) -> Option<(usize, usize)> {
         use self::Matcher::*;
         match self.matcher {
@@ -339,7 +339,7 @@ impl SingleByteSet {
     }
 
     /// Faster find that special cases certain sizes to use memchr.
-    #[inline(always)] // reduces constant overhead
+    #[cfg_attr(feature = "perf-inline", inline(always))]
     fn find(&self, text: &[u8]) -> Option<usize> {
         match self.dense.len() {
             0 => None,
@@ -452,7 +452,7 @@ impl FreqyPacked {
         }
     }
 
-    #[inline(always)] // reduces constant overhead
+    #[cfg_attr(feature = "perf-inline", inline(always))]
     pub fn find(&self, haystack: &[u8]) -> Option<usize> {
         let pat = &*self.pat;
         if haystack.len() < pat.len() || pat.is_empty() {
@@ -478,7 +478,7 @@ impl FreqyPacked {
         None
     }
 
-    #[inline(always)] // reduces constant overhead
+    #[cfg_attr(feature = "perf-inline", inline(always))]
     pub fn is_suffix(&self, text: &[u8]) -> bool {
         if text.len() < self.len() {
             return false;

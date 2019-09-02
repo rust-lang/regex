@@ -362,22 +362,22 @@ impl<'c> RegularExpression for ExecNoSyncStr<'c> {
         next_utf8(text.as_bytes(), i)
     }
 
-    #[inline(always)] // reduces constant overhead
+    #[cfg_attr(feature = "perf-inline", inline(always))]
     fn shortest_match_at(&self, text: &str, start: usize) -> Option<usize> {
         self.0.shortest_match_at(text.as_bytes(), start)
     }
 
-    #[inline(always)] // reduces constant overhead
+    #[cfg_attr(feature = "perf-inline", inline(always))]
     fn is_match_at(&self, text: &str, start: usize) -> bool {
         self.0.is_match_at(text.as_bytes(), start)
     }
 
-    #[inline(always)] // reduces constant overhead
+    #[cfg_attr(feature = "perf-inline", inline(always))]
     fn find_at(&self, text: &str, start: usize) -> Option<(usize, usize)> {
         self.0.find_at(text.as_bytes(), start)
     }
 
-    #[inline(always)] // reduces constant overhead
+    #[cfg_attr(feature = "perf-inline", inline(always))]
     fn captures_read_at(
         &self,
         locs: &mut Locations,
@@ -404,7 +404,7 @@ impl<'c> RegularExpression for ExecNoSync<'c> {
 
     /// Returns the end of a match location, possibly occurring before the
     /// end location of the correct leftmost-first match.
-    #[inline(always)] // reduces constant overhead
+    #[cfg_attr(feature = "perf-inline", inline(always))]
     fn shortest_match_at(&self, text: &[u8], start: usize) -> Option<usize> {
         if !self.is_anchor_end_match(text) {
             return None;
@@ -449,7 +449,7 @@ impl<'c> RegularExpression for ExecNoSync<'c> {
     ///
     /// For single regular expressions, this is equivalent to calling
     /// shortest_match(...).is_some().
-    #[inline(always)] // reduces constant overhead
+    #[cfg_attr(feature = "perf-inline", inline(always))]
     fn is_match_at(&self, text: &[u8], start: usize) -> bool {
         if !self.is_anchor_end_match(text) {
             return false;
@@ -495,7 +495,7 @@ impl<'c> RegularExpression for ExecNoSync<'c> {
 
     /// Finds the start and end location of the leftmost-first match, starting
     /// at the given location.
-    #[inline(always)] // reduces constant overhead
+    #[cfg_attr(feature = "perf-inline", inline(always))]
     fn find_at(&self, text: &[u8], start: usize) -> Option<(usize, usize)> {
         if !self.is_anchor_end_match(text) {
             return None;
@@ -639,7 +639,7 @@ impl<'c> RegularExpression for ExecNoSync<'c> {
 
 impl<'c> ExecNoSync<'c> {
     /// Finds the leftmost-first match using only literal search.
-    #[inline(always)] // reduces constant overhead
+    #[cfg_attr(feature = "perf-inline", inline(always))]
     fn find_literals(
         &self,
         ty: MatchLiteralType,
@@ -682,7 +682,7 @@ impl<'c> ExecNoSync<'c> {
     ///
     /// If the result returned indicates that the DFA quit, then another
     /// matching engine should be used.
-    #[inline(always)] // reduces constant overhead
+    #[cfg_attr(feature = "perf-inline", inline(always))]
     fn find_dfa_forward(
         &self,
         text: &[u8],
@@ -721,7 +721,7 @@ impl<'c> ExecNoSync<'c> {
     ///
     /// If the result returned indicates that the DFA quit, then another
     /// matching engine should be used.
-    #[inline(always)] // reduces constant overhead
+    #[cfg_attr(feature = "perf-inline", inline(always))]
     fn find_dfa_anchored_reverse(
         &self,
         text: &[u8],
@@ -742,7 +742,7 @@ impl<'c> ExecNoSync<'c> {
     }
 
     /// Finds the end of the shortest match using only the DFA.
-    #[inline(always)] // reduces constant overhead
+    #[cfg_attr(feature = "perf-inline", inline(always))]
     fn shortest_dfa(&self, text: &[u8], start: usize) -> dfa::Result<usize> {
         dfa::Fsm::forward(&self.ro.dfa, self.cache, true, text, start)
     }
@@ -750,7 +750,7 @@ impl<'c> ExecNoSync<'c> {
     /// Finds the end of the shortest match using only the DFA by scanning for
     /// suffix literals.
     ///
-    #[inline(always)] // reduces constant overhead
+    #[cfg_attr(feature = "perf-inline", inline(always))]
     fn shortest_dfa_reverse_suffix(
         &self,
         text: &[u8],
@@ -775,7 +775,7 @@ impl<'c> ExecNoSync<'c> {
     ///
     /// If the result returned indicates that the DFA quit, then another
     /// matching engine should be used.
-    #[inline(always)] // reduces constant overhead
+    #[cfg_attr(feature = "perf-inline", inline(always))]
     fn exec_dfa_reverse_suffix(
         &self,
         text: &[u8],
@@ -819,7 +819,7 @@ impl<'c> ExecNoSync<'c> {
     ///
     /// If the result returned indicates that the DFA quit, then another
     /// matching engine should be used.
-    #[inline(always)] // reduces constant overhead
+    #[cfg_attr(feature = "perf-inline", inline(always))]
     fn find_dfa_reverse_suffix(
         &self,
         text: &[u8],
@@ -1118,7 +1118,7 @@ impl<'c> ExecNoSync<'c> {
         }
     }
 
-    #[inline(always)] // reduces constant overhead
+    #[cfg_attr(feature = "perf-inline", inline(always))]
     fn is_anchor_end_match(&self, text: &[u8]) -> bool {
         // Only do this check if the haystack is big (>1MB).
         if text.len() > (1 << 20) && self.ro.nfa.is_anchored_end {
@@ -1143,7 +1143,7 @@ impl<'c> ExecNoSyncStr<'c> {
 
 impl Exec {
     /// Get a searcher that isn't Sync.
-    #[inline(always)] // reduces constant overhead
+    #[cfg_attr(feature = "perf-inline", inline(always))]
     pub fn searcher(&self) -> ExecNoSync {
         let create =
             || Box::new(RefCell::new(ProgramCacheInner::new(&self.ro)));
@@ -1154,7 +1154,7 @@ impl Exec {
     }
 
     /// Get a searcher that isn't Sync and can match on &str.
-    #[inline(always)] // reduces constant overhead
+    #[cfg_attr(feature = "perf-inline", inline(always))]
     pub fn searcher_str(&self) -> ExecNoSyncStr {
         ExecNoSyncStr(self.searcher())
     }
