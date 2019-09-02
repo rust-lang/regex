@@ -4,6 +4,8 @@ use std::fmt::Debug;
 use std::slice;
 use std::u8;
 
+use unicode;
+
 // This module contains an *internal* implementation of interval sets.
 //
 // The primary invariant that interval sets guards is canonical ordering. That
@@ -14,7 +16,8 @@ use std::u8;
 //
 // Since case folding (as implemented below) breaks that invariant, we roll
 // that into this API even though it is a little out of place in an otherwise
-// generic interval set.
+// generic interval set. (Hence the reason why the `unicode` module is imported
+// here.)
 //
 // Some of the implementation complexity here is a result of me wanting to
 // preserve the sequential representation without using additional memory.
@@ -72,13 +75,20 @@ impl<I: Interval> IntervalSet<I> {
     /// characters. For example, if this class consists of the range `a-z`,
     /// then applying case folding will result in the class containing both the
     /// ranges `a-z` and `A-Z`.
-    pub fn case_fold_simple(&mut self) {
+    ///
+    /// This returns an error if the necessary case mapping data is not
+    /// available.
+    pub fn case_fold_simple(&mut self) -> Result<(), unicode::CaseFoldError> {
         let len = self.ranges.len();
         for i in 0..len {
             let range = self.ranges[i];
-            range.case_fold_simple(&mut self.ranges);
+            if let Err(err) = range.case_fold_simple(&mut self.ranges) {
+                self.canonicalize();
+                return Err(err);
+            }
         }
         self.canonicalize();
+        Ok(())
     }
 
     /// Union this set with the given set, in place.
@@ -331,7 +341,10 @@ pub trait Interval:
     fn upper(&self) -> Self::Bound;
     fn set_lower(&mut self, bound: Self::Bound);
     fn set_upper(&mut self, bound: Self::Bound);
-    fn case_fold_simple(&self, intervals: &mut Vec<Self>);
+    fn case_fold_simple(
+        &self,
+        intervals: &mut Vec<Self>,
+    ) -> Result<(), unicode::CaseFoldError>;
 
     /// Create a new interval.
     fn create(lower: Self::Bound, upper: Self::Bound) -> Self {

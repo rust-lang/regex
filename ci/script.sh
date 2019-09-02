@@ -1,5 +1,7 @@
 #!/bin/sh
 
+# vim: tabstop=2 shiftwidth=2 softtabstop=2
+
 # This is the main CI script for testing the regex crate and its sub-crates.
 
 set -ex
@@ -42,8 +44,13 @@ RUST_REGEX_RANDOM_TEST=1 \
 ci/run-shootout-test
 
 # Run tests on regex-syntax crate.
-cargo test --verbose --manifest-path regex-syntax/Cargo.toml
 cargo doc --verbose --manifest-path regex-syntax/Cargo.toml
+# Only run the full test suite on one job, to conserve resources.
+if [ "$TRAVIS_RUST_VERSION" = "stable" ]; then
+  (cd regex-syntax && ./test)
+else
+  cargo test --verbose --manifest-path regex-syntax/Cargo.toml
+fi
 
 # Run tests on regex-capi crate.
 ci/test-regex-capi

@@ -8,3 +8,25 @@ documentation = "https://docs.rs/regex-syntax"
 homepage = "https://github.com/rust-lang/regex"
 description = "A regular expression parser."
 workspace = ".."
+
+# Features are documented in the "Crate features" section of the crate docs:
+# https://docs.rs/regex-syntax/*/#crate-features
+[features]
+default = ["unicode"]
+
+unicode = [
+  "unicode-age",
+  "unicode-bool",
+  "unicode-case",
+  "unicode-gencat",
+  "unicode-perl",
+  "unicode-script",
+  "unicode-segment",
+]
+unicode-age = []
+unicode-bool = []
+unicode-case = []
+unicode-gencat = []
+unicode-perl = []
+unicode-script = []
+unicode-segment = []
