@@ -621,6 +621,7 @@ compile_error!("`std` feature is currently required to build this crate");
 
 extern crate aho_corasick;
 extern crate memchr;
+#[cfg(feature = "perf-cache")]
 extern crate thread_local;
 #[cfg(test)]
 #[macro_use]
@@ -744,6 +745,7 @@ pub mod bytes {
 }
 
 mod backtrack;
+mod cache;
 mod compile;
 mod dfa;
 mod error;

@@ -6,9 +6,9 @@ use aho_corasick::{AhoCorasick, AhoCorasickBuilder, MatchKind};
 use syntax::hir::literal::Literals;
 use syntax::hir::Hir;
 use syntax::ParserBuilder;
-use thread_local::CachedThreadLocal;
 
 use backtrack;
+use cache::{Cached, CachedGuard};
 use compile::Compiler;
 use dfa;
 use error::Error;
@@ -32,7 +32,7 @@ pub struct Exec {
     /// All read only state.
     ro: Arc<ExecReadOnly>,
     /// Caches for the various matching engines.
-    cache: CachedThreadLocal<ProgramCache>,
+    cache: Cached<ProgramCache>,
 }
 
 /// `ExecNoSync` is like `Exec`, except it embeds a reference to a cache. This
@@ -43,7 +43,7 @@ pub struct ExecNoSync<'c> {
     /// All read only state.
     ro: &'c Arc<ExecReadOnly>,
     /// Caches for the various matching engines.
-    cache: &'c ProgramCache,
+    cache: CachedGuard<'c, ProgramCache>,
 }
 
 /// `ExecNoSyncStr` is like `ExecNoSync`, but matches on &str instead of &[u8].
@@ -291,7 +291,7 @@ impl ExecBuilder {
                 ac: None,
                 match_type: MatchType::Nothing,
             });
-            return Ok(Exec { ro: ro, cache: CachedThreadLocal::new() });
+            return Ok(Exec { ro: ro, cache: Cached::new() });
         }
         let parsed = self.parse()?;
         let mut nfa = Compiler::new()
@@ -347,7 +347,7 @@ impl ExecBuilder {
         ro.match_type = ro.choose_match_type(self.match_type);
 
         let ro = Arc::new(ro);
-        Ok(Exec { ro: ro, cache: CachedThreadLocal::new() })
+        Ok(Exec { ro: ro, cache: Cached::new() })
     }
 }
 
@@ -423,7 +423,7 @@ impl<'c> RegularExpression for ExecNoSync<'c> {
             MatchType::DfaAnchoredReverse => {
                 match dfa::Fsm::reverse(
                     &self.ro.dfa_reverse,
-                    self.cache,
+                    self.cache.value(),
                     true,
                     &text[start..],
                     text.len(),
@@ -471,7 +471,7 @@ impl<'c> RegularExpression for ExecNoSync<'c> {
             MatchType::DfaAnchoredReverse => {
                 match dfa::Fsm::reverse(
                     &self.ro.dfa_reverse,
-                    self.cache,
+                    self.cache.value(),
                     true,
                     &text[start..],
                     text.len(),
@@ -691,7 +691,7 @@ impl<'c> ExecNoSync<'c> {
         use dfa::Result::*;
         let end = match dfa::Fsm::forward(
             &self.ro.dfa,
-            self.cache,
+            self.cache.value(),
             false,
             text,
             start,
@@ -704,7 +704,7 @@ impl<'c> ExecNoSync<'c> {
         // Now run the DFA in reverse to find the start of the match.
         match dfa::Fsm::reverse(
             &self.ro.dfa_reverse,
-            self.cache,
+            self.cache.value(),
             false,
             &text[start..],
             end - start,
@@ -730,7 +730,7 @@ impl<'c> ExecNoSync<'c> {
         use dfa::Result::*;
         match dfa::Fsm::reverse(
             &self.ro.dfa_reverse,
-            self.cache,
+            self.cache.value(),
             false,
             &text[start..],
             text.len() - start,
@@ -744,7 +744,7 @@ impl<'c> ExecNoSync<'c> {
     /// Finds the end of the shortest match using only the DFA.
     #[cfg_attr(feature = "perf-inline", inline(always))]
     fn shortest_dfa(&self, text: &[u8], start: usize) -> dfa::Result<usize> {
-        dfa::Fsm::forward(&self.ro.dfa, self.cache, true, text, start)
+        dfa::Fsm::forward(&self.ro.dfa, self.cache.value(), true, text, start)
     }
 
     /// Finds the end of the shortest match using only the DFA by scanning for
@@ -796,7 +796,7 @@ impl<'c> ExecNoSync<'c> {
             end = last_literal + lcs.len();
             match dfa::Fsm::reverse(
                 &self.ro.dfa_reverse,
-                self.cache,
+                self.cache.value(),
                 false,
                 &text[start..end],
                 end - start,
@@ -841,7 +841,7 @@ impl<'c> ExecNoSync<'c> {
         // leftmost-first match.)
         match dfa::Fsm::forward(
             &self.ro.dfa,
-            self.cache,
+            self.cache.value(),
             false,
             text,
             match_start,
@@ -1007,7 +1007,7 @@ impl<'c> ExecNoSync<'c> {
         if self.ro.nfa.uses_bytes() {
             pikevm::Fsm::exec(
                 &self.ro.nfa,
-                self.cache,
+                self.cache.value(),
                 matches,
                 slots,
                 quit_after_match,
@@ -1018,7 +1018,7 @@ impl<'c> ExecNoSync<'c> {
         } else {
             pikevm::Fsm::exec(
                 &self.ro.nfa,
-                self.cache,
+                self.cache.value(),
                 matches,
                 slots,
                 quit_after_match,
@@ -1041,7 +1041,7 @@ impl<'c> ExecNoSync<'c> {
         if self.ro.nfa.uses_bytes() {
             backtrack::Bounded::exec(
                 &self.ro.nfa,
-                self.cache,
+                self.cache.value(),
                 matches,
                 slots,
                 ByteInput::new(text, self.ro.nfa.only_utf8),
@@ -1051,7 +1051,7 @@ impl<'c> ExecNoSync<'c> {
         } else {
             backtrack::Bounded::exec(
                 &self.ro.nfa,
-                self.cache,
+                self.cache.value(),
                 matches,
                 slots,
                 CharInput::new(text),
@@ -1087,7 +1087,7 @@ impl<'c> ExecNoSync<'c> {
             Dfa | DfaAnchoredReverse | DfaSuffix | DfaMany => {
                 match dfa::Fsm::forward_many(
                     &self.ro.dfa,
-                    self.cache,
+                    self.cache.value(),
                     matches,
                     text,
                     start,
@@ -1145,8 +1145,7 @@ impl Exec {
     /// Get a searcher that isn't Sync.
     #[cfg_attr(feature = "perf-inline", inline(always))]
     pub fn searcher(&self) -> ExecNoSync {
-        let create =
-            || Box::new(RefCell::new(ProgramCacheInner::new(&self.ro)));
+        let create = || RefCell::new(ProgramCacheInner::new(&self.ro));
         ExecNoSync {
             ro: &self.ro, // a clone is too expensive here! (and not needed)
             cache: self.cache.get_or(create),
@@ -1201,7 +1200,7 @@ impl Exec {
 
 impl Clone for Exec {
     fn clone(&self) -> Exec {
-        Exec { ro: self.ro.clone(), cache: CachedThreadLocal::new() }
+        Exec { ro: self.ro.clone(), cache: Cached::new() }
     }
 }
 
