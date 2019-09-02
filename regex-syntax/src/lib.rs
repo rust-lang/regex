@@ -91,12 +91,74 @@ know a regular expression must match a prefix or suffix literal, then it is
 often quicker to search for instances of that literal, and then confirm or deny
 the match using the full regular expression engine. These optimizations are
 done automatically in the `regex` crate.
+
+
+# Crate features
+
+An important feature provided by this crate is its Unicode support. This
+includes things like case folding, boolean properties, general categories,
+scripts and Unicode-aware support for the Perl classes `\w`, `\s` and `\d`.
+However, a downside of this support is that it requires bundling several
+Unicode data tables that are substantial in size.
+
+A fair number of use cases do not require full Unicode support. For this
+reason, this crate exposes a number of features to control which Unicode
+data is available.
+
+If a regular expression attempts to use a Unicode feature that is not available
+because the corresponding crate feature was disabled, then translating that
+regular expression to an `Hir` will return an error. (It is still possible
+construct an `Ast` for such a regular expression, since Unicode data is not
+used until translation to an `Hir`.) Stated differently, enabling or disabling
+any of the features below can only add or subtract from the total set of valid
+regular expressions. Enabling or disabling a feature will never modify the
+match semantics of a regular expression.
+
+The following features are available:
+
+* **unicode** -
+  Enables all Unicode features. This feature is enabled by default, and will
+  always cover all Unicode features, even if more are added in the future.
+* **unicode-age** -
+  Provide the data for the
+  [Unicode `Age` property](https://www.unicode.org/reports/tr44/tr44-24.html#Character_Age).
+  This makes it possible to use classes like `\p{Age:6.0}` to refer to all
+  codepoints first introduced in Unicode 6.0
+* **unicode-bool** -
+  Provide the data for numerous Unicode boolean properties. The full list
+  is not included here, but contains properties like `Alphabetic`, `Emoji`,
+  `Lowercase`, `Math`, `Uppercase` and `White_Space`.
+* **unicode-case** -
+  Provide the data for case insensitive matching using
+  [Unicode's "simple loose matches" specification](https://www.unicode.org/reports/tr18/#Simple_Loose_Matches).
+* **unicode-gencat** -
+  Provide the data for
+  [Uncode general categories](https://www.unicode.org/reports/tr44/tr44-24.html#General_Category_Values).
+  This includes, but is not limited to, `Decimal_Number`, `Letter`,
+  `Math_Symbol`, `Number` and `Punctuation`.
+* **unicode-perl** -
+  Provide the data for supporting the Unicode-aware Perl character classes,
+  corresponding to `\w`, `\s` and `\d`. This is also necessary for using
+  Unicode-aware word boundary assertions. Note that if this feature is
+  disabled, the `\s` and `\d` character classes are still available if the
+  `unicode-bool` and `unicode-gencat` features are enabled, respectively.
+* **unicode-script** -
+  Provide the data for
+  [Unicode scripts and script extensions](https://www.unicode.org/reports/tr24/).
+  This includes, but is not limited to, `Arabic`, `Cyrillic`, `Hebrew`,
+  `Latin` and `Thai`.
+* **unicode-segment** -
+  Provide the data necessary to provide the properties used to implement the
+  [Unicode text segmentation algorithms](https://www.unicode.org/reports/tr29/).
+  This enables using classes like `\p{gcb=Extend}`, `\p{wb=Katakana}` and
+  `\p{sb=ATerm}`.
 */
 
 #![deny(missing_docs)]
 
 pub use error::{Error, Result};
 pub use parser::{Parser, ParserBuilder};
+pub use unicode::UnicodeWordError;
 
 pub mod ast;
 mod either;
@@ -156,24 +218,35 @@ pub fn is_meta_character(c: char) -> bool {
 /// is considered a word character if it is in either of the `Alphabetic` or
 /// `Join_Control` properties, or is in one of the `Decimal_Number`, `Mark`
 /// or `Connector_Punctuation` general categories.
+///
+/// # Panics
+///
+/// If the `unicode-perl` feature is not enabled, then this function panics.
+/// For this reason, it is recommended that callers use
+/// [`try_is_word_character`](fn.try_is_word_character.html)
+/// instead.
 pub fn is_word_character(c: char) -> bool {
-    use std::cmp::Ordering;
-    use unicode_tables::perl_word::PERL_WORD;
+    try_is_word_character(c).expect("unicode-perl feature must be enabled")
+}
 
-    if c <= 0x7F as char && is_word_byte(c as u8) {
-        return true;
-    }
-    PERL_WORD
-        .binary_search_by(|&(start, end)| {
-            if start <= c && c <= end {
-                Ordering::Equal
-            } else if start > c {
-                Ordering::Greater
-            } else {
-                Ordering::Less
-            }
-        })
-        .is_ok()
+/// Returns true if and only if the given character is a Unicode word
+/// character.
+///
+/// A Unicode word character is defined by
+/// [UTS#18 Annex C](http://unicode.org/reports/tr18/#Compatibility_Properties).
+/// In particular, a character
+/// is considered a word character if it is in either of the `Alphabetic` or
+/// `Join_Control` properties, or is in one of the `Decimal_Number`, `Mark`
+/// or `Connector_Punctuation` general categories.
+///
+/// # Errors
+///
+/// If the `unicode-perl` feature is not enabled, then this function always
+/// returns an error.
+pub fn try_is_word_character(
+    c: char,
+) -> std::result::Result<bool, UnicodeWordError> {
+    unicode::is_word_character(c)
 }
 
 /// Returns true if and only if the given character is an ASCII word character.
@@ -200,10 +273,14 @@ mod tests {
     }
 
     #[test]
-    fn word() {
+    fn word_byte() {
         assert!(is_word_byte(b'a'));
         assert!(!is_word_byte(b'-'));
+    }
 
+    #[test]
+    #[cfg(feature = "unicode-perl")]
+    fn word_char() {
         assert!(is_word_character('a'), "ASCII");
         assert!(is_word_character('à'), "Latin-1");
         assert!(is_word_character('β'), "Greek");
@@ -215,5 +292,18 @@ mod tests {
         assert!(is_word_character('\u{16E40}'), "Medefaidrin (Unicode 11.0)");
         assert!(!is_word_character('-'));
         assert!(!is_word_character('☃'));
+    }
+
+    #[test]
+    #[should_panic]
+    #[cfg(not(feature = "unicode-perl"))]
+    fn word_char_disabled_panic() {
+        assert!(is_word_character('a'));
+    }
+
+    #[test]
+    #[cfg(not(feature = "unicode-perl"))]
+    fn word_char_disabled_error() {
+        assert!(try_is_word_character('a').is_err());
     }
 }

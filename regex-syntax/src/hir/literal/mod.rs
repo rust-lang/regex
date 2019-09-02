@@ -1105,6 +1105,7 @@ mod tests {
     test_lit!(pfx_one_lit1, prefixes, "a", M("a"));
     test_lit!(pfx_one_lit2, prefixes, "abc", M("abc"));
     test_lit!(pfx_one_lit3, prefixes, "(?u)☃", M("\\xe2\\x98\\x83"));
+    #[cfg(feature = "unicode-case")]
     test_lit!(pfx_one_lit4, prefixes, "(?ui)☃", M("\\xe2\\x98\\x83"));
     test_lit!(pfx_class1, prefixes, "[1-4]", M("1"), M("2"), M("3"), M("4"));
     test_lit!(
@@ -1114,6 +1115,7 @@ mod tests {
         M("\\xe2\\x85\\xa0"),
         M("\\xe2\\x98\\x83")
     );
+    #[cfg(feature = "unicode-case")]
     test_lit!(
         pfx_class3,
         prefixes,
@@ -1122,11 +1124,11 @@ mod tests {
         M("\\xe2\\x85\\xb0"),
         M("\\xe2\\x98\\x83")
     );
-    test_lit!(pfx_one_lit_casei1, prefixes, "(?i)a", M("A"), M("a"));
+    test_lit!(pfx_one_lit_casei1, prefixes, "(?i-u)a", M("A"), M("a"));
     test_lit!(
         pfx_one_lit_casei2,
         prefixes,
-        "(?i)abc",
+        "(?i-u)abc",
         M("ABC"),
         M("aBC"),
         M("AbC"),
@@ -1158,7 +1160,7 @@ mod tests {
     test_lit!(
         pfx_cat3,
         prefixes,
-        "(?i)[ab]z",
+        "(?i-u)[ab]z",
         M("AZ"),
         M("BZ"),
         M("aZ"),
@@ -1295,7 +1297,7 @@ mod tests {
     test_exhausted!(
         pfx_exhausted4,
         prefixes,
-        "(?i)foobar",
+        "(?i-u)foobar",
         C("FO"),
         C("fO"),
         C("Fo"),
@@ -1336,6 +1338,7 @@ mod tests {
     test_lit!(sfx_one_lit1, suffixes, "a", M("a"));
     test_lit!(sfx_one_lit2, suffixes, "abc", M("abc"));
     test_lit!(sfx_one_lit3, suffixes, "(?u)☃", M("\\xe2\\x98\\x83"));
+    #[cfg(feature = "unicode-case")]
     test_lit!(sfx_one_lit4, suffixes, "(?ui)☃", M("\\xe2\\x98\\x83"));
     test_lit!(sfx_class1, suffixes, "[1-4]", M("1"), M("2"), M("3"), M("4"));
     test_lit!(
@@ -1345,6 +1348,7 @@ mod tests {
         M("\\xe2\\x85\\xa0"),
         M("\\xe2\\x98\\x83")
     );
+    #[cfg(feature = "unicode-case")]
     test_lit!(
         sfx_class3,
         suffixes,
@@ -1353,11 +1357,11 @@ mod tests {
         M("\\xe2\\x85\\xb0"),
         M("\\xe2\\x98\\x83")
     );
-    test_lit!(sfx_one_lit_casei1, suffixes, "(?i)a", M("A"), M("a"));
+    test_lit!(sfx_one_lit_casei1, suffixes, "(?i-u)a", M("A"), M("a"));
     test_lit!(
         sfx_one_lit_casei2,
         suffixes,
-        "(?i)abc",
+        "(?i-u)abc",
         M("ABC"),
         M("ABc"),
         M("AbC"),
@@ -1389,7 +1393,7 @@ mod tests {
     test_lit!(
         sfx_cat3,
         suffixes,
-        "(?i)[ab]z",
+        "(?i-u)[ab]z",
         M("AZ"),
         M("Az"),
         M("BZ"),
@@ -1480,7 +1484,7 @@ mod tests {
     test_exhausted!(
         sfx_exhausted4,
         suffixes,
-        "(?i)foobar",
+        "(?i-u)foobar",
         C("AR"),
         C("Ar"),
         C("aR"),

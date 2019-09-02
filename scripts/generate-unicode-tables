@@ -31,8 +31,6 @@ ucd-generate general-category "$ucddir" \
     --chars --exclude surrogate > "$out/general_category.rs"
 ucd-generate grapheme-cluster-break "$ucddir" \
     --chars > "$out/grapheme_cluster_break.rs"
-ucd-generate perl-word "$ucddir" \
-    --chars > "$out/perl_word.rs"
 ucd-generate property-bool "$ucddir" \
     --chars > "$out/property_bool.rs"
 ucd-generate property-names "$ucddir" \
@@ -47,6 +45,19 @@ ucd-generate sentence-break "$ucddir" \
     --chars > "$out/sentence_break.rs"
 ucd-generate word-break "$ucddir" \
     --chars > "$out/word_break.rs"
+
+# These generate the \w, \d and \s Unicode-aware character classes. \d and \s
+# are technically part of the general category and boolean properties generated
+# above. However, these are generated separately to make it possible to enable
+# or disable them via Cargo features independently of whether all boolean
+# properties or general categories are enabled or disabled. The crate ensures
+# that only one copy is compiled.
+ucd-generate perl-word "$ucddir" \
+    --chars > "$out/perl_word.rs"
+ucd-generate general-category "$ucddir" \
+    --chars --include decimalnumber > "$out/perl_decimal.rs"
+ucd-generate property-bool "$ucddir" \
+    --chars --include whitespace > "$out/perl_space.rs"
 
 # Make sure everything is formatted.
 cargo +stable fmt --all
