@@ -42,6 +42,23 @@ assert_eq!(hir, Hir::alternation(vec![
 ```
 
 
+### Safety
+
+This crate has no `unsafe` code and sets `forbid(unsafe_code)`. While it's
+possible this crate could use `unsafe` code in the future, the standard
+for doing so is extremely high. In general, most code in this crate is not
+performance critical, since it tends to be dwarfed by the time it takes to
+compile a regular expression into an automaton. Therefore, there is little need
+for extreme optimization, and therefore, use of `unsafe`.
+
+The standard for using `unsafe` in this crate is extremely high because this
+crate is intended to be reasonably safe to use with user supplied regular
+expressions. Therefore, while their may be bugs in the regex parser itself,
+they should _never_ result in memory unsafety unless there is either a bug
+in the compiler or the standard library. (Since `regex-syntax` has zero
+dependencies.)
+
+
 ### Crate features
 
 By default, this crate bundles a fairly large amount of Unicode data tables

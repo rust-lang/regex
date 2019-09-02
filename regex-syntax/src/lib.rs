@@ -155,6 +155,7 @@ The following features are available:
 */
 
 #![deny(missing_docs)]
+#![forbid(unsafe_code)]
 
 pub use error::{Error, Result};
 pub use parser::{Parser, ParserBuilder};
