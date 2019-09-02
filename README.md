@@ -201,9 +201,36 @@ recommended for general use.
 [Documentation `regex-syntax`.](https://docs.rs/regex-syntax)
 
 
+### Crate features
+
+This crate comes with several features that permit tweaking the trade off
+between binary size, compilation time and runtime performance. Users of this
+crate can selectively disable Unicode tables, or choose from a variety of
+optimizations performed by this crate to disable.
+
+When all of these features are disabled, runtime match performance may be much
+worse, but if you're matching on short strings, or if high performance isn't
+necessary, then such a configuration is perfectly serviceable. To disable
+all such features, use the following `Cargo.toml` dependency configuration:
+
+```toml
+[dependencies.regex]
+version = "1.3"
+default-features = false
+# regex currently requires the standard library, you must re-enable it.
+features = ["std"]
+```
+
+This will reduce the dependency tree of `regex` down to a single crate
+(`regex-syntax`).
+
+The full set of features one can disable are
+[in the "Crate features" section of the documentation](https://docs.rs/regex/*/#crate-features).
+
+
 ### Minimum Rust version policy
 
-This crate's minimum supported `rustc` version is `1.28.1`.
+This crate's minimum supported `rustc` version is `1.28.0`.
 
 The current **tentative** policy is that the minimum Rust version required
 to use this crate can be increased in minor version updates. For example, if
