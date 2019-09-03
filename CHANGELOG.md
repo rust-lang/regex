@@ -1,4 +1,4 @@
-1.3.0 (2019-09-02)
+1.3.0 (2019-09-03)
 ==================
 This release adds a plethora of new crate features that permit users of regex
 to shrink its size considerably, in exchange for giving up either functionality
