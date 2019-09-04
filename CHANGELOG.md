@@ -1,3 +1,9 @@
+1.3.1 (2019-09-04)
+==================
+This is a maintenance release with no changes in order to try to work-around
+a [docs.rs/Cargo issue](https://github.com/rust-lang/docs.rs/issues/400).
+
+
 1.3.0 (2019-09-03)
 ==================
 This release adds a plethora of new crate features that permit users of regex
