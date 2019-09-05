@@ -2,12 +2,12 @@
 
 use std::mem;
 use std::ptr;
-use std::sync::{Once, ONCE_INIT};
+use std::sync::Once;
 
 use libc::{c_char, c_int, c_long, c_void};
 
 // Used to initialize the TCL interpreter exactly once.
-static ONCE: Once = ONCE_INIT;
+static ONCE: Once = Once::new();
 
 /// Text is a TCL string object backed by a Rust string.
 ///
