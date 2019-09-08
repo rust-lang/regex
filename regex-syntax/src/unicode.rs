@@ -277,7 +277,7 @@ enum CanonicalClassQuery {
 
 /// Looks up a Unicode class given a query. If one doesn't exist, then
 /// `None` is returned.
-pub fn class<'a>(query: ClassQuery<'a>) -> Result<hir::ClassUnicode> {
+pub fn class(query: ClassQuery) -> Result<hir::ClassUnicode> {
     use self::CanonicalClassQuery::*;
 
     match query.canonicalize()? {
