@@ -128,7 +128,7 @@ default-features = false
 # For examples.
 lazy_static = "1"
 # For property based tests.
-quickcheck = { version = "0.8", default-features = false }
+quickcheck = { version = "0.9", default-features = false }
 # For generating random test data.
 rand = "0.6.5"
 # To check README's example
