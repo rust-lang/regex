@@ -1,12 +1,39 @@
-1.2.2 (Unreleased)
-==================
 
+1.3.2 (Unreleased)
+==================
 
 Bug fixes:
 
 * [BUG #521](https://github.com/rust-lang/regex/issues/521):
   Fixes `SplitN` returning an additional empty string where `n` is one greater than
   the number of splits.
+
+1.3.1 (2019-09-04)
+==================
+This is a maintenance release with no changes in order to try to work-around
+a [docs.rs/Cargo issue](https://github.com/rust-lang/docs.rs/issues/400).
+
+
+1.3.0 (2019-09-03)
+==================
+This release adds a plethora of new crate features that permit users of regex
+to shrink its size considerably, in exchange for giving up either functionality
+(such as Unicode support) or runtime performance. When all such features are
+disabled, the dependency tree for `regex` shrinks to exactly 1 crate
+(`regex-syntax`). More information about the new crate features can be
+[found in the docs](https://docs.rs/regex/*/#crate-features).
+
+Note that while this is a new minor version release, the minimum supported
+Rust version for this crate remains at `1.28.0`.
+
+New features:
+
+* [FEATURE #474](https://github.com/rust-lang/regex/issues/474):
+  The `use_std` feature has been deprecated in favor of the `std` feature.
+  The `use_std` feature will be removed in regex 2. Until then, `use_std` will
+  remain as an alias for the `std` feature.
+* [FEATURE #583](https://github.com/rust-lang/regex/issues/583):
+  Add a substantial number of crate features shrinking `regex`.
 
 
 1.2.1 (2019-08-03)

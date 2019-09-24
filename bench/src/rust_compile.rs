@@ -49,7 +49,7 @@ fn compile_small_full(b: &mut Bencher) {
 fn compile_huge(b: &mut Bencher) {
     b.iter(|| {
         let re = Parser::new().parse(r"\p{L}{100}").unwrap();
-        Compiler::new().compile(&[re]).unwrap()
+        Compiler::new().size_limit(1 << 30).compile(&[re]).unwrap()
     });
 }
 
@@ -57,7 +57,7 @@ fn compile_huge(b: &mut Bencher) {
 fn compile_huge_bytes(b: &mut Bencher) {
     b.iter(|| {
         let re = Parser::new().parse(r"\p{L}{100}").unwrap();
-        Compiler::new().bytes(true).compile(&[re]).unwrap()
+        Compiler::new().size_limit(1 << 30).bytes(true).compile(&[re]).unwrap()
     });
 }
 

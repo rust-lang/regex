@@ -49,6 +49,9 @@ mod replace;
 mod searcher;
 mod set;
 mod suffix_reverse;
+#[cfg(feature = "unicode")]
 mod unicode;
+#[cfg(feature = "unicode-perl")]
 mod word_boundary;
+#[cfg(feature = "unicode-perl")]
 mod word_boundary_unicode;

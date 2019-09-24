@@ -312,3 +312,6 @@ cfg_if! {
         mod sherlock;
     }
 }
+
+#[cfg(any(feature = "re-rust", feature = "re-rust-bytes"))]
+mod rust_compile;

@@ -5,6 +5,7 @@ use std::char;
 use std::cmp;
 use std::error;
 use std::fmt;
+use std::result;
 use std::u8;
 
 use ast::Span;
@@ -12,6 +13,7 @@ use hir::interval::{Interval, IntervalSet, IntervalSetIter};
 use unicode;
 
 pub use hir::visitor::{visit, Visitor};
+pub use unicode::CaseFoldError;
 
 mod interval;
 pub mod literal;
@@ -65,6 +67,14 @@ pub enum ErrorKind {
     /// This occurs when an unrecognized Unicode property value could not
     /// be found.
     UnicodePropertyValueNotFound,
+    /// This occurs when a Unicode-aware Perl character class (`\w`, `\s` or
+    /// `\d`) could not be found. This can occur when the `unicode-perl`
+    /// crate feature is not enabled.
+    UnicodePerlClassNotFound,
+    /// This occurs when the Unicode simple case mapping tables are not
+    /// available, and the regular expression required Unicode aware case
+    /// insensitivity.
+    UnicodeCaseUnavailable,
     /// This occurs when the translator attempts to construct a character class
     /// that is empty.
     ///
@@ -88,8 +98,16 @@ impl ErrorKind {
             InvalidUtf8 => "pattern can match invalid UTF-8",
             UnicodePropertyNotFound => "Unicode property not found",
             UnicodePropertyValueNotFound => "Unicode property value not found",
+            UnicodePerlClassNotFound => {
+                "Unicode-aware Perl class not found \
+                 (make sure the unicode-perl feature is enabled)"
+            }
+            UnicodeCaseUnavailable => {
+                "Unicode-aware case insensitivity matching is not available \
+                 (make sure the unicode-case feature is enabled)"
+            }
             EmptyClassNotAllowed => "empty character classes are not allowed",
-            _ => unreachable!(),
+            __Nonexhaustive => unreachable!(),
         }
     }
 }
@@ -848,8 +866,38 @@ impl ClassUnicode {
     /// characters, according to Unicode's "simple" mapping. For example, if
     /// this class consists of the range `a-z`, then applying case folding will
     /// result in the class containing both the ranges `a-z` and `A-Z`.
+    ///
+    /// # Panics
+    ///
+    /// This routine panics when the case mapping data necessary for this
+    /// routine to complete is unavailable. This occurs when the `unicode-case`
+    /// feature is not enabled.
+    ///
+    /// Callers should prefer using `try_case_fold_simple` instead, which will
+    /// return an error instead of panicking.
     pub fn case_fold_simple(&mut self) {
-        self.set.case_fold_simple();
+        self.set
+            .case_fold_simple()
+            .expect("unicode-case feature must be enabled");
+    }
+
+    /// Expand this character class such that it contains all case folded
+    /// characters, according to Unicode's "simple" mapping. For example, if
+    /// this class consists of the range `a-z`, then applying case folding will
+    /// result in the class containing both the ranges `a-z` and `A-Z`.
+    ///
+    /// # Panics
+    ///
+    /// This routine panics when the case mapping data necessary for this
+    /// routine to complete is unavailable. This occurs when the `unicode-case`
+    /// feature is not enabled.
+    ///
+    /// Callers should prefer using `try_case_fold_simple` instead, which will
+    /// return an error instead of panicking.
+    pub fn try_case_fold_simple(
+        &mut self,
+    ) -> result::Result<(), CaseFoldError> {
+        self.set.case_fold_simple()
     }
 
     /// Negate this character class.
@@ -957,9 +1005,12 @@ impl Interval for ClassUnicodeRange {
     ///
     /// Additional ranges are appended to the given vector. Canonical ordering
     /// is *not* maintained in the given vector.
-    fn case_fold_simple(&self, ranges: &mut Vec<ClassUnicodeRange>) {
-        if !unicode::contains_simple_case_mapping(self.start, self.end) {
-            return;
+    fn case_fold_simple(
+        &self,
+        ranges: &mut Vec<ClassUnicodeRange>,
+    ) -> Result<(), unicode::CaseFoldError> {
+        if !unicode::contains_simple_case_mapping(self.start, self.end)? {
+            return Ok(());
         }
         let start = self.start as u32;
         let end = (self.end as u32).saturating_add(1);
@@ -968,7 +1019,7 @@ impl Interval for ClassUnicodeRange {
             if next_simple_cp.map_or(false, |next| cp < next) {
                 continue;
             }
-            let it = match unicode::simple_fold(cp) {
+            let it = match unicode::simple_fold(cp)? {
                 Ok(it) => it,
                 Err(next) => {
                     next_simple_cp = next;
@@ -979,6 +1030,7 @@ impl Interval for ClassUnicodeRange {
                 ranges.push(ClassUnicodeRange::new(cp_folded, cp_folded));
             }
         }
+        Ok(())
     }
 }
 
@@ -1057,7 +1109,7 @@ impl ClassBytes {
     /// Note that this only applies ASCII case folding, which is limited to the
     /// characters `a-z` and `A-Z`.
     pub fn case_fold_simple(&mut self) {
-        self.set.case_fold_simple();
+        self.set.case_fold_simple().expect("ASCII case folding never fails");
     }
 
     /// Negate this byte class.
@@ -1151,7 +1203,10 @@ impl Interval for ClassBytesRange {
     ///
     /// Additional ranges are appended to the given vector. Canonical ordering
     /// is *not* maintained in the given vector.
-    fn case_fold_simple(&self, ranges: &mut Vec<ClassBytesRange>) {
+    fn case_fold_simple(
+        &self,
+        ranges: &mut Vec<ClassBytesRange>,
+    ) -> Result<(), unicode::CaseFoldError> {
         if !ClassBytesRange::new(b'a', b'z').is_intersection_empty(self) {
             let lower = cmp::max(self.start, b'a');
             let upper = cmp::min(self.end, b'z');
@@ -1162,6 +1217,7 @@ impl Interval for ClassBytesRange {
             let upper = cmp::min(self.end, b'Z');
             ranges.push(ClassBytesRange::new(lower + 32, upper + 32));
         }
+        Ok(())
     }
 }
 
@@ -1473,6 +1529,7 @@ mod tests {
         cls.iter().map(|x| (x.start(), x.end())).collect()
     }
 
+    #[cfg(feature = "unicode-case")]
     fn ucasefold(cls: &ClassUnicode) -> ClassUnicode {
         let mut cls_ = cls.clone();
         cls_.case_fold_simple();
@@ -1643,6 +1700,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "unicode-case")]
     fn class_case_fold_unicode() {
         let cls = uclass(&[
             ('C', 'F'),
@@ -1698,6 +1756,37 @@ mod tests {
 
         let cls = uclass(&[('@', '@')]);
         assert_eq!(cls, ucasefold(&cls));
+    }
+
+    #[test]
+    #[cfg(not(feature = "unicode-case"))]
+    fn class_case_fold_unicode_disabled() {
+        let mut cls = uclass(&[
+            ('C', 'F'),
+            ('A', 'G'),
+            ('D', 'J'),
+            ('A', 'C'),
+            ('M', 'P'),
+            ('L', 'S'),
+            ('c', 'f'),
+        ]);
+        assert!(cls.try_case_fold_simple().is_err());
+    }
+
+    #[test]
+    #[should_panic]
+    #[cfg(not(feature = "unicode-case"))]
+    fn class_case_fold_unicode_disabled_panics() {
+        let mut cls = uclass(&[
+            ('C', 'F'),
+            ('A', 'G'),
+            ('D', 'J'),
+            ('A', 'C'),
+            ('M', 'P'),
+            ('L', 'S'),
+            ('c', 'f'),
+        ]);
+        cls.case_fold_simple();
     }
 
     #[test]

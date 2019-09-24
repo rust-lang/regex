@@ -66,7 +66,7 @@ impl InputAt {
 }
 
 /// An abstraction over input used in the matching engines.
-pub trait Input {
+pub trait Input: fmt::Debug {
     /// Return an encoding of the position at byte offset `i`.
     fn at(&self, i: usize) -> InputAt;
 
@@ -158,8 +158,12 @@ impl<'t> ops::Deref for CharInput<'t> {
 
 impl<'t> Input for CharInput<'t> {
     fn at(&self, i: usize) -> InputAt {
-        let c = decode_utf8(&self[i..]).map(|(c, _)| c).into();
-        InputAt { pos: i, c: c, byte: None, len: c.len_utf8() }
+        if i >= self.len() {
+            InputAt { pos: self.len(), c: None.into(), byte: None, len: 0 }
+        } else {
+            let c = decode_utf8(&self[i..]).map(|(c, _)| c).into();
+            InputAt { pos: i, c: c, byte: None, len: c.len_utf8() }
+        }
     }
 
     fn next_char(&self, at: InputAt) -> Char {
@@ -243,7 +247,16 @@ impl<'t> ops::Deref for ByteInput<'t> {
 
 impl<'t> Input for ByteInput<'t> {
     fn at(&self, i: usize) -> InputAt {
-        InputAt { pos: i, c: None.into(), byte: self.get(i).cloned(), len: 1 }
+        if i >= self.len() {
+            InputAt { pos: self.len(), c: None.into(), byte: None, len: 0 }
+        } else {
+            InputAt {
+                pos: i,
+                c: None.into(),
+                byte: self.get(i).cloned(),
+                len: 1,
+            }
+        }
     }
 
     fn next_char(&self, at: InputAt) -> Char {
@@ -352,16 +365,20 @@ impl Char {
 
     /// Returns the length of the character's UTF-8 encoding.
     ///
-    /// If the character is absent, then `0` is returned.
+    /// If the character is absent, then `1` is returned.
     #[inline]
     pub fn len_utf8(self) -> usize {
-        char::from_u32(self.0).map_or(0, |c| c.len_utf8())
+        char::from_u32(self.0).map_or(1, |c| c.len_utf8())
     }
 
     /// Returns true iff the character is a word character.
     ///
     /// If the character is absent, then false is returned.
     pub fn is_word_char(self) -> bool {
+        // is_word_character can panic if the Unicode data for \w isn't
+        // available. However, our compiler ensures that if a Unicode word
+        // boundary is used, then the data must also be available. If it isn't,
+        // then the compiler returns an error.
         char::from_u32(self.0).map_or(false, syntax::is_word_character)
     }
 

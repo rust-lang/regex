@@ -1,5 +1,7 @@
 #!/bin/sh
 
+# vim: tabstop=2 shiftwidth=2 softtabstop=2
+
 # This is the main CI script for testing the regex crate and its sub-crates.
 
 set -ex
@@ -18,26 +20,33 @@ if [ "$TRAVIS_RUST_VERSION" = "$MSRV" ]; then
   exit
 fi
 
-# Run tests. If we have nightly, then enable our nightly features.
-# Right now there are no nightly features, but that may change in the
-# future.
-CARGO_TEST_EXTRA_FLAGS=""
-if [ "$TRAVIS_RUST_VERSION" = "nightly" ]; then
-  CARGO_TEST_EXTRA_FLAGS=""
+# Check formatting, but make sure we use the stable version of rustfmt.
+if [ "$TRAVIS_RUST_VERSION" = "stable" ]; then
+  rustup component add rustfmt
+  cargo fmt --all -- --check
 fi
-cargo test --verbose ${CARGO_TEST_EXTRA_FLAGS}
 
-# Run the random tests in release mode, as this is faster.
-RUST_REGEX_RANDOM_TEST=1 \
-    cargo test --release --verbose \
-    ${CARGO_TEST_EXTRA_FLAGS} --test crates-regex
+# Only run the full test suite on one job to keep build times lower.
+if [ "$TRAVIS_RUST_VERSION" = "stable" ]; then
+  ./test
+
+  # Run the random tests in release mode, as this is faster.
+  RUST_REGEX_RANDOM_TEST=1 cargo test --release --verbose --test crates-regex
+else
+  cargo test --verbose --test default
+fi
 
 # Run a test that confirms the shootout benchmarks are correct.
 ci/run-shootout-test
 
 # Run tests on regex-syntax crate.
-cargo test --verbose --manifest-path regex-syntax/Cargo.toml
 cargo doc --verbose --manifest-path regex-syntax/Cargo.toml
+# Only run the full test suite on one job, to conserve resources.
+if [ "$TRAVIS_RUST_VERSION" = "stable" ]; then
+  (cd regex-syntax && ./test)
+else
+  cargo test --verbose --manifest-path regex-syntax/Cargo.toml
+fi
 
 # Run tests on regex-capi crate.
 ci/test-regex-capi
@@ -50,17 +59,10 @@ if [ "$TRAVIS_RUST_VERSION" = "nightly" ]; then
 
   # Test minimal versions.
   #
-  # For now, we remove this check, because it doesn't seem possible to convince
-  # some maintainers of *core* crates that this is a worthwhile test to add.
-  # In particular, this test uncovers any *incorrect* dependency specification
-  # in the chain of dependencies.
-  #
-  # We might consider figuring out how to migrate off of rand in order to get
-  # this check working. (This will be hard, since it either requires dropping
-  # quickcheck or migrating quickcheck off of rand, which is just probably
-  # not practical.)
-  #
-  # So frustrating.
+  # rand has started putting the minimal version check in their CI, so we
+  # should be able to re-enable this soon. This will require upgrading to
+  # rand 0.7, which breaks our MSRV since it relies on Rust 2018 features in
+  # order to read the Cargo.toml.
   # cargo +nightly generate-lockfile -Z minimal-versions
   # cargo build --verbose
   # cargo test --verbose

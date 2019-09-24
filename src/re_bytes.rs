@@ -5,7 +5,7 @@ use std::ops::Index;
 use std::str::FromStr;
 use std::sync::Arc;
 
-use memchr::memchr;
+use find_byte::find_byte;
 
 use error::Error;
 use exec::{Exec, ExecNoSync};
@@ -1126,7 +1126,7 @@ impl<'a> Replacer for &'a [u8] {
     }
 
     fn no_expansion(&mut self) -> Option<Cow<[u8]>> {
-        match memchr(b'$', *self) {
+        match find_byte(b'$', *self) {
             Some(_) => None,
             None => Some(Cow::Borrowed(*self)),
         }

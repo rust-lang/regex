@@ -25,6 +25,7 @@ Usage:
     regex-debug [options] captures <pattern>
     regex-debug [options] compile <patterns> ...
     regex-debug [options] utf8-ranges <class>
+    regex-debug [options] utf8-ranges-rev <class>
     regex-debug --help
 
 Options:
@@ -43,6 +44,7 @@ Options:
                          of all literals extracted. [default: 250]
     --class-limit ARG    A limit on the size of character classes used to
                          extract literals. [default: 10]
+    --literal-bytes      Show raw literal bytes instead of Unicode chars.
     --lcp                Show the longest common prefix of all the literals
                          extracted.
     --lcs                Show the longest common suffix of all the literals
@@ -61,6 +63,7 @@ struct Args {
     cmd_captures: bool,
     cmd_compile: bool,
     cmd_utf8_ranges: bool,
+    cmd_utf8_ranges_rev: bool,
 
     arg_pattern: String,
     arg_patterns: Vec<String>,
@@ -73,12 +76,13 @@ struct Args {
     flag_all_literals: bool,
     flag_literal_limit: usize,
     flag_class_limit: usize,
+    flag_literal_bytes: bool,
     flag_lcp: bool,
     flag_lcs: bool,
     flag_searcher: bool,
 }
 
-type Result<T> = result::Result<T, Box<error::Error + Send + Sync>>;
+type Result<T> = result::Result<T, Box<dyn error::Error + Send + Sync>>;
 
 fn main() {
     let mut args: Args = Docopt::new(USAGE)
@@ -113,6 +117,8 @@ fn run(args: &Args) -> Result<()> {
         cmd_compile(args)
     } else if args.cmd_utf8_ranges {
         cmd_utf8_ranges(args)
+    } else if args.cmd_utf8_ranges_rev {
+        cmd_utf8_ranges_rev(args)
     } else {
         unreachable!()
     }
@@ -162,7 +168,15 @@ fn cmd_literals(args: &Args) -> Result<()> {
         println!("{}", escape_unicode(lits.longest_common_suffix()));
     } else {
         for lit in lits.literals() {
-            println!("{:?}", lit);
+            if args.flag_literal_bytes {
+                if lit.is_cut() {
+                    println!("Cut({})", escape_bytes(lit));
+                } else {
+                    println!("Complete({})", escape_bytes(lit));
+                }
+            } else {
+                println!("{:?}", lit);
+            }
         }
     }
     Ok(())
@@ -232,6 +246,43 @@ fn cmd_utf8_ranges(args: &Args) -> Result<()> {
             }
             println!();
         }
+    }
+    println!("codepoint count: {}", char_count);
+    Ok(())
+}
+
+fn cmd_utf8_ranges_rev(args: &Args) -> Result<()> {
+    use syntax::hir::{self, HirKind};
+    use syntax::utf8::Utf8Sequences;
+    use syntax::ParserBuilder;
+
+    let hir = ParserBuilder::new()
+        .build()
+        .parse(&format!("[{}]", args.arg_class))?;
+    let cls = match hir.into_kind() {
+        HirKind::Class(hir::Class::Unicode(cls)) => cls,
+        _ => {
+            return Err(
+                format!("unexpected HIR, expected Unicode class").into()
+            )
+        }
+    };
+    let mut char_count = 0;
+    let mut seqs = vec![];
+    for (_, range) in cls.iter().enumerate() {
+        char_count += (range.end() as u32) - (range.start() as u32) + 1;
+        for seq in Utf8Sequences::new(range.start(), range.end()) {
+            let mut seq = seq.as_slice().to_vec();
+            seq.reverse();
+            seqs.push(seq);
+        }
+    }
+    seqs.sort();
+    for seq in seqs {
+        for utf8_range in seq.into_iter() {
+            print!("[{:02X}-{:02X}]", utf8_range.start, utf8_range.end);
+        }
+        println!();
     }
     println!("codepoint count: {}", char_count);
     Ok(())

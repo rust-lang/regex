@@ -54,8 +54,11 @@ mod searcher;
 mod set;
 mod shortest_match;
 mod suffix_reverse;
+#[cfg(feature = "unicode")]
 mod unicode;
+#[cfg(feature = "unicode-perl")]
 mod word_boundary;
+#[cfg(feature = "unicode-perl")]
 mod word_boundary_unicode;
 
 #[test]

@@ -50,6 +50,9 @@ mod regression;
 mod replace;
 mod set;
 mod suffix_reverse;
+#[cfg(feature = "unicode")]
 mod unicode;
+#[cfg(feature = "unicode-perl")]
 mod word_boundary;
-mod word_boundary_ascii;
+#[cfg(feature = "unicode-perl")]
+mod word_boundary_unicode;
