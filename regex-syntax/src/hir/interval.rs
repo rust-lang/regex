@@ -32,7 +32,7 @@ use unicode;
 //
 // Tests on this are relegated to the public API of HIR in src/hir.rs.
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub struct IntervalSet<I> {
     ranges: Vec<I>,
 }

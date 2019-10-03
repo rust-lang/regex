@@ -769,7 +769,7 @@ impl Literal {
 /// expression to disable Unicode mode, which in turn impacts the semantics of
 /// case insensitive matching. For example, `(?i)k` and `(?i-u)k` will not
 /// match the same set of strings.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub enum Class {
     /// A set of characters represented by Unicode scalar values.
     Unicode(ClassUnicode),
@@ -823,7 +823,7 @@ impl Class {
 }
 
 /// A set of characters represented by Unicode scalar values.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub struct ClassUnicode {
     set: IntervalSet<ClassUnicodeRange>,
 }
@@ -1062,7 +1062,7 @@ impl ClassUnicodeRange {
 
 /// A set of characters represented by arbitrary bytes (where one byte
 /// corresponds to one character).
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub struct ClassBytes {
     set: IntervalSet<ClassBytesRange>,
 }
