@@ -2095,6 +2095,12 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
         } else {
             let start = self.pos();
             let c = self.char();
+            if c == '\\' {
+                return Err(self.error(
+                    self.span_char(),
+                    ast::ErrorKind::UnicodeClassInvalid,
+                ));
+            }
             self.bump_and_bump_space();
             let kind = ast::ClassUnicodeKind::OneLetter(c);
             (start, kind)
@@ -5712,6 +5718,20 @@ bar
                     }),
                 ],
             }))
+        );
+        assert_eq!(
+            parser(r"\p\{").parse().unwrap_err(),
+            TestError {
+                span: span(2..3),
+                kind: ast::ErrorKind::UnicodeClassInvalid,
+            }
+        );
+        assert_eq!(
+            parser(r"\P\{").parse().unwrap_err(),
+            TestError {
+                span: span(2..3),
+                kind: ast::ErrorKind::UnicodeClassInvalid,
+            }
         );
     }
 
