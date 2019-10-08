@@ -2,6 +2,8 @@
 Provides routines for extracting literal prefixes and suffixes from an `Hir`.
 */
 
+mod freqs;
+
 use std::cmp;
 use std::fmt;
 use std::iter;
@@ -9,6 +11,8 @@ use std::mem;
 use std::ops;
 
 use hir::{self, Hir, HirKind};
+
+use self::freqs::BYTE_FREQUENCIES;
 
 /// A set of literal byte strings extracted from a regular expression.
 ///
@@ -866,6 +870,13 @@ impl Literal {
     /// Cuts this literal.
     pub fn cut(&mut self) {
         self.cut = true;
+    }
+
+    /// Computes estimated literal frequency (lower is rarer).
+    pub fn freq(&self) -> f64 {
+        self.v.iter()
+            .map(|b| BYTE_FREQUENCIES[*b as usize])
+            .product()
     }
 }
 
