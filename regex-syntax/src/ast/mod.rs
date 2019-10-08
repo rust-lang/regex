@@ -156,6 +156,8 @@ pub enum ErrorKind {
     /// `(?i)*`. It is, however, possible to create a repetition operating on
     /// an empty sub-expression. For example, `()*` is still considered valid.
     RepetitionMissing,
+    /// The unicode class represented by a single character is not valid.
+    UnicodeCharacterClassInvalid,
     /// When octal support is disabled, this error is produced when an octal
     /// escape is used. The octal escape is assumed to be an invocation of
     /// a backreference, which is the common case.
@@ -206,6 +208,7 @@ impl error::Error for Error {
             RepetitionCountInvalid => "invalid repetition count range",
             RepetitionCountUnclosed => "unclosed counted repetition",
             RepetitionMissing => "repetition operator missing expression",
+            UnicodeCharacterClassInvalid => "invalid unicode character class",
             UnsupportedBackreference => "backreferences are not supported",
             UnsupportedLookAround => "look-around is not supported",
             _ => unreachable!(),
@@ -292,6 +295,9 @@ impl fmt::Display for ErrorKind {
             }
             RepetitionMissing => {
                 write!(f, "repetition operator missing expression")
+            }
+            UnicodeCharacterClassInvalid => {
+                write!(f, "invalid unicode character class")
             }
             UnsupportedBackreference => {
                 write!(f, "backreferences are not supported")
