@@ -9,6 +9,8 @@ New features:
 
 Bug fixes:
 
+* [BUG #594](https://github.com/rust-lang/regex/pull/594):
+  Improve error reporting when writing `\p\`.
 * [BUG #633](https://github.com/rust-lang/regex/pull/633):
   Squash deprecation warnings for the `std::error::Error::description` method.
 
