@@ -1,3 +1,10 @@
+Unreleased
+==================
+
+* [BUG #627](https://github.com/rust-lang/regex/issues/627):
+  Corrects `/-/.split("a-")` to return `["a", ""]` correctly instead of `["a"]`
+  (where `/-/` is a placeholder for code generate a regex).
+
 1.3.1 (2019-09-04)
 ==================
 This is a maintenance release with no changes in order to try to work-around
