@@ -11,6 +11,8 @@ Bug fixes:
 
 * [BUG #594](https://github.com/rust-lang/regex/pull/594):
   Improve error reporting when writing `\p\`.
+* [BUG #627](https://github.com/rust-lang/regex/issues/627):
+  Corrects `re.split("a-")` to return `["a", ""]` instead of `["a"]`.
 * [BUG #633](https://github.com/rust-lang/regex/pull/633):
   Squash deprecation warnings for the `std::error::Error::description` method.
 
