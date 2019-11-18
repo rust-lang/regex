@@ -4,6 +4,9 @@ Unreleased
 * [BUG #627](https://github.com/rust-lang/regex/issues/627):
   Corrects `/-/.split("a-")` to return `["a", ""]` correctly instead of `["a"]`
   (where `/-/` is a placeholder for code generate a regex).
+* [BUG #521](https://github.com/rust-lang/regex/issues/521):
+  Corrects `/-/.splitn("a", 2)` to return `["a"]` correctly instead of
+  `["a", ""]` (where `/-/` is a placeholder for code generate a regex).
 
 1.3.1 (2019-09-04)
 ==================
