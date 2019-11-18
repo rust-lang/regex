@@ -213,9 +213,7 @@ split!(split_trailing_blank, r"-", r"a-", &[t!("a"), t!("")]);
 split!(split_trailing_blanks, r"-", r"a--", &[t!("a"), t!(""), t!("")]);
 split!(split_empty, r"-", r"", &[t!("")]);
 
-// See: https://github.com/rust-lang/regex/issues/521
-// splitn!(splitn_below_limit, r"-", r"a", 2, &[t!("a")]);
-
+splitn!(splitn_below_limit, r"-", r"a", 2, &[t!("a")]);
 splitn!(splitn_at_limit, r"-", r"a-b", 2, &[t!("a"), t!("b")]);
 splitn!(splitn_above_limit, r"-", r"a-b-c", 2, &[t!("a"), t!("b-c")]);
 splitn!(splitn_zero_limit, r"-", r"a-b", 0, empty_vec!());
