@@ -774,12 +774,19 @@ impl<'r, 't> Iterator for SplitN<'r, 't> {
         if self.n == 0 {
             return None;
         }
+
         self.n -= 1;
-        if self.n == 0 {
-            let text = self.splits.finder.0.text();
-            Some(&text[self.splits.last..])
+        if self.n > 0 {
+            return self.splits.next();
+        }
+
+        let text = self.splits.finder.0.text();
+        if self.splits.last > text.len() {
+            // We've already returned all substrings.
+            None
         } else {
-            self.splits.next()
+            // self.n == 0, so future calls will return None immediately
+            Some(&text[self.splits.last..])
         }
     }
 }
