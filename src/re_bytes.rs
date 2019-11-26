@@ -56,6 +56,12 @@ impl<'t> Match<'t> {
     }
 }
 
+impl<'t> From<Match<'t>> for Range<usize> {
+    fn from(m: Match<'t>) -> Range<usize> {
+        m.range()
+    }
+}
+
 /// A compiled regular expression for matching arbitrary bytes.
 ///
 /// It can be used to search, split or replace text. All searching is done with

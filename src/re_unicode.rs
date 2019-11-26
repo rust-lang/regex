@@ -71,6 +71,12 @@ impl<'t> From<Match<'t>> for &'t str {
     }
 }
 
+impl<'t> From<Match<'t>> for Range<usize> {
+    fn from(m: Match<'t>) -> Range<usize> {
+        m.range()
+    }
+}
+
 /// A compiled regular expression for matching Unicode strings.
 ///
 /// It is represented as either a sequence of bytecode instructions (dynamic)

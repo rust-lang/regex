@@ -2,6 +2,11 @@
 ==================
 This is a small maintenance release with some house cleaning and bug fixes.
 
+New features:
+
+* [FEATURE #631](https://github.com/rust-lang/regex/issues/631):
+  Add a `Match::range` method an a `From<Match> for Range` impl.
+
 Bug fixes:
 
 * [BUG #633](https://github.com/rust-lang/regex/pull/633):
