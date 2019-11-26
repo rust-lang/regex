@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fmt;
-use std::ops::Index;
+use std::ops::{Index, Range};
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -36,10 +36,17 @@ impl<'t> Match<'t> {
         self.end
     }
 
+    /// Returns the range over the starting and ending byte offsets of the match
+    /// in the haystack.
+    #[inline]
+    pub fn range(&self) -> Range<usize> {
+        self.start..self.end
+    }
+
     /// Returns the matched text.
     #[inline]
     pub fn as_bytes(&self) -> &'t [u8] {
-        &self.text[self.start..self.end]
+        &self.text[self.range()]
     }
 
     /// Creates a new match from the given haystack and byte offsets.
