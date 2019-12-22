@@ -18,15 +18,7 @@ pub enum Error {
     __Nonexhaustive,
 }
 
-impl ::std::error::Error for Error {
-    fn description(&self) -> &str {
-        match *self {
-            Error::Syntax(ref err) => err,
-            Error::CompiledTooBig(_) => "compiled program too big",
-            Error::__Nonexhaustive => unreachable!(),
-        }
-    }
-}
+impl ::std::error::Error for Error {}
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

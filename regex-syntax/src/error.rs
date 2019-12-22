@@ -39,15 +39,7 @@ impl From<hir::Error> for Error {
     }
 }
 
-impl error::Error for Error {
-    fn description(&self) -> &str {
-        match *self {
-            Error::Parse(ref x) => x.description(),
-            Error::Translate(ref x) => x.description(),
-            _ => unreachable!(),
-        }
-    }
-}
+impl error::Error for Error {}
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
