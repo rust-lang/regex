@@ -30,3 +30,7 @@ unicode-gencat = []
 unicode-perl = []
 unicode-script = []
 unicode-segment = []
+
+[lib]
+crate-type = ["rlib"]
+
