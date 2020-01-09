@@ -91,6 +91,8 @@ pub enum ErrorKind {
 }
 
 impl ErrorKind {
+    // TODO: Remove this method entirely on the next breaking semver release.
+    #[allow(deprecated)]
     fn description(&self) -> &str {
         use self::ErrorKind::*;
         match *self {
@@ -113,6 +115,8 @@ impl ErrorKind {
 }
 
 impl error::Error for Error {
+    // TODO: Remove this method entirely on the next breaking semver release.
+    #[allow(deprecated)]
     fn description(&self) -> &str {
         self.kind.description()
     }
@@ -126,6 +130,8 @@ impl fmt::Display for Error {
 
 impl fmt::Display for ErrorKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        // TODO: Remove this on the next breaking semver release.
+        #[allow(deprecated)]
         f.write_str(self.description())
     }
 }
