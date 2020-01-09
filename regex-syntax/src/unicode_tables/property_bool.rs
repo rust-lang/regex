@@ -8203,12 +8203,8 @@ pub const OTHER_GRAPHEME_EXTEND: &'static [(char, char)] = &[
 pub const OTHER_ID_CONTINUE: &'static [(char, char)] =
     &[('·', '·'), ('·', '·'), ('፩', '፱'), ('᧚', '᧚')];
 
-pub const OTHER_ID_START: &'static [(char, char)] = &[
-    ('\u{1885}', '\u{1886}'),
-    ('℘', '℘'),
-    ('℮', '℮'),
-    ('゛', '゜'),
-];
+pub const OTHER_ID_START: &'static [(char, char)] =
+    &[('\u{1885}', '\u{1886}'), ('℘', '℘'), ('℮', '℮'), ('゛', '゜')];
 
 pub const OTHER_LOWERCASE: &'static [(char, char)] = &[
     ('ª', 'ª'),
@@ -8370,13 +8366,8 @@ pub const OTHER_MATH: &'static [(char, char)] = &[
     ('𞺫', '𞺻'),
 ];
 
-pub const OTHER_UPPERCASE: &'static [(char, char)] = &[
-    ('Ⅰ', 'Ⅿ'),
-    ('Ⓐ', 'Ⓩ'),
-    ('🄰', '🅉'),
-    ('🅐', '🅩'),
-    ('🅰', '🆉'),
-];
+pub const OTHER_UPPERCASE: &'static [(char, char)] =
+    &[('Ⅰ', 'Ⅿ'), ('Ⓐ', 'Ⓩ'), ('🄰', '🅉'), ('🅐', '🅩'), ('🅰', '🆉')];
 
 pub const PATTERN_SYNTAX: &'static [(char, char)] = &[
     ('!', '/'),
