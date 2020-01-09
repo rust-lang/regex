@@ -40,6 +40,8 @@ impl From<hir::Error> for Error {
 }
 
 impl error::Error for Error {
+    // TODO: Remove this method entirely on the next breaking semver release.
+    #[allow(deprecated)]
     fn description(&self) -> &str {
         match *self {
             Error::Parse(ref x) => x.description(),

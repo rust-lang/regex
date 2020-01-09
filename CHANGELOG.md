@@ -1,3 +1,13 @@
+1.3.2 (2020-01-09)
+==================
+This is a small maintenance release with some house cleaning and bug fixes.
+
+Bug fixes:
+
+* [BUG #633](https://github.com/rust-lang/regex/pull/633):
+  Squash deprecation warnings for the `std::error::Error::description` method.
+
+
 1.3.1 (2019-09-04)
 ==================
 This is a maintenance release with no changes in order to try to work-around
