@@ -115,7 +115,7 @@ optional = true
 
 # For managing regex caches quickly across multiple threads.
 [dependencies.thread_local]
-version = "0.3.6"
+version = "1"
 optional = true
 
 # For parsing regular expressions.

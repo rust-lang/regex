@@ -1,3 +1,10 @@
+1.3.3 (2020-01-09)
+==================
+This is a small maintenance release that upgrades the dependency on
+`thread_local` from `0.3` to `1.0`. The minimum supported Rust version remains
+at Rust 1.28.
+
+
 1.3.2 (2020-01-09)
 ==================
 This is a small maintenance release with some house cleaning and bug fixes.
