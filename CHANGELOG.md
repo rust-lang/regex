@@ -1,3 +1,15 @@
+1.3.4 (2020-01-30)
+==================
+This is a small bug fix release that fixes a bug related to the scoping of
+flags in a regex. Namely, before this fix, a regex like `((?i)a)b)` would
+match `aB` despite the fact that `b` should not be matched case insensitively.
+
+Bug fixes:
+
+* [BUG #640](https://github.com/rust-lang/regex/issues/640):
+  Fix bug related to the scoping of flags in a regex.
+
+
 1.3.3 (2020-01-09)
 ==================
 This is a small maintenance release that upgrades the dependency on
