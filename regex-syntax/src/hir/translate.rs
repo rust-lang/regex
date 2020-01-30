@@ -159,18 +159,19 @@ enum HirFrame {
     /// indicated by parentheses (including non-capturing groups). It is popped
     /// upon leaving a group.
     Group {
-        /// The old active flags, if any, when this group was opened.
+        /// The old active flags when this group was opened.
         ///
         /// If this group sets flags, then the new active flags are set to the
         /// result of merging the old flags with the flags introduced by this
-        /// group.
+        /// group. If the group doesn't set any flags, then this is simply
+        /// equivalent to whatever flags were set when the group was opened.
         ///
         /// When this group is popped, the active flags should be restored to
         /// the flags set here.
         ///
         /// The "active" flags correspond to whatever flags are set in the
         /// Translator.
-        old_flags: Option<Flags>,
+        old_flags: Flags,
     },
     /// This is pushed whenever a concatenation is observed. After visiting
     /// every sub-expression in the concatenation, the translator's stack is
@@ -219,8 +220,8 @@ impl HirFrame {
 
     /// Assert that the current stack frame is a group indicator and return
     /// its corresponding flags (the flags that were active at the time the
-    /// group was entered) if they exist.
-    fn unwrap_group(self) -> Option<Flags> {
+    /// group was entered).
+    fn unwrap_group(self) -> Flags {
         match self {
             HirFrame::Group { old_flags } => old_flags,
             _ => {
@@ -252,8 +253,11 @@ impl<'t, 'p> Visitor for TranslatorI<'t, 'p> {
                 }
             }
             Ast::Group(ref x) => {
-                let old_flags = x.flags().map(|ast| self.set_flags(ast));
-                self.push(HirFrame::Group { old_flags: old_flags });
+                let old_flags = x
+                    .flags()
+                    .map(|ast| self.set_flags(ast))
+                    .unwrap_or_else(|| self.flags());
+                self.push(HirFrame::Group { old_flags });
             }
             Ast::Concat(ref x) if x.asts.is_empty() => {}
             Ast::Concat(_) => {
@@ -350,9 +354,8 @@ impl<'t, 'p> Visitor for TranslatorI<'t, 'p> {
             }
             Ast::Group(ref x) => {
                 let expr = self.pop().unwrap().unwrap_expr();
-                if let Some(flags) = self.pop().unwrap().unwrap_group() {
-                    self.trans().flags.set(flags);
-                }
+                let old_flags = self.pop().unwrap().unwrap_group();
+                self.trans().flags.set(old_flags);
                 self.push(HirFrame::Expr(self.hir_group(x, expr)));
             }
             Ast::Concat(_) => {
@@ -1639,6 +1642,20 @@ mod tests {
             hir_cat(vec![
                 hir_group_nocap(hir_bclass(&[(b'A', b'A'), (b'a', b'a')])),
                 hir_lit("β"),
+            ])
+        );
+        assert_eq!(
+            t("(?:(?i-u)a)b"),
+            hir_cat(vec![
+                hir_group_nocap(hir_bclass(&[(b'A', b'A'), (b'a', b'a')])),
+                hir_lit("b"),
+            ])
+        );
+        assert_eq!(
+            t("((?i-u)a)b"),
+            hir_cat(vec![
+                hir_group(1, hir_bclass(&[(b'A', b'A'), (b'a', b'a')])),
+                hir_lit("b"),
             ])
         );
         #[cfg(feature = "unicode-case")]
