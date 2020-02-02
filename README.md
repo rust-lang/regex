@@ -7,9 +7,7 @@ linear time with respect to the size of the regular expression and search text.
 Much of the syntax and implementation is inspired
 by [RE2](https://github.com/google/re2).
 
-[![Build status](https://travis-ci.com/rust-lang/regex.svg?branch=master)](https://travis-ci.com/rust-lang/regex)
-[![Build status](https://ci.appveyor.com/api/projects/status/github/rust-lang/regex?svg=true)](https://ci.appveyor.com/project/rust-lang-libs/regex)
-[![Coverage Status](https://coveralls.io/repos/github/rust-lang/regex/badge.svg?branch=master)](https://coveralls.io/github/rust-lang/regex?branch=master)
+[![Build status](https://github.com/rust-lang/regex/workflows/ci/badge.svg)](https://github.com/rust-lang/regex/actions)
 [![](https://meritbadge.herokuapp.com/regex)](https://crates.io/crates/regex)
 [![Rust](https://img.shields.io/badge/rust-1.28.0%2B-blue.svg?maxAge=3600)](https://github.com/rust-lang/regex)
 
