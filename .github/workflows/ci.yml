@@ -1,0 +1,173 @@
+name: ci
+on:
+  pull_request:
+  push:
+    branches:
+    - master
+  schedule:
+  - cron: '00 01 * * *'
+jobs:
+  test:
+    name: test
+    env:
+      # For some builds, we use cross to test on 32-bit and big-endian
+      # systems.
+      CARGO: cargo
+      # When CARGO is set to CROSS, TARGET is set to `--target matrix.target`.
+      TARGET:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        build:
+        - pinned
+        - stable
+        - stable-32
+        - stable-mips
+        - beta
+        - nightly
+        - macos
+        - win-msvc
+        - win-gnu
+        include:
+        - build: pinned
+          os: ubuntu-18.04
+          rust: 1.28.0
+        - build: stable
+          os: ubuntu-18.04
+          rust: stable
+        - build: stable-32
+          os: ubuntu-18.04
+          rust: stable
+          target: i686-unknown-linux-gnu
+        - build: stable-mips
+          os: ubuntu-18.04
+          rust: stable
+          target: mips64-unknown-linux-gnuabi64
+        - build: beta
+          os: ubuntu-18.04
+          rust: beta
+        - build: nightly
+          os: ubuntu-18.04
+          rust: nightly
+        - build: macos
+          os: macos-latest
+          rust: stable
+        - build: win-msvc
+          os: windows-2019
+          rust: stable
+        - build: win-gnu
+          os: windows-2019
+          rust: stable-x86_64-gnu
+    steps:
+
+    - name: Checkout repository
+      uses: actions/checkout@v1
+      with:
+        fetch-depth: 1
+
+    - name: Install Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: ${{ matrix.rust }}
+        profile: minimal
+        override: true
+
+    - name: Install and configure Cross
+      if: matrix.target != ''
+      run: |
+        # FIXME: to work around bugs in latest cross release, install master.
+        # See: https://github.com/rust-embedded/cross/issues/357
+        cargo install --git https://github.com/rust-embedded/cross
+        echo "::set-env name=CARGO::cross"
+        echo "::set-env name=TARGET::--target ${{ matrix.target }}"
+
+    - name: Show command used for Cargo
+      run: |
+        echo "cargo command is: ${{ env.CARGO }}"
+        echo "target flag is: ${{ env.TARGET }}"
+
+    - name: Show CPU info for debugging
+      if: matrix.os == 'ubuntu-18.04'
+      run: lscpu
+
+    - name: Basic build
+      run: ${{ env.CARGO }} build --verbose $TARGET
+
+    - name: Build docs
+      run: ${{ env.CARGO }} doc --verbose $TARGET
+
+    # Our dev dependencies evolve more rapidly than we'd like, so only run
+    # tests when we aren't pinning the Rust version.
+    #
+    # Also, our "full" test suite does quite a lot of work, so we only run it
+    # on one build. Otherwise, we just run the "default" set of tests.
+    - name: Run subset of tests
+      if: matrix.build != 'pinned' && matrix.build != 'stable'
+      run: ${{ env.CARGO }} test --verbose --test default $TARGET
+
+    - name: Run full test suite
+      if: matrix.build == 'stable'
+      # 'stable' is Linux only, so we have bash.
+      run: ./test
+
+    - name: Run randomized tests against regexes from the wild
+      if: matrix.build == 'stable'
+      run: |
+        # We run the tests in release mode since it winds up being faster.
+        RUST_REGEX_RANDOM_TEST=1 ${{ env.CARGO }} test --release --verbose --test crates-regex $TARGET
+
+    - name: Build regex-syntax docs
+      if: matrix.build != 'pinned'
+      run: |
+        ${{ env.CARGO }} doc --verbose --manifest-path regex-syntax/Cargo.toml $TARGET
+
+    - name: Run subset of regex-syntax tests
+      if: matrix.build != 'pinned' && matrix.build != 'stable'
+      run: |
+        ${{ env.CARGO }} test --verbose --manifest-path regex-syntax/Cargo.toml $TARGET
+
+    - name: Run full regex-syntax test suite
+      if: matrix.build == 'stable'
+      run: |
+        # 'stable' is Linux only, so we have bash.
+        cd regex-syntax
+        ./test
+
+    - name: Run regex-capi tests
+      if: matrix.build == 'stable'
+      run: |
+        # 'stable' is Linux only, so we have bash.
+        cd regex-capi
+        ./test
+
+    - if: matrix.build == 'nightly'
+      name: Compile regex-debug
+      run: |
+        ${{ env.CARGO }} build --verbose --manifest-path regex-debug/Cargo.toml $TARGET
+
+    - if: matrix.build == 'nightly'
+      name: Run benchmarks as tests
+      run: |
+        cd bench
+        ./run rust --no-run --verbose
+
+  rustfmt:
+    name: rustfmt
+    runs-on: ubuntu-18.04
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v1
+      with:
+        fetch-depth: 1
+    - name: Install Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        profile: minimal
+        override: true
+        components: rustfmt
+    - name: Install rustfmt
+      run: rustup component add rustfmt
+    - name: Check formatting
+      run: |
+        cargo fmt --all -- --check
