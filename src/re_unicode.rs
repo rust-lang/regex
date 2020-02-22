@@ -983,7 +983,9 @@ impl<'t> Captures<'t> {
     /// Indicates if no group was captured.
     ///
     #[inline]
-    pub fn is_empty(&self) -> bool { self.len() == 0 }
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
 }
 
 impl<'t> fmt::Debug for Captures<'t> {

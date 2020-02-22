@@ -863,7 +863,9 @@ impl CaptureLocations {
     /// Indicates if no group was captured.
     ///
     #[inline]
-    pub fn is_empty(&self) -> bool { self.len() == 0 }
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
 
     /// An alias for the `get` method for backwards compatibility.
     ///

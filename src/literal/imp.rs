@@ -644,7 +644,9 @@ impl BoyerMooreSearch {
         None
     }
 
-    fn len(&self) -> usize { self.pattern.len() }
+    fn len(&self) -> usize {
+        self.pattern.len()
+    }
 
     /// The key heuristic behind which the BoyerMooreSearch lives.
     ///
