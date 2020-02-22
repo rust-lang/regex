@@ -876,6 +876,9 @@ impl CaptureLocations {
         self.0.len()
     }
 
+    ///
+    /// Indicates if no group was captured.
+    ///
     #[inline]
     pub fn is_empty(&self) -> bool { self.len() == 0 }
 
@@ -976,6 +979,9 @@ impl<'t> Captures<'t> {
         self.locs.len()
     }
 
+    ///
+    /// Indicates if no group was captured.
+    ///
     #[inline]
     pub fn is_empty(&self) -> bool { self.len() == 0 }
 }

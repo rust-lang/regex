@@ -724,6 +724,12 @@ impl Compiler {
     }
 }
 
+impl Default for Compiler {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[derive(Debug)]
 enum Hole {
     None,

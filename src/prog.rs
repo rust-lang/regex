@@ -158,6 +158,12 @@ impl Program {
     }
 }
 
+impl Default for Program {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Deref for Program {
     type Target = [Inst];
 
@@ -233,7 +239,7 @@ impl fmt::Debug for Program {
             if pc == self.start {
                 write!(f, " (start)")?;
             }
-            write!(f, "\n")?;
+            writeln!(f, "")?;
         }
         Ok(())
     }
