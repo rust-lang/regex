@@ -859,6 +859,9 @@ impl CaptureLocations {
         self.0.len()
     }
 
+    #[inline]
+    pub fn is_empty(&self) -> bool { self.len() == 0 }
+
     /// An alias for the `get` method for backwards compatibility.
     ///
     /// Previously, we exported `get` as `pos` in an undocumented API. To
@@ -1090,7 +1093,7 @@ pub trait Replacer {
     /// be beneficial to avoid finding sub-captures.
     ///
     /// In general, this is called once for every call to `replacen`.
-    fn no_expansion<'r>(&'r mut self) -> Option<Cow<'r, [u8]>> {
+    fn no_expansion(&mut self) -> Option<Cow<[u8]>> {
         None
     }
 
@@ -1115,7 +1118,7 @@ pub trait Replacer {
     ///     dst.into_owned()
     /// }
     /// ```
-    fn by_ref<'r>(&'r mut self) -> ReplacerRef<'r, Self> {
+    fn by_ref(&mut self) -> ReplacerRef<Self> {
         ReplacerRef(self)
     }
 }
@@ -1130,7 +1133,7 @@ impl<'a, R: Replacer + ?Sized + 'a> Replacer for ReplacerRef<'a, R> {
     fn replace_append(&mut self, caps: &Captures, dst: &mut Vec<u8>) {
         self.0.replace_append(caps, dst)
     }
-    fn no_expansion<'r>(&'r mut self) -> Option<Cow<'r, [u8]>> {
+    fn no_expansion(&mut self) -> Option<Cow<[u8]>> {
         self.0.no_expansion()
     }
 }
