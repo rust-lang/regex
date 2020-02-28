@@ -98,12 +98,13 @@ fn is_hex(c: char) -> bool {
 /// Returns true if the given character is a valid in a capture group name.
 ///
 /// If `first` is true, then `c` is treated as the first character in the
-/// group name (which is not allowed to be a digit).
+/// group name (which must be alphabetic or underscore).
 fn is_capture_char(c: char, first: bool) -> bool {
     c == '_'
-        || (!first && c >= '0' && c <= '9')
-        || (c >= 'a' && c <= 'z')
-        || (c >= 'A' && c <= 'Z')
+        || (!first
+            && (('0' <= c && c <= '9') || c == '.' || c == '[' || c == ']'))
+        || ('A' <= c && c <= 'Z')
+        || ('a' <= c && c <= 'z')
 }
 
 /// A builder for a regular expression parser.
@@ -3848,6 +3849,45 @@ bar
                     index: 1,
                 }),
                 ast: Box::new(lit('z', 8)),
+            }))
+        );
+
+        assert_eq!(
+            parser("(?P<a_1>z)").parse(),
+            Ok(Ast::Group(ast::Group {
+                span: span(0..10),
+                kind: ast::GroupKind::CaptureName(ast::CaptureName {
+                    span: span(4..7),
+                    name: s("a_1"),
+                    index: 1,
+                }),
+                ast: Box::new(lit('z', 8)),
+            }))
+        );
+
+        assert_eq!(
+            parser("(?P<a.1>z)").parse(),
+            Ok(Ast::Group(ast::Group {
+                span: span(0..10),
+                kind: ast::GroupKind::CaptureName(ast::CaptureName {
+                    span: span(4..7),
+                    name: s("a.1"),
+                    index: 1,
+                }),
+                ast: Box::new(lit('z', 8)),
+            }))
+        );
+
+        assert_eq!(
+            parser("(?P<a[1]>z)").parse(),
+            Ok(Ast::Group(ast::Group {
+                span: span(0..11),
+                kind: ast::GroupKind::CaptureName(ast::CaptureName {
+                    span: span(4..8),
+                    name: s("a[1]"),
+                    index: 1,
+                }),
+                ast: Box::new(lit('z', 9)),
             }))
         );
 
