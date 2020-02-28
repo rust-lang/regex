@@ -947,17 +947,22 @@ impl<'t> Captures<'t> {
     /// Expands all instances of `$name` in `replacement` to the corresponding
     /// capture group `name`, and writes them to the `dst` buffer given.
     ///
-    /// `name` may be an integer corresponding to the index of the
-    /// capture group (counted by order of opening parenthesis where `0` is the
+    /// `name` may be an integer corresponding to the index of the capture
+    /// group (counted by order of opening parenthesis where `0` is the
     /// entire match) or it can be a name (consisting of letters, digits or
     /// underscores) corresponding to a named capture group.
     ///
     /// If `name` isn't a valid capture group (whether the name doesn't exist
     /// or isn't a valid index), then it is replaced with the empty string.
     ///
-    /// The longest possible name is used. e.g., `$1a` looks up the capture
-    /// group named `1a` and not the capture group at index `1`. To exert more
-    /// precise control over the name, use braces, e.g., `${1}a`.
+    /// The longest possible name consisting of the characters `[_0-9A-Za-z]`
+    /// is used. e.g., `$1a` looks up the capture group named `1a` and not the
+    /// capture group at index `1`. To exert more precise control over the
+    /// name, or to refer to a capture group name that uses characters outside
+    /// of `[_0-9A-Za-z]`, use braces, e.g., `${1}a` or `${foo[bar].baz}`. When
+    /// using braces, any sequence of characters is permitted. If the sequence
+    /// does not refer to a capture group name in the corresponding regex, then
+    /// it is replaced with an empty string.
     ///
     /// To write a literal `$` use `$$`.
     pub fn expand(&self, replacement: &str, dst: &mut String) {
