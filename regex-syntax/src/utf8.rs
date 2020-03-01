@@ -152,6 +152,31 @@ impl Utf8Sequence {
         self.as_slice().len()
     }
 
+    /// Reverses the ranges in this sequence.
+    ///
+    /// For example, if this corresponds to the following sequence:
+    ///
+    /// ```ignore
+    /// [D0-D3][80-BF]
+    /// ```
+    ///
+    /// Then after reversal, it will be
+    ///
+    /// ```ignore
+    /// [80-BF][D0-D3]
+    /// ```
+    ///
+    /// This is useful when one is constructing a UTF-8 automaton to match
+    /// character classes in reverse.
+    pub fn reverse(&mut self) {
+        match *self {
+            Utf8Sequence::One(_) => {}
+            Utf8Sequence::Two(ref mut x) => x.reverse(),
+            Utf8Sequence::Three(ref mut x) => x.reverse(),
+            Utf8Sequence::Four(ref mut x) => x.reverse(),
+        }
+    }
+
     /// Returns true if and only if a prefix of `bytes` matches this sequence
     /// of byte ranges.
     pub fn matches(&self, bytes: &[u8]) -> bool {
@@ -201,7 +226,7 @@ pub struct Utf8Range {
 
 impl Utf8Range {
     fn new(start: u8, end: u8) -> Self {
-        Utf8Range { start: start, end: end }
+        Utf8Range { start, end }
     }
 
     /// Returns true if and only if the given byte is in this range.
@@ -294,7 +319,7 @@ impl Utf8Sequences {
     }
 
     fn push(&mut self, start: u32, end: u32) {
-        self.range_stack.push(ScalarRange { start: start, end: end });
+        self.range_stack.push(ScalarRange { start, end });
     }
 }
 
@@ -503,6 +528,43 @@ mod tests {
                     rutf8(0x80, 0xBF),
                     rutf8(0x80, 0xBF)
                 ]),
+            ]
+        );
+    }
+
+    #[test]
+    fn reverse() {
+        use utf8::Utf8Sequence::*;
+
+        let mut s = One(rutf8(0xA, 0xB));
+        s.reverse();
+        assert_eq!(s.as_slice(), &[rutf8(0xA, 0xB)]);
+
+        let mut s = Two([rutf8(0xA, 0xB), rutf8(0xB, 0xC)]);
+        s.reverse();
+        assert_eq!(s.as_slice(), &[rutf8(0xB, 0xC), rutf8(0xA, 0xB)]);
+
+        let mut s = Three([rutf8(0xA, 0xB), rutf8(0xB, 0xC), rutf8(0xC, 0xD)]);
+        s.reverse();
+        assert_eq!(
+            s.as_slice(),
+            &[rutf8(0xC, 0xD), rutf8(0xB, 0xC), rutf8(0xA, 0xB)]
+        );
+
+        let mut s = Four([
+            rutf8(0xA, 0xB),
+            rutf8(0xB, 0xC),
+            rutf8(0xC, 0xD),
+            rutf8(0xD, 0xE),
+        ]);
+        s.reverse();
+        assert_eq!(
+            s.as_slice(),
+            &[
+                rutf8(0xD, 0xE),
+                rutf8(0xC, 0xD),
+                rutf8(0xB, 0xC),
+                rutf8(0xA, 0xB)
             ]
         );
     }
