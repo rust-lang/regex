@@ -892,14 +892,11 @@ impl ClassUnicode {
     /// this class consists of the range `a-z`, then applying case folding will
     /// result in the class containing both the ranges `a-z` and `A-Z`.
     ///
-    /// # Panics
+    /// # Error
     ///
-    /// This routine panics when the case mapping data necessary for this
-    /// routine to complete is unavailable. This occurs when the `unicode-case`
-    /// feature is not enabled.
-    ///
-    /// Callers should prefer using `try_case_fold_simple` instead, which will
-    /// return an error instead of panicking.
+    /// This routine returns an error when the case mapping data necessary
+    /// for this routine to complete is unavailable. This occurs when the
+    /// `unicode-case` feature is not enabled.
     pub fn try_case_fold_simple(
         &mut self,
     ) -> result::Result<(), CaseFoldError> {
