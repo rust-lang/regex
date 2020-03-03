@@ -938,6 +938,13 @@ impl ClassUnicode {
     pub fn symmetric_difference(&mut self, other: &ClassUnicode) {
         self.set.symmetric_difference(&other.set);
     }
+
+    /// Returns true if and only if this character class will either match
+    /// nothing or only ASCII bytes. Stated differently, this returns false
+    /// if and only if this class contains a non-ASCII codepoint.
+    pub fn is_all_ascii(&self) -> bool {
+        self.set.intervals().last().map_or(true, |r| r.end <= '\x7F')
+    }
 }
 
 /// An iterator over all ranges in a Unicode character class.
