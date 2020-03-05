@@ -51,6 +51,7 @@ Options:
                          extracted.
     --searcher           Show the debug output for the literal searcher
                          constructed by the literals found.
+    --quiet              Show less output.
 ";
 
 #[derive(Deserialize)]
@@ -80,6 +81,7 @@ struct Args {
     flag_lcp: bool,
     flag_lcs: bool,
     flag_searcher: bool,
+    flag_quiet: bool,
 }
 
 type Result<T> = result::Result<T, Box<dyn error::Error + Send + Sync>>;
@@ -214,7 +216,11 @@ fn cmd_compile(args: &Args) -> Result<()> {
         .dfa(args.flag_dfa)
         .reverse(args.flag_dfa_reverse);
     let prog = compiler.compile(&exprs)?;
-    print!("{:?}", prog);
+    if !args.flag_quiet {
+        print!("{:?}", prog);
+    } else {
+        println!("instruction count: {}", prog.insts.len());
+    }
     Ok(())
 }
 
