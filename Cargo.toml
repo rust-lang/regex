@@ -42,7 +42,7 @@ default = ["std", "perf", "unicode"]
 # will prevent regex from compiling.
 std = []
 # The 'use_std' feature is DEPRECATED. It will be removed in regex 2. Until
-# then, it is alias for the 'std' feature.
+# then, it is an alias for the 'std' feature.
 use_std = ["std"]
 
 
@@ -117,7 +117,7 @@ optional = true
 # For parsing regular expressions.
 [dependencies.regex-syntax]
 path = "regex-syntax"
-version = "0.6.14"
+version = "0.6.17"
 default-features = false
 
 [dev-dependencies]
