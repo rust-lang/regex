@@ -1,3 +1,13 @@
+1.3.5 (2020-03-12)
+==================
+This release updates this crate to Unicode 13.
+
+New features:
+
+* [FEATURE #653](https://github.com/rust-lang/regex/pull/653):
+  Update `regex-syntax` to Unicode 13.
+
+
 1.3.4 (2020-01-30)
 ==================
 This is a small bug fix release that fixes a bug related to the scoping of
