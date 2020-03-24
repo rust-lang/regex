@@ -1,3 +1,14 @@
+1.3.6 (2020-03-24)
+==================
+This release contains a sizable (~30%) performance improvement when compiling
+some kinds of large regular expressions.
+
+Performance improvements:
+
+* [PERF #657](https://github.com/rust-lang/regex/pull/657):
+  Improvement performance of compiling large regular expressions.
+
+
 1.3.5 (2020-03-12)
 ==================
 This release updates this crate to Unicode 13.
