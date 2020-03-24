@@ -391,7 +391,20 @@ impl Compiler {
     }
 
     fn c_char(&mut self, c: char) -> Result {
-        self.c_class(&[hir::ClassUnicodeRange::new(c, c)])
+        if self.compiled.uses_bytes() {
+            if c.is_ascii() {
+                let b = c as u8;
+                let hole =
+                    self.push_hole(InstHole::Bytes { start: b, end: b });
+                self.byte_classes.set_range(b, b);
+                Ok(Patch { hole, entry: self.insts.len() - 1 })
+            } else {
+                self.c_class(&[hir::ClassUnicodeRange::new(c, c)])
+            }
+        } else {
+            let hole = self.push_hole(InstHole::Char { c: c });
+            Ok(Patch { hole, entry: self.insts.len() - 1 })
+        }
     }
 
     fn c_class(&mut self, ranges: &[hir::ClassUnicodeRange]) -> Result {
