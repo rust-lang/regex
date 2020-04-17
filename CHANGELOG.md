@@ -1,3 +1,15 @@
+1.3.7 (2020-04-17)
+==================
+This release contains a small bug fix that fixes how `regex` forwards crate
+features to `regex-syntax`. In particular, this will reduce recompilations in
+some cases.
+
+Bug fixes:
+
+* [BUG #665](https://github.com/rust-lang/regex/pull/665):
+  Fix feature forwarding to `regex-syntax`.
+
+
 1.3.6 (2020-03-24)
 ==================
 This release contains a sizable (~30%) performance improvement when compiling
