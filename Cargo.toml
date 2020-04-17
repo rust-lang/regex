@@ -31,7 +31,7 @@ doctest = false
 # Features are documented in the "Crate features" section of the crate docs:
 # https://docs.rs/regex/*/#crate-features
 [features]
-default = ["std", "perf", "unicode"]
+default = ["std", "perf", "unicode", "regex-syntax/default"]
 
 # ECOSYSTEM FEATURES
 
@@ -71,6 +71,7 @@ unicode = [
   "unicode-perl",
   "unicode-script",
   "unicode-segment",
+  "regex-syntax/unicode",
 ]
 # Enables use of the `Age` property, e.g., `\p{Age:3.0}`.
 unicode-age = ["regex-syntax/unicode-age"]
