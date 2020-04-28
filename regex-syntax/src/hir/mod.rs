@@ -1496,7 +1496,7 @@ macro_rules! define_bool {
                 self.bools &= !(1 << $bit);
             }
         }
-    }
+    };
 }
 
 impl HirInfo {
