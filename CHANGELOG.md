@@ -1,3 +1,12 @@
+TBD
+===
+
+Bug fixes:
+
+* [BUG #523](https://github.com/rust-lang/regex/pull/523):
+  Add note to documentation that spaces can be escaped in `x` mode.
+
+
 1.3.7 (2020-04-17)
 ==================
 This release contains a small bug fix that fixes how `regex` forwards crate
