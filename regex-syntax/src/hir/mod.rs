@@ -241,8 +241,8 @@ impl Hir {
         info.set_any_anchored_start(false);
         info.set_any_anchored_end(false);
         info.set_match_empty(true);
-        info.set_literal(true);
-        info.set_alternation_literal(true);
+        info.set_literal(false);
+        info.set_alternation_literal(false);
         Hir { kind: HirKind::Empty, info: info }
     }
 
@@ -671,8 +671,8 @@ impl Hir {
     /// true when this HIR expression is either itself a `Literal` or a
     /// concatenation of only `Literal`s.
     ///
-    /// For example, `f` and `foo` are literals, but `f+`, `(foo)`, `foo()`
-    /// are not (even though that contain sub-expressions that are literals).
+    /// For example, `f` and `foo` are literals, but `f+`, `(foo)`, `foo()`,
+    /// `` are not (even though that contain sub-expressions that are literals).
     pub fn is_literal(&self) -> bool {
         self.info.is_literal()
     }
@@ -682,8 +682,8 @@ impl Hir {
     /// true when this HIR expression is either itself a `Literal` or a
     /// concatenation of only `Literal`s or an alternation of only `Literal`s.
     ///
-    /// For example, `f`, `foo`, `a|b|c`, and `foo|bar|baz` are alternaiton
-    /// literals, but `f+`, `(foo)`, `foo()`
+    /// For example, `f`, `foo`, `a|b|c`, and `foo|bar|baz` are alternation
+    /// literals, but `f+`, `(foo)`, `foo()`, ``
     /// are not (even though that contain sub-expressions that are literals).
     pub fn is_alternation_literal(&self) -> bool {
         self.info.is_alternation_literal()
