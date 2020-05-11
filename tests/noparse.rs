@@ -26,6 +26,8 @@ noparse!(fail_bad_capture_name, "(?P<na-me>)");
 noparse!(fail_bad_flag, "(?a)a");
 noparse!(fail_too_big, "a{10000000}");
 noparse!(fail_counted_no_close, "a{1001");
+noparse!(fail_counted_decreasing, "a{2,1}");
+noparse!(fail_counted_nonnegative, "a{-1,1}");
 noparse!(fail_unfinished_cap, "(?");
 noparse!(fail_unfinished_escape, "\\");
 noparse!(fail_octal_digit, r"\8");
