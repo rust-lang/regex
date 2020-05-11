@@ -5,6 +5,10 @@ Bug fixes:
 
 * [BUG #523](https://github.com/rust-lang/regex/pull/523):
   Add note to documentation that spaces can be escaped in `x` mode.
+* [BUG #524](https://github.com/rust-lang/regex/issue/524):
+  Add support for empty sub-expressions, including empty alternations.
+* [BUG #659](https://github.com/rust-lang/regex/issue/659):
+  Fix match bug caused by an empty sub-expression miscompilation.
 
 
 1.3.7 (2020-04-17)
