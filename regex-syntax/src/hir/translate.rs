@@ -3105,13 +3105,13 @@ mod tests {
     #[test]
     fn analysis_is_literal() {
         // Positive examples.
-        assert!(t(r"").is_literal());
         assert!(t(r"a").is_literal());
         assert!(t(r"ab").is_literal());
         assert!(t(r"abc").is_literal());
         assert!(t(r"(?m)abc").is_literal());
 
         // Negative examples.
+        assert!(!t(r"").is_literal());
         assert!(!t(r"^").is_literal());
         assert!(!t(r"a|b").is_literal());
         assert!(!t(r"(a)").is_literal());
@@ -3124,7 +3124,6 @@ mod tests {
     #[test]
     fn analysis_is_alternation_literal() {
         // Positive examples.
-        assert!(t(r"").is_alternation_literal());
         assert!(t(r"a").is_alternation_literal());
         assert!(t(r"ab").is_alternation_literal());
         assert!(t(r"abc").is_alternation_literal());
@@ -3135,6 +3134,7 @@ mod tests {
         assert!(t(r"foo|bar|baz").is_alternation_literal());
 
         // Negative examples.
+        assert!(!t(r"").is_alternation_literal());
         assert!(!t(r"^").is_alternation_literal());
         assert!(!t(r"(a)").is_alternation_literal());
         assert!(!t(r"a+").is_alternation_literal());
