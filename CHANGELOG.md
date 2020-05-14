@@ -1,3 +1,45 @@
+TBD
+===
+
+Bug fixes:
+
+* [BUG #523](https://github.com/rust-lang/regex/pull/523):
+  Add note to documentation that spaces can be escaped in `x` mode.
+
+
+1.3.7 (2020-04-17)
+==================
+This release contains a small bug fix that fixes how `regex` forwards crate
+features to `regex-syntax`. In particular, this will reduce recompilations in
+some cases.
+
+Bug fixes:
+
+* [BUG #665](https://github.com/rust-lang/regex/pull/665):
+  Fix feature forwarding to `regex-syntax`.
+
+
+1.3.6 (2020-03-24)
+==================
+This release contains a sizable (~30%) performance improvement when compiling
+some kinds of large regular expressions.
+
+Performance improvements:
+
+* [PERF #657](https://github.com/rust-lang/regex/pull/657):
+  Improvement performance of compiling large regular expressions.
+
+
+1.3.5 (2020-03-12)
+==================
+This release updates this crate to Unicode 13.
+
+New features:
+
+* [FEATURE #653](https://github.com/rust-lang/regex/pull/653):
+  Update `regex-syntax` to Unicode 13.
+
+
 1.3.4 (2020-01-30)
 ==================
 This is a small bug fix release that fixes a bug related to the scoping of

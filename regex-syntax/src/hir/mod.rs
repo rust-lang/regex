@@ -892,14 +892,11 @@ impl ClassUnicode {
     /// this class consists of the range `a-z`, then applying case folding will
     /// result in the class containing both the ranges `a-z` and `A-Z`.
     ///
-    /// # Panics
+    /// # Error
     ///
-    /// This routine panics when the case mapping data necessary for this
-    /// routine to complete is unavailable. This occurs when the `unicode-case`
-    /// feature is not enabled.
-    ///
-    /// Callers should prefer using `try_case_fold_simple` instead, which will
-    /// return an error instead of panicking.
+    /// This routine returns an error when the case mapping data necessary
+    /// for this routine to complete is unavailable. This occurs when the
+    /// `unicode-case` feature is not enabled.
     pub fn try_case_fold_simple(
         &mut self,
     ) -> result::Result<(), CaseFoldError> {
@@ -940,6 +937,13 @@ impl ClassUnicode {
     /// but will not contain any elements that are in both classes.
     pub fn symmetric_difference(&mut self, other: &ClassUnicode) {
         self.set.symmetric_difference(&other.set);
+    }
+
+    /// Returns true if and only if this character class will either match
+    /// nothing or only ASCII bytes. Stated differently, this returns false
+    /// if and only if this class contains a non-ASCII codepoint.
+    pub fn is_all_ascii(&self) -> bool {
+        self.set.intervals().last().map_or(true, |r| r.end <= '\x7F')
     }
 }
 
@@ -1492,7 +1496,7 @@ macro_rules! define_bool {
                 self.bools &= !(1 << $bit);
             }
         }
-    }
+    };
 }
 
 impl HirInfo {

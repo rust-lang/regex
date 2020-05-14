@@ -1,6 +1,6 @@
 [package]
 name = "regex"
-version = "1.3.5"  #:version
+version = "1.3.7"  #:version
 authors = ["The Rust Project Developers"]
 license = "MIT OR Apache-2.0"
 readme = "README.md"
@@ -31,7 +31,7 @@ doctest = false
 # Features are documented in the "Crate features" section of the crate docs:
 # https://docs.rs/regex/*/#crate-features
 [features]
-default = ["std", "perf", "unicode"]
+default = ["std", "perf", "unicode", "regex-syntax/default"]
 
 # ECOSYSTEM FEATURES
 
@@ -42,7 +42,7 @@ default = ["std", "perf", "unicode"]
 # will prevent regex from compiling.
 std = []
 # The 'use_std' feature is DEPRECATED. It will be removed in regex 2. Until
-# then, it is alias for the 'std' feature.
+# then, it is an alias for the 'std' feature.
 use_std = ["std"]
 
 
@@ -71,6 +71,7 @@ unicode = [
   "unicode-perl",
   "unicode-script",
   "unicode-segment",
+  "regex-syntax/unicode",
 ]
 # Enables use of the `Age` property, e.g., `\p{Age:3.0}`.
 unicode-age = ["regex-syntax/unicode-age"]
@@ -117,7 +118,7 @@ optional = true
 # For parsing regular expressions.
 [dependencies.regex-syntax]
 path = "regex-syntax"
-version = "0.6.14"
+version = "0.6.17"
 default-features = false
 
 [dev-dependencies]

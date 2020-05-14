@@ -152,8 +152,9 @@ assert_eq!(after, "03/14/2012, 01/01/2013 and 07/05/2014");
 ```
 
 If you wish to match against whitespace in this mode, you can still use `\s`,
-`\n`, `\t`, etc. For escaping a single space character, you can use its hex
-character code `\x20` or temporarily disable the `x` flag, e.g., `(?-x: )`.
+`\n`, `\t`, etc. For escaping a single space character, you can escape it
+directly with `\ `, use its hex character code `\x20` or temporarily disable
+the `x` flag, e.g., `(?-x: )`.
 
 # Example: match multiple regular expressions simultaneously
 
@@ -621,7 +622,7 @@ compile_error!("`std` feature is currently required to build this crate");
 
 #[cfg(feature = "perf-literal")]
 extern crate aho_corasick;
-#[cfg(test)]
+#[cfg(doctest)]
 extern crate doc_comment;
 #[cfg(feature = "perf-literal")]
 extern crate memchr;
@@ -632,7 +633,7 @@ extern crate regex_syntax as syntax;
 #[cfg(feature = "perf-cache")]
 extern crate thread_local;
 
-#[cfg(test)]
+#[cfg(doctest)]
 doc_comment::doctest!("../README.md");
 
 #[cfg(feature = "std")]
