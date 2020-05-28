@@ -1,5 +1,10 @@
-TBD
-===
+1.3.8 (2020-05-28)
+==================
+This release contains a couple of important bug fixes driven
+by better support for empty-subexpressions in regexes. For
+example, regexes like `b|` are now allowed. Major thanks to
+[@sliquister](https://github.com/sliquister) for implementing support for this
+in [#677](https://github.com/rust-lang/regex/pull/677).
 
 Bug fixes:
 
