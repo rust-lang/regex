@@ -6,7 +6,7 @@ compile on other Rust versions, such as Rust 1.39.
 
 Bug fixes:
 
-* [BUG #685](https://github.com/rust-lang/regex/issue/685):
+* [BUG #685](https://github.com/rust-lang/regex/issues/685):
   Remove use of `doc_comment` crate, which cannot be used before Rust 1.43.
 
 
@@ -22,9 +22,9 @@ Bug fixes:
 
 * [BUG #523](https://github.com/rust-lang/regex/pull/523):
   Add note to documentation that spaces can be escaped in `x` mode.
-* [BUG #524](https://github.com/rust-lang/regex/issue/524):
+* [BUG #524](https://github.com/rust-lang/regex/issues/524):
   Add support for empty sub-expressions, including empty alternations.
-* [BUG #659](https://github.com/rust-lang/regex/issue/659):
+* [BUG #659](https://github.com/rust-lang/regex/issues/659):
   Fix match bug caused by an empty sub-expression miscompilation.
 
 
