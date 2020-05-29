@@ -129,7 +129,10 @@ quickcheck = { version = "0.8", default-features = false }
 # For generating random test data.
 rand = "0.6.5"
 # To check README's example
-doc-comment = "0.3"
+# TODO: Re-enable this once the MSRV is 1.43 or greater.
+# See: https://github.com/rust-lang/regex/issues/684
+# See: https://github.com/rust-lang/regex/issues/685
+# doc-comment = "0.3"
 
 # Run the test suite on the default behavior of Regex::new.
 # This includes a mish mash of NFAs and DFAs, which are chosen automatically

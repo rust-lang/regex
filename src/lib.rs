@@ -622,8 +622,8 @@ compile_error!("`std` feature is currently required to build this crate");
 
 #[cfg(feature = "perf-literal")]
 extern crate aho_corasick;
-#[cfg(doctest)]
-extern crate doc_comment;
+// #[cfg(doctest)]
+// extern crate doc_comment;
 #[cfg(feature = "perf-literal")]
 extern crate memchr;
 #[cfg(test)]
@@ -633,8 +633,8 @@ extern crate regex_syntax as syntax;
 #[cfg(feature = "perf-cache")]
 extern crate thread_local;
 
-#[cfg(doctest)]
-doc_comment::doctest!("../README.md");
+// #[cfg(doctest)]
+// doc_comment::doctest!("../README.md");
 
 #[cfg(feature = "std")]
 pub use error::Error;

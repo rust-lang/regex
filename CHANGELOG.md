@@ -1,3 +1,15 @@
+1.3.9 (2020-05-28)
+==================
+This release fixes a MSRV (Minimum Support Rust Version) regression in the
+1.3.8 release. Namely, while 1.3.8 compiles on Rust 1.28, it actually does not
+compile on other Rust versions, such as Rust 1.39.
+
+Bug fixes:
+
+* [BUG #685](https://github.com/rust-lang/regex/issue/685):
+  Remove use of `doc_comment` crate, which cannot be used before Rust 1.43.
+
+
 1.3.8 (2020-05-28)
 ==================
 This release contains a couple of important bug fixes driven
