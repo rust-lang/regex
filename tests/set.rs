@@ -54,3 +54,14 @@ fn get_set_patterns() {
     let set = regex_set!(&["a", "b"]);
     assert_eq!(vec!["a", "b"], set.patterns());
 }
+
+#[test]
+fn len_and_empty() {
+    let empty = regex_set!(&[""; 0]);
+    assert_eq!(empty.len(), 0);
+    assert!(empty.is_empty());
+
+    let not_empty = regex_set!(&["ab", "b"]);
+    assert_eq!(not_empty.len(), 2);
+    assert!(!not_empty.is_empty());
+}
