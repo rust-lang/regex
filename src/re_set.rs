@@ -207,6 +207,11 @@ impl RegexSet {
         self.0.regex_strings().len()
     }
 
+    /// Returns `true` if this set contains no regular expressions.
+    pub fn is_empty(&self) -> bool {
+        self.0.regex_strings().is_empty()
+    }
+
     /// Returns the patterns that this set will match on.
     ///
     /// This function can be used to determine the pattern for a match. The
