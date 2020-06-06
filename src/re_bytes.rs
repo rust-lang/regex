@@ -1051,6 +1051,7 @@ impl<'t, 'i> Index<&'i str> for Captures<'t> {
 ///
 /// The lifetime `'c` corresponds to the lifetime of the `Captures` value, and
 /// the lifetime `'t` corresponds to the originally matched text.
+#[derive(Clone)]
 pub struct SubCaptureMatches<'c, 't: 'c> {
     caps: &'c Captures<'t>,
     it: SubCapturesPosIter<'c>,

@@ -51,6 +51,7 @@ impl Locations {
 /// Positions are byte indices in terms of the original string matched.
 ///
 /// `'c` is the lifetime of the captures.
+#[derive(Clone)]
 pub struct SubCapturesPosIter<'c> {
     idx: usize,
     locs: &'c Locations,
