@@ -128,19 +128,25 @@ impl From<usize> for Ref<'static> {
 fn find_cap_ref<T: ?Sized + AsRef<[u8]>>(
     replacement: &T,
 ) -> Option<CaptureRef> {
-    let mut i = 0;
     let rep: &[u8] = replacement.as_ref();
     if rep.len() <= 1 || rep[0] != b'$' {
         return None;
     }
     let mut brace = false;
-    i += 1;
+    let mut numeric = false;
+    let mut i = 1;
+
     if rep[i] == b'{' {
         brace = true;
         i += 1;
-    }
+    } else if is_cap_number(&rep[i]) {
+        numeric = true;
+    };
+
+    let is_allowed = if numeric { is_cap_number } else { is_valid_cap_letter };
     let mut cap_end = i;
-    while rep.get(cap_end).map_or(false, is_valid_cap_letter) {
+
+    while rep.get(cap_end).map_or(false, is_allowed) {
         cap_end += 1;
     }
     if cap_end == i {
@@ -172,6 +178,9 @@ fn is_valid_cap_letter(b: &u8) -> bool {
         b'0'..=b'9' | b'a'..=b'z' | b'A'..=b'Z' | b'_' => true,
         _ => false,
     }
+}
+fn is_cap_number(b: &u8) -> bool {
+    matches!(*b, b'0'..=b'9')
 }
 
 #[cfg(test)]
@@ -205,7 +214,7 @@ mod tests {
     find!(find_cap_ref4, "$5", c!(5, 2));
     find!(find_cap_ref5, "$10", c!(10, 3));
     // see https://github.com/rust-lang/regex/pull/585 for more on characters following numbers
-    find!(find_cap_ref6, "$42a", c!("42a", 4));
+    find!(find_cap_ref6, "$42a", c!(42, 3));
     find!(find_cap_ref7, "${42}a", c!(42, 5));
     find!(find_cap_ref8, "${42");
     find!(find_cap_ref9, "${42 ");
@@ -214,7 +223,7 @@ mod tests {
     find!(find_cap_ref12, " ");
     find!(find_cap_ref13, "");
     find!(find_cap_ref14, "$1-$2", c!(1, 2));
-    find!(find_cap_ref15, "$1_$2", c!("1_", 3));
+    find!(find_cap_ref15, "$1_$2", c!(1, 2));
     find!(find_cap_ref16, "$x-$y", c!("x", 2));
     find!(find_cap_ref17, "$x_$y", c!("x_", 3));
 }
