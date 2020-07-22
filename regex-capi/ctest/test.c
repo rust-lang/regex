@@ -108,7 +108,7 @@ bool test_captures() {
         if (DEBUG) {
             fprintf(stderr,
                     "[test_captures] "
-                    "expected capture group lenght to be %zd, but "
+                    "expected capture group length to be %zd, but "
                     "got %zd\n",
                     expect_captures_len, captures_len);
         }
