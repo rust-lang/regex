@@ -1122,7 +1122,7 @@ pub trait Replacer {
     /// have a match at capture group `0`.
     ///
     /// For example, a no-op replacement would be
-    /// `dst.extend(caps.get(0).unwrap().as_str())`.
+    /// `dst.push_str(caps.get(0).unwrap().as_str())`.
     fn replace_append(&mut self, caps: &Captures, dst: &mut String);
 
     /// Return a fixed unchanging replacement string.
