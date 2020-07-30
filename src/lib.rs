@@ -731,8 +731,8 @@ Unicode codepoints. For example, in ASCII compatible mode, `\xFF` matches the
 literal byte `\xFF`, while in Unicode mode, `\xFF` is a Unicode codepoint that
 matches its UTF-8 encoding of `\xC3\xBF`. Similarly for octal notation when
 enabled.
-6. `.` matches any *byte* except for `\n` instead of any Unicode scalar value.
-When the `s` flag is enabled, `.` matches any byte.
+6. In ASCII compatible mode, `.` matches any *byte* except for `\n`. When the
+`s` flag is additionally enabled, `.` matches any byte.
 
 # Performance
 
