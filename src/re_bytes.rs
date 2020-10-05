@@ -119,7 +119,7 @@ impl Regex {
         RegexBuilder::new(re).build()
     }
 
-    /// Returns true if and only if the regex matches the string given.
+    /// Returns true if and only if there is a match for the regex in the string given.
     ///
     /// It is recommended to use this method if all you need to do is test
     /// a match, since the underlying matching engine may be able to do less
