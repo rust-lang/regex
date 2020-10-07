@@ -222,7 +222,7 @@ impl Compiler {
     ///                                         hole
     /// ```
     ///
-    /// To compile two expressions, e1 and e2, concatinated together we
+    /// To compile two expressions, e1 and e2, concatenated together we
     /// would do:
     ///
     /// ```ignore
