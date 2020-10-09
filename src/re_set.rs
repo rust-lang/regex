@@ -96,6 +96,19 @@ impl RegexSet {
         RegexSetBuilder::new(exprs).build()
     }
 
+    /// Create a new empty regex set.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// # use regex::RegexSet;
+    /// let set = RegexSet::empty();
+    /// assert!(set.is_empty());
+    /// ```
+    pub fn empty() -> RegexSet {
+        RegexSetBuilder::new(&[""; 0]).build().unwrap()
+    }
+
     /// Returns true if and only if one of the regexes in this set matches
     /// the text given.
     ///
