@@ -679,7 +679,7 @@ impl<'a> Fsm<'a> {
                 }
             } else if next_si & STATE_START > 0 {
                 // A start state isn't in the common case because we may
-                // what to do quick prefix scanning. If the program doesn't
+                // want to do quick prefix scanning. If the program doesn't
                 // have a detected prefix, then start states are actually
                 // considered common and this case is never reached.
                 debug_assert!(self.has_prefix());
@@ -725,7 +725,7 @@ impl<'a> Fsm<'a> {
             }
         }
 
-        // Run the DFA once more on the special EOF senitnel value.
+        // Run the DFA once more on the special EOF sentinel value.
         // We don't care about the special bits in the state pointer any more,
         // so get rid of them.
         prev_si &= STATE_MAX;
@@ -830,7 +830,7 @@ impl<'a> Fsm<'a> {
             }
         }
 
-        // Run the DFA once more on the special EOF senitnel value.
+        // Run the DFA once more on the special EOF sentinel value.
         prev_si = match self.next_state(qcur, qnext, prev_si, Byte::eof()) {
             None => return Result::Quit,
             Some(STATE_DEAD) => return result.set_non_match(0),
@@ -913,8 +913,8 @@ impl<'a> Fsm<'a> {
         if self.state(si).flags().has_empty() {
             // Compute the flags immediately preceding the current byte.
             // This means we only care about the "end" or "end line" flags.
-            // (The "start" flags are computed immediately proceding the
-            // current byte and is handled below.)
+            // (The "start" flags are computed immediately following the
+            // current byte and are handled below.)
             let mut flags = EmptyFlags::default();
             if b.is_eof() {
                 flags.end = true;
@@ -1048,7 +1048,7 @@ impl<'a> Fsm<'a> {
     ///
     /// If matching starts after the beginning of the input, then only start
     /// line should be set if the preceding byte is `\n`. End line should never
-    /// be set in this case. (Even if the proceding byte is a `\n`, it will
+    /// be set in this case. (Even if the following byte is a `\n`, it will
     /// be handled in a subsequent DFA state.)
     fn follow_epsilons(
         &mut self,
