@@ -913,7 +913,7 @@ impl<'a> Fsm<'a> {
         if self.state(si).flags().has_empty() {
             // Compute the flags immediately preceding the current byte.
             // This means we only care about the "end" or "end line" flags.
-            // (The "start" flags are computed immediately preceding the
+            // (The "start" flags are computed immediately following the
             // current byte and are handled below.)
             let mut flags = EmptyFlags::default();
             if b.is_eof() {
@@ -1048,7 +1048,7 @@ impl<'a> Fsm<'a> {
     ///
     /// If matching starts after the beginning of the input, then only start
     /// line should be set if the preceding byte is `\n`. End line should never
-    /// be set in this case. (Even if the preceding byte is a `\n`, it will
+    /// be set in this case. (Even if the following byte is a `\n`, it will
     /// be handled in a subsequent DFA state.)
     fn follow_epsilons(
         &mut self,
