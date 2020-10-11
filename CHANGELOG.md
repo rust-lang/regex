@@ -1,3 +1,34 @@
+1.4.0 (2020-10-11)
+==================
+This releases has a few minor documentation fixes as well as some very minor
+API additions. The MSRV remains at Rust 1.28 for now, but this is intended to
+increase to at least Rust 1.41.1 soon.
+
+This release also adds support for OSS-Fuzz. Kudos to
+[@DavidKorczynski](https://github.com/DavidKorczynski)
+for doing the heavy lifting for that!
+
+New features:
+
+* [FEATURE #649](https://github.com/rust-lang/regex/issues/649):
+  Support `[`, `]` and `.` in capture group names.
+* [FEATURE #687](https://github.com/rust-lang/regex/issues/687):
+  Add `is_empty` predicate to `RegexSet`.
+* [FEATURE #689](https://github.com/rust-lang/regex/issues/689):
+  Implement `Clone` for `SubCaptureMatches`.
+* [FEATURE #715](https://github.com/rust-lang/regex/issues/715):
+  Add `empty` constructor to `RegexSet` for convenience.
+
+Bug fixes:
+
+* [BUG #694](https://github.com/rust-lang/regex/issues/694):
+  Fix doc example for `Replacer::replace_append`.
+* [BUG #698](https://github.com/rust-lang/regex/issues/698):
+  Clarify docs for `s` flag when using a `bytes::Regex`.
+* [BUG #711](https://github.com/rust-lang/regex/issues/711):
+  Clarify `is_match` docs to indicate that it can match anywhere in string.
+
+
 1.3.9 (2020-05-28)
 ==================
 This release fixes a MSRV (Minimum Support Rust Version) regression in the
