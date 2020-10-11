@@ -8,7 +8,7 @@
 //
 // It can do more than the DFA can (specifically, record capture locations
 // and execute Unicode word boundary assertions), but at a slower speed.
-// Specifically, the Pike VM exectues a DFA implicitly by repeatedly expanding
+// Specifically, the Pike VM executes a DFA implicitly by repeatedly expanding
 // epsilon transitions. That is, the Pike VM engine can be in multiple states
 // at once where as the DFA is only ever in one state at a time.
 //
