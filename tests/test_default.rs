@@ -49,6 +49,7 @@ mod misc;
 mod multiline;
 mod noparse;
 mod regression;
+mod regression_fuzz;
 mod replace;
 mod searcher;
 mod set;

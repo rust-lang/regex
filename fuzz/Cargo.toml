@@ -21,3 +21,7 @@ members = ["."]
 [[bin]]
 name = "fuzz_regex_match"
 path = "fuzz_targets/fuzz_regex_match.rs"
+
+[profile.release]
+opt-level = 3
+debug = true
