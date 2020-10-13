@@ -237,8 +237,16 @@ impl<'a> ClassQuery<'a> {
     fn canonical_binary(&self, name: &str) -> Result<CanonicalClassQuery> {
         let norm = symbolic_name_normalize(name);
 
-        if let Some(canon) = canonical_prop(&norm)? {
-            return Ok(CanonicalClassQuery::Binary(canon));
+        // This is a special case where 'cf' refers to the 'Format' general
+        // category, but where the 'cf' abbreviation is also an abbreviation
+        // for the 'Case_Folding' property. But we want to treat it as
+        // a general category. (Currently, we don't even support the
+        // 'Case_Folding' property. But if we do in the future, users will be
+        // required to spell it out.)
+        if norm != "cf" {
+            if let Some(canon) = canonical_prop(&norm)? {
+                return Ok(CanonicalClassQuery::Binary(canon));
+            }
         }
         if let Some(canon) = canonical_gencat(&norm)? {
             return Ok(CanonicalClassQuery::GeneralCategory(canon));

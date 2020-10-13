@@ -1,3 +1,13 @@
+1.4.1 (2020-10-13)
+==================
+This is a small bug fix release that makes `\p{cf}` work. Previously, it would
+report "property not found" even though `cf` is a valid abbreviation for the
+`Format` general category.
+
+* [BUG #719](https://github.com/rust-lang/regex/issues/719):
+  Fixes bug that prevented `\p{cf}` from working.
+
+
 1.4.0 (2020-10-11)
 ==================
 This releases has a few minor documentation fixes as well as some very minor
