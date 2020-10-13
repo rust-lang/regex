@@ -22,6 +22,14 @@ members = ["."]
 name = "fuzz_regex_match"
 path = "fuzz_targets/fuzz_regex_match.rs"
 
+[profile.debug]
+opt-level = 3
+debug = true
+
 [profile.release]
+opt-level = 3
+debug = true
+
+[profile.test]
 opt-level = 3
 debug = true
