@@ -1,3 +1,5 @@
+cargo-features = ['named-profiles']
+
 [package]
 name = "regex-fuzz"
 version = "0.0.0"
@@ -22,14 +24,12 @@ members = ["."]
 name = "fuzz_regex_match"
 path = "fuzz_targets/fuzz_regex_match.rs"
 
-[profile.debug]
-opt-level = 3
-debug = true
-
 [profile.release]
 opt-level = 3
 debug = true
 
+[profile.debug]
+inherits = "release"
+
 [profile.test]
-opt-level = 3
-debug = true
+inherits = "release"
