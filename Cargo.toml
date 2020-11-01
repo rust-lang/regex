@@ -118,7 +118,7 @@ optional = true
 # For parsing regular expressions.
 [dependencies.regex-syntax]
 path = "regex-syntax"
-version = "0.6.20"
+version = "0.6.21"
 default-features = false
 
 [dev-dependencies]
