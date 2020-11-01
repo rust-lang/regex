@@ -322,7 +322,7 @@ impl<'t, 'p> Visitor for TranslatorI<'t, 'p> {
                         ast.negated,
                         &mut cls,
                     )?;
-                    if cls.iter().next().is_none() {
+                    if cls.ranges().is_empty() {
                         return Err(self.error(
                             ast.span,
                             ErrorKind::EmptyClassNotAllowed,
@@ -337,7 +337,7 @@ impl<'t, 'p> Visitor for TranslatorI<'t, 'p> {
                         ast.negated,
                         &mut cls,
                     )?;
-                    if cls.iter().next().is_none() {
+                    if cls.ranges().is_empty() {
                         return Err(self.error(
                             ast.span,
                             ErrorKind::EmptyClassNotAllowed,
@@ -844,6 +844,11 @@ impl<'t, 'p> TranslatorI<'t, 'p> {
                 ast_class.negated,
                 class,
             )?;
+            if class.ranges().is_empty() {
+                let err = self
+                    .error(ast_class.span, ErrorKind::EmptyClassNotAllowed);
+                return Err(err);
+            }
         }
         result
     }
@@ -2312,6 +2317,21 @@ mod tests {
                 span: Span::new(
                     Position::new(0, 1, 1),
                     Position::new(11, 1, 12)
+                ),
+            }
+        );
+    }
+
+    #[test]
+    #[cfg(feature = "unicode-gencat")]
+    fn class_unicode_any_empty() {
+        assert_eq!(
+            t_err(r"\P{any}"),
+            TestError {
+                kind: hir::ErrorKind::EmptyClassNotAllowed,
+                span: Span::new(
+                    Position::new(0, 1, 1),
+                    Position::new(7, 1, 8)
                 ),
             }
         );
