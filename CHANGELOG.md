@@ -1,3 +1,13 @@
+1.4.2 (2020-11-01)
+==================
+This is a small bug fix release that bans `\P{any}`. We previously banned empty
+classes like `[^\w\W]`, but missed the `\P{any}` case. In the future, we hope
+to permit empty classes.
+
+* [BUG #722](https://github.com/rust-lang/regex/issues/722):
+  Ban `\P{any}` to avoid a panic in the regex compiler. Found by OSS-Fuzz.
+
+
 1.4.1 (2020-10-13)
 ==================
 This is a small bug fix release that makes `\p{cf}` work. Previously, it would
