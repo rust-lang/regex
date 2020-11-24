@@ -1,5 +1,5 @@
 // The Computer Language Benchmarks Game
-// http://benchmarksgame.alioth.debian.org/
+// https://benchmarksgame-team.pages.debian.net/benchmarksgame/
 //
 // contributed by the Rust Project Developers
 // contributed by TeXitoi
