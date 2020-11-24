@@ -245,12 +245,12 @@ supported version of Rust.
 This project is licensed under either of
 
  * Apache License, Version 2.0, ([LICENSE-APACHE](LICENSE-APACHE) or
-   http://www.apache.org/licenses/LICENSE-2.0)
+   https://www.apache.org/licenses/LICENSE-2.0)
  * MIT license ([LICENSE-MIT](LICENSE-MIT) or
-   http://opensource.org/licenses/MIT)
+   https://opensource.org/licenses/MIT)
 
 at your option.
 
 The data in `regex-syntax/src/unicode_tables/` is licensed under the Unicode
 License Agreement
-([LICENSE-UNICODE](http://www.unicode.org/copyright.html#License)).
+([LICENSE-UNICODE](https://www.unicode.org/copyright.html#License)).
