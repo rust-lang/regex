@@ -130,3 +130,52 @@ replace!(
     t!("${1}a $1a"),
     "ba "
 );
+
+replace!(
+    impl_string,
+    replace,
+    r"[0-9]",
+    "age: 26",
+    t!("Z".to_string()),
+    "age: Z6"
+);
+replace!(
+    impl_string_ref,
+    replace,
+    r"[0-9]",
+    "age: 26",
+    t!(&"Z".to_string()),
+    "age: Z6"
+);
+replace!(
+    impl_cow_borrowed,
+    replace,
+    r"[0-9]",
+    "age: 26",
+    t!(std::borrow::Cow::<'_, str>::Borrowed("Z")),
+    "age: Z6"
+);
+replace!(
+    impl_cow_borrowed_ref,
+    replace,
+    r"[0-9]",
+    "age: 26",
+    t!(&std::borrow::Cow::<'_, str>::Borrowed("Z")),
+    "age: Z6"
+);
+replace!(
+    impl_cow_owned,
+    replace,
+    r"[0-9]",
+    "age: 26",
+    t!(std::borrow::Cow::<'_, str>::Owned("Z".to_string())),
+    "age: Z6"
+);
+replace!(
+    impl_cow_owned_ref,
+    replace,
+    r"[0-9]",
+    "age: 26",
+    t!(&std::borrow::Cow::<'_, str>::Owned("Z".to_string())),
+    "age: Z6"
+);

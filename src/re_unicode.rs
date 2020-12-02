@@ -1190,10 +1190,55 @@ impl<'a> Replacer for &'a str {
     }
 
     fn no_expansion(&mut self) -> Option<Cow<str>> {
-        match find_byte(b'$', self.as_bytes()) {
-            Some(_) => None,
-            None => Some(Cow::Borrowed(*self)),
-        }
+        no_expansion(self)
+    }
+}
+
+impl<'a> Replacer for &'a String {
+    fn replace_append(&mut self, caps: &Captures, dst: &mut String) {
+        self.as_str().replace_append(caps, dst)
+    }
+
+    fn no_expansion(&mut self) -> Option<Cow<str>> {
+        no_expansion(self)
+    }
+}
+
+impl Replacer for String {
+    fn replace_append(&mut self, caps: &Captures, dst: &mut String) {
+        self.as_str().replace_append(caps, dst)
+    }
+
+    fn no_expansion(&mut self) -> Option<Cow<str>> {
+        no_expansion(self)
+    }
+}
+
+impl<'a> Replacer for Cow<'a, str> {
+    fn replace_append(&mut self, caps: &Captures, dst: &mut String) {
+        self.as_ref().replace_append(caps, dst)
+    }
+
+    fn no_expansion(&mut self) -> Option<Cow<str>> {
+        no_expansion(self)
+    }
+}
+
+impl<'a> Replacer for &'a Cow<'a, str> {
+    fn replace_append(&mut self, caps: &Captures, dst: &mut String) {
+        self.as_ref().replace_append(caps, dst)
+    }
+
+    fn no_expansion(&mut self) -> Option<Cow<str>> {
+        no_expansion(self)
+    }
+}
+
+fn no_expansion<T: AsRef<str>>(t: &T) -> Option<Cow<str>> {
+    let s = t.as_ref();
+    match find_byte(b'$', s.as_bytes()) {
+        Some(_) => None,
+        None => Some(Cow::Borrowed(s)),
     }
 }
 
