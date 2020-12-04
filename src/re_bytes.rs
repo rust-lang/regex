@@ -1148,10 +1148,55 @@ impl<'a> Replacer for &'a [u8] {
     }
 
     fn no_expansion(&mut self) -> Option<Cow<[u8]>> {
-        match find_byte(b'$', *self) {
-            Some(_) => None,
-            None => Some(Cow::Borrowed(*self)),
-        }
+        no_expansion(self)
+    }
+}
+
+impl<'a> Replacer for &'a Vec<u8> {
+    fn replace_append(&mut self, caps: &Captures, dst: &mut Vec<u8>) {
+        caps.expand(*self, dst);
+    }
+
+    fn no_expansion(&mut self) -> Option<Cow<[u8]>> {
+        no_expansion(self)
+    }
+}
+
+impl Replacer for Vec<u8> {
+    fn replace_append(&mut self, caps: &Captures, dst: &mut Vec<u8>) {
+        caps.expand(self, dst);
+    }
+
+    fn no_expansion(&mut self) -> Option<Cow<[u8]>> {
+        no_expansion(self)
+    }
+}
+
+impl<'a> Replacer for Cow<'a, [u8]> {
+    fn replace_append(&mut self, caps: &Captures, dst: &mut Vec<u8>) {
+        caps.expand(self.as_ref(), dst);
+    }
+
+    fn no_expansion(&mut self) -> Option<Cow<[u8]>> {
+        no_expansion(self)
+    }
+}
+
+impl<'a> Replacer for &'a Cow<'a, [u8]> {
+    fn replace_append(&mut self, caps: &Captures, dst: &mut Vec<u8>) {
+        caps.expand(self.as_ref(), dst);
+    }
+
+    fn no_expansion(&mut self) -> Option<Cow<[u8]>> {
+        no_expansion(self)
+    }
+}
+
+fn no_expansion<T: AsRef<[u8]>>(t: &T) -> Option<Cow<[u8]>> {
+    let s = t.as_ref();
+    match find_byte(b'$', s) {
+        Some(_) => None,
+        None => Some(Cow::Borrowed(s)),
     }
 }
 
