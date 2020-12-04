@@ -1077,9 +1077,9 @@ impl<'c, 't> Iterator for SubCaptureMatches<'c, 't> {
 /// string.
 ///
 /// In general, users of this crate shouldn't need to implement this trait,
-/// since implementations are already provided for `&[u8]` and
-/// `FnMut(&Captures) -> Vec<u8>` (or any `FnMut(&Captures) -> T`
-/// where `T: AsRef<[u8]>`), which covers most use cases.
+/// since implementations are already provided for `&[u8]` along with other
+/// variants of bytes types and `FnMut(&Captures) -> Vec<u8>` (or any
+/// `FnMut(&Captures) -> T` where `T: AsRef<[u8]>`), which covers most use cases.
 pub trait Replacer {
     /// Appends text to `dst` to replace the current match.
     ///

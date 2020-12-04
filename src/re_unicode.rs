@@ -1119,9 +1119,9 @@ impl<'r, 't> Iterator for Matches<'r, 't> {
 /// Replacer describes types that can be used to replace matches in a string.
 ///
 /// In general, users of this crate shouldn't need to implement this trait,
-/// since implementations are already provided for `&str` and
-/// `FnMut(&Captures) -> String` (or any `FnMut(&Captures) -> T`
-/// where `T: AsRef<str>`), which covers most use cases.
+/// since implementations are already provided for `&str` along with other
+/// variants of string types and `FnMut(&Captures) -> String` (or any
+/// `FnMut(&Captures) -> T` where `T: AsRef<str>`), which covers most use cases.
 pub trait Replacer {
     /// Appends text to `dst` to replace the current match.
     ///
