@@ -72,7 +72,7 @@ impl LiteralSearcher {
     /// Returns true if all matches comprise the entire regular expression.
     ///
     /// This does not necessarily mean that a literal match implies a match
-    /// of the regular expression. For example, the regular expresison `^a`
+    /// of the regular expression. For example, the regular expression `^a`
     /// is comprised of a single complete literal `a`, but the regular
     /// expression demands that it only match at the beginning of a string.
     pub fn complete(&self) -> bool {
