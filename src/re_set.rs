@@ -352,6 +352,8 @@ impl DoubleEndedIterator for SetMatchesIntoIter {
     }
 }
 
+impl iter::FusedIterator for SetMatchesIntoIter {}
+
 /// A borrowed iterator over the set of matches from a regex set.
 ///
 /// The lifetime `'a` refers to the lifetime of a `SetMatches` value.
@@ -391,6 +393,8 @@ impl<'a> DoubleEndedIterator for SetMatchesIter<'a> {
         }
     }
 }
+
+impl<'a> iter::FusedIterator for SetMatchesIter<'a> {}
 
 #[doc(hidden)]
 impl From<Exec> for RegexSet {

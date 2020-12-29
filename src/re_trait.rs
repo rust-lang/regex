@@ -1,3 +1,5 @@
+use std::iter::FusedIterator;
+
 /// Slot is a single saved capture location. Note that there are two slots for
 /// every capture in a regular expression (one slot each for the start and end
 /// of the capture).
@@ -72,6 +74,8 @@ impl<'c> Iterator for SubCapturesPosIter<'c> {
         x
     }
 }
+
+impl<'c> FusedIterator for SubCapturesPosIter<'c> {}
 
 /// `RegularExpression` describes types that can implement regex searching.
 ///
@@ -205,6 +209,13 @@ where
     }
 }
 
+impl<'t, R> FusedIterator for Matches<'t, R>
+where
+    R: RegularExpression,
+    R::Text: 't + AsRef<[u8]>,
+{
+}
+
 /// An iterator over all non-overlapping successive leftmost-first matches with
 /// captures.
 pub struct CaptureMatches<'t, R>(Matches<'t, R>)
@@ -259,4 +270,11 @@ where
         self.0.last_match = Some(e);
         Some(locs)
     }
+}
+
+impl<'t, R> FusedIterator for CaptureMatches<'t, R>
+where
+    R: RegularExpression,
+    R::Text: 't + AsRef<[u8]>,
+{
 }

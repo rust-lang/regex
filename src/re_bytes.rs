@@ -1,6 +1,7 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fmt;
+use std::iter::FusedIterator;
 use std::ops::{Index, Range};
 use std::str::FromStr;
 use std::sync::Arc;
@@ -701,6 +702,8 @@ impl<'r, 't> Iterator for Matches<'r, 't> {
     }
 }
 
+impl<'r, 't> FusedIterator for Matches<'r, 't> {}
+
 /// An iterator that yields all non-overlapping capture groups matching a
 /// particular regular expression.
 ///
@@ -723,6 +726,8 @@ impl<'r, 't> Iterator for CaptureMatches<'r, 't> {
         })
     }
 }
+
+impl<'r, 't> FusedIterator for CaptureMatches<'r, 't> {}
 
 /// Yields all substrings delimited by a regular expression match.
 ///
@@ -757,6 +762,8 @@ impl<'r, 't> Iterator for Split<'r, 't> {
     }
 }
 
+impl<'r, 't> FusedIterator for Split<'r, 't> {}
+
 /// Yields at most `N` substrings delimited by a regular expression match.
 ///
 /// The last substring will be whatever remains after splitting.
@@ -790,7 +797,13 @@ impl<'r, 't> Iterator for SplitN<'r, 't> {
             Some(&text[self.splits.last..])
         }
     }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (0, Some(self.n))
+    }
 }
+
+impl<'r, 't> FusedIterator for SplitN<'r, 't> {}
 
 /// An iterator over the names of all possible captures.
 ///
@@ -813,7 +826,15 @@ impl<'r> Iterator for CaptureNames<'r> {
     fn size_hint(&self) -> (usize, Option<usize>) {
         self.0.size_hint()
     }
+
+    fn count(self) -> usize {
+        self.0.count()
+    }
 }
+
+impl<'r> ExactSizeIterator for CaptureNames<'r> {}
+
+impl<'r> FusedIterator for CaptureNames<'r> {}
 
 /// CaptureLocations is a low level representation of the raw offsets of each
 /// submatch.
@@ -1072,6 +1093,8 @@ impl<'c, 't> Iterator for SubCaptureMatches<'c, 't> {
             .map(|cap| cap.map(|(s, e)| Match::new(self.caps.text, s, e)))
     }
 }
+
+impl<'c, 't> FusedIterator for SubCaptureMatches<'c, 't> {}
 
 /// Replacer describes types that can be used to replace matches in a byte
 /// string.
