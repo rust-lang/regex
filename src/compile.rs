@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fmt;
 use std::iter;
 use std::result;
 use std::sync::Arc;
@@ -25,6 +26,9 @@ struct Patch {
 
 /// A compiler translates a regular expression AST to a sequence of
 /// instructions. The sequence of instructions represents an NFA.
+// `Compiler` is only public via the `internal` module, so avoid deriving
+// `Debug`.
+#[allow(missing_debug_implementations)]
 pub struct Compiler {
     insts: Vec<MaybeInst>,
     compiled: Program,
@@ -1051,6 +1055,7 @@ impl<'a, 'b> CompileClass<'a, 'b> {
 /// This uses similar idea to [`SparseSet`](../sparse/struct.SparseSet.html),
 /// except it uses hashes as original indices and then compares full keys for
 /// validation against `dense` array.
+#[derive(Debug)]
 struct SuffixCache {
     sparse: Box<[usize]>,
     dense: Vec<SuffixCacheEntry>,
@@ -1156,6 +1161,12 @@ impl ByteClassSet {
             i += 1;
         }
         byte_classes
+    }
+}
+
+impl fmt::Debug for ByteClassSet {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("ByteClassSet").field(&&self.0[..]).finish()
     }
 }
 

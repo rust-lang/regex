@@ -691,6 +691,7 @@ impl Regex {
 ///
 /// `'r` is the lifetime of the compiled regular expression and `'t` is the
 /// lifetime of the matched byte string.
+#[derive(Debug)]
 pub struct Matches<'r, 't>(re_trait::Matches<'t, ExecNoSync<'r>>);
 
 impl<'r, 't> Iterator for Matches<'r, 't> {
@@ -711,6 +712,7 @@ impl<'r, 't> FusedIterator for Matches<'r, 't> {}
 ///
 /// `'r` is the lifetime of the compiled regular expression and `'t` is the
 /// lifetime of the matched byte string.
+#[derive(Debug)]
 pub struct CaptureMatches<'r, 't>(
     re_trait::CaptureMatches<'t, ExecNoSync<'r>>,
 );
@@ -733,6 +735,7 @@ impl<'r, 't> FusedIterator for CaptureMatches<'r, 't> {}
 ///
 /// `'r` is the lifetime of the compiled regular expression and `'t` is the
 /// lifetime of the byte string being split.
+#[derive(Debug)]
 pub struct Split<'r, 't> {
     finder: Matches<'r, 't>,
     last: usize,
@@ -770,6 +773,7 @@ impl<'r, 't> FusedIterator for Split<'r, 't> {}
 ///
 /// `'r` is the lifetime of the compiled regular expression and `'t` is the
 /// lifetime of the byte string being split.
+#[derive(Debug)]
 pub struct SplitN<'r, 't> {
     splits: Split<'r, 't>,
     n: usize,
@@ -811,6 +815,7 @@ impl<'r, 't> FusedIterator for SplitN<'r, 't> {}
 /// whole matched region) is always unnamed.
 ///
 /// `'r` is the lifetime of the compiled regular expression.
+#[derive(Clone, Debug)]
 pub struct CaptureNames<'r>(::std::slice::Iter<'r, Option<String>>);
 
 impl<'r> Iterator for CaptureNames<'r> {
@@ -1078,7 +1083,7 @@ impl<'t, 'i> Index<&'i str> for Captures<'t> {
 ///
 /// The lifetime `'c` corresponds to the lifetime of the `Captures` value, and
 /// the lifetime `'t` corresponds to the originally matched text.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct SubCaptureMatches<'c, 't: 'c> {
     caps: &'c Captures<'t>,
     it: SubCapturesPosIter<'c>,
@@ -1196,6 +1201,7 @@ where
 /// and performant (since capture groups don't need to be found).
 ///
 /// `'t` is the lifetime of the literal text.
+#[derive(Clone, Debug)]
 pub struct NoExpand<'t>(pub &'t [u8]);
 
 impl<'t> Replacer for NoExpand<'t> {

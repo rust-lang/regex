@@ -232,6 +232,7 @@ impl Matcher {
     }
 }
 
+#[derive(Debug)]
 pub enum LiteralIter<'a> {
     Empty,
     Bytes(&'a [u8]),
