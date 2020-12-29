@@ -2,5 +2,6 @@ blank_issues_enabled: true
 contact_links:
   - name: Ask a question
     about: |
-      You've come to seek help or want to discuss something related to ripgrep.
+      You've come to seek help or want to discuss something related to the
+      regex crate.
     url: https://github.com/rust-lang/regex/discussions/new
