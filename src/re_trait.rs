@@ -1,3 +1,4 @@
+use std::fmt;
 use std::iter::FusedIterator;
 
 /// Slot is a single saved capture location. Note that there are two slots for
@@ -53,7 +54,7 @@ impl Locations {
 /// Positions are byte indices in terms of the original string matched.
 ///
 /// `'c` is the lifetime of the captures.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct SubCapturesPosIter<'c> {
     idx: usize,
     locs: &'c Locations,
@@ -89,9 +90,9 @@ impl<'c> FusedIterator for SubCapturesPosIter<'c> {}
 /// somewhat reasonable. One particular thing this trait would expose would be
 /// the ability to start the search of a regex anywhere in a haystack, which
 /// isn't possible in the current public API.
-pub trait RegularExpression: Sized {
+pub trait RegularExpression: Sized + fmt::Debug {
     /// The type of the haystack.
-    type Text: ?Sized;
+    type Text: ?Sized + fmt::Debug;
 
     /// The number of capture slots in the compiled regular expression. This is
     /// always two times the number of capture groups (two slots per group).
@@ -149,6 +150,7 @@ pub trait RegularExpression: Sized {
 }
 
 /// An iterator over all non-overlapping successive leftmost-first matches.
+#[derive(Debug)]
 pub struct Matches<'t, R>
 where
     R: RegularExpression,
@@ -218,6 +220,7 @@ where
 
 /// An iterator over all non-overlapping successive leftmost-first matches with
 /// captures.
+#[derive(Debug)]
 pub struct CaptureMatches<'t, R>(Matches<'t, R>)
 where
     R: RegularExpression,

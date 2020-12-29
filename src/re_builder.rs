@@ -47,6 +47,7 @@ macro_rules! define_builder {
             /// A builder can be used to configure how the regex is built, for example, by
             /// setting the default flags (which can be overridden in the expression
             /// itself) or setting various limits.
+            #[derive(Debug)]
             pub struct RegexBuilder(RegexOptions);
 
             impl RegexBuilder {
@@ -244,6 +245,7 @@ macro_rules! define_set_builder {
             /// A builder can be used to configure how the regexes are built, for example,
             /// by setting the default flags (which can be overridden in the expression
             /// itself) or setting various limits.
+            #[derive(Debug)]
             pub struct RegexSetBuilder(RegexOptions);
 
             impl RegexSetBuilder {

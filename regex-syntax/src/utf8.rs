@@ -84,6 +84,7 @@ which uses it for executing automata on their term index.
 
 use std::char;
 use std::fmt;
+use std::iter::FusedIterator;
 use std::slice;
 
 const MAX_UTF8_BYTES: usize = 4;
@@ -295,6 +296,7 @@ impl fmt::Debug for Utf8Range {
 /// illustrative. In practice, you could just try to decode your byte sequence
 /// and compare it with the scalar value range directly. However, this is not
 /// always possible (for example, in a byte based automaton).
+#[derive(Debug)]
 pub struct Utf8Sequences {
     range_stack: Vec<ScalarRange>,
 }
@@ -387,6 +389,8 @@ impl Iterator for Utf8Sequences {
         None
     }
 }
+
+impl FusedIterator for Utf8Sequences {}
 
 impl ScalarRange {
     /// split splits this range if it overlaps with a surrogate codepoint.

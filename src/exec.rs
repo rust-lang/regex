@@ -30,6 +30,7 @@ use utf8::next_utf8;
 /// In particular, this manages the various compiled forms of a single regular
 /// expression and the choice of which matching engine to use to execute a
 /// regular expression.
+#[derive(Debug)]
 pub struct Exec {
     /// All read only state.
     ro: Arc<ExecReadOnly>,
@@ -49,6 +50,7 @@ pub struct ExecNoSync<'c> {
 }
 
 /// `ExecNoSyncStr` is like `ExecNoSync`, but matches on &str instead of &[u8].
+#[derive(Debug)]
 pub struct ExecNoSyncStr<'c>(ExecNoSync<'c>);
 
 /// `ExecReadOnly` comprises all read only state for a regex. Namely, all such
@@ -97,6 +99,9 @@ struct ExecReadOnly {
 /// Facilitates the construction of an executor by exposing various knobs
 /// to control how a regex is executed and what kinds of resources it's
 /// permitted to use.
+// `ExecBuilder` is only public via the `internal` module, so avoid deriving
+// `Debug`.
+#[allow(missing_debug_implementations)]
 pub struct ExecBuilder {
     options: RegexOptions,
     match_type: Option<MatchType>,
