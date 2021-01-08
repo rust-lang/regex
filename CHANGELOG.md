@@ -1,3 +1,16 @@
+1.4.3 (2021-01-08)
+==================
+This is a small patch release that adds some missing standard trait
+implementations for some types in the public API.
+
+Bug fixes:
+
+* [BUG #734](https://github.com/rust-lang/regex/pull/734):
+  Add `FusedIterator` and `ExactSizeIterator` impls to iterator types.
+* [BUG #735](https://github.com/rust-lang/regex/pull/735):
+  Add missing `Debug` impls to public API types.
+
+
 1.4.2 (2020-11-01)
 ==================
 This is a small bug fix release that bans `\P{any}`. We previously banned empty
