@@ -823,7 +823,7 @@ fn symbolic_name_normalize(x: &str) -> String {
 /// The slice returned is guaranteed to be valid UTF-8 for all possible values
 /// of `slice`.
 ///
-/// See: http://unicode.org/reports/tr44/#UAX44-LM3
+/// See: https://unicode.org/reports/tr44/#UAX44-LM3
 fn symbolic_name_normalize_bytes(slice: &mut [u8]) -> &mut [u8] {
     // I couldn't find a place in the standard that specified that property
     // names/aliases had a particular structure (unlike character names), but

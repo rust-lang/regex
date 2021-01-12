@@ -216,7 +216,7 @@ pub fn is_meta_character(c: char) -> bool {
 /// character.
 ///
 /// A Unicode word character is defined by
-/// [UTS#18 Annex C](http://unicode.org/reports/tr18/#Compatibility_Properties).
+/// [UTS#18 Annex C](https://unicode.org/reports/tr18/#Compatibility_Properties).
 /// In particular, a character
 /// is considered a word character if it is in either of the `Alphabetic` or
 /// `Join_Control` properties, or is in one of the `Decimal_Number`, `Mark`
@@ -236,7 +236,7 @@ pub fn is_word_character(c: char) -> bool {
 /// character.
 ///
 /// A Unicode word character is defined by
-/// [UTS#18 Annex C](http://unicode.org/reports/tr18/#Compatibility_Properties).
+/// [UTS#18 Annex C](https://unicode.org/reports/tr18/#Compatibility_Properties).
 /// In particular, a character
 /// is considered a word character if it is in either of the `Alphabetic` or
 /// `Join_Control` properties, or is in one of the `Decimal_Number`, `Mark`

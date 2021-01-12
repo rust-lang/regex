@@ -253,7 +253,7 @@ assert_eq!((mat.start(), mat.end()), (3, 23));
 ```
 
 For a more detailed breakdown of Unicode support with respect to
-[UTS#18](http://unicode.org/reports/tr18/),
+[UTS#18](https://unicode.org/reports/tr18/),
 please see the
 [UNICODE](https://github.com/rust-lang/regex/blob/master/UNICODE.md)
 document in the root of the regex repository.
@@ -455,7 +455,7 @@ assert_eq!(&cap[0], "abc");
 ## Perl character classes (Unicode friendly)
 
 These classes are based on the definitions provided in
-[UTS#18](http://www.unicode.org/reports/tr18/#Compatibility_Properties):
+[UTS#18](https://www.unicode.org/reports/tr18/#Compatibility_Properties):
 
 <pre class="rust">
 \d     digit (\p{Nd})
