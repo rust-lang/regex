@@ -1105,9 +1105,9 @@ impl<'c, 't> FusedIterator for SubCaptureMatches<'c, 't> {}
 /// string.
 ///
 /// In general, users of this crate shouldn't need to implement this trait,
-/// since implementations are already provided for `&[u8]` and
-/// `FnMut(&Captures) -> Vec<u8>` (or any `FnMut(&Captures) -> T`
-/// where `T: AsRef<[u8]>`), which covers most use cases.
+/// since implementations are already provided for `&[u8]` along with other
+/// variants of bytes types and `FnMut(&Captures) -> Vec<u8>` (or any
+/// `FnMut(&Captures) -> T` where `T: AsRef<[u8]>`), which covers most use cases.
 pub trait Replacer {
     /// Appends text to `dst` to replace the current match.
     ///
@@ -1176,10 +1176,55 @@ impl<'a> Replacer for &'a [u8] {
     }
 
     fn no_expansion(&mut self) -> Option<Cow<[u8]>> {
-        match find_byte(b'$', *self) {
-            Some(_) => None,
-            None => Some(Cow::Borrowed(*self)),
-        }
+        no_expansion(self)
+    }
+}
+
+impl<'a> Replacer for &'a Vec<u8> {
+    fn replace_append(&mut self, caps: &Captures, dst: &mut Vec<u8>) {
+        caps.expand(*self, dst);
+    }
+
+    fn no_expansion(&mut self) -> Option<Cow<[u8]>> {
+        no_expansion(self)
+    }
+}
+
+impl Replacer for Vec<u8> {
+    fn replace_append(&mut self, caps: &Captures, dst: &mut Vec<u8>) {
+        caps.expand(self, dst);
+    }
+
+    fn no_expansion(&mut self) -> Option<Cow<[u8]>> {
+        no_expansion(self)
+    }
+}
+
+impl<'a> Replacer for Cow<'a, [u8]> {
+    fn replace_append(&mut self, caps: &Captures, dst: &mut Vec<u8>) {
+        caps.expand(self.as_ref(), dst);
+    }
+
+    fn no_expansion(&mut self) -> Option<Cow<[u8]>> {
+        no_expansion(self)
+    }
+}
+
+impl<'a> Replacer for &'a Cow<'a, [u8]> {
+    fn replace_append(&mut self, caps: &Captures, dst: &mut Vec<u8>) {
+        caps.expand(self.as_ref(), dst);
+    }
+
+    fn no_expansion(&mut self) -> Option<Cow<[u8]>> {
+        no_expansion(self)
+    }
+}
+
+fn no_expansion<T: AsRef<[u8]>>(t: &T) -> Option<Cow<[u8]>> {
+    let s = t.as_ref();
+    match find_byte(b'$', s) {
+        Some(_) => None,
+        None => Some(Cow::Borrowed(s)),
     }
 }
 

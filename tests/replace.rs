@@ -130,3 +130,101 @@ replace!(
     t!("${1}a $1a"),
     "ba "
 );
+
+replace!(
+    impl_string,
+    replace,
+    r"[0-9]",
+    "age: 26",
+    t!("Z".to_string()),
+    "age: Z6"
+);
+replace!(
+    impl_string_ref,
+    replace,
+    r"[0-9]",
+    "age: 26",
+    t!(&"Z".to_string()),
+    "age: Z6"
+);
+replace!(
+    impl_cow_str_borrowed,
+    replace,
+    r"[0-9]",
+    "age: 26",
+    t!(std::borrow::Cow::<'_, str>::Borrowed("Z")),
+    "age: Z6"
+);
+replace!(
+    impl_cow_str_borrowed_ref,
+    replace,
+    r"[0-9]",
+    "age: 26",
+    t!(&std::borrow::Cow::<'_, str>::Borrowed("Z")),
+    "age: Z6"
+);
+replace!(
+    impl_cow_str_owned,
+    replace,
+    r"[0-9]",
+    "age: 26",
+    t!(std::borrow::Cow::<'_, str>::Owned("Z".to_string())),
+    "age: Z6"
+);
+replace!(
+    impl_cow_str_owned_ref,
+    replace,
+    r"[0-9]",
+    "age: 26",
+    t!(&std::borrow::Cow::<'_, str>::Owned("Z".to_string())),
+    "age: Z6"
+);
+
+replace!(
+    impl_vec_u8,
+    replace,
+    r"[0-9]",
+    "age: 26",
+    bytes!(vec![b'Z']),
+    "age: Z6"
+);
+replace!(
+    impl_vec_u8_ref,
+    replace,
+    r"[0-9]",
+    "age: 26",
+    bytes!(&vec![b'Z']),
+    "age: Z6"
+);
+replace!(
+    impl_cow_slice_borrowed,
+    replace,
+    r"[0-9]",
+    "age: 26",
+    bytes!(std::borrow::Cow::<'_, [u8]>::Borrowed(&[b'Z'])),
+    "age: Z6"
+);
+replace!(
+    impl_cow_slice_borrowed_ref,
+    replace,
+    r"[0-9]",
+    "age: 26",
+    bytes!(&std::borrow::Cow::<'_, [u8]>::Borrowed(&[b'Z'])),
+    "age: Z6"
+);
+replace!(
+    impl_cow_slice_owned,
+    replace,
+    r"[0-9]",
+    "age: 26",
+    bytes!(std::borrow::Cow::<'_, [u8]>::Owned(vec![b'Z'])),
+    "age: Z6"
+);
+replace!(
+    impl_cow_slice_owned_ref,
+    replace,
+    r"[0-9]",
+    "age: 26",
+    bytes!(&std::borrow::Cow::<'_, [u8]>::Owned(vec![b'Z'])),
+    "age: Z6"
+);
