@@ -15,7 +15,7 @@ whether a particular byte sequence was a Cyrillic character. One possible
 scalar value range is `[0400-04FF]`. The set of allowed bytes for this
 range can be expressed as a sequence of byte ranges:
 
-```ignore
+```text
 [D0-D3][80-BF]
 ```
 
@@ -32,7 +32,7 @@ for example, `04FF` (because its last byte, `BF` isn't in the range `80-AF`).
 
 Instead, you need multiple sequences of byte ranges:
 
-```ignore
+```text
 [D0-D3][80-BF]  # matches codepoints 0400-04FF
 [D4][80-AF]     # matches codepoints 0500-052F
 ```
@@ -41,7 +41,7 @@ This gets even more complicated if you want bigger ranges, particularly if
 they naively contain surrogate codepoints. For example, the sequence of byte
 ranges for the basic multilingual plane (`[0000-FFFF]`) look like this:
 
-```ignore
+```text
 [0-7F]
 [C2-DF][80-BF]
 [E0][A0-BF][80-BF]
@@ -55,7 +55,7 @@ UTF-8, including encodings of surrogate codepoints.
 
 And, of course, for all of Unicode (`[000000-10FFFF]`):
 
-```ignore
+```text
 [0-7F]
 [C2-DF][80-BF]
 [E0][A0-BF][80-BF]
@@ -157,13 +157,13 @@ impl Utf8Sequence {
     ///
     /// For example, if this corresponds to the following sequence:
     ///
-    /// ```ignore
+    /// ```text
     /// [D0-D3][80-BF]
     /// ```
     ///
     /// Then after reversal, it will be
     ///
-    /// ```ignore
+    /// ```text
     /// [80-BF][D0-D3]
     /// ```
     ///

@@ -43,7 +43,7 @@ $(#[$doc_regexset_example])*
 /// Note that it would be possible to adapt the above example to using `Regex`
 /// with an expression like:
 ///
-/// ```ignore
+/// ```text
 /// (?P<email>[a-z]+@(?P<email_domain>[a-z]+[.](com|org|net)))|(?P<domain>[a-z]+[.](com|org|net))
 /// ```
 ///
