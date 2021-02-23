@@ -125,9 +125,9 @@ default-features = false
 # For examples.
 lazy_static = "1"
 # For property based tests.
-quickcheck = { version = "0.8", default-features = false }
+quickcheck = { version = "1.0.3", default-features = false }
 # For generating random test data.
-rand = "0.6.5"
+rand = { version = "0.8.3", default-features = false, features = ["getrandom", "small_rng"] }
 # To check README's example
 # TODO: Re-enable this once the MSRV is 1.43 or greater.
 # See: https://github.com/rust-lang/regex/issues/684

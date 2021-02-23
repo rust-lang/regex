@@ -1,3 +1,5 @@
+#![allow(deprecated)]
+
 // This module defines a common API for caching internal runtime state.
 // The `thread_local` crate provides an extremely optimized version of this.
 // However, if the perf-cache feature is disabled, then we drop the

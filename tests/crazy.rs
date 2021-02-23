@@ -137,9 +137,10 @@ matiter!(match_empty23, r"a(?:)|b", "abc", (0, 1), (1, 2));
 #[test]
 fn dfa_handles_pathological_case() {
     fn ones_and_zeroes(count: usize) -> String {
-        use rand::{thread_rng, Rng};
+        use rand::rngs::SmallRng;
+        use rand::{Rng, SeedableRng};
 
-        let mut rng = thread_rng();
+        let mut rng = SmallRng::from_entropy();
         let mut s = String::new();
         for _ in 0..count {
             if rng.gen() {
