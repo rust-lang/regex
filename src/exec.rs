@@ -1,5 +1,6 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::panic::AssertUnwindSafe;
 use std::sync::Arc;
 
 #[cfg(feature = "perf-literal")]
@@ -9,7 +10,6 @@ use syntax::hir::Hir;
 use syntax::ParserBuilder;
 
 use backtrack;
-use cache::{Cached, CachedGuard};
 use compile::Compiler;
 #[cfg(feature = "perf-dfa")]
 use dfa;
@@ -17,6 +17,7 @@ use error::Error;
 use input::{ByteInput, CharInput};
 use literal::LiteralSearcher;
 use pikevm;
+use pool::{Pool, PoolGuard};
 use prog::Program;
 use re_builder::RegexOptions;
 use re_bytes;
@@ -34,8 +35,8 @@ use utf8::next_utf8;
 pub struct Exec {
     /// All read only state.
     ro: Arc<ExecReadOnly>,
-    /// Caches for the various matching engines.
-    cache: Cached<ProgramCache>,
+    /// A pool of reusable values for the various matching engines.
+    pool: Pool<ProgramCache>,
 }
 
 /// `ExecNoSync` is like `Exec`, except it embeds a reference to a cache. This
@@ -46,7 +47,7 @@ pub struct ExecNoSync<'c> {
     /// All read only state.
     ro: &'c Arc<ExecReadOnly>,
     /// Caches for the various matching engines.
-    cache: CachedGuard<'c, ProgramCache>,
+    cache: PoolGuard<'c, ProgramCache>,
 }
 
 /// `ExecNoSyncStr` is like `ExecNoSync`, but matches on &str instead of &[u8].
@@ -302,7 +303,8 @@ impl ExecBuilder {
                 ac: None,
                 match_type: MatchType::Nothing,
             });
-            return Ok(Exec { ro: ro, cache: Cached::new() });
+            let pool = ExecReadOnly::new_pool(&ro);
+            return Ok(Exec { ro: ro, pool });
         }
         let parsed = self.parse()?;
         let mut nfa = Compiler::new()
@@ -342,7 +344,8 @@ impl ExecBuilder {
         ro.match_type = ro.choose_match_type(self.match_type);
 
         let ro = Arc::new(ro);
-        Ok(Exec { ro: ro, cache: Cached::new() })
+        let pool = ExecReadOnly::new_pool(&ro);
+        Ok(Exec { ro, pool })
     }
 
     #[cfg(feature = "perf-literal")]
@@ -1254,10 +1257,9 @@ impl Exec {
     /// Get a searcher that isn't Sync.
     #[cfg_attr(feature = "perf-inline", inline(always))]
     pub fn searcher(&self) -> ExecNoSync {
-        let create = || RefCell::new(ProgramCacheInner::new(&self.ro));
         ExecNoSync {
             ro: &self.ro, // a clone is too expensive here! (and not needed)
-            cache: self.cache.get_or(create),
+            cache: self.pool.get(),
         }
     }
 
@@ -1309,7 +1311,8 @@ impl Exec {
 
 impl Clone for Exec {
     fn clone(&self) -> Exec {
-        Exec { ro: self.ro.clone(), cache: Cached::new() }
+        let pool = ExecReadOnly::new_pool(&self.ro);
+        Exec { ro: self.ro.clone(), pool }
     }
 }
 
@@ -1442,6 +1445,13 @@ impl ExecReadOnly {
         let lcs_len = self.suffixes.lcs().char_len();
         lcs_len >= 3 && lcs_len > self.dfa.prefixes.lcp().char_len()
     }
+
+    fn new_pool(ro: &Arc<ExecReadOnly>) -> Pool<ProgramCache> {
+        let ro = ro.clone();
+        Pool::new(Box::new(move || {
+            AssertUnwindSafe(RefCell::new(ProgramCacheInner::new(&ro)))
+        }))
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -1500,7 +1510,11 @@ enum MatchNfaType {
 
 /// `ProgramCache` maintains reusable allocations for each matching engine
 /// available to a particular program.
-pub type ProgramCache = RefCell<ProgramCacheInner>;
+///
+/// We declare this as unwind safe since it's a cache that's only used for
+/// performance purposes. If a panic occurs, it is (or should be) always safe
+/// to continue using the same regex object.
+pub type ProgramCache = AssertUnwindSafe<RefCell<ProgramCacheInner>>;
 
 #[derive(Debug)]
 pub struct ProgramCacheInner {
