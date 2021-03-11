@@ -51,7 +51,10 @@ use_std = ["std"]
 # Enables all performance features.
 perf = ["perf-cache", "perf-dfa", "perf-inline", "perf-literal"]
 # Enables fast caching. (If disabled, caching is still used, but is slower.)
-perf-cache = ["thread_local"]
+# Currently, this feature has no effect. It used to remove the thread_local
+# dependency and use a slower internal cache, but now the default cache has
+# been improved and thread_local is no longer a dependency at all.
+perf-cache = []
 # Enables use of a lazy DFA when possible.
 perf-dfa = []
 # Enables aggressive use of inlining.
@@ -108,11 +111,6 @@ optional = true
 # For skipping along search text quickly when a leading byte is known.
 [dependencies.memchr]
 version = "2.2.1"
-optional = true
-
-# For managing regex caches quickly across multiple threads.
-[dependencies.thread_local]
-version = "1"
 optional = true
 
 # For parsing regular expressions.

@@ -523,11 +523,6 @@ All features below are enabled by default.
   Enables all performance related features. This feature is enabled by default
   and will always cover all features that improve performance, even if more
   are added in the future.
-* **perf-cache** -
-  Enables the use of very fast thread safe caching for internal match state.
-  When this is disabled, caching is still used, but with a slower and simpler
-  implementation. Disabling this drops the `thread_local` and `lazy_static`
-  dependencies.
 * **perf-dfa** -
   Enables the use of a lazy DFA for matching. The lazy DFA is used to compile
   portions of a regex to a very fast DFA on an as-needed basis. This can
@@ -542,6 +537,11 @@ All features below are enabled by default.
   Enables the use of literal optimizations for speeding up matches. In some
   cases, literal optimizations can result in speedups of _several_ orders of
   magnitude. Disabling this drops the `aho-corasick` and `memchr` dependencies.
+* **perf-cache** -
+  This feature used to enable a faster internal cache at the cost of using
+  additional dependencies, but this is no longer an option. A fast internal
+  cache is now used unconditionally with no additional dependencies. This may
+  change in the future.
 
 ### Unicode features
 
@@ -631,8 +631,6 @@ extern crate memchr;
 #[cfg_attr(feature = "perf-literal", macro_use)]
 extern crate quickcheck;
 extern crate regex_syntax as syntax;
-#[cfg(feature = "perf-cache")]
-extern crate thread_local;
 
 // #[cfg(doctest)]
 // doc_comment::doctest!("../README.md");
@@ -749,7 +747,6 @@ pub mod bytes {
 }
 
 mod backtrack;
-mod cache;
 mod compile;
 #[cfg(feature = "perf-dfa")]
 mod dfa;
@@ -764,6 +761,7 @@ mod literal;
 #[cfg(feature = "pattern")]
 mod pattern;
 mod pikevm;
+mod pool;
 mod prog;
 mod re_builder;
 mod re_bytes;
