@@ -1,3 +1,18 @@
+1.4.4 (2021-03-11)
+==================
+This is a small patch release that contains some bug fixes. Notably, it also
+drops the `thread_local` (and `lazy_static`, via transitivity) dependencies.
+
+Bug fixes:
+
+* [BUG #362](https://github.com/rust-lang/regex/pull/362):
+  Memory leaks caused by an internal caching strategy should now be fixed.
+* [BUG #576](https://github.com/rust-lang/regex/pull/576):
+  All regex types now implement `UnwindSafe` and `RefUnwindSafe`.
+* [BUG #728](https://github.com/rust-lang/regex/pull/749):
+  Add missing `Replacer` impls for `Vec<u8>`, `String`, `Cow`, etc.
+
+
 1.4.3 (2021-01-08)
 ==================
 This is a small patch release that adds some missing standard trait
