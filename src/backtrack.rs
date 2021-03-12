@@ -115,8 +115,8 @@ impl<'a, 'm, 'r, 's, I: Input> Bounded<'a, 'm, 'r, 's, I> {
         // Then we reset all existing allocated space to 0.
         // Finally, we request more space if we need it.
         //
-        // This is all a little circuitous, but doing this unsafely
-        // doesn't seem to have a measurable impact on performance.
+        // This is all a little circuitous, but doing this using unchecked
+        // operations doesn't seem to have a measurable impact on performance.
         // (Probably because backtracking is limited to such small
         // inputs/regexes in the first place.)
         let visited_len =
