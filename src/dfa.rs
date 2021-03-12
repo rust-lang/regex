@@ -848,7 +848,7 @@ impl<'a> Fsm<'a> {
     /// next_si transitions to the next state, where the transition input
     /// corresponds to text[i].
     ///
-    /// This elides bounds checks, and is therefore unsafe.
+    /// This elides bounds checks, and is therefore not safe.
     #[cfg_attr(feature = "perf-inline", inline(always))]
     unsafe fn next_si(&self, si: StatePtr, text: &[u8], i: usize) -> StatePtr {
         // What is the argument for safety here?
@@ -1688,7 +1688,7 @@ impl Transitions {
         self.num_byte_classes * mem::size_of::<StatePtr>()
     }
 
-    /// Like `next`, but uses unchecked access and is therefore unsafe.
+    /// Like `next`, but uses unchecked access and is therefore not safe.
     unsafe fn next_unchecked(&self, si: StatePtr, cls: usize) -> StatePtr {
         debug_assert!((si as usize) < self.table.len());
         debug_assert!(cls < self.num_byte_classes);
