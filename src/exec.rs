@@ -36,7 +36,14 @@ pub struct Exec {
     /// All read only state.
     ro: Arc<ExecReadOnly>,
     /// A pool of reusable values for the various matching engines.
-    pool: Pool<ProgramCache>,
+    ///
+    /// Note that boxing this value is not strictly necessary, but it is an
+    /// easy way to ensure that T does not bloat the stack sized used by a pool
+    /// in the case where T is big. And this turns out to be the case at the
+    /// time of writing for regex's use of this pool. At the time of writing,
+    /// the size of a Regex on the stack is 856 bytes. Boxing this value
+    /// reduces that size to 16 bytes.
+    pool: Box<Pool<ProgramCache>>,
 }
 
 /// `ExecNoSync` is like `Exec`, except it embeds a reference to a cache. This
@@ -1446,11 +1453,11 @@ impl ExecReadOnly {
         lcs_len >= 3 && lcs_len > self.dfa.prefixes.lcp().char_len()
     }
 
-    fn new_pool(ro: &Arc<ExecReadOnly>) -> Pool<ProgramCache> {
+    fn new_pool(ro: &Arc<ExecReadOnly>) -> Box<Pool<ProgramCache>> {
         let ro = ro.clone();
-        Pool::new(Box::new(move || {
+        Box::new(Pool::new(Box::new(move || {
             AssertUnwindSafe(RefCell::new(ProgramCacheInner::new(&ro)))
-        }))
+        })))
     }
 }
 
