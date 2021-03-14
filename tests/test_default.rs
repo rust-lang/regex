@@ -136,3 +136,18 @@ fn oibits_regression() {
 
     let _ = panic::catch_unwind(|| Regex::new("a").unwrap());
 }
+
+// See: https://github.com/rust-lang/regex/issues/750
+#[test]
+#[cfg(target_pointer_width = "64")]
+fn regex_is_reasonably_small() {
+    use std::mem::size_of;
+
+    use regex::bytes;
+    use regex::{Regex, RegexSet};
+
+    assert_eq!(16, size_of::<Regex>());
+    assert_eq!(16, size_of::<RegexSet>());
+    assert_eq!(16, size_of::<bytes::Regex>());
+    assert_eq!(16, size_of::<bytes::RegexSet>());
+}

@@ -1,3 +1,17 @@
+1.4.5 (2021-03-14)
+==================
+This is a small patch release that fixes a regression in the size of a `Regex`
+in the 1.4.4 release. Prior to 1.4.4, a `Regex` was 552 bytes. In the 1.4.4
+release, it was 856 bytes due to internal changes. In this release, a `Regex`
+is now 16 bytes. In general, the size of a `Regex` was never something that was
+on my radar, but this increased size in the 1.4.4 release seems to have crossed
+a threshold and resulted in stack overflows in some programs.
+
+* [BUG #750](https://github.com/rust-lang/regex/pull/750):
+  Fixes stack overflows seemingly caused by a large `Regex` size by decreasing
+  its size.
+
+
 1.4.4 (2021-03-11)
 ==================
 This is a small patch release that contains some bug fixes. Notably, it also
