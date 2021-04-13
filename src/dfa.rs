@@ -43,7 +43,7 @@ use std::mem;
 use std::sync::Arc;
 
 use exec::ProgramCache;
-use prog::{Inst, Program};
+use prog::{BytesInst, InstTrait, Program};
 use sparse::SparseSet;
 
 /// Return true if and only if the given program can be executed by a DFA.
@@ -54,8 +54,7 @@ use sparse::SparseSet;
 ///
 /// This function will also return false if the given program has any Unicode
 /// instructions (Char or Ranges) since the DFA operates on bytes only.
-pub fn can_exec(insts: &Program) -> bool {
-    use prog::Inst::*;
+pub fn can_exec(insts: &Program<BytesInst>) -> bool {
     // If for some reason we manage to allocate a regex program with more
     // than i32::MAX instructions, then we can't execute the DFA because we
     // use 32 bit instruction pointer deltas for memory savings.
@@ -64,12 +63,6 @@ pub fn can_exec(insts: &Program) -> bool {
     // and we are OK to use 32 bits.
     if insts.dfa_size_limit == 0 || insts.len() > ::std::i32::MAX as usize {
         return false;
-    }
-    for inst in insts {
-        match *inst {
-            Char(_) | Ranges(_) => return false,
-            EmptyLook(_) | Match(_) | Save(_) | Split(_) | Bytes(_) => {}
-        }
     }
     true
 }
@@ -172,7 +165,7 @@ pub struct Fsm<'a> {
     /// the `dfa` instructions or the `dfa_reverse` instructions from
     /// `exec::ExecReadOnly`. (It never uses `ExecReadOnly.nfa`, which may have
     /// Unicode opcodes that cannot be executed by the DFA.)
-    prog: &'a Program,
+    prog: &'a Program<BytesInst>,
     /// The start state. We record it here because the pointer may change
     /// when the cache is wiped.
     start: StatePtr,
@@ -411,7 +404,7 @@ struct StateFlags(u8);
 
 impl Cache {
     /// Create new empty cache for the DFA engine.
-    pub fn new(prog: &Program) -> Self {
+    pub fn new(prog: &Program<BytesInst>) -> Self {
         // We add 1 to account for the special EOF byte.
         let num_byte_classes = (prog.byte_classes[255] as usize + 1) + 1;
         let starts = vec![STATE_UNKNOWN; 256];
@@ -445,7 +438,7 @@ impl CacheInner {
 impl<'a> Fsm<'a> {
     #[cfg_attr(feature = "perf-inline", inline(always))]
     pub fn forward(
-        prog: &'a Program,
+        prog: &'a Program<BytesInst>,
         cache: &ProgramCache,
         quit_after_match: bool,
         text: &[u8],
@@ -475,7 +468,7 @@ impl<'a> Fsm<'a> {
 
     #[cfg_attr(feature = "perf-inline", inline(always))]
     pub fn reverse(
-        prog: &'a Program,
+        prog: &'a Program<BytesInst>,
         cache: &ProgramCache,
         quit_after_match: bool,
         text: &[u8],
@@ -505,7 +498,7 @@ impl<'a> Fsm<'a> {
 
     #[cfg_attr(feature = "perf-inline", inline(always))]
     pub fn forward_many(
-        prog: &'a Program,
+        prog: &'a Program<BytesInst>,
         cache: &ProgramCache,
         matches: &mut [bool],
         text: &[u8],
@@ -539,7 +532,7 @@ impl<'a> Fsm<'a> {
                 debug_assert!(dfa.last_match_si != STATE_UNKNOWN);
                 debug_assert!(dfa.last_match_si != STATE_DEAD);
                 for ip in dfa.state(dfa.last_match_si).inst_ptrs() {
-                    if let Inst::Match(slot) = dfa.prog[ip] {
+                    if let BytesInst::Match(slot) = dfa.prog[ip] {
                         matches[slot] = true;
                     }
                 }
@@ -894,7 +887,7 @@ impl<'a> Fsm<'a> {
         mut si: StatePtr,
         b: Byte,
     ) -> Option<StatePtr> {
-        use prog::Inst::*;
+        use prog::BytesInst::*;
 
         // Initialize a queue with the current DFA state's NFA states.
         qcur.clear();
@@ -957,8 +950,6 @@ impl<'a> Fsm<'a> {
         qnext.clear();
         for &ip in &*qcur {
             match self.prog[ip as usize] {
-                // These states never happen in a byte-based program.
-                Char(_) | Ranges(_) => unreachable!(),
                 // These states are handled when following epsilon transitions.
                 Save(_) | Split(_) | EmptyLook(_) => {}
                 Match(_) => {
@@ -1056,8 +1047,8 @@ impl<'a> Fsm<'a> {
         q: &mut SparseSet,
         flags: EmptyFlags,
     ) {
+        use prog::BytesInst::*;
         use prog::EmptyLook::*;
-        use prog::Inst::*;
 
         // We need to traverse the NFA to follow epsilon transitions, so avoid
         // recursion with an explicit stack.
@@ -1072,7 +1063,6 @@ impl<'a> Fsm<'a> {
                 }
                 q.insert(ip as usize);
                 match self.prog[ip as usize] {
-                    Char(_) | Ranges(_) => unreachable!(),
                     Match(_) | Bytes(_) => {
                         break;
                     }
@@ -1190,7 +1180,7 @@ impl<'a> Fsm<'a> {
         q: &SparseSet,
         state_flags: &mut StateFlags,
     ) -> Option<State> {
-        use prog::Inst::*;
+        use prog::BytesInst::*;
 
         // We need to build up enough information to recognize pre-built states
         // in the DFA. Generally speaking, this includes every instruction
@@ -1211,7 +1201,6 @@ impl<'a> Fsm<'a> {
         for &ip in q {
             let ip = usize_to_u32(ip);
             match self.prog[ip as usize] {
-                Char(_) | Ranges(_) => unreachable!(),
                 Save(_) | Split(_) => {}
                 Bytes(_) => push_inst_ptr(&mut insts, &mut prev, ip),
                 EmptyLook(_) => {

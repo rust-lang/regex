@@ -18,7 +18,7 @@
 
 use exec::ProgramCache;
 use input::{Input, InputAt};
-use prog::{InstPtr, Program};
+use prog::{BytesInst, InstPtr, InstTrait, Program, UnicodeInst};
 use re_trait::Slot;
 
 type Bits = u32;
@@ -41,8 +41,8 @@ pub fn should_exec(num_insts: usize, text_len: usize) -> bool {
 
 /// A backtracking matching engine.
 #[derive(Debug)]
-pub struct Bounded<'a, 'm, 'r, 's, I> {
-    prog: &'r Program,
+pub struct Bounded<'a, 'm, 'r, 's, I, P: InstTrait> {
+    prog: &'r Program<P>,
     input: I,
     matches: &'m mut [bool],
     slots: &'s mut [Slot],
@@ -59,7 +59,7 @@ pub struct Cache {
 
 impl Cache {
     /// Create new empty cache for the backtracking engine.
-    pub fn new(_prog: &Program) -> Self {
+    pub fn new<I: InstTrait>(_prog: &Program<I>) -> Self {
         Cache { jobs: vec![], visited: vec![] }
     }
 }
@@ -76,13 +76,15 @@ enum Job {
     SaveRestore { slot: usize, old_pos: Option<usize> },
 }
 
-impl<'a, 'm, 'r, 's, I: Input> Bounded<'a, 'm, 'r, 's, I> {
+impl<'a, 'm, 'r, 's, I: Input, P: InstTrait + Step>
+    Bounded<'a, 'm, 'r, 's, I, P>
+{
     /// Execute the backtracking matching engine.
     ///
     /// If there's a match, `exec` returns `true` and populates the given
     /// captures accordingly.
     pub fn exec(
-        prog: &'r Program,
+        prog: &'r Program<P>,
         cache: &ProgramCache,
         matches: &'m mut [bool],
         slots: &'s mut [Slot],
@@ -93,14 +95,14 @@ impl<'a, 'm, 'r, 's, I: Input> Bounded<'a, 'm, 'r, 's, I> {
         let mut cache = cache.borrow_mut();
         let cache = &mut cache.backtrack;
         let start = input.at(start);
-        let mut b = Bounded {
+        Bounded {
             prog: prog,
             input: input,
             matches: matches,
             slots: slots,
             m: cache,
-        };
-        b.exec_(start, end)
+        }
+        .exec_(start, end)
     }
 
     /// Clears the cache such that the backtracking engine can be executed
@@ -196,7 +198,6 @@ impl<'a, 'm, 'r, 's, I: Input> Bounded<'a, 'm, 'r, 's, I> {
     }
 
     fn step(&mut self, mut ip: InstPtr, mut at: InputAt) -> bool {
-        use prog::Inst::*;
         loop {
             // This loop is an optimization to avoid constantly pushing/popping
             // from the stack. Namely, if we're pushing a job only to run it
@@ -205,64 +206,12 @@ impl<'a, 'm, 'r, 's, I: Input> Bounded<'a, 'm, 'r, 's, I> {
             if self.has_visited(ip, at) {
                 return false;
             }
-            match self.prog[ip] {
-                Match(slot) => {
-                    if slot < self.matches.len() {
-                        self.matches[slot] = true;
-                    }
-                    return true;
+            match self.prog[ip].step(self, at) {
+                Ok((next_ip, next_at)) => {
+                    ip = next_ip;
+                    at = next_at;
                 }
-                Save(ref inst) => {
-                    if let Some(&old_pos) = self.slots.get(inst.slot) {
-                        // If this path doesn't work out, then we save the old
-                        // capture index (if one exists) in an alternate
-                        // job. If the next path fails, then the alternate
-                        // job is popped and the old capture index is restored.
-                        self.m.jobs.push(Job::SaveRestore {
-                            slot: inst.slot,
-                            old_pos: old_pos,
-                        });
-                        self.slots[inst.slot] = Some(at.pos());
-                    }
-                    ip = inst.goto;
-                }
-                Split(ref inst) => {
-                    self.m.jobs.push(Job::Inst { ip: inst.goto2, at: at });
-                    ip = inst.goto1;
-                }
-                EmptyLook(ref inst) => {
-                    if self.input.is_empty_match(at, inst) {
-                        ip = inst.goto;
-                    } else {
-                        return false;
-                    }
-                }
-                Char(ref inst) => {
-                    if inst.c == at.char() {
-                        ip = inst.goto;
-                        at = self.input.at(at.next_pos());
-                    } else {
-                        return false;
-                    }
-                }
-                Ranges(ref inst) => {
-                    if inst.matches(at.char()) {
-                        ip = inst.goto;
-                        at = self.input.at(at.next_pos());
-                    } else {
-                        return false;
-                    }
-                }
-                Bytes(ref inst) => {
-                    if let Some(b) = at.byte() {
-                        if inst.matches(b) {
-                            ip = inst.goto;
-                            at = self.input.at(at.next_pos());
-                            continue;
-                        }
-                    }
-                    return false;
-                }
+                Err(res) => return res,
             }
         }
     }
@@ -276,6 +225,125 @@ impl<'a, 'm, 'r, 's, I: Input> Bounded<'a, 'm, 'r, 's, I> {
             false
         } else {
             true
+        }
+    }
+}
+
+pub trait Step: InstTrait + Sized {
+    fn step<I: Input>(
+        &self,
+        bounded: &mut Bounded<'_, '_, '_, '_, I, Self>,
+        at: InputAt,
+    ) -> Result<(InstPtr, InputAt), bool>;
+}
+
+impl Step for UnicodeInst {
+    fn step<I: Input>(
+        &self,
+        bounded: &mut Bounded<'_, '_, '_, '_, I, Self>,
+        mut at: InputAt,
+    ) -> Result<(InstPtr, InputAt), bool> {
+        use prog::UnicodeInst::*;
+        match *self {
+            Match(slot) => {
+                if slot < bounded.matches.len() {
+                    bounded.matches[slot] = true;
+                }
+                Err(true)
+            }
+            Save(ref inst) => {
+                if let Some(&old_pos) = bounded.slots.get(inst.slot) {
+                    // If this path doesn't work out, then we save the old
+                    // capture index (if one exists) in an alternate
+                    // job. If the next path fails, then the alternate
+                    // job is popped and the old capture index is restored.
+                    bounded.m.jobs.push(Job::SaveRestore {
+                        slot: inst.slot,
+                        old_pos: old_pos,
+                    });
+                    bounded.slots[inst.slot] = Some(at.pos());
+                }
+                Ok((inst.goto, at))
+            }
+            Split(ref inst) => {
+                bounded.m.jobs.push(Job::Inst { ip: inst.goto2, at: at });
+                Ok((inst.goto1, at))
+            }
+            EmptyLook(ref inst) => {
+                if bounded.input.is_empty_match(at, inst) {
+                    Ok((inst.goto, at))
+                } else {
+                    Err(false)
+                }
+            }
+            Char(ref inst) => {
+                if inst.c == at.char() {
+                    at = bounded.input.at(at.next_pos());
+                    Ok((inst.goto, at))
+                } else {
+                    Err(false)
+                }
+            }
+            Ranges(ref inst) => {
+                if inst.matches(at.char()) {
+                    at = bounded.input.at(at.next_pos());
+                    Ok((inst.goto, at))
+                } else {
+                    Err(false)
+                }
+            }
+        }
+    }
+}
+
+impl Step for BytesInst {
+    fn step<I: Input>(
+        &self,
+        bounded: &mut Bounded<'_, '_, '_, '_, I, Self>,
+        mut at: InputAt,
+    ) -> Result<(InstPtr, InputAt), bool> {
+        use prog::BytesInst::*;
+        match *self {
+            Match(slot) => {
+                if slot < bounded.matches.len() {
+                    bounded.matches[slot] = true;
+                }
+                Err(true)
+            }
+            Save(ref inst) => {
+                if let Some(&old_pos) = bounded.slots.get(inst.slot) {
+                    // If this path doesn't work out, then we save the old
+                    // capture index (if one exists) in an alternate
+                    // job. If the next path fails, then the alternate
+                    // job is popped and the old capture index is restored.
+                    bounded.m.jobs.push(Job::SaveRestore {
+                        slot: inst.slot,
+                        old_pos: old_pos,
+                    });
+                    bounded.slots[inst.slot] = Some(at.pos());
+                }
+                Ok((inst.goto, at))
+            }
+            Split(ref inst) => {
+                bounded.m.jobs.push(Job::Inst { ip: inst.goto2, at: at });
+                Ok((inst.goto1, at))
+            }
+            EmptyLook(ref inst) => {
+                if bounded.input.is_empty_match(at, inst) {
+                    Ok((inst.goto, at))
+                } else {
+                    Err(false)
+                }
+            }
+            Bytes(ref inst) => {
+                if let Some(b) = at.byte() {
+                    if inst.matches(b) {
+                        at = bounded.input.at(at.next_pos());
+                        return Ok((inst.goto, at));
+                    }
+                }
+                Err(false)
+            }
         }
     }
 }

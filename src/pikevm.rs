@@ -19,17 +19,17 @@ use std::mem;
 
 use exec::ProgramCache;
 use input::{Input, InputAt};
-use prog::{InstPtr, Program};
+use prog::{BytesInst, InstPtr, InstTrait, Program, UnicodeInst};
 use re_trait::Slot;
 use sparse::SparseSet;
 
 /// An NFA simulation matching engine.
 #[derive(Debug)]
-pub struct Fsm<'r, I> {
+pub struct Fsm<'r, I, P: InstTrait> {
     /// The sequence of opcodes (among other things) that is actually executed.
     ///
     /// The program may be byte oriented or Unicode codepoint oriented.
-    prog: &'r Program,
+    prog: &'r Program<P>,
     /// An explicit stack used for following epsilon transitions. (This is
     /// borrowed from the cache.)
     stack: &'r mut Vec<FollowEpsilon>,
@@ -49,7 +49,7 @@ pub struct Cache {
 
 /// An ordered set of NFA states and their captures.
 #[derive(Clone, Debug)]
-struct Threads {
+pub struct Threads {
     /// An ordered set of opcodes (each opcode is an NFA state).
     set: SparseSet,
     /// Captures for every NFA state.
@@ -75,18 +75,18 @@ enum FollowEpsilon {
 impl Cache {
     /// Create a new allocation used by the NFA machine to record execution
     /// and captures.
-    pub fn new(_prog: &Program) -> Self {
+    pub fn new<I: InstTrait>(_prog: &Program<I>) -> Self {
         Cache { clist: Threads::new(), nlist: Threads::new(), stack: vec![] }
     }
 }
 
-impl<'r, I: Input> Fsm<'r, I> {
+impl<'r, I: Input, P: InstTrait + Step> Fsm<'r, I, P> {
     /// Execute the NFA matching engine.
     ///
     /// If there's a match, `exec` returns `true` and populates the given
     /// captures accordingly.
     pub fn exec(
-        prog: &'r Program,
+        prog: &'r Program<P>,
         cache: &ProgramCache,
         matches: &mut [bool],
         slots: &mut [Slot],
@@ -231,39 +231,15 @@ impl<'r, I: Input> Fsm<'r, I> {
         at: InputAt,
         at_next: InputAt,
     ) -> bool {
-        use prog::Inst::*;
-        match self.prog[ip] {
-            Match(match_slot) => {
-                if match_slot < matches.len() {
-                    matches[match_slot] = true;
-                }
-                for (slot, val) in slots.iter_mut().zip(thread_caps.iter()) {
-                    *slot = *val;
-                }
-                true
-            }
-            Char(ref inst) => {
-                if inst.c == at.char() {
-                    self.add(nlist, thread_caps, inst.goto, at_next);
-                }
-                false
-            }
-            Ranges(ref inst) => {
-                if inst.matches(at.char()) {
-                    self.add(nlist, thread_caps, inst.goto, at_next);
-                }
-                false
-            }
-            Bytes(ref inst) => {
-                if let Some(b) = at.byte() {
-                    if inst.matches(b) {
-                        self.add(nlist, thread_caps, inst.goto, at_next);
-                    }
-                }
-                false
-            }
-            EmptyLook(_) | Save(_) | Split(_) => false,
-        }
+        self.prog[ip].step(
+            self,
+            nlist,
+            matches,
+            slots,
+            thread_caps,
+            at,
+            at_next,
+        )
     }
 
     /// Follows epsilon transitions and adds them for processing to nlist,
@@ -300,40 +276,196 @@ impl<'r, I: Input> Fsm<'r, I> {
         // traverse the set of states. We only push to the stack when we
         // absolutely need recursion (restoring captures or following a
         // branch).
-        use prog::Inst::*;
         loop {
             // Don't visit states we've already added.
             if nlist.set.contains(ip) {
                 return;
             }
             nlist.set.insert(ip);
-            match self.prog[ip] {
-                EmptyLook(ref inst) => {
-                    if self.input.is_empty_match(at, inst) {
-                        ip = inst.goto;
+            if let Some(next_ip) =
+                self.prog[ip].add_step(self, nlist, thread_caps, ip, at)
+            {
+                ip = next_ip;
+            } else {
+                return;
+            }
+        }
+    }
+}
+
+pub trait Step: InstTrait + Sized {
+    fn step<'r, I: Input>(
+        &self,
+        fsm: &mut Fsm<'r, I, Self>,
+        nlist: &mut Threads,
+        matches: &mut [bool],
+        slots: &mut [Slot],
+        thread_caps: &mut [Option<usize>],
+        at: InputAt,
+        at_next: InputAt,
+    ) -> bool;
+
+    fn add_step<'r, I: Input>(
+        &self,
+        fsm: &mut Fsm<'r, I, Self>,
+        nlist: &mut Threads,
+        thread_caps: &mut [Option<usize>],
+        ip: usize,
+        at: InputAt,
+    ) -> Option<usize>;
+}
+
+impl Step for UnicodeInst {
+    fn step<'r, I: Input>(
+        &self,
+        fsm: &mut Fsm<'r, I, UnicodeInst>,
+        nlist: &mut Threads,
+        matches: &mut [bool],
+        slots: &mut [Slot],
+        thread_caps: &mut [Option<usize>],
+        at: InputAt,
+        at_next: InputAt,
+    ) -> bool {
+        use prog::UnicodeInst::*;
+        match *self {
+            Match(match_slot) => {
+                if match_slot < matches.len() {
+                    matches[match_slot] = true;
+                }
+                for (slot, val) in slots.iter_mut().zip(thread_caps.iter()) {
+                    *slot = *val;
+                }
+                true
+            }
+            Char(ref inst) => {
+                if inst.c == at.char() {
+                    fsm.add(nlist, thread_caps, inst.goto, at_next);
+                }
+                false
+            }
+            Ranges(ref inst) => {
+                if inst.matches(at.char()) {
+                    fsm.add(nlist, thread_caps, inst.goto, at_next);
+                }
+                false
+            }
+            EmptyLook(_) | Save(_) | Split(_) => false,
+        }
+    }
+
+    fn add_step<'r, I: Input>(
+        &self,
+        fsm: &mut Fsm<'r, I, UnicodeInst>,
+        nlist: &mut Threads,
+        thread_caps: &mut [Option<usize>],
+        ip: usize,
+        at: InputAt,
+    ) -> Option<usize> {
+        use prog::UnicodeInst::*;
+        match *self {
+            EmptyLook(ref inst) => {
+                if fsm.input.is_empty_match(at, inst) {
+                    Some(inst.goto)
+                } else {
+                    Some(ip)
+                }
+            }
+            Save(ref inst) => {
+                if inst.slot < thread_caps.len() {
+                    fsm.stack.push(FollowEpsilon::Capture {
+                        slot: inst.slot,
+                        pos: thread_caps[inst.slot],
+                    });
+                    thread_caps[inst.slot] = Some(at.pos());
+                }
+                Some(inst.goto)
+            }
+            Split(ref inst) => {
+                fsm.stack.push(FollowEpsilon::IP(inst.goto2));
+                Some(inst.goto1)
+            }
+            Match(_) | Char(_) | Ranges(_) => {
+                let t = &mut nlist.caps(ip);
+                for (slot, val) in t.iter_mut().zip(thread_caps.iter()) {
+                    *slot = *val;
+                }
+                None
+            }
+        }
+    }
+}
+
+impl Step for BytesInst {
+    fn step<'r, I: Input>(
+        &self,
+        fsm: &mut Fsm<'r, I, BytesInst>,
+        nlist: &mut Threads,
+        matches: &mut [bool],
+        slots: &mut [Slot],
+        thread_caps: &mut [Option<usize>],
+        at: InputAt,
+        at_next: InputAt,
+    ) -> bool {
+        use prog::BytesInst::*;
+        match *self {
+            Match(match_slot) => {
+                if match_slot < matches.len() {
+                    matches[match_slot] = true;
+                }
+                for (slot, val) in slots.iter_mut().zip(thread_caps.iter()) {
+                    *slot = *val;
+                }
+                true
+            }
+            Bytes(ref inst) => {
+                if let Some(b) = at.byte() {
+                    if inst.matches(b) {
+                        fsm.add(nlist, thread_caps, inst.goto, at_next);
                     }
                 }
-                Save(ref inst) => {
-                    if inst.slot < thread_caps.len() {
-                        self.stack.push(FollowEpsilon::Capture {
-                            slot: inst.slot,
-                            pos: thread_caps[inst.slot],
-                        });
-                        thread_caps[inst.slot] = Some(at.pos());
-                    }
-                    ip = inst.goto;
+                false
+            }
+            EmptyLook(_) | Save(_) | Split(_) => false,
+        }
+    }
+
+    fn add_step<'r, I: Input>(
+        &self,
+        fsm: &mut Fsm<'r, I, BytesInst>,
+        nlist: &mut Threads,
+        thread_caps: &mut [Option<usize>],
+        ip: usize,
+        at: InputAt,
+    ) -> Option<usize> {
+        use prog::BytesInst::*;
+        match *self {
+            EmptyLook(ref inst) => {
+                if fsm.input.is_empty_match(at, inst) {
+                    Some(inst.goto)
+                } else {
+                    Some(ip)
                 }
-                Split(ref inst) => {
-                    self.stack.push(FollowEpsilon::IP(inst.goto2));
-                    ip = inst.goto1;
+            }
+            Save(ref inst) => {
+                if inst.slot < thread_caps.len() {
+                    fsm.stack.push(FollowEpsilon::Capture {
+                        slot: inst.slot,
+                        pos: thread_caps[inst.slot],
+                    });
+                    thread_caps[inst.slot] = Some(at.pos());
                 }
-                Match(_) | Char(_) | Ranges(_) | Bytes(_) => {
-                    let t = &mut nlist.caps(ip);
-                    for (slot, val) in t.iter_mut().zip(thread_caps.iter()) {
-                        *slot = *val;
-                    }
-                    return;
+                Some(inst.goto)
+            }
+            Split(ref inst) => {
+                fsm.stack.push(FollowEpsilon::IP(inst.goto2));
+                Some(inst.goto1)
+            }
+            Match(_) | Bytes(_) => {
+                let t = &mut nlist.caps(ip);
+                for (slot, val) in t.iter_mut().zip(thread_caps.iter()) {
+                    *slot = *val;
                 }
+                None
             }
         }
     }

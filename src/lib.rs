@@ -781,5 +781,5 @@ pub mod internal {
     pub use exec::{Exec, ExecBuilder};
     pub use input::{Char, CharInput, Input, InputAt};
     pub use literal::LiteralSearcher;
-    pub use prog::{EmptyLook, Inst, InstRanges, Program};
+    pub use prog::{BytesInst, EmptyLook, InstRanges, Program, UnicodeInst};
 }

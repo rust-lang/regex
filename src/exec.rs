@@ -18,7 +18,7 @@ use input::{ByteInput, CharInput};
 use literal::LiteralSearcher;
 use pikevm;
 use pool::{Pool, PoolGuard};
-use prog::Program;
+use prog::{BytesInst, Program, UnicodeInst};
 use re_builder::RegexOptions;
 use re_bytes;
 use re_set;
@@ -61,6 +61,76 @@ pub struct ExecNoSync<'c> {
 #[derive(Debug)]
 pub struct ExecNoSyncStr<'c>(ExecNoSync<'c>);
 
+#[derive(Debug)]
+enum NfaProgram {
+    Bytes(Program<BytesInst>),
+    Unicode(Program<UnicodeInst>),
+}
+
+impl NfaProgram {
+    #[inline]
+    fn len(&self) -> usize {
+        match self {
+            NfaProgram::Bytes(program) => program.len(),
+            NfaProgram::Unicode(program) => program.len(),
+        }
+    }
+
+    #[inline]
+    fn is_empty(&self) -> bool {
+        match self {
+            NfaProgram::Bytes(program) => program.is_empty(),
+            NfaProgram::Unicode(program) => program.is_empty(),
+        }
+    }
+
+    #[inline]
+    fn is_anchored_start(&self) -> bool {
+        match self {
+            NfaProgram::Bytes(program) => program.is_anchored_start,
+            NfaProgram::Unicode(program) => program.is_anchored_start,
+        }
+    }
+
+    #[inline]
+    fn is_anchored_end(&self) -> bool {
+        match self {
+            NfaProgram::Bytes(program) => program.is_anchored_end,
+            NfaProgram::Unicode(program) => program.is_anchored_end,
+        }
+    }
+
+    #[inline]
+    fn only_utf8(&self) -> bool {
+        match self {
+            NfaProgram::Bytes(program) => program.only_utf8,
+            NfaProgram::Unicode(program) => program.only_utf8,
+        }
+    }
+
+    #[inline]
+    fn prefixes(&self) -> &LiteralSearcher {
+        match self {
+            NfaProgram::Bytes(program) => &program.prefixes,
+            NfaProgram::Unicode(program) => &program.prefixes,
+        }
+    }
+
+    pub fn capture_name_idx(&self) -> &Arc<HashMap<String, usize>> {
+        match self {
+            NfaProgram::Bytes(program) => &program.capture_name_idx,
+            NfaProgram::Unicode(program) => &program.capture_name_idx,
+        }
+    }
+
+    pub fn captures(&self) -> &[Option<String>] {
+        match self {
+            NfaProgram::Bytes(program) => &program.captures,
+            NfaProgram::Unicode(program) => &program.captures,
+        }
+    }
+}
+
 /// `ExecReadOnly` comprises all read only state for a regex. Namely, all such
 /// state is determined at compile time and never changes during search.
 #[derive(Debug)]
@@ -72,17 +142,17 @@ struct ExecReadOnly {
     ///
     /// N.B. It is not possibly to make this byte-based from the public API.
     /// It is only used for testing byte based programs in the NFA simulations.
-    nfa: Program,
+    nfa: NfaProgram,
     /// A compiled byte based program for DFA execution. This is only used
     /// if a DFA can be executed. (Currently, only word boundary assertions are
     /// not supported.) Note that this program contains an embedded `.*?`
     /// preceding the first capture group, unless the regex is anchored at the
     /// beginning.
-    dfa: Program,
+    dfa: Program<BytesInst>,
     /// The same as above, except the program is reversed (and there is no
     /// preceding `.*?`). This is used by the DFA to find the starting location
     /// of matches.
-    dfa_reverse: Program,
+    dfa_reverse: Program<BytesInst>,
     /// A set of suffix literals extracted from the regex.
     ///
     /// Prefix literals are stored on the `Program`, since they are used inside
@@ -302,7 +372,7 @@ impl ExecBuilder {
         if self.options.pats.is_empty() {
             let ro = Arc::new(ExecReadOnly {
                 res: vec![],
-                nfa: Program::new(),
+                nfa: NfaProgram::Unicode(Program::new()),
                 dfa: Program::new(),
                 dfa_reverse: Program::new(),
                 suffixes: LiteralSearcher::empty(),
@@ -314,11 +384,6 @@ impl ExecBuilder {
             return Ok(Exec { ro: ro, pool });
         }
         let parsed = self.parse()?;
-        let mut nfa = Compiler::new()
-            .size_limit(self.options.size_limit)
-            .bytes(self.bytes || parsed.bytes)
-            .only_utf8(self.only_utf8)
-            .compile(&parsed.exprs)?;
         let mut dfa = Compiler::new()
             .size_limit(self.options.size_limit)
             .dfa(true)
@@ -333,8 +398,25 @@ impl ExecBuilder {
 
         #[cfg(feature = "perf-literal")]
         let ac = self.build_aho_corasick(&parsed);
-        nfa.prefixes = LiteralSearcher::prefixes(parsed.prefixes);
-        dfa.prefixes = nfa.prefixes.clone();
+
+        let nfa = if self.bytes || parsed.bytes {
+            let mut program = Compiler::new()
+                .size_limit(self.options.size_limit)
+                .only_utf8(self.only_utf8)
+                .compile(&parsed.exprs)?;
+            program.prefixes = LiteralSearcher::prefixes(parsed.prefixes);
+            dfa.prefixes = program.prefixes.clone();
+            NfaProgram::Bytes(program)
+        } else {
+            let mut program = Compiler::new()
+                .size_limit(self.options.size_limit)
+                .only_utf8(self.only_utf8)
+                .compile(&parsed.exprs)?;
+            program.prefixes = LiteralSearcher::prefixes(parsed.prefixes);
+            dfa.prefixes = program.prefixes.clone();
+            NfaProgram::Unicode(program)
+        };
+
         dfa.dfa_size_limit = self.options.dfa_size_limit;
         dfa_reverse.dfa_size_limit = self.options.dfa_size_limit;
 
@@ -428,7 +510,7 @@ impl<'c> RegularExpression for ExecNoSync<'c> {
     /// are two slots for every capture group, corresponding to possibly empty
     /// start and end locations of the capture.)
     fn slots_len(&self) -> usize {
-        self.ro.nfa.captures.len() * 2
+        self.ro.nfa.captures().len() * 2
     }
 
     fn next_after_empty(&self, _text: &[u8], i: usize) -> usize {
@@ -630,7 +712,7 @@ impl<'c> RegularExpression for ExecNoSync<'c> {
             }
             #[cfg(feature = "perf-dfa")]
             MatchType::Dfa => {
-                if self.ro.nfa.is_anchored_start {
+                if self.ro.nfa.is_anchored_start() {
                     self.captures_nfa(slots, text, start)
                 } else {
                     match self.find_dfa_forward(text, start) {
@@ -701,12 +783,12 @@ impl<'c> ExecNoSync<'c> {
         use self::MatchLiteralType::*;
         match ty {
             Unanchored => {
-                let lits = &self.ro.nfa.prefixes;
+                let lits = self.ro.nfa.prefixes();
                 lits.find(&text[start..]).map(|(s, e)| (start + s, start + e))
             }
             AnchoredStart => {
-                let lits = &self.ro.nfa.prefixes;
-                if start == 0 || !self.ro.nfa.is_anchored_start {
+                let lits = self.ro.nfa.prefixes();
+                if start == 0 || !self.ro.nfa.is_anchored_start() {
                     lits.find_start(&text[start..])
                         .map(|(s, e)| (start + s, start + e))
                 } else {
@@ -1086,20 +1168,19 @@ impl<'c> ExecNoSync<'c> {
         start: usize,
         end: usize,
     ) -> bool {
-        if self.ro.nfa.uses_bytes() {
-            pikevm::Fsm::exec(
-                &self.ro.nfa,
+        match self.ro.nfa {
+            NfaProgram::Bytes(ref program) => pikevm::Fsm::exec(
+                program,
                 self.cache.value(),
                 matches,
                 slots,
                 quit_after_match,
-                ByteInput::new(text, self.ro.nfa.only_utf8),
+                ByteInput::new(text, self.ro.nfa.only_utf8()),
                 start,
                 end,
-            )
-        } else {
-            pikevm::Fsm::exec(
-                &self.ro.nfa,
+            ),
+            NfaProgram::Unicode(ref program) => pikevm::Fsm::exec(
+                program,
                 self.cache.value(),
                 matches,
                 slots,
@@ -1107,7 +1188,7 @@ impl<'c> ExecNoSync<'c> {
                 CharInput::new(text),
                 start,
                 end,
-            )
+            ),
         }
     }
 
@@ -1120,26 +1201,25 @@ impl<'c> ExecNoSync<'c> {
         start: usize,
         end: usize,
     ) -> bool {
-        if self.ro.nfa.uses_bytes() {
-            backtrack::Bounded::exec(
-                &self.ro.nfa,
+        match self.ro.nfa {
+            NfaProgram::Bytes(ref program) => backtrack::Bounded::exec(
+                program,
                 self.cache.value(),
                 matches,
                 slots,
-                ByteInput::new(text, self.ro.nfa.only_utf8),
+                ByteInput::new(text, self.ro.nfa.only_utf8()),
                 start,
                 end,
-            )
-        } else {
-            backtrack::Bounded::exec(
-                &self.ro.nfa,
+            ),
+            NfaProgram::Unicode(ref program) => backtrack::Bounded::exec(
+                program,
                 self.cache.value(),
                 matches,
                 slots,
                 CharInput::new(text),
                 start,
                 end,
-            )
+            ),
         }
     }
 
@@ -1237,7 +1317,7 @@ impl<'c> ExecNoSync<'c> {
         #[cfg(feature = "perf-literal")]
         fn imp(ro: &ExecReadOnly, text: &[u8]) -> bool {
             // Only do this check if the haystack is big (>1MB).
-            if text.len() > (1 << 20) && ro.nfa.is_anchored_end {
+            if text.len() > (1 << 20) && ro.nfa.is_anchored_end() {
                 let lcs = ro.suffixes.lcs();
                 if lcs.len() >= 1 && !lcs.is_suffix(text) {
                     return false;
@@ -1250,7 +1330,7 @@ impl<'c> ExecNoSync<'c> {
     }
 
     pub fn capture_name_idx(&self) -> &Arc<HashMap<String, usize>> {
-        &self.ro.nfa.capture_name_idx
+        &self.ro.nfa.capture_name_idx()
     }
 }
 
@@ -1306,13 +1386,13 @@ impl Exec {
     ///
     /// Any capture that isn't named is None.
     pub fn capture_names(&self) -> &[Option<String>] {
-        &self.ro.nfa.captures
+        &self.ro.nfa.captures()
     }
 
     /// Return a reference to named groups mapping (from group name to
     /// group position).
     pub fn capture_name_idx(&self) -> &Arc<HashMap<String, usize>> {
-        &self.ro.nfa.capture_name_idx
+        &self.ro.nfa.capture_name_idx()
     }
 }
 
@@ -1329,7 +1409,7 @@ impl ExecReadOnly {
             return hint.unwrap();
         }
         // If the NFA is empty, then we'll never match anything.
-        if self.nfa.insts.is_empty() {
+        if self.nfa.is_empty() {
             return MatchType::Nothing;
         }
         if let Some(literalty) = self.choose_literal_match_type() {
@@ -1371,15 +1451,15 @@ impl ExecReadOnly {
                     MatchLiteralType::AhoCorasick,
                 ));
             }
-            if ro.nfa.prefixes.complete() {
-                return if ro.nfa.is_anchored_start {
+            if ro.nfa.prefixes().complete() {
+                return if ro.nfa.is_anchored_start() {
                     Some(MatchType::Literal(MatchLiteralType::AnchoredStart))
                 } else {
                     Some(MatchType::Literal(MatchLiteralType::Unanchored))
                 };
             }
             if ro.suffixes.complete() {
-                return if ro.nfa.is_anchored_end {
+                return if ro.nfa.is_anchored_end() {
                     Some(MatchType::Literal(MatchLiteralType::AnchoredEnd))
                 } else {
                     // This case shouldn't happen. When the regex isn't
@@ -1412,7 +1492,7 @@ impl ExecReadOnly {
             }
             // If the regex is anchored at the end but not the start, then
             // just match in reverse from the end of the haystack.
-            if !ro.nfa.is_anchored_start && ro.nfa.is_anchored_end {
+            if !ro.nfa.is_anchored_start() && ro.nfa.is_anchored_end() {
                 return Some(MatchType::DfaAnchoredReverse);
             }
             #[cfg(feature = "perf-literal")]
@@ -1536,8 +1616,20 @@ pub struct ProgramCacheInner {
 impl ProgramCacheInner {
     fn new(ro: &ExecReadOnly) -> Self {
         ProgramCacheInner {
-            pikevm: pikevm::Cache::new(&ro.nfa),
-            backtrack: backtrack::Cache::new(&ro.nfa),
+            pikevm: match ro.nfa {
+                NfaProgram::Bytes(ref program) => pikevm::Cache::new(program),
+                NfaProgram::Unicode(ref program) => {
+                    pikevm::Cache::new(program)
+                }
+            },
+            backtrack: match ro.nfa {
+                NfaProgram::Bytes(ref program) => {
+                    backtrack::Cache::new(program)
+                }
+                NfaProgram::Unicode(ref program) => {
+                    backtrack::Cache::new(program)
+                }
+            },
             #[cfg(feature = "perf-dfa")]
             dfa: dfa::Cache::new(&ro.dfa),
             #[cfg(feature = "perf-dfa")]
