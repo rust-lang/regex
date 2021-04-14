@@ -927,9 +927,10 @@ impl InstHole {
                 Inst::EmptyLook(InstEmptyLook { goto: goto, look: look })
             }
             InstHole::Char { c } => Inst::Char(InstChar { goto: goto, c: c }),
-            InstHole::Ranges { ref ranges } => {
-                Inst::Ranges(InstRanges { goto: goto, ranges: ranges.clone() })
-            }
+            InstHole::Ranges { ref ranges } => Inst::Ranges(InstRanges {
+                goto: goto,
+                ranges: ranges.clone().into_boxed_slice(),
+            }),
             InstHole::Bytes { start, end } => {
                 Inst::Bytes(InstBytes { goto: goto, start: start, end: end })
             }
