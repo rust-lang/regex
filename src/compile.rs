@@ -38,6 +38,7 @@ pub struct Compiler {
     suffix_cache: SuffixCache,
     utf8_seqs: Option<Utf8Sequences>,
     byte_classes: ByteClassSet,
+    extra_inst_bytes: usize,
 }
 
 impl Compiler {
@@ -54,6 +55,7 @@ impl Compiler {
             suffix_cache: SuffixCache::new(1000),
             utf8_seqs: Some(Utf8Sequences::new('\x00', '\x00')),
             byte_classes: ByteClassSet::new(),
+            extra_inst_bytes: 0,
         }
     }
 
@@ -420,6 +422,8 @@ impl Compiler {
     }
 
     fn c_class(&mut self, ranges: &[hir::ClassUnicodeRange]) -> ResultOrEmpty {
+        use std::mem::size_of;
+
         assert!(!ranges.is_empty());
         if self.compiled.uses_bytes() {
             Ok(Some(CompileClass { c: self, ranges: ranges }.compile()?))
@@ -429,6 +433,8 @@ impl Compiler {
             let hole = if ranges.len() == 1 && ranges[0].0 == ranges[0].1 {
                 self.push_hole(InstHole::Char { c: ranges[0].0 })
             } else {
+                self.extra_inst_bytes +=
+                    ranges.len() * (size_of::<char>() * 2);
                 self.push_hole(InstHole::Ranges { ranges: ranges })
             };
             Ok(Some(Patch { hole: hole, entry: self.insts.len() - 1 }))
@@ -795,7 +801,9 @@ impl Compiler {
     fn check_size(&self) -> result::Result<(), Error> {
         use std::mem::size_of;
 
-        if self.insts.len() * size_of::<Inst>() > self.size_limit {
+        let size =
+            self.extra_inst_bytes + (self.insts.len() * size_of::<Inst>());
+        if size > self.size_limit {
             Err(Error::CompiledTooBig(self.size_limit))
         } else {
             Ok(())

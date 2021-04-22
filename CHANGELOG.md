@@ -1,3 +1,15 @@
+1.4.6 (2021-04-22)
+==================
+This is a small patch release that fixes the compiler's size check on how much
+heap memory a regex uses. Previously, the compiler did not account for the
+heap usage of Unicode character classes. Now it does. It's possible that this
+may make some regexes fail to compile that previously did compile. If that
+happens, please file an issue.
+
+* [BUG OSS-fuzz#33579](https://bugs.chromium.org/p/oss-fuzz/issues/detail?id=33579):
+  Some regexes can use more heap memory than one would expect.
+
+
 1.4.5 (2021-03-14)
 ==================
 This is a small patch release that fixes a regression in the size of a `Regex`
