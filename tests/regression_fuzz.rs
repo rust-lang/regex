@@ -17,3 +17,15 @@ fn fuzz1() {
 fn empty_any_errors_no_panic() {
     assert!(regex_new!(r"\P{any}").is_err());
 }
+
+// This tests that a very large regex errors during compilation instead of
+// using gratuitous amounts of memory. The specific problem is that the
+// compiler wasn't accounting for the memory used by Unicode character classes
+// correctly.
+//
+// See: https://bugs.chromium.org/p/oss-fuzz/issues/detail?id=33579
+#[test]
+fn big_regex_fails_to_compile() {
+    let pat = "[\u{0}\u{e}\u{2}\\w~~>[l\t\u{0}]p?<]{971158}";
+    assert!(regex_new!(pat).is_err());
+}
