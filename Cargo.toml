@@ -105,12 +105,12 @@ pattern = []
 
 # For very fast prefix literal matching.
 [dependencies.aho-corasick]
-version = "0.7.6"
+version = "0.7.18"
 optional = true
 
 # For skipping along search text quickly when a leading byte is known.
 [dependencies.memchr]
-version = "2.2.1"
+version = "2.4.0"
 optional = true
 
 # For parsing regular expressions.
