@@ -348,7 +348,7 @@ impl<'t> Input for ByteInput<'t> {
 pub struct Char(u32);
 
 impl fmt::Debug for Char {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match char::from_u32(self.0) {
             None => write!(f, "Empty"),
             Some(c) => write!(f, "{:?}", c),

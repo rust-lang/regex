@@ -1,7 +1,7 @@
 #![cfg_attr(feature = "pattern", feature(pattern))]
 
-extern crate rand;
-extern crate regex;
+
+use regex;
 
 // Due to macro scoping rules, this definition only applies for the modules
 // defined below. Effectively, it allows us to use the same tests for both

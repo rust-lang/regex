@@ -94,7 +94,7 @@ replace!(
     replace,
     r"([0-9]+)",
     "age: 26",
-    |captures: &Captures| {
+    |captures: &Captures<'_>| {
         match_text!(captures.get(1).unwrap())[0..1].to_owned()
     },
     "age: 2"
@@ -104,7 +104,7 @@ replace!(
     replace,
     r"[0-9]+",
     "age: 26",
-    |_captures: &Captures| t!("Z").to_owned(),
+    |_captures: &Captures<'_>| t!("Z").to_owned(),
     "age: Z"
 );
 

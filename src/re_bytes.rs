@@ -79,14 +79,14 @@ pub struct Regex(Exec);
 
 impl fmt::Display for Regex {
     /// Shows the original regular expression.
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.as_str())
     }
 }
 
 impl fmt::Debug for Regex {
     /// Shows the original regular expression.
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Display::fmt(self, f)
     }
 }
@@ -658,7 +658,7 @@ impl Regex {
     }
 
     /// Returns an iterator over the capture names.
-    pub fn capture_names(&self) -> CaptureNames {
+    pub fn capture_names(&self) -> CaptureNames<'_> {
         CaptureNames(self.0.capture_names().iter())
     }
 
@@ -990,15 +990,15 @@ impl<'t> Captures<'t> {
 }
 
 impl<'t> fmt::Debug for Captures<'t> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_tuple("Captures").field(&CapturesDebug(self)).finish()
     }
 }
 
-struct CapturesDebug<'c, 't: 'c>(&'c Captures<'t>);
+struct CapturesDebug<'c, 't>(&'c Captures<'t>);
 
 impl<'c, 't> fmt::Debug for CapturesDebug<'c, 't> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fn escape_bytes(bytes: &[u8]) -> String {
             let mut s = String::new();
             for &b in bytes {
@@ -1084,7 +1084,7 @@ impl<'t, 'i> Index<&'i str> for Captures<'t> {
 /// The lifetime `'c` corresponds to the lifetime of the `Captures` value, and
 /// the lifetime `'t` corresponds to the originally matched text.
 #[derive(Clone, Debug)]
-pub struct SubCaptureMatches<'c, 't: 'c> {
+pub struct SubCaptureMatches<'c, 't> {
     caps: &'c Captures<'t>,
     it: SubCapturesPosIter<'c>,
 }
@@ -1116,7 +1116,7 @@ pub trait Replacer {
     ///
     /// For example, a no-op replacement would be
     /// `dst.extend(&caps[0])`.
-    fn replace_append(&mut self, caps: &Captures, dst: &mut Vec<u8>);
+    fn replace_append(&mut self, caps: &Captures<'_>, dst: &mut Vec<u8>);
 
     /// Return a fixed unchanging replacement byte string.
     ///
@@ -1159,10 +1159,10 @@ pub trait Replacer {
 ///
 /// Returned by [`Replacer::by_ref`](trait.Replacer.html#method.by_ref).
 #[derive(Debug)]
-pub struct ReplacerRef<'a, R: ?Sized + 'a>(&'a mut R);
+pub struct ReplacerRef<'a, R: ?Sized>(&'a mut R);
 
 impl<'a, R: Replacer + ?Sized + 'a> Replacer for ReplacerRef<'a, R> {
-    fn replace_append(&mut self, caps: &Captures, dst: &mut Vec<u8>) {
+    fn replace_append(&mut self, caps: &Captures<'_>, dst: &mut Vec<u8>) {
         self.0.replace_append(caps, dst)
     }
     fn no_expansion<'r>(&'r mut self) -> Option<Cow<'r, [u8]>> {
@@ -1171,56 +1171,56 @@ impl<'a, R: Replacer + ?Sized + 'a> Replacer for ReplacerRef<'a, R> {
 }
 
 impl<'a> Replacer for &'a [u8] {
-    fn replace_append(&mut self, caps: &Captures, dst: &mut Vec<u8>) {
+    fn replace_append(&mut self, caps: &Captures<'_>, dst: &mut Vec<u8>) {
         caps.expand(*self, dst);
     }
 
-    fn no_expansion(&mut self) -> Option<Cow<[u8]>> {
+    fn no_expansion(&mut self) -> Option<Cow<'_, [u8]>> {
         no_expansion(self)
     }
 }
 
 impl<'a> Replacer for &'a Vec<u8> {
-    fn replace_append(&mut self, caps: &Captures, dst: &mut Vec<u8>) {
+    fn replace_append(&mut self, caps: &Captures<'_>, dst: &mut Vec<u8>) {
         caps.expand(*self, dst);
     }
 
-    fn no_expansion(&mut self) -> Option<Cow<[u8]>> {
+    fn no_expansion(&mut self) -> Option<Cow<'_, [u8]>> {
         no_expansion(self)
     }
 }
 
 impl Replacer for Vec<u8> {
-    fn replace_append(&mut self, caps: &Captures, dst: &mut Vec<u8>) {
+    fn replace_append(&mut self, caps: &Captures<'_>, dst: &mut Vec<u8>) {
         caps.expand(self, dst);
     }
 
-    fn no_expansion(&mut self) -> Option<Cow<[u8]>> {
+    fn no_expansion(&mut self) -> Option<Cow<'_, [u8]>> {
         no_expansion(self)
     }
 }
 
 impl<'a> Replacer for Cow<'a, [u8]> {
-    fn replace_append(&mut self, caps: &Captures, dst: &mut Vec<u8>) {
+    fn replace_append(&mut self, caps: &Captures<'_>, dst: &mut Vec<u8>) {
         caps.expand(self.as_ref(), dst);
     }
 
-    fn no_expansion(&mut self) -> Option<Cow<[u8]>> {
+    fn no_expansion(&mut self) -> Option<Cow<'_, [u8]>> {
         no_expansion(self)
     }
 }
 
 impl<'a> Replacer for &'a Cow<'a, [u8]> {
-    fn replace_append(&mut self, caps: &Captures, dst: &mut Vec<u8>) {
+    fn replace_append(&mut self, caps: &Captures<'_>, dst: &mut Vec<u8>) {
         caps.expand(self.as_ref(), dst);
     }
 
-    fn no_expansion(&mut self) -> Option<Cow<[u8]>> {
+    fn no_expansion(&mut self) -> Option<Cow<'_, [u8]>> {
         no_expansion(self)
     }
 }
 
-fn no_expansion<T: AsRef<[u8]>>(t: &T) -> Option<Cow<[u8]>> {
+fn no_expansion<T: AsRef<[u8]>>(t: &T) -> Option<Cow<'_, [u8]>> {
     let s = t.as_ref();
     match find_byte(b'$', s) {
         Some(_) => None,
@@ -1230,10 +1230,10 @@ fn no_expansion<T: AsRef<[u8]>>(t: &T) -> Option<Cow<[u8]>> {
 
 impl<F, T> Replacer for F
 where
-    F: FnMut(&Captures) -> T,
+    F: FnMut(&Captures<'_>) -> T,
     T: AsRef<[u8]>,
 {
-    fn replace_append(&mut self, caps: &Captures, dst: &mut Vec<u8>) {
+    fn replace_append(&mut self, caps: &Captures<'_>, dst: &mut Vec<u8>) {
         dst.extend_from_slice((*self)(caps).as_ref());
     }
 }
@@ -1250,11 +1250,11 @@ where
 pub struct NoExpand<'t>(pub &'t [u8]);
 
 impl<'t> Replacer for NoExpand<'t> {
-    fn replace_append(&mut self, _: &Captures, dst: &mut Vec<u8>) {
+    fn replace_append(&mut self, _: &Captures<'_>, dst: &mut Vec<u8>) {
         dst.extend_from_slice(self.0);
     }
 
-    fn no_expansion(&mut self) -> Option<Cow<[u8]>> {
+    fn no_expansion(&mut self) -> Option<Cow<'_, [u8]>> {
         Some(Cow::Borrowed(self.0))
     }
 }

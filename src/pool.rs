@@ -154,7 +154,7 @@ pub struct Pool<T> {
 unsafe impl<T: Send> Sync for Pool<T> {}
 
 impl<T: ::std::fmt::Debug> ::std::fmt::Debug for Pool<T> {
-    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
         f.debug_struct("Pool")
             .field("stack", &self.stack)
             .field("owner", &self.owner)
@@ -168,7 +168,7 @@ impl<T: ::std::fmt::Debug> ::std::fmt::Debug for Pool<T> {
 /// The purpose of the guard is to use RAII to automatically put the value back
 /// in the pool once it's dropped.
 #[derive(Debug)]
-pub struct PoolGuard<'a, T: 'a + Send> {
+pub struct PoolGuard<'a, T: Send> {
     /// The pool that this guard is attached to.
     pool: &'a Pool<T>,
     /// This is None when the guard represents the special "owned" value. In
@@ -193,7 +193,7 @@ impl<T: Send> Pool<T> {
     /// the value to go back into the pool) and then calling get again is NOT
     /// guaranteed to return the same value received in the first get call.
     #[cfg_attr(feature = "perf-inline", inline(always))]
-    pub fn get(&self) -> PoolGuard<T> {
+    pub fn get(&self) -> PoolGuard<'_, T> {
         // Our fast path checks if the caller is the thread that "owns" this
         // pool. Or stated differently, whether it is the first thread that
         // tried to extract a value from the pool. If it is, then we can return
@@ -217,7 +217,7 @@ impl<T: Send> Pool<T> {
     ///
     /// If the pool has no owner, then this will set the owner.
     #[cold]
-    fn get_slow(&self, caller: usize, owner: usize) -> PoolGuard<T> {
+    fn get_slow(&self, caller: usize, owner: usize) -> PoolGuard<'_, T> {
         use std::sync::atomic::Ordering::Relaxed;
 
         if owner == 0 {

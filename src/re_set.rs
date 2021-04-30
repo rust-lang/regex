@@ -292,7 +292,7 @@ impl SetMatches {
     /// This will always produces matches in ascending order of index, where
     /// the index corresponds to the index of the regex that matched with
     /// respect to its position when initially building the set.
-    pub fn iter(&self) -> SetMatchesIter {
+    pub fn iter(&self) -> SetMatchesIter<'_> {
         SetMatchesIter((&*self.matches).into_iter().enumerate())
     }
 }
@@ -405,7 +405,7 @@ impl From<Exec> for RegexSet {
 }
 
 impl fmt::Debug for RegexSet {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "RegexSet({:?})", self.0.regex_strings())
     }
 }

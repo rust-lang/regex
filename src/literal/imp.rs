@@ -119,7 +119,7 @@ impl LiteralSearcher {
     }
 
     /// Returns an iterator over all literals to be matched.
-    pub fn iter(&self) -> LiteralIter {
+    pub fn iter(&self) -> LiteralIter<'_> {
         match self.matcher {
             Matcher::Empty => LiteralIter::Empty,
             Matcher::Bytes(ref sset) => LiteralIter::Bytes(&sset.dense),
