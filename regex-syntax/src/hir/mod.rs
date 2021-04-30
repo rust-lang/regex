@@ -123,13 +123,13 @@ impl error::Error for Error {
 }
 
 impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         crate::error::Formatter::from(self).fmt(f)
     }
 }
 
 impl fmt::Display for ErrorKind {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // TODO: Remove this on the next breaking semver release.
         #[allow(deprecated)]
         f.write_str(self.description())
@@ -727,7 +727,7 @@ impl HirKind {
 /// This implementation uses constant stack space and heap space proportional
 /// to the size of the `Hir`.
 impl fmt::Display for Hir {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         use crate::hir::print::Printer;
         Printer::new().print(self, f)
     }
@@ -859,7 +859,7 @@ impl ClassUnicode {
     /// Return an iterator over all ranges in this class.
     ///
     /// The iterator yields ranges in ascending order.
-    pub fn iter(&self) -> ClassUnicodeIter {
+    pub fn iter(&self) -> ClassUnicodeIter<'_> {
         ClassUnicodeIter(self.set.iter())
     }
 
@@ -972,7 +972,7 @@ pub struct ClassUnicodeRange {
 }
 
 impl fmt::Debug for ClassUnicodeRange {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let start = if !self.start.is_whitespace() && !self.start.is_control()
         {
             self.start.to_string()
@@ -1102,7 +1102,7 @@ impl ClassBytes {
     /// Return an iterator over all ranges in this class.
     ///
     /// The iterator yields ranges in ascending order.
-    pub fn iter(&self) -> ClassBytesIter {
+    pub fn iter(&self) -> ClassBytesIter<'_> {
         ClassBytesIter(self.set.iter())
     }
 
@@ -1258,7 +1258,7 @@ impl ClassBytesRange {
 }
 
 impl fmt::Debug for ClassBytesRange {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut debug = f.debug_struct("ClassBytesRange");
         if self.start <= 0x7F {
             debug.field("start", &(self.start as char));

@@ -62,9 +62,7 @@ on how your program is structured. Thankfully, the
 [`lazy_static`](https://crates.io/crates/lazy_static)
 crate provides an answer that works well:
 
-    #[macro_use] extern crate lazy_static;
-    extern crate regex;
-
+    use lazy_static::lazy_static;
     use regex::Regex;
 
     fn some_helper_function(text: &str) -> bool {

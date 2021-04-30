@@ -1,6 +1,3 @@
-extern crate cc;
-extern crate pkg_config;
-
 use std::env;
 use std::process;
 

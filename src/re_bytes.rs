@@ -133,7 +133,7 @@ impl Regex {
     /// bytes:
     ///
     /// ```rust
-    /// # extern crate regex; use regex::bytes::Regex;
+    /// # use regex::bytes::Regex;
     /// # fn main() {
     /// let text = b"I categorically deny having triskaidekaphobia.";
     /// assert!(Regex::new(r"\b\w{13}\b").unwrap().is_match(text));
@@ -156,7 +156,7 @@ impl Regex {
     /// ASCII word bytes:
     ///
     /// ```rust
-    /// # extern crate regex; use regex::bytes::Regex;
+    /// # use regex::bytes::Regex;
     /// # fn main() {
     /// let text = b"I categorically deny having triskaidekaphobia.";
     /// let mat = Regex::new(r"\b\w{13}\b").unwrap().find(text).unwrap();
@@ -177,7 +177,7 @@ impl Regex {
     /// word bytes:
     ///
     /// ```rust
-    /// # extern crate regex; use regex::bytes::Regex;
+    /// # use regex::bytes::Regex;
     /// # fn main() {
     /// let text = b"Retroactively relinquishing remunerations is reprehensible.";
     /// for mat in Regex::new(r"\b\w{13}\b").unwrap().find_iter(text) {
@@ -205,7 +205,7 @@ impl Regex {
     /// year separately.
     ///
     /// ```rust
-    /// # extern crate regex; use regex::bytes::Regex;
+    /// # use regex::bytes::Regex;
     /// # fn main() {
     /// let re = Regex::new(r"'([^']+)'\s+\((\d{4})\)").unwrap();
     /// let text = b"Not my favorite movie: 'Citizen Kane' (1941).";
@@ -227,7 +227,7 @@ impl Regex {
     /// We can make this example a bit clearer by using *named* capture groups:
     ///
     /// ```rust
-    /// # extern crate regex; use regex::bytes::Regex;
+    /// # use regex::bytes::Regex;
     /// # fn main() {
     /// let re = Regex::new(r"'(?P<title>[^']+)'\s+\((?P<year>\d{4})\)")
     ///                .unwrap();
@@ -271,7 +271,7 @@ impl Regex {
     /// some text, where the movie is formatted like "'Title' (xxxx)":
     ///
     /// ```rust
-    /// # extern crate regex; use std::str; use regex::bytes::Regex;
+    /// # use std::str; use regex::bytes::Regex;
     /// # fn main() {
     /// let re = Regex::new(r"'(?P<title>[^']+)'\s+\((?P<year>\d{4})\)")
     ///                .unwrap();
@@ -305,7 +305,7 @@ impl Regex {
     /// To split a string delimited by arbitrary amounts of spaces or tabs:
     ///
     /// ```rust
-    /// # extern crate regex; use regex::bytes::Regex;
+    /// # use regex::bytes::Regex;
     /// # fn main() {
     /// let re = Regex::new(r"[ \t]+").unwrap();
     /// let fields: Vec<&[u8]> = re.split(b"a b \t  c\td    e").collect();
@@ -331,7 +331,7 @@ impl Regex {
     /// Get the first two words in some text:
     ///
     /// ```rust
-    /// # extern crate regex; use regex::bytes::Regex;
+    /// # use regex::bytes::Regex;
     /// # fn main() {
     /// let re = Regex::new(r"\W+").unwrap();
     /// let fields: Vec<&[u8]> = re.splitn(b"Hey! How are you?", 3).collect();
@@ -379,7 +379,7 @@ impl Regex {
     /// In typical usage, this can just be a normal byte string:
     ///
     /// ```rust
-    /// # extern crate regex; use regex::bytes::Regex;
+    /// # use regex::bytes::Regex;
     /// # fn main() {
     /// let re = Regex::new("[^01]+").unwrap();
     /// assert_eq!(re.replace(b"1078910", &b""[..]), &b"1010"[..]);
@@ -392,7 +392,7 @@ impl Regex {
     /// group matches easily:
     ///
     /// ```rust
-    /// # extern crate regex; use regex::bytes::Regex;
+    /// # use regex::bytes::Regex;
     /// # use regex::bytes::Captures; fn main() {
     /// let re = Regex::new(r"([^,\s]+),\s+(\S+)").unwrap();
     /// let result = re.replace(b"Springsteen, Bruce", |caps: &Captures| {
@@ -411,7 +411,7 @@ impl Regex {
     /// with named capture groups:
     ///
     /// ```rust
-    /// # extern crate regex; use regex::bytes::Regex;
+    /// # use regex::bytes::Regex;
     /// # fn main() {
     /// let re = Regex::new(r"(?P<last>[^,\s]+),\s+(?P<first>\S+)").unwrap();
     /// let result = re.replace(b"Springsteen, Bruce", &b"$first $last"[..]);
@@ -428,7 +428,7 @@ impl Regex {
     /// underscore:
     ///
     /// ```rust
-    /// # extern crate regex; use regex::bytes::Regex;
+    /// # use regex::bytes::Regex;
     /// # fn main() {
     /// let re = Regex::new(r"(?P<first>\w+)\s+(?P<second>\w+)").unwrap();
     /// let result = re.replace(b"deep fried", &b"${first}_$second"[..]);
@@ -445,7 +445,7 @@ impl Regex {
     /// byte string with `NoExpand`:
     ///
     /// ```rust
-    /// # extern crate regex; use regex::bytes::Regex;
+    /// # use regex::bytes::Regex;
     /// # fn main() {
     /// use regex::bytes::NoExpand;
     ///
@@ -546,7 +546,7 @@ impl Regex {
     /// `a`.
     ///
     /// ```rust
-    /// # extern crate regex; use regex::bytes::Regex;
+    /// # use regex::bytes::Regex;
     /// # fn main() {
     /// let text = b"aaaaa";
     /// let pos = Regex::new(r"a+").unwrap().shortest_match(text);

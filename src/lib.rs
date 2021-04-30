@@ -22,12 +22,6 @@ used by adding `regex` to your dependencies in your project's `Cargo.toml`.
 regex = "1"
 ```
 
-If you're using Rust 2015, then you'll also need to add it to your crate root:
-
-```rust
-extern crate regex;
-```
-
 # Example: find a date
 
 General use of regular expressions in this package involves compiling an
@@ -68,9 +62,7 @@ regular expressions are compiled exactly once.
 For example:
 
 ```rust
-#[macro_use] extern crate lazy_static;
-extern crate regex;
-
+use lazy_static::lazy_static;
 use regex::Regex;
 
 fn some_helper_function(text: &str) -> bool {
@@ -94,7 +86,7 @@ matches. For example, to find all dates in a string and be able to access
 them by their component pieces:
 
 ```rust
-# extern crate regex; use regex::Regex;
+# use regex::Regex;
 # fn main() {
 let re = Regex::new(r"(\d{4})-(\d{2})-(\d{2})").unwrap();
 let text = "2012-03-14, 2013-01-01 and 2014-07-05";
@@ -119,7 +111,7 @@ clearer, we can *name*  our capture groups and use those names as variables
 in our replacement text:
 
 ```rust
-# extern crate regex; use regex::Regex;
+# use regex::Regex;
 # fn main() {
 let re = Regex::new(r"(?P<y>\d{4})-(?P<m>\d{2})-(?P<d>\d{2})").unwrap();
 let before = "2012-03-14, 2013-01-01 and 2014-07-05";
@@ -136,7 +128,7 @@ Note that if your regex gets complicated, you can use the `x` flag to
 enable insignificant whitespace mode, which also lets you write comments:
 
 ```rust
-# extern crate regex; use regex::Regex;
+# use regex::Regex;
 # fn main() {
 let re = Regex::new(r"(?x)
   (?P<y>\d{4}) # the year
@@ -217,7 +209,7 @@ Unicode scalar values. This means you can use Unicode characters directly
 in your expression:
 
 ```rust
-# extern crate regex; use regex::Regex;
+# use regex::Regex;
 # fn main() {
 let re = Regex::new(r"(?i)Δ+").unwrap();
 let mat = re.find("ΔδΔ").unwrap();
@@ -244,7 +236,7 @@ of boolean properties are available as character classes. For example, you can
 match a sequence of numerals, Greek or Cherokee letters:
 
 ```rust
-# extern crate regex; use regex::Regex;
+# use regex::Regex;
 # fn main() {
 let re = Regex::new(r"[\pN\p{Greek}\p{Cherokee}]+").unwrap();
 let mat = re.find("abcΔᎠβⅠᏴγδⅡxyz").unwrap();
@@ -391,7 +383,7 @@ Flags can be toggled within a pattern. Here's an example that matches
 case-insensitively for the first part but case-sensitively for the second part:
 
 ```rust
-# extern crate regex; use regex::Regex;
+# use regex::Regex;
 # fn main() {
 let re = Regex::new(r"(?i)a+(?-i)b+").unwrap();
 let cap = re.captures("AaAaAbbBBBb").unwrap();
@@ -425,7 +417,7 @@ Here is an example that uses an ASCII word boundary instead of a Unicode
 word boundary:
 
 ```rust
-# extern crate regex; use regex::Regex;
+# use regex::Regex;
 # fn main() {
 let re = Regex::new(r"(?-u:\b).+(?-u:\b)").unwrap();
 let cap = re.captures("$$abc$$").unwrap();
@@ -620,12 +612,10 @@ another matching engine with fixed memory requirements.
 #[cfg(not(feature = "std"))]
 compile_error!("`std` feature is currently required to build this crate");
 
-#[cfg(feature = "perf-literal")]
-extern crate aho_corasick;
-
-
-extern crate regex_syntax as syntax;
-
+// To check README's example
+// TODO: Re-enable this once the MSRV is 1.43 or greater.
+// See: https://github.com/rust-lang/regex/issues/684
+// See: https://github.com/rust-lang/regex/issues/685
 // #[cfg(doctest)]
 // doc_comment::doctest!("../README.md");
 

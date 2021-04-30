@@ -10,6 +10,7 @@ homepage = "https://github.com/rust-lang/regex"
 description = "Regex benchmarks for Rust's and other engines."
 build = "build.rs"
 workspace = ".."
+edition = "2018"
 
 [dependencies]
 docopt = "1"
@@ -20,8 +21,7 @@ libpcre-sys = { version = "0.2", optional = true }
 memmap = "0.6.2"
 regex = { version = "1", path = ".." }
 regex-syntax = { version = "0.6", path = "../regex-syntax" }
-serde = "1"
-serde_derive = "1"
+serde = { version = "1", features = ["derive"] }
 cfg-if = "0.1"
 
 [build-dependencies]

@@ -5,8 +5,6 @@
 // contributed by TeXitoi
 // contributed by BurntSushi
 
-
-
 use std::io::{self, Read};
 
 macro_rules! regex {

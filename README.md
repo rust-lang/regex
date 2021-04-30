@@ -27,13 +27,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-regex = "1"
-```
-
-and this to your crate root (if you're using Rust 2015):
-
-```rust
-extern crate regex;
+regex = "1.5"
 ```
 
 Here's a simple example that matches a date in YYYY-MM-DD format and prints the

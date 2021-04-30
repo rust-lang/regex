@@ -38,7 +38,7 @@ pub struct CaseFoldError(());
 impl error::Error for CaseFoldError {}
 
 impl fmt::Display for CaseFoldError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
             "Unicode-aware case folding is not available \
@@ -58,7 +58,7 @@ pub struct UnicodeWordError(());
 impl error::Error for UnicodeWordError {}
 
 impl fmt::Display for UnicodeWordError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
             "Unicode-aware \\w class is not available \
@@ -285,7 +285,7 @@ enum CanonicalClassQuery {
 
 /// Looks up a Unicode class given a query. If one doesn't exist, then
 /// `None` is returned.
-pub fn class(query: ClassQuery) -> Result<hir::ClassUnicode> {
+pub fn class(query: ClassQuery<'_>) -> Result<hir::ClassUnicode> {
     use self::CanonicalClassQuery::*;
 
     match query.canonicalize()? {

@@ -203,7 +203,7 @@ impl<'a> IntoIterator for &'a Utf8Sequence {
 }
 
 impl fmt::Debug for Utf8Sequence {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         use self::Utf8Sequence::*;
         match *self {
             One(ref r) => write!(f, "{:?}", r),
@@ -237,7 +237,7 @@ impl Utf8Range {
 }
 
 impl fmt::Debug for Utf8Range {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.start == self.end {
             write!(f, "[{:X}]", self.start)
         } else {
@@ -331,7 +331,7 @@ struct ScalarRange {
 }
 
 impl fmt::Debug for ScalarRange {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "ScalarRange({:X}, {:X})", self.start, self.end)
     }
 }

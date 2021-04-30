@@ -60,7 +60,7 @@ impl<I: Interval> IntervalSet<I> {
     /// Return an iterator over all intervals in this set.
     ///
     /// The iterator yields intervals in ascending order.
-    pub fn iter(&self) -> IntervalSetIter<I> {
+    pub fn iter(&self) -> IntervalSetIter<'_, I> {
         IntervalSetIter(self.ranges.iter())
     }
 
@@ -322,7 +322,7 @@ impl<I: Interval> IntervalSet<I> {
 
 /// An iterator over intervals.
 #[derive(Debug)]
-pub struct IntervalSetIter<'a, I: 'a>(slice::Iter<'a, I>);
+pub struct IntervalSetIter<'a, I>(slice::Iter<'a, I>);
 
 impl<'a, I> Iterator for IntervalSetIter<'a, I> {
     type Item = &'a I;

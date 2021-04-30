@@ -1,6 +1,6 @@
 use test::Bencher;
 
-use {Regex, Text};
+use crate::{Regex, Text};
 
 // USAGE: dna!(name, pattern, count)
 //
