@@ -168,7 +168,7 @@ impl Deref for Program {
 }
 
 impl fmt::Debug for Program {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         use self::Inst::*;
 
         fn with_goto(cur: usize, goto: usize, fmtd: String) -> String {

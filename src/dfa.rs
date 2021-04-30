@@ -306,7 +306,7 @@ impl State {
         StateFlags(self.data[0])
     }
 
-    fn inst_ptrs(&self) -> InstPtrs {
+    fn inst_ptrs(&self) -> InstPtrs<'_> {
         InstPtrs { base: 0, data: &self.data[1..] }
     }
 }
@@ -1754,7 +1754,7 @@ impl Byte {
 }
 
 impl fmt::Debug for State {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let ips: Vec<usize> = self.inst_ptrs().collect();
         f.debug_struct("State")
             .field("flags", &self.flags())
@@ -1764,7 +1764,7 @@ impl fmt::Debug for State {
 }
 
 impl fmt::Debug for Transitions {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut fmtd = f.debug_map();
         for si in 0..self.num_states() {
             let s = si * self.num_byte_classes;
@@ -1778,7 +1778,7 @@ impl fmt::Debug for Transitions {
 struct TransitionsRow<'a>(&'a [StatePtr]);
 
 impl<'a> fmt::Debug for TransitionsRow<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut fmtd = f.debug_map();
         for (b, si) in self.0.iter().enumerate() {
             match *si {
@@ -1796,7 +1796,7 @@ impl<'a> fmt::Debug for TransitionsRow<'a> {
 }
 
 impl fmt::Debug for StateFlags {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("StateFlags")
             .field("is_match", &self.is_match())
             .field("is_word", &self.is_word())
@@ -1889,7 +1889,7 @@ fn read_varu32(data: &[u8]) -> (u32, usize) {
 
 #[cfg(test)]
 mod tests {
-    extern crate rand;
+    
 
     use super::{
         push_inst_ptr, read_vari32, read_varu32, write_vari32, write_varu32,

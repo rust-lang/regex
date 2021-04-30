@@ -30,7 +30,7 @@ impl Locations {
     /// Creates an iterator of all the capture group positions in order of
     /// appearance in the regular expression. Positions are byte indices
     /// in terms of the original string matched.
-    pub fn iter(&self) -> SubCapturesPosIter {
+    pub fn iter(&self) -> SubCapturesPosIter<'_> {
         SubCapturesPosIter { idx: 0, locs: self }
     }
 
@@ -138,13 +138,13 @@ pub trait RegularExpression: Sized + fmt::Debug {
 
     /// Returns an iterator over all non-overlapping successive leftmost-first
     /// matches.
-    fn find_iter(self, text: &Self::Text) -> Matches<Self> {
+    fn find_iter(self, text: &Self::Text) -> Matches<'_, Self> {
         Matches { re: self, text: text, last_end: 0, last_match: None }
     }
 
     /// Returns an iterator over all non-overlapping successive leftmost-first
     /// matches with captures.
-    fn captures_iter(self, text: &Self::Text) -> CaptureMatches<Self> {
+    fn captures_iter(self, text: &Self::Text) -> CaptureMatches<'_, Self> {
         CaptureMatches(self.find_iter(text))
     }
 }

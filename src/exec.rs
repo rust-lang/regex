@@ -1263,7 +1263,7 @@ impl<'c> ExecNoSyncStr<'c> {
 impl Exec {
     /// Get a searcher that isn't Sync.
     #[cfg_attr(feature = "perf-inline", inline(always))]
-    pub fn searcher(&self) -> ExecNoSync {
+    pub fn searcher(&self) -> ExecNoSync<'_> {
         ExecNoSync {
             ro: &self.ro, // a clone is too expensive here! (and not needed)
             cache: self.pool.get(),
@@ -1272,7 +1272,7 @@ impl Exec {
 
     /// Get a searcher that isn't Sync and can match on &str.
     #[cfg_attr(feature = "perf-inline", inline(always))]
-    pub fn searcher_str(&self) -> ExecNoSyncStr {
+    pub fn searcher_str(&self) -> ExecNoSyncStr<'_> {
         ExecNoSyncStr(self.searcher())
     }
 

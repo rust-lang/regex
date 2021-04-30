@@ -10,7 +10,7 @@
 // replacing them with a single linear scan. i.e., it re-implements
 // `replace_all`. As a result, this is around 25% faster. ---AG
 
-extern crate regex;
+
 
 use std::io::{self, Read};
 use std::sync::Arc;
