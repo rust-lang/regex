@@ -1,9 +1,9 @@
 use std::str;
 
-use find_byte::find_byte;
+use crate::find_byte::find_byte;
 
-use re_bytes;
-use re_unicode;
+use crate::re_bytes;
+use crate::re_unicode;
 
 pub fn expand_str(
     caps: &re_unicode::Captures,

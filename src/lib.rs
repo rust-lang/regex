@@ -614,7 +614,6 @@ another matching engine with fixed memory requirements.
 */
 
 #![deny(missing_docs)]
-#![cfg_attr(test, deny(warnings))]
 #![cfg_attr(feature = "pattern", feature(pattern))]
 #![warn(missing_debug_implementations)]
 
@@ -633,16 +632,16 @@ extern crate regex_syntax as syntax;
 // doc_comment::doctest!("../README.md");
 
 #[cfg(feature = "std")]
-pub use error::Error;
+pub use crate::error::Error;
 #[cfg(feature = "std")]
-pub use re_builder::set_unicode::*;
+pub use crate::re_builder::set_unicode::*;
 #[cfg(feature = "std")]
-pub use re_builder::unicode::*;
+pub use crate::re_builder::unicode::*;
 #[cfg(feature = "std")]
-pub use re_set::unicode::*;
+pub use crate::re_set::unicode::*;
 #[cfg(feature = "std")]
 #[cfg(feature = "std")]
-pub use re_unicode::{
+pub use crate::re_unicode::{
     escape, CaptureLocations, CaptureMatches, CaptureNames, Captures,
     Locations, Match, Matches, NoExpand, Regex, Replacer, ReplacerRef, Split,
     SplitN, SubCaptureMatches,
@@ -737,10 +736,10 @@ performance on `&str`.
 */
 #[cfg(feature = "std")]
 pub mod bytes {
-    pub use re_builder::bytes::*;
-    pub use re_builder::set_bytes::*;
-    pub use re_bytes::*;
-    pub use re_set::bytes::*;
+    pub use crate::re_builder::bytes::*;
+    pub use crate::re_builder::set_bytes::*;
+    pub use crate::re_bytes::*;
+    pub use crate::re_set::bytes::*;
 }
 
 mod backtrack;
@@ -772,9 +771,9 @@ mod utf8;
 #[doc(hidden)]
 #[cfg(feature = "std")]
 pub mod internal {
-    pub use compile::Compiler;
-    pub use exec::{Exec, ExecBuilder};
-    pub use input::{Char, CharInput, Input, InputAt};
-    pub use literal::LiteralSearcher;
-    pub use prog::{EmptyLook, Inst, InstRanges, Program};
+    pub use crate::compile::Compiler;
+    pub use crate::exec::{Exec, ExecBuilder};
+    pub use crate::input::{Char, CharInput, Input, InputAt};
+    pub use crate::literal::LiteralSearcher;
+    pub use crate::prog::{EmptyLook, Inst, InstRanges, Program};
 }

@@ -6,13 +6,13 @@ use std::ops::{Index, Range};
 use std::str::FromStr;
 use std::sync::Arc;
 
-use find_byte::find_byte;
+use crate::find_byte::find_byte;
 
-use error::Error;
-use exec::{Exec, ExecNoSync};
-use expand::expand_bytes;
-use re_builder::bytes::RegexBuilder;
-use re_trait::{self, RegularExpression, SubCapturesPosIter};
+use crate::error::Error;
+use crate::exec::{Exec, ExecNoSync};
+use crate::expand::expand_bytes;
+use crate::re_builder::bytes::RegexBuilder;
+use crate::re_trait::{self, RegularExpression, SubCapturesPosIter};
 
 /// Match represents a single match of a regex in a haystack.
 ///

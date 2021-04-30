@@ -158,9 +158,9 @@ The following features are available:
 #![warn(missing_debug_implementations)]
 #![forbid(unsafe_code)]
 
-pub use error::{Error, Result};
-pub use parser::{Parser, ParserBuilder};
-pub use unicode::UnicodeWordError;
+pub use crate::error::{Error, Result};
+pub use crate::parser::{Parser, ParserBuilder};
+pub use crate::unicode::UnicodeWordError;
 
 pub mod ast;
 mod either;

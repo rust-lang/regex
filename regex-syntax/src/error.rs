@@ -3,8 +3,8 @@ use std::error;
 use std::fmt;
 use std::result;
 
-use ast;
-use hir;
+use crate::ast;
+use crate::hir;
 
 /// A type alias for dealing with errors returned by this crate.
 pub type Result<T> = result::Result<T, Error>;
@@ -286,7 +286,7 @@ fn repeat_char(c: char, count: usize) -> String {
 
 #[cfg(test)]
 mod tests {
-    use ast::parse::Parser;
+    use crate::ast::parse::Parser;
 
     fn assert_panic_message(pattern: &str, expected_msg: &str) -> () {
         let result = Parser::new().parse(pattern);

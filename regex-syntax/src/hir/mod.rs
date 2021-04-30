@@ -8,12 +8,12 @@ use std::fmt;
 use std::result;
 use std::u8;
 
-use ast::Span;
-use hir::interval::{Interval, IntervalSet, IntervalSetIter};
-use unicode;
+use crate::ast::Span;
+use crate::hir::interval::{Interval, IntervalSet, IntervalSetIter};
+use crate::unicode;
 
-pub use hir::visitor::{visit, Visitor};
-pub use unicode::CaseFoldError;
+pub use crate::hir::visitor::{visit, Visitor};
+pub use crate::unicode::CaseFoldError;
 
 mod interval;
 pub mod literal;
@@ -124,7 +124,7 @@ impl error::Error for Error {
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        ::error::Formatter::from(self).fmt(f)
+        crate::error::Formatter::from(self).fmt(f)
     }
 }
 
@@ -728,7 +728,7 @@ impl HirKind {
 /// to the size of the `Hir`.
 impl fmt::Display for Hir {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        use hir::print::Printer;
+        use crate::hir::print::Printer;
         Printer::new().print(self, f)
     }
 }

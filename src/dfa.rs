@@ -42,9 +42,9 @@ use std::iter::repeat;
 use std::mem;
 use std::sync::Arc;
 
-use exec::ProgramCache;
-use prog::{Inst, Program};
-use sparse::SparseSet;
+use crate::exec::ProgramCache;
+use crate::prog::{Inst, Program};
+use crate::sparse::SparseSet;
 
 /// Return true if and only if the given program can be executed by a DFA.
 ///
@@ -55,7 +55,7 @@ use sparse::SparseSet;
 /// This function will also return false if the given program has any Unicode
 /// instructions (Char or Ranges) since the DFA operates on bytes only.
 pub fn can_exec(insts: &Program) -> bool {
-    use prog::Inst::*;
+    use crate::prog::Inst::*;
     // If for some reason we manage to allocate a regex program with more
     // than i32::MAX instructions, then we can't execute the DFA because we
     // use 32 bit instruction pointer deltas for memory savings.
@@ -894,7 +894,7 @@ impl<'a> Fsm<'a> {
         mut si: StatePtr,
         b: Byte,
     ) -> Option<StatePtr> {
-        use prog::Inst::*;
+        use crate::prog::Inst::*;
 
         // Initialize a queue with the current DFA state's NFA states.
         qcur.clear();
@@ -1056,8 +1056,8 @@ impl<'a> Fsm<'a> {
         q: &mut SparseSet,
         flags: EmptyFlags,
     ) {
-        use prog::EmptyLook::*;
-        use prog::Inst::*;
+        use crate::prog::EmptyLook::*;
+        use crate::prog::Inst::*;
 
         // We need to traverse the NFA to follow epsilon transitions, so avoid
         // recursion with an explicit stack.
@@ -1190,7 +1190,7 @@ impl<'a> Fsm<'a> {
         q: &SparseSet,
         state_flags: &mut StateFlags,
     ) -> Option<State> {
-        use prog::Inst::*;
+        use crate::prog::Inst::*;
 
         // We need to build up enough information to recognize pre-built states
         // in the DFA. Generally speaking, this includes every instruction

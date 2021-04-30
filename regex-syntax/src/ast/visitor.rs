@@ -1,6 +1,6 @@
 use std::fmt;
 
-use ast::{self, Ast};
+use crate::ast::{self, Ast};
 
 /// A trait for visiting an abstract syntax tree (AST) in depth first order.
 ///

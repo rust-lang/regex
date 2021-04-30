@@ -8,7 +8,7 @@ use std::str;
 use libc::{c_char, size_t};
 use regex::bytes;
 
-use error::{Error, ErrorKind};
+use crate::error::{Error, ErrorKind};
 
 const RURE_FLAG_CASEI: u32 = 1 << 0;
 const RURE_FLAG_MULTI: u32 = 1 << 1;

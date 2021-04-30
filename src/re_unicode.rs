@@ -6,14 +6,14 @@ use std::ops::{Index, Range};
 use std::str::FromStr;
 use std::sync::Arc;
 
-use find_byte::find_byte;
-use syntax;
+use crate::find_byte::find_byte;
+use crate::syntax;
 
-use error::Error;
-use exec::{Exec, ExecNoSyncStr};
-use expand::expand_str;
-use re_builder::unicode::RegexBuilder;
-use re_trait::{self, RegularExpression, SubCapturesPosIter};
+use crate::error::Error;
+use crate::exec::{Exec, ExecNoSyncStr};
+use crate::expand::expand_str;
+use crate::re_builder::unicode::RegexBuilder;
+use crate::re_trait::{self, RegularExpression, SubCapturesPosIter};
 
 /// Escapes all regular expression meta characters in `text`.
 ///
