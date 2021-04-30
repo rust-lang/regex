@@ -1,6 +1,3 @@
-
-
-
 /*
  * This test is a minimal version of <rofl_0> and <subdiff_0>
  *

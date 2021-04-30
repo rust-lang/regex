@@ -1,6 +1,3 @@
-
-
-
 macro_rules! regex_new {
     ($re:expr) => {{
         use regex::bytes::Regex;

@@ -130,8 +130,8 @@ pub fn contains_simple_case_mapping(
 
     #[cfg(feature = "unicode-case")]
     fn imp(start: char, end: char) -> FoldResult<bool> {
-        use std::cmp::Ordering;
         use crate::unicode_tables::case_folding_simple::CASE_FOLDING_SIMPLE;
+        use std::cmp::Ordering;
 
         assert!(start <= end);
         Ok(CASE_FOLDING_SIMPLE
@@ -406,8 +406,8 @@ pub fn is_word_character(c: char) -> result::Result<bool, UnicodeWordError> {
     #[cfg(feature = "unicode-perl")]
     fn imp(c: char) -> result::Result<bool, UnicodeWordError> {
         use crate::is_word_byte;
-        use std::cmp::Ordering;
         use crate::unicode_tables::perl_word::PERL_WORD;
+        use std::cmp::Ordering;
 
         if c <= 0x7F as char && is_word_byte(c as u8) {
             return Ok(true);
