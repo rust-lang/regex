@@ -5,8 +5,8 @@ use std::iter::repeat;
 use test::Bencher;
 
 #[cfg(any(feature = "re-rust", feature = "re-rust-bytes"))]
-use RegexSet;
-use {Regex, Text};
+use crate::RegexSet;
+use crate::{Regex, Text};
 
 #[cfg(not(feature = "re-onig"))]
 #[cfg(not(feature = "re-pcre1"))]

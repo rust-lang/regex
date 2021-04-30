@@ -1,18 +1,3 @@
-extern crate docopt;
-extern crate libc;
-#[cfg(feature = "re-pcre1")]
-extern crate libpcre_sys;
-extern crate memmap;
-#[cfg(feature = "re-onig")]
-extern crate onig;
-#[cfg(any(feature = "re-rust", feature = "re-rust-bytes",))]
-extern crate regex;
-#[cfg(feature = "re-rust")]
-extern crate regex_syntax;
-extern crate serde;
-#[macro_use]
-extern crate serde_derive;
-
 use std::fs::File;
 use std::str;
 
@@ -39,7 +24,7 @@ Options:
     -h, --help   Show this usage message.
 ";
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, serde::Deserialize)]
 struct Args {
     arg_pattern: String,
     arg_file: String,

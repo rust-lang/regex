@@ -838,7 +838,7 @@ fn alternate_literals<F: FnMut(&Hir, &mut Literals)>(
 }
 
 impl fmt::Debug for Literals {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Literals")
             .field("lits", &self.lits)
             .field("limit_size", &self.limit_size)
@@ -882,7 +882,7 @@ impl PartialOrd for Literal {
 }
 
 impl fmt::Debug for Literal {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.is_cut() {
             write!(f, "Cut({})", escape_unicode(&self.v))
         } else {
@@ -1017,7 +1017,7 @@ mod tests {
     }
 
     impl fmt::Debug for ULiteral {
-        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
             if self.is_cut() {
                 write!(f, "Cut({})", self.v)
             } else {

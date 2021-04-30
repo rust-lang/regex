@@ -4,7 +4,7 @@ use std::fmt;
 use std::ptr;
 use std::str;
 
-use libc::{c_int, c_void, size_t, uint32_t, uint8_t};
+use libc::{c_int, c_void, size_t};
 
 pub struct Regex {
     code: *mut code,
@@ -142,10 +142,10 @@ impl fmt::Debug for Error {
 
 // PCRE2 FFI. We only wrap the bits we need.
 
-const PCRE2_UCP: uint32_t = 0x00020000;
-const PCRE2_UTF: uint32_t = 0x00080000;
-const PCRE2_NO_UTF_CHECK: uint32_t = 0x40000000;
-const PCRE2_JIT_COMPLETE: uint32_t = 0x00000001;
+const PCRE2_UCP: u32 = 0x00020000;
+const PCRE2_UTF: u32 = 0x00080000;
+const PCRE2_NO_UTF_CHECK: u32 = 0x40000000;
+const PCRE2_JIT_COMPLETE: u32 = 0x00000001;
 const PCRE2_ERROR_NOMATCH: c_int = -1;
 
 type code = c_void;
@@ -160,9 +160,9 @@ type match_context = c_void; // unused
 
 extern "C" {
     fn pcre2_compile_8(
-        pattern: *const uint8_t,
+        pattern: *const u8,
         len: size_t,
-        options: uint32_t,
+        options: u32,
         error_code: *mut c_int,
         error_offset: *mut size_t,
         context: *mut compile_context,
@@ -180,21 +180,21 @@ extern "C" {
     fn pcre2_get_ovector_pointer_8(match_data: *mut match_data)
         -> *mut size_t;
 
-    fn pcre2_jit_compile_8(code: *const code, options: uint32_t) -> c_int;
+    fn pcre2_jit_compile_8(code: *const code, options: u32) -> c_int;
 
     fn pcre2_jit_match_8(
         code: *const code,
-        subject: *const uint8_t,
+        subject: *const u8,
         length: size_t,
         startoffset: size_t,
-        options: uint32_t,
+        options: u32,
         match_data: *mut match_data,
         match_context: *mut match_context,
     ) -> c_int;
 
     fn pcre2_get_error_message_8(
         error_code: c_int,
-        buf: *mut uint8_t,
+        buf: *mut u8,
         buflen: size_t,
     ) -> c_int;
 }

@@ -1256,7 +1256,7 @@ mod tests {
     }
 
     #[allow(dead_code)]
-    fn hir_uclass_query(query: ClassQuery) -> Hir {
+    fn hir_uclass_query(query: ClassQuery<'_>) -> Hir {
         Hir::class(hir::Class::Unicode(unicode::class(query).unwrap()))
     }
 

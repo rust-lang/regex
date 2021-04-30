@@ -1,5 +1,3 @@
-
-
 use std::io::{self, Read};
 
 macro_rules! regex {

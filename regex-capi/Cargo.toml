@@ -11,6 +11,7 @@ description = """
 A C API for Rust's regular expression library.
 """
 workspace = ".."
+edition = "2018"
 
 [lib]
 name = "rure"

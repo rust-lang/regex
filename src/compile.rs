@@ -4,9 +4,9 @@ use std::iter;
 use std::result;
 use std::sync::Arc;
 
-use crate::syntax::hir::{self, Hir};
-use crate::syntax::is_word_byte;
-use crate::syntax::utf8::{Utf8Range, Utf8Sequence, Utf8Sequences};
+use regex_syntax::hir::{self, Hir};
+use regex_syntax::is_word_byte;
+use regex_syntax::utf8::{Utf8Range, Utf8Sequence, Utf8Sequences};
 
 use crate::prog::{
     EmptyLook, Inst, InstBytes, InstChar, InstEmptyLook, InstPtr, InstRanges,
@@ -256,7 +256,7 @@ impl Compiler {
     /// instruction, and so no patch.entry value makes sense.
     fn c(&mut self, expr: &Hir) -> ResultOrEmpty {
         use crate::prog;
-        use crate::syntax::hir::HirKind::*;
+        use regex_syntax::hir::HirKind::*;
 
         self.check_size()?;
         match *expr.kind() {
@@ -554,7 +554,7 @@ impl Compiler {
     }
 
     fn c_repeat(&mut self, rep: &hir::Repetition) -> ResultOrEmpty {
-        use crate::syntax::hir::RepetitionKind::*;
+        use regex_syntax::hir::RepetitionKind::*;
         match rep.kind {
             ZeroOrOne => self.c_repeat_zero_or_one(&rep.hir, rep.greedy),
             ZeroOrMore => self.c_repeat_zero_or_more(&rep.hir, rep.greedy),

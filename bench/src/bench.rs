@@ -1,29 +1,21 @@
 // Enable the benchmarking harness.
 #![feature(test)]
+// It's too annoying to carefully define macros based on which regex engines
+// have which benchmarks, so just ignore these warnings.
+#![allow(unused_macros)]
 
-#[macro_use]
-extern crate lazy_static;
-#[macro_use]
-extern crate cfg_if;
-
-#[cfg(not(any(feature = "re-rust", feature = "re-rust-bytes")))]
-extern crate libc;
-
-extern crate regex_syntax;
 extern crate test;
+
+use cfg_if::cfg_if;
 
 cfg_if! {
     if #[cfg(feature = "re-pcre1")] {
-        extern crate libpcre_sys;
         pub use ffi::pcre1::Regex;
     } else if #[cfg(feature = "re-onig")] {
-        extern crate onig;
         pub use ffi::onig::Regex;
     } else if #[cfg(any(feature = "re-rust"))] {
-        extern crate regex;
         pub use regex::{Regex, RegexSet};
     } else if #[cfg(feature = "re-rust-bytes")] {
-        extern crate regex;
         pub use regex::bytes::{Regex, RegexSet};
     } else if #[cfg(feature = "re-re2")] {
         pub use ffi::re2::Regex;
@@ -51,7 +43,7 @@ cfg_if! {
 // native and dynamic regexes.
 macro_rules! regex {
     ($re:expr) => {
-        ::Regex::new(&$re.to_owned()).unwrap()
+        crate::Regex::new(&$re.to_owned()).unwrap()
     };
 }
 
@@ -72,7 +64,7 @@ cfg_if! {
         // regex accepts in its `is_match` and `find_iter` methods.
         macro_rules! text {
             ($text:expr) => {{
-                use ffi::tcl::Text;
+                use crate::ffi::tcl::Text;
                 Text::new($text)
             }}
         }
@@ -148,6 +140,7 @@ macro_rules! bench_is_match {
     ($name:ident, $is_match:expr, $re:expr, $haystack:expr) => {
         #[bench]
         fn $name(b: &mut Bencher) {
+            use lazy_static::lazy_static;
             use std::sync::Mutex;
 
             // Why do we use lazy_static here? It seems sensible to just
@@ -192,6 +185,7 @@ macro_rules! bench_find {
     ($name:ident, $pattern:expr, $count:expr, $haystack:expr) => {
         #[bench]
         fn $name(b: &mut Bencher) {
+            use lazy_static::lazy_static;
             use std::sync::Mutex;
 
             lazy_static! {
@@ -224,6 +218,7 @@ macro_rules! bench_captures {
         #[cfg(feature = "re-rust")]
         #[bench]
         fn $name(b: &mut Bencher) {
+            use lazy_static::lazy_static;
             use std::sync::Mutex;
 
             lazy_static! {
@@ -246,7 +241,9 @@ macro_rules! bench_is_match_set {
     ($name:ident, $is_match:expr, $re:expr, $haystack:expr) => {
         #[bench]
         fn $name(b: &mut Bencher) {
+            use lazy_static::lazy_static;
             use std::sync::Mutex;
+
             lazy_static! {
                 static ref RE: Mutex<RegexSet> = Mutex::new($re);
                 static ref TEXT: Mutex<Text> = Mutex::new(text!($haystack));
@@ -272,7 +269,9 @@ macro_rules! bench_matches_set {
     ($name:ident, $is_match:expr, $re:expr, $haystack:expr) => {
         #[bench]
         fn $name(b: &mut Bencher) {
+            use lazy_static::lazy_static;
             use std::sync::Mutex;
+
             lazy_static! {
                 static ref RE: Mutex<RegexSet> = Mutex::new($re);
                 static ref TEXT: Mutex<Text> = Mutex::new(text!($haystack));

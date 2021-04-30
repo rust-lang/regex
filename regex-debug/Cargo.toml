@@ -9,10 +9,10 @@ documentation = "https://docs.rs/regex"
 homepage = "https://github.com/rust-lang/regex"
 description = "A tool useful for debugging regular expressions."
 workspace = ".."
+edition = "2018"
 
 [dependencies]
 docopt = "1"
 regex = { version = "1.1", path = ".." }
 regex-syntax = { version = "0.6", path = "../regex-syntax" }
-serde = "1"
-serde_derive = "1"
+serde = { version = "1", features = ["derive"] }
