@@ -623,12 +623,9 @@ compile_error!("`std` feature is currently required to build this crate");
 
 #[cfg(feature = "perf-literal")]
 extern crate aho_corasick;
-// #[cfg(doctest)]
-// extern crate doc_comment;
 #[cfg(feature = "perf-literal")]
 extern crate memchr;
 #[cfg(test)]
-#[cfg_attr(feature = "perf-literal", macro_use)]
 extern crate quickcheck;
 extern crate regex_syntax as syntax;
 
@@ -754,8 +751,6 @@ mod error;
 mod exec;
 mod expand;
 mod find_byte;
-#[cfg(feature = "perf-literal")]
-mod freqs;
 mod input;
 mod literal;
 #[cfg(feature = "pattern")]
