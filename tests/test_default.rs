@@ -1,6 +1,5 @@
 #![cfg_attr(feature = "pattern", feature(pattern))]
 
-
 use regex;
 
 // Due to macro scoping rules, this definition only applies for the modules

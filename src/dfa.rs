@@ -1889,7 +1889,6 @@ fn read_varu32(data: &[u8]) -> (u32, usize) {
 
 #[cfg(test)]
 mod tests {
-    
 
     use super::{
         push_inst_ptr, read_vari32, read_varu32, write_vari32, write_varu32,

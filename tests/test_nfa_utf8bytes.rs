@@ -1,8 +1,5 @@
 #![cfg_attr(feature = "pattern", feature(pattern))]
 
-
-
-
 macro_rules! regex_new {
     ($re:expr) => {{
         use regex::internal::ExecBuilder;
