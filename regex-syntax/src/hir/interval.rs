@@ -4,7 +4,7 @@ use std::fmt::Debug;
 use std::slice;
 use std::u8;
 
-use unicode;
+use crate::unicode;
 
 // This module contains an *internal* implementation of interval sets.
 //

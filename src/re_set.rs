@@ -7,10 +7,10 @@ macro_rules! define_set {
             use std::slice;
             use std::vec;
 
-            use error::Error;
-            use exec::Exec;
-            use re_builder::$builder_mod::RegexSetBuilder;
-            use re_trait::RegularExpression;
+            use crate::error::Error;
+            use crate::exec::Exec;
+            use crate::re_builder::$builder_mod::RegexSetBuilder;
+            use crate::re_trait::RegularExpression;
 
 /// Match multiple (possibly overlapping) regular expressions in a single scan.
 ///

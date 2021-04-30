@@ -6,8 +6,8 @@ use std::ops::Deref;
 use std::slice;
 use std::sync::Arc;
 
-use input::Char;
-use literal::LiteralSearcher;
+use crate::input::Char;
+use crate::literal::LiteralSearcher;
 
 /// `InstPtr` represents the index of an instruction in a regex program.
 pub type InstPtr = usize;

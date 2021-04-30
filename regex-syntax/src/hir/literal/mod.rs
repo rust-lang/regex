@@ -8,7 +8,7 @@ use std::iter;
 use std::mem;
 use std::ops;
 
-use hir::{self, Hir, HirKind};
+use crate::hir::{self, Hir, HirKind};
 
 /// A set of literal byte strings extracted from a regular expression.
 ///
@@ -977,8 +977,8 @@ mod tests {
     use std::fmt;
 
     use super::{escape_bytes, Literal, Literals};
-    use hir::Hir;
-    use ParserBuilder;
+    use crate::hir::Hir;
+    use crate::ParserBuilder;
 
     // To make test failures easier to read.
     #[derive(Debug, Eq, PartialEq)]

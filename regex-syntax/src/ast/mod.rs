@@ -6,7 +6,7 @@ use std::cmp::Ordering;
 use std::error;
 use std::fmt;
 
-pub use ast::visitor::{visit, Visitor};
+pub use crate::ast::visitor::{visit, Visitor};
 
 pub mod parse;
 pub mod print;
@@ -221,7 +221,7 @@ impl error::Error for Error {
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        ::error::Formatter::from(self).fmt(f)
+        crate::error::Formatter::from(self).fmt(f)
     }
 }
 
@@ -543,7 +543,7 @@ impl Ast {
 /// to the size of the `Ast`.
 impl fmt::Display for Ast {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        use ast::print::Printer;
+        use crate::ast::print::Printer;
         Printer::new().print(self, f)
     }
 }

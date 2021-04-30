@@ -5,9 +5,9 @@ Defines a translator that converts an `Ast` to an `Hir`.
 use std::cell::{Cell, RefCell};
 use std::result;
 
-use ast::{self, Ast, Span, Visitor};
-use hir::{self, Error, ErrorKind, Hir};
-use unicode::{self, ClassQuery};
+use crate::ast::{self, Ast, Span, Visitor};
+use crate::hir::{self, Error, ErrorKind, Hir};
+use crate::unicode::{self, ClassQuery};
 
 type Result<T> = result::Result<T, Error>;
 
@@ -533,7 +533,7 @@ impl<'t, 'p> Visitor for TranslatorI<'t, 'p> {
         &mut self,
         op: &ast::ClassSetBinaryOp,
     ) -> Result<()> {
-        use ast::ClassSetBinaryOpKind::*;
+        use crate::ast::ClassSetBinaryOpKind::*;
 
         if self.flags().unicode() {
             let mut rhs = self.pop().unwrap().unwrap_class_unicode();
@@ -819,7 +819,7 @@ impl<'t, 'p> TranslatorI<'t, 'p> {
         &self,
         ast_class: &ast::ClassUnicode,
     ) -> Result<hir::ClassUnicode> {
-        use ast::ClassUnicodeKind::*;
+        use crate::ast::ClassUnicodeKind::*;
 
         if !self.flags().unicode() {
             return Err(
@@ -857,7 +857,7 @@ impl<'t, 'p> TranslatorI<'t, 'p> {
         &self,
         ast_class: &ast::ClassPerl,
     ) -> Result<hir::ClassUnicode> {
-        use ast::ClassPerlKind::*;
+        use crate::ast::ClassPerlKind::*;
 
         assert!(self.flags().unicode());
         let result = match ast_class.kind {
@@ -879,7 +879,7 @@ impl<'t, 'p> TranslatorI<'t, 'p> {
         &self,
         ast_class: &ast::ClassPerl,
     ) -> hir::ClassBytes {
-        use ast::ClassPerlKind::*;
+        use crate::ast::ClassPerlKind::*;
 
         assert!(!self.flags().unicode());
         let mut class = match ast_class.kind {
@@ -1077,7 +1077,7 @@ fn hir_ascii_class_bytes(kind: &ast::ClassAsciiKind) -> hir::ClassBytes {
 }
 
 fn ascii_class(kind: &ast::ClassAsciiKind) -> &'static [(char, char)] {
-    use ast::ClassAsciiKind::*;
+    use crate::ast::ClassAsciiKind::*;
     match *kind {
         Alnum => &[('0', '9'), ('A', 'Z'), ('a', 'z')],
         Alpha => &[('A', 'Z'), ('a', 'z')],
@@ -1105,10 +1105,10 @@ fn ascii_class(kind: &ast::ClassAsciiKind) -> &'static [(char, char)] {
 
 #[cfg(test)]
 mod tests {
-    use ast::parse::ParserBuilder;
-    use ast::{self, Ast, Position, Span};
-    use hir::{self, Hir, HirKind};
-    use unicode::{self, ClassQuery};
+    use crate::ast::parse::ParserBuilder;
+    use crate::ast::{self, Ast, Position, Span};
+    use crate::hir::{self, Hir, HirKind};
+    use crate::unicode::{self, ClassQuery};
 
     use super::{ascii_class, TranslatorBuilder};
 
@@ -1315,7 +1315,7 @@ mod tests {
 
     #[allow(dead_code)]
     fn hir_union(expr1: Hir, expr2: Hir) -> Hir {
-        use hir::Class::{Bytes, Unicode};
+        use crate::hir::Class::{Bytes, Unicode};
 
         match (expr1.into_kind(), expr2.into_kind()) {
             (HirKind::Class(Unicode(mut c1)), HirKind::Class(Unicode(c2))) => {
@@ -1332,7 +1332,7 @@ mod tests {
 
     #[allow(dead_code)]
     fn hir_difference(expr1: Hir, expr2: Hir) -> Hir {
-        use hir::Class::{Bytes, Unicode};
+        use crate::hir::Class::{Bytes, Unicode};
 
         match (expr1.into_kind(), expr2.into_kind()) {
             (HirKind::Class(Unicode(mut c1)), HirKind::Class(Unicode(c2))) => {

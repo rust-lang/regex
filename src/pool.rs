@@ -284,7 +284,7 @@ mod tests {
 
     #[test]
     fn oibits() {
-        use exec::ProgramCache;
+        use crate::exec::ProgramCache;
 
         fn has_oibits<T: Send + Sync + UnwindSafe + RefUnwindSafe>() {}
         has_oibits::<Pool<ProgramCache>>();

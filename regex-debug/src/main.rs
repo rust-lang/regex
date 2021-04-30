@@ -12,8 +12,8 @@ use std::result;
 
 use docopt::Docopt;
 use regex::internal::{Compiler, LiteralSearcher};
-use syntax::hir::literal::Literals;
-use syntax::hir::Hir;
+use crate::syntax::hir::literal::Literals;
+use crate::syntax::hir::Hir;
 
 const USAGE: &'static str = "
 Usage:
@@ -127,7 +127,7 @@ fn run(args: &Args) -> Result<()> {
 }
 
 fn cmd_ast(args: &Args) -> Result<()> {
-    use syntax::ast::parse::Parser;
+    use crate::syntax::ast::parse::Parser;
 
     let mut parser = Parser::new();
     let ast = parser.parse(&args.arg_pattern)?;
@@ -136,7 +136,7 @@ fn cmd_ast(args: &Args) -> Result<()> {
 }
 
 fn cmd_hir(args: &Args) -> Result<()> {
-    use syntax::ParserBuilder;
+    use crate::syntax::ParserBuilder;
 
     let mut parser = ParserBuilder::new().allow_invalid_utf8(false).build();
     let hir = parser.parse(&args.arg_pattern)?;
@@ -225,9 +225,9 @@ fn cmd_compile(args: &Args) -> Result<()> {
 }
 
 fn cmd_utf8_ranges(args: &Args) -> Result<()> {
-    use syntax::hir::{self, HirKind};
-    use syntax::utf8::Utf8Sequences;
-    use syntax::ParserBuilder;
+    use crate::syntax::hir::{self, HirKind};
+    use crate::syntax::utf8::Utf8Sequences;
+    use crate::syntax::ParserBuilder;
 
     let hir = ParserBuilder::new()
         .build()
@@ -258,9 +258,9 @@ fn cmd_utf8_ranges(args: &Args) -> Result<()> {
 }
 
 fn cmd_utf8_ranges_rev(args: &Args) -> Result<()> {
-    use syntax::hir::{self, HirKind};
-    use syntax::utf8::Utf8Sequences;
-    use syntax::ParserBuilder;
+    use crate::syntax::hir::{self, HirKind};
+    use crate::syntax::utf8::Utf8Sequences;
+    use crate::syntax::ParserBuilder;
 
     let hir = ParserBuilder::new()
         .build()
@@ -334,7 +334,7 @@ impl Args {
 }
 
 fn parse(re: &str) -> Result<Hir> {
-    use syntax::ParserBuilder;
+    use crate::syntax::ParserBuilder;
     ParserBuilder::new()
         .allow_invalid_utf8(true)
         .build()

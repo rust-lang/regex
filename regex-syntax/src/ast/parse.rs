@@ -7,10 +7,10 @@ use std::cell::{Cell, RefCell};
 use std::mem;
 use std::result;
 
-use ast::{self, Ast, Position, Span};
-use either::Either;
+use crate::ast::{self, Ast, Position, Span};
+use crate::either::Either;
 
-use is_meta_character;
+use crate::is_meta_character;
 
 type Result<T> = result::Result<T, ast::Error>;
 
@@ -61,7 +61,7 @@ impl Primitive {
         p: &ParserI<P>,
     ) -> Result<ast::ClassSetItem> {
         use self::Primitive::*;
-        use ast::ClassSetItem;
+        use crate::ast::ClassSetItem;
 
         match self {
             Literal(lit) => Ok(ClassSetItem::Literal(lit)),
@@ -2312,7 +2312,7 @@ mod tests {
     use std::ops::Range;
 
     use super::{Parser, ParserBuilder, ParserI, Primitive};
-    use ast::{self, Ast, Position, Span};
+    use crate::ast::{self, Ast, Position, Span};
 
     // Our own assert_eq, which has slightly better formatting (but honestly
     // still kind of crappy).

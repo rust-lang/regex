@@ -4,11 +4,11 @@ use std::fmt;
 use std::ops;
 use std::u32;
 
-use syntax;
+use crate::syntax;
 
-use literal::LiteralSearcher;
-use prog::InstEmptyLook;
-use utf8::{decode_last_utf8, decode_utf8};
+use crate::literal::LiteralSearcher;
+use crate::prog::InstEmptyLook;
+use crate::utf8::{decode_last_utf8, decode_utf8};
 
 /// Represents a location in the input.
 #[derive(Clone, Copy, Debug)]
@@ -175,7 +175,7 @@ impl<'t> Input for CharInput<'t> {
     }
 
     fn is_empty_match(&self, at: InputAt, empty: &InstEmptyLook) -> bool {
-        use prog::EmptyLook::*;
+        use crate::prog::EmptyLook::*;
         match empty.look {
             StartLine => {
                 let c = self.previous_char(at);
@@ -268,7 +268,7 @@ impl<'t> Input for ByteInput<'t> {
     }
 
     fn is_empty_match(&self, at: InputAt, empty: &InstEmptyLook) -> bool {
-        use prog::EmptyLook::*;
+        use crate::prog::EmptyLook::*;
         match empty.look {
             StartLine => {
                 let c = self.previous_char(at);
