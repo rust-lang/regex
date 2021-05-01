@@ -1,3 +1,9 @@
+1.5.1 (2021-04-30)
+==================
+This is a patch release that fixes a compilation error when the `perf-literal`
+feature is not enabled.
+
+
 1.5.0 (2021-04-30)
 ==================
 This release primarily updates to Rust 2018 (finally) and bumps the MSRV to
