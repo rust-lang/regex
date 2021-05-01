@@ -348,7 +348,7 @@ pub fn perl_space() -> Result<hir::ClassUnicode> {
 
     #[cfg(all(feature = "unicode-perl", not(feature = "unicode-bool")))]
     fn imp() -> Result<hir::ClassUnicode> {
-        use unicode_tables::perl_space::WHITE_SPACE;
+        use crate::unicode_tables::perl_space::WHITE_SPACE;
         Ok(hir_class(WHITE_SPACE))
     }
 
@@ -372,7 +372,7 @@ pub fn perl_digit() -> Result<hir::ClassUnicode> {
 
     #[cfg(all(feature = "unicode-perl", not(feature = "unicode-gencat")))]
     fn imp() -> Result<hir::ClassUnicode> {
-        use unicode_tables::perl_decimal::DECIMAL_NUMBER;
+        use crate::unicode_tables::perl_decimal::DECIMAL_NUMBER;
         Ok(hir_class(DECIMAL_NUMBER))
     }
 
