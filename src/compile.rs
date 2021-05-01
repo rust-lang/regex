@@ -318,6 +318,13 @@ impl Compiler {
                 }
                 self.compiled.has_unicode_word_boundary = true;
                 self.byte_classes.set_word_boundary();
+                // We also make sure that all ASCII bytes are in a different
+                // class from non-ASCII bytes. Otherwise, it's possible for
+                // ASCII bytes to get lumped into the same class as non-ASCII
+                // bytes. This in turn may cause the lazy DFA to falsely start
+                // when it sees an ASCII byte that maps to a byte class with
+                // non-ASCII bytes. This ensures that never happens.
+                self.byte_classes.set_range(0, 0x7F);
                 self.c_empty_look(prog::EmptyLook::WordBoundary)
             }
             WordBoundary(hir::WordBoundary::UnicodeNegate) => {
@@ -330,6 +337,8 @@ impl Compiler {
                 }
                 self.compiled.has_unicode_word_boundary = true;
                 self.byte_classes.set_word_boundary();
+                // See comments above for why we set the ASCII range here.
+                self.byte_classes.set_range(0, 0x7F);
                 self.c_empty_look(prog::EmptyLook::NotWordBoundary)
             }
             WordBoundary(hir::WordBoundary::Ascii) => {
