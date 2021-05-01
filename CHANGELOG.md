@@ -1,3 +1,17 @@
+1.5.0 (2021-04-30)
+==================
+This release primarily updates to Rust 2018 (finally) and bumps the MSRV to
+Rust 1.41 (from Rust 1.28). Rust 1.41 was chosen because it's still reasonably
+old, and is what's in Debian stable at the time of writing.
+
+This release also drops this crate's own bespoke substring search algorithms
+in favor of a new
+[`memmem` implementation provided by the `memchr` crate](https://docs.rs/memchr/2.4.0/memchr/memmem/index.html).
+This will change the performance profile of some regexes, sometimes getting a
+little worse, and hopefully more frequently, getting a lot better. Please
+report any serious performance regressions if you find them.
+
+
 1.4.6 (2021-04-22)
 ==================
 This is a small patch release that fixes the compiler's size check on how much
