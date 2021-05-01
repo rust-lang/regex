@@ -1,3 +1,15 @@
+1.5.2 (2021-05-01)
+==================
+This release fixes a performance bug when Unicode word boundaries are used.
+Namely, for certain regexes on certain inputs, it's possible for the lazy DFA
+to stop searching (causing a fallback to a slower engine) when it doesn't
+actually need to.
+
+[PR #768](https://github.com/rust-lang/regex/pull/768) fixes the bug, which was
+originally reported in
+[ripgrep#1860](https://github.com/BurntSushi/ripgrep/issues/1860).
+
+
 1.5.1 (2021-04-30)
 ==================
 This is a patch release that fixes a compilation error when the `perf-literal`
