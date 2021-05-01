@@ -373,9 +373,6 @@ impl ExecBuilder {
             AhoCorasickBuilder::new()
                 .match_kind(MatchKind::LeftmostFirst)
                 .auto_configure(&lits)
-                // We always want this to reduce size, regardless
-                // of what auto-configure does.
-                .byte_classes(true)
                 .build_with_size::<u32, _, _>(&lits)
                 // This should never happen because we'd long exceed the
                 // compilation limit for regexes first.
