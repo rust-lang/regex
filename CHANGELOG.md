@@ -1,3 +1,13 @@
+1.5.3 (2021-05-01)
+==================
+This releases fixes a bug when building regex with only the `unicode-perl`
+feature. It turns out that while CI was building this configuration, it wasn't
+actually failing the overall build on a failed compilation.
+
+* [BUG #769](https://github.com/rust-lang/regex/issues/769):
+  Fix build in `regex-syntax` when only the `unicode-perl` feature is enabled.
+
+
 1.5.2 (2021-05-01)
 ==================
 This release fixes a performance bug when Unicode word boundaries are used.
