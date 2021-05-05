@@ -503,7 +503,7 @@ impl Regex {
     /// assert_eq!(result, "$2 $last");
     /// # }
     /// ```
-    pub fn replace<'t, R: Replacer>(
+    pub fn replace<'t, R: Replacer<'t>>(
         &self,
         text: &'t str,
         rep: R,
@@ -517,7 +517,7 @@ impl Regex {
     ///
     /// See the documentation for `replace` for details on how to access
     /// capturing group matches in the replacement string.
-    pub fn replace_all<'t, R: Replacer>(
+    pub fn replace_all<'t, R: Replacer<'t>>(
         &self,
         text: &'t str,
         rep: R,
@@ -531,7 +531,7 @@ impl Regex {
     ///
     /// See the documentation for `replace` for details on how to access
     /// capturing group matches in the replacement string.
-    pub fn replacen<'t, R: Replacer>(
+    pub fn replacen<'t, R: Replacer<'t>>(
         &self,
         text: &'t str,
         limit: usize,
@@ -1149,7 +1149,7 @@ impl<'r, 't> FusedIterator for Matches<'r, 't> {}
 /// since implementations are already provided for `&str` along with other
 /// variants of string types and `FnMut(&Captures) -> String` (or any
 /// `FnMut(&Captures) -> T` where `T: AsRef<str>`), which covers most use cases.
-pub trait Replacer {
+pub trait Replacer<'a> {
     /// Appends text to `dst` to replace the current match.
     ///
     /// The current match is represented by `caps`, which is guaranteed to
@@ -1157,7 +1157,7 @@ pub trait Replacer {
     ///
     /// For example, a no-op replacement would be
     /// `dst.push_str(caps.get(0).unwrap().as_str())`.
-    fn replace_append(&mut self, caps: &Captures<'_>, dst: &mut String);
+    fn replace_append(&mut self, caps: &Captures<'a>, dst: &mut String);
 
     /// Return a fixed unchanging replacement string.
     ///
@@ -1202,8 +1202,8 @@ pub trait Replacer {
 #[derive(Debug)]
 pub struct ReplacerRef<'a, R: ?Sized>(&'a mut R);
 
-impl<'a, R: Replacer + ?Sized + 'a> Replacer for ReplacerRef<'a, R> {
-    fn replace_append(&mut self, caps: &Captures<'_>, dst: &mut String) {
+impl<'a, 'b, R: Replacer<'b> + ?Sized + 'a> Replacer<'b> for ReplacerRef<'a, R> {
+    fn replace_append(&mut self, caps: &Captures<'b>, dst: &mut String) {
         self.0.replace_append(caps, dst)
     }
     fn no_expansion(&mut self) -> Option<Cow<'_, str>> {
@@ -1211,7 +1211,7 @@ impl<'a, R: Replacer + ?Sized + 'a> Replacer for ReplacerRef<'a, R> {
     }
 }
 
-impl<'a> Replacer for &'a str {
+impl<'a> Replacer<'_> for &'a str {
     fn replace_append(&mut self, caps: &Captures<'_>, dst: &mut String) {
         caps.expand(*self, dst);
     }
@@ -1221,7 +1221,7 @@ impl<'a> Replacer for &'a str {
     }
 }
 
-impl<'a> Replacer for &'a String {
+impl<'a> Replacer<'_> for &'a String {
     fn replace_append(&mut self, caps: &Captures<'_>, dst: &mut String) {
         self.as_str().replace_append(caps, dst)
     }
@@ -1231,7 +1231,7 @@ impl<'a> Replacer for &'a String {
     }
 }
 
-impl Replacer for String {
+impl Replacer<'_> for String {
     fn replace_append(&mut self, caps: &Captures<'_>, dst: &mut String) {
         self.as_str().replace_append(caps, dst)
     }
@@ -1241,7 +1241,7 @@ impl Replacer for String {
     }
 }
 
-impl<'a> Replacer for Cow<'a, str> {
+impl<'a> Replacer<'_> for Cow<'a, str> {
     fn replace_append(&mut self, caps: &Captures<'_>, dst: &mut String) {
         self.as_ref().replace_append(caps, dst)
     }
@@ -1251,7 +1251,7 @@ impl<'a> Replacer for Cow<'a, str> {
     }
 }
 
-impl<'a> Replacer for &'a Cow<'a, str> {
+impl<'a> Replacer<'_> for &'a Cow<'a, str> {
     fn replace_append(&mut self, caps: &Captures<'_>, dst: &mut String) {
         self.as_ref().replace_append(caps, dst)
     }
@@ -1269,12 +1269,12 @@ fn no_expansion<T: AsRef<str>>(t: &T) -> Option<Cow<'_, str>> {
     }
 }
 
-impl<F, T> Replacer for F
+impl<'a, F, T> Replacer<'a> for F
 where
-    F: FnMut(&Captures<'_>) -> T,
+    F: FnMut(&Captures<'a>) -> T,
     T: AsRef<str>,
 {
-    fn replace_append(&mut self, caps: &Captures<'_>, dst: &mut String) {
+    fn replace_append(&mut self, caps: &Captures<'a>, dst: &mut String) {
         dst.push_str((*self)(caps).as_ref());
     }
 }
@@ -1290,7 +1290,7 @@ where
 #[derive(Clone, Debug)]
 pub struct NoExpand<'t>(pub &'t str);
 
-impl<'t> Replacer for NoExpand<'t> {
+impl<'t> Replacer<'_> for NoExpand<'t> {
     fn replace_append(&mut self, _: &Captures<'_>, dst: &mut String) {
         dst.push_str(self.0);
     }
