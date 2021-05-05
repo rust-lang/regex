@@ -21,7 +21,6 @@ features=(
     "std perf-dfa"
     "std perf-inline"
     "std perf-literal"
-    "std pattern"
 )
 for f in "${features[@]}"; do
     echo "===== FEATURE: $f (default) ==="
