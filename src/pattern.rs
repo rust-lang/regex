@@ -1,6 +1,6 @@
 use std::str::pattern::{Pattern, SearchStep, Searcher};
 
-use re_unicode::{Matches, Regex};
+use crate::re_unicode::{Matches, Regex};
 
 pub struct RegexSearcher<'r, 't> {
     haystack: &'t str,
