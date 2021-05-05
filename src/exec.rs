@@ -140,7 +140,7 @@ impl ExecBuilder {
     ///
     /// Note that when compiling 2 or more regular expressions, capture groups
     /// are completely unsupported. (This means both `find` and `captures`
-    /// wont work.)
+    /// won't work.)
     pub fn new_many<I, S>(res: I) -> Self
     where
         S: AsRef<str>,
