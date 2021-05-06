@@ -151,6 +151,11 @@ jobs:
         cd bench
         ./run rust --no-run --verbose
 
+    - if: matrix.build == 'nightly'
+      name: Run tests with pattern feature
+      run: |
+        cargo test --test default --no-default-features --features 'std pattern unicode-perl'
+
   rustfmt:
     name: rustfmt
     runs-on: ubuntu-18.04
