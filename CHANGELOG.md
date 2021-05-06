@@ -1,3 +1,13 @@
+1.5.4 (2021-05-06)
+==================
+This release fixes another compilation failure when building regex. This time,
+the fix is for when the `pattern` feature is enabled, which only works on
+nightly Rust. CI has been updated to test this case.
+
+* [BUG #772](https://github.com/rust-lang/regex/pull/772):
+  Fix build when `pattern` feature is enabled.
+
+
 1.5.3 (2021-05-01)
 ==================
 This releases fixes a bug when building regex with only the `unicode-perl`
