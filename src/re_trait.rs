@@ -139,7 +139,7 @@ pub trait RegularExpression: Sized + fmt::Debug {
     /// Returns an iterator over all non-overlapping successive leftmost-first
     /// matches.
     fn find_iter(self, text: &Self::Text) -> Matches<'_, Self> {
-        Matches { re: self, text: text, last_end: 0, last_match: None }
+        Matches { re: self, text, last_end: 0, last_match: None }
     }
 
     /// Returns an iterator over all non-overlapping successive leftmost-first

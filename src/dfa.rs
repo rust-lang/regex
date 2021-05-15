@@ -454,10 +454,10 @@ impl<'a> Fsm<'a> {
         let mut cache = cache.borrow_mut();
         let cache = &mut cache.dfa;
         let mut dfa = Fsm {
-            prog: prog,
+            prog,
             start: 0, // filled in below
-            at: at,
-            quit_after_match: quit_after_match,
+            at,
+            quit_after_match,
             last_match_si: STATE_UNKNOWN,
             last_cache_flush: at,
             cache: &mut cache.inner,
@@ -484,10 +484,10 @@ impl<'a> Fsm<'a> {
         let mut cache = cache.borrow_mut();
         let cache = &mut cache.dfa_reverse;
         let mut dfa = Fsm {
-            prog: prog,
+            prog,
             start: 0, // filled in below
-            at: at,
-            quit_after_match: quit_after_match,
+            at,
+            quit_after_match,
             last_match_si: STATE_UNKNOWN,
             last_cache_flush: at,
             cache: &mut cache.inner,
@@ -515,9 +515,9 @@ impl<'a> Fsm<'a> {
         let mut cache = cache.borrow_mut();
         let cache = &mut cache.dfa;
         let mut dfa = Fsm {
-            prog: prog,
+            prog,
             start: 0, // filled in below
-            at: at,
+            at,
             quit_after_match: false,
             last_match_si: STATE_UNKNOWN,
             last_cache_flush: at,
@@ -1608,11 +1608,7 @@ struct StateMap {
 
 impl StateMap {
     fn new(num_byte_classes: usize) -> StateMap {
-        StateMap {
-            map: HashMap::new(),
-            states: vec![],
-            num_byte_classes: num_byte_classes,
-        }
+        StateMap { map: HashMap::new(), states: vec![], num_byte_classes }
     }
 
     fn len(&self) -> usize {
@@ -1648,7 +1644,7 @@ impl Transitions {
     /// The number of byte classes corresponds to the stride. Every state will
     /// have `num_byte_classes` slots for transitions.
     fn new(num_byte_classes: usize) -> Transitions {
-        Transitions { table: vec![], num_byte_classes: num_byte_classes }
+        Transitions { table: vec![], num_byte_classes }
     }
 
     /// Returns the total number of states currently in this table.
@@ -1698,27 +1694,27 @@ impl Transitions {
 
 impl StateFlags {
     fn is_match(&self) -> bool {
-        self.0 & 0b0000000_1 > 0
+        self.0 & 0b0000_0001 > 0
     }
 
     fn set_match(&mut self) {
-        self.0 |= 0b0000000_1;
+        self.0 |= 0b0000_0001;
     }
 
     fn is_word(&self) -> bool {
-        self.0 & 0b000000_1_0 > 0
+        self.0 & 0b0000_0010 > 0
     }
 
     fn set_word(&mut self) {
-        self.0 |= 0b000000_1_0;
+        self.0 |= 0b0000_0010;
     }
 
     fn has_empty(&self) -> bool {
-        self.0 & 0b00000_1_00 > 0
+        self.0 & 0b0000_0100 > 0
     }
 
     fn set_empty(&mut self) {
-        self.0 |= 0b00000_1_00;
+        self.0 |= 0b0000_0100;
     }
 }
 
