@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 from subprocess import run
+import argparse
 import datetime
 import json
 import os
@@ -36,32 +37,44 @@ def gen_test(path):
         f"\tassert_sync::<{path}>();",
         f"\tassert_unwind_safe::<{path}>();",
         f"\tassert_ref_unwind_safe::<{path}>();",
-        ""
+        "",
     ]
     return "\n".join(tests)
 
 
-def gen_tests():
+def gen_docs():
     doc_gen_result = run(CMD)
     if doc_gen_result.returncode != 0:
         print("Unable to generate the docs for the regex")
         exit(1)
 
+
+def get_public_types():
     with open(os.path.join("target", "doc", "regex.json")) as docs_file:
         docs = json.load(docs_file)
         index = docs["index"]
 
-        tests = []
+        type_paths = []
         public_modules = get_public_of_kind(["module"], index.keys(), index)
         for mod in public_modules:
-            tests.append("")
             types = get_public_of_kind(["struct"], mod["inner"]["items"], index)
             for type in types:
                 prefix = "" if mod["inner"]["is_crate"] else "regex::"
-                test = gen_test(f"{prefix}{mod['name']}::{type['name']}")
-                tests.append(test)
+                type_path = f"{prefix}{mod['name']}::{type['name']}"
+                type_paths.append(type_path)
 
-        return tests
+        return type_paths
+
+
+def gen_tests():
+    tests = []
+    types = get_public_types()
+    for type in types:
+        tests.append("")
+        test = gen_test(type)
+        tests.append(test)
+
+    return tests
 
 
 def get_assert_definitions():
@@ -74,7 +87,7 @@ def get_assert_definitions():
     return "\n".join(definitions)
 
 
-def main():
+def write_tests():
     with open(os.path.join("tests", "marker_traits.rs"), "w") as f:
         f.write(PREAMBLE.format(date=str(datetime.datetime.now())))
         f.write("\n")
@@ -86,6 +99,48 @@ def main():
         for test in gen_tests():
             f.write(f"{test}\n")
         f.write("}\n")
+
+
+def check_existence():
+    types = get_public_types()
+    with open(os.path.join("tests", "marker_traits.rs")) as f:
+        lines = f.readlines()
+        for type in types:
+            if any(type in line for line in lines):
+                continue
+            else:
+                exit(1)
+
+    exit(0)
+
+
+def main():
+    p = argparse.ArgumentParser(
+        "A script to manage marker-traits tests.",
+        description="Checks for the existence of tests for the public API types, "
+        "failing when there are missing tests for a marker trait of "
+        "a type.",
+    )
+    p.add_argument(
+        "-g",
+        "--generate-tests",
+        action="store_true",
+        help=(
+            "If set, the script will generate a "
+            "tests/marker_traits.rs file containing a test that "
+            "checks the auto traits of the public API types "
+            "(These tests might need to be updated after generating them)."
+        ),
+    )
+
+    args = p.parse_args()
+
+    gen_docs()
+
+    if args.generate_tests:
+        write_tests()
+    else:
+        check_existence()
 
 
 if __name__ == "__main__":
