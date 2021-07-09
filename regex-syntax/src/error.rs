@@ -182,7 +182,7 @@ impl<'p> Spans<'p> {
             if line_count <= 1 { 0 } else { line_count.to_string().len() };
         let mut spans = Spans {
             pattern: &fmter.pattern,
-            line_number_width: line_number_width,
+            line_number_width,
             by_line: vec![vec![]; line_count],
             multi_line: vec![],
         };
