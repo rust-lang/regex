@@ -15,7 +15,7 @@ mod visitor;
 /// An error that occurred while parsing a regular expression into an abstract
 /// syntax tree.
 ///
-/// Note that note all ASTs represents a valid regular expression. For example,
+/// Note that not all ASTs represents a valid regular expression. For example,
 /// an AST is constructed without error for `\p{Quux}`, but `Quux` is not a
 /// valid Unicode property name. That particular error is reported when
 /// translating an AST to the high-level intermediate representation (`HIR`).
