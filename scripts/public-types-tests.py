@@ -22,16 +22,36 @@ CMD = [
     "json",
 ]
 
+def gen_docs():
+    """Runs the command to retrieve the docs of this crate.
 
-def get_public_of_kind(kinds, elements, index):
-    keys_of_kind = filter(lambda key: index[key]["kind"] in kinds, elements)
+    If the command fails, the script exits.
+    """
+    doc_gen_result = run(CMD)
+    if doc_gen_result.returncode != 0:
+        print("Unable to generate the docs for the regex")
+        exit(1)
+
+
+def get_public_of_kind(kinds, elements, docs):
+    """Gets the items that are of some kind in the public API.
+
+    `kinds` is a list of item kinds. Ex: ["module", "struct"]
+    `elements` are the keys in the docs json schema to search in.
+    `docs` is usually the slice of the json tree that we care about.
+    """
+    keys_of_kind = filter(lambda key: docs[key]["kind"] in kinds, elements)
     public_of_kind = filter(
-        lambda key: index[key]["visibility"] == "public", keys_of_kind
+        lambda key: docs[key]["visibility"] == "public", keys_of_kind
     )
-    return map(lambda key: index[key], public_of_kind)
+    return map(lambda key: docs[key], public_of_kind)
 
 
 def gen_test(path):
+    """Generates 4 valid lines of Rust code that assert marker traits on a type.
+
+    `path` is a fully qualified type. Ex: regex::bytes::Regex
+    """
     tests = [
         f"\tassert_send::<{path}>();",
         f"\tassert_sync::<{path}>();",
@@ -42,14 +62,13 @@ def gen_test(path):
     return "\n".join(tests)
 
 
-def gen_docs():
-    doc_gen_result = run(CMD)
-    if doc_gen_result.returncode != 0:
-        print("Unable to generate the docs for the regex")
-        exit(1)
-
-
 def get_public_types():
+    """Reads the public types from the json dump of the docs of this crate.
+
+    After generating the docs, this function is used to read the dump in
+    json format located at target/doc/regex.json. Then, it generates the
+    fully qualified paths for each type of the public API of the crate.
+    """
     with open(os.path.join("target", "doc", "regex.json")) as docs_file:
         docs = json.load(docs_file)
         index = docs["index"]
@@ -78,6 +97,8 @@ def gen_tests():
 
 
 def get_assert_definitions():
+    """Generates the definitions of the assert functions we use to test marker
+    traits."""
     definitions = [
         "\tfn assert_send<T: Send>() {}",
         "\tfn assert_sync<T: Sync>() {}",
@@ -88,6 +109,7 @@ def get_assert_definitions():
 
 
 def write_tests():
+    """Writes the generated tests to the tests/marker_traits.rs file."""
     with open(os.path.join("tests", "marker_traits.rs"), "w") as f:
         f.write(PREAMBLE.format(date=str(datetime.datetime.now())))
         f.write("\n")
@@ -102,15 +124,21 @@ def write_tests():
 
 
 def check_existence():
+    """Fails the script when a type in the API doesn't have a corresponding marker trait test
+    in the tests/marker_traits.rs file."""
     types = get_public_types()
-    with open(os.path.join("tests", "marker_traits.rs")) as f:
+    test_path = os.path.join("tests", "marker_traits.rs")
+    with open(test_path ) as f:
         lines = f.readlines()
         for type in types:
             if any(type in line for line in lines):
                 continue
             else:
+                print("Failed check!\n")
+                print(f"A marker trait test for {type} was not found in {test_path}.")
                 exit(1)
 
+    print("Success!\nThe existence check found that every type has a corresponding test.")
     exit(0)
 
 
