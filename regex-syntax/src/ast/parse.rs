@@ -1927,7 +1927,7 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
             }));
             if !self.bump_and_bump_space() {
                 return Err(self.error(
-                    Span::new(start, self.pos()),
+                    Span::new(start, start),
                     ast::ErrorKind::ClassUnclosed,
                 ));
             }
@@ -5515,14 +5515,23 @@ bar
         assert_eq!(
             parser("[-").parse_set_class_open().unwrap_err(),
             TestError {
-                span: span(0..2),
+                span: span(0..0),
                 kind: ast::ErrorKind::ClassUnclosed,
             }
         );
         assert_eq!(
             parser("[--").parse_set_class_open().unwrap_err(),
             TestError {
-                span: span(0..3),
+                span: span(0..0),
+                kind: ast::ErrorKind::ClassUnclosed,
+            }
+        );
+
+        // See: https://github.com/rust-lang/regex/issues/792
+        assert_eq!(
+            parser("(?x)[-#]").parse_with_comments().unwrap_err(),
+            TestError {
+                span: span(4..4),
                 kind: ast::ErrorKind::ClassUnclosed,
             }
         );
