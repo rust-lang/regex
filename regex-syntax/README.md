@@ -3,7 +3,6 @@ regex-syntax
 This crate provides a robust regular expression parser.
 
 [![Build status](https://github.com/rust-lang/regex/workflows/ci/badge.svg)](https://github.com/rust-lang/regex/actions)
-[![](https://meritbadge.herokuapp.com/regex-syntax)](https://crates.io/crates/regex-syntax)
 [![Crates.io](https://img.shields.io/crates/v/regex-syntax.svg)](https://crates.io/crates/regex-syntax)
 [![Rust](https://img.shields.io/badge/rust-1.28.0%2B-blue.svg?maxAge=3600)](https://github.com/rust-lang/regex)
 
