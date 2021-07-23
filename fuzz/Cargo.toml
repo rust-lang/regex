@@ -28,7 +28,7 @@ path = "fuzz_targets/fuzz_regex_match.rs"
 opt-level = 3
 debug = true
 
-[profile.debug]
+[profile.dev]
 inherits = "release"
 
 [profile.test]
