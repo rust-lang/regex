@@ -3,19 +3,13 @@ use std::iter::repeat;
 
 /// An error that occurred during parsing or compiling a regular expression.
 #[derive(Clone, PartialEq)]
+#[non_exhaustive]
 pub enum Error {
     /// A syntax error.
     Syntax(String),
     /// The compiled program exceeded the set size limit.
     /// The argument is the size limit imposed.
     CompiledTooBig(usize),
-    /// Hints that destructuring should not be exhaustive.
-    ///
-    /// This enum may grow additional variants, so this makes sure clients
-    /// don't count on exhaustive matching. (Otherwise, adding a new variant
-    /// could break existing code.)
-    #[doc(hidden)]
-    __Nonexhaustive,
 }
 
 impl ::std::error::Error for Error {
@@ -25,7 +19,6 @@ impl ::std::error::Error for Error {
         match *self {
             Error::Syntax(ref err) => err,
             Error::CompiledTooBig(_) => "compiled program too big",
-            Error::__Nonexhaustive => unreachable!(),
         }
     }
 }
@@ -39,7 +32,6 @@ impl fmt::Display for Error {
                 "Compiled regex exceeds size limit of {} bytes.",
                 limit
             ),
-            Error::__Nonexhaustive => unreachable!(),
         }
     }
 }
@@ -62,9 +54,6 @@ impl fmt::Debug for Error {
             }
             Error::CompiledTooBig(limit) => {
                 f.debug_tuple("CompiledTooBig").field(&limit).finish()
-            }
-            Error::__Nonexhaustive => {
-                f.debug_tuple("__Nonexhaustive").finish()
             }
         }
     }

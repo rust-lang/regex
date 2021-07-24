@@ -54,6 +54,7 @@ impl Error {
 
 /// The type of an error that occurred while building an `Hir`.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum ErrorKind {
     /// This error occurs when a Unicode feature is used when Unicode
     /// support is disabled. For example `(?-u:\pL)` would trigger this error.
@@ -81,13 +82,6 @@ pub enum ErrorKind {
     /// Note that this restriction in the translator may be removed in the
     /// future.
     EmptyClassNotAllowed,
-    /// Hints that destructuring should not be exhaustive.
-    ///
-    /// This enum may grow additional variants, so this makes sure clients
-    /// don't count on exhaustive matching. (Otherwise, adding a new variant
-    /// could break existing code.)
-    #[doc(hidden)]
-    __Nonexhaustive,
 }
 
 impl ErrorKind {
@@ -109,7 +103,6 @@ impl ErrorKind {
                  (make sure the unicode-case feature is enabled)"
             }
             EmptyClassNotAllowed => "empty character classes are not allowed",
-            __Nonexhaustive => unreachable!(),
         }
     }
 }

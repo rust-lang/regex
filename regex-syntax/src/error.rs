@@ -11,6 +11,7 @@ pub type Result<T> = result::Result<T, Error>;
 
 /// This error type encompasses any error that can be returned by this crate.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum Error {
     /// An error that occurred while translating concrete syntax into abstract
     /// syntax (AST).
@@ -18,13 +19,6 @@ pub enum Error {
     /// An error that occurred while translating abstract syntax into a high
     /// level intermediate representation (HIR).
     Translate(hir::Error),
-    /// Hints that destructuring should not be exhaustive.
-    ///
-    /// This enum may grow additional variants, so this makes sure clients
-    /// don't count on exhaustive matching. (Otherwise, adding a new variant
-    /// could break existing code.)
-    #[doc(hidden)]
-    __Nonexhaustive,
 }
 
 impl From<ast::Error> for Error {
@@ -46,7 +40,6 @@ impl error::Error for Error {
         match *self {
             Error::Parse(ref x) => x.description(),
             Error::Translate(ref x) => x.description(),
-            _ => unreachable!(),
         }
     }
 }
@@ -56,7 +49,6 @@ impl fmt::Display for Error {
         match *self {
             Error::Parse(ref x) => x.fmt(f),
             Error::Translate(ref x) => x.fmt(f),
-            _ => unreachable!(),
         }
     }
 }
