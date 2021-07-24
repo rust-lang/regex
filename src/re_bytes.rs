@@ -53,7 +53,7 @@ impl<'t> Match<'t> {
     /// Creates a new match from the given haystack and byte offsets.
     #[inline]
     fn new(haystack: &'t [u8], start: usize, end: usize) -> Match<'t> {
-        Match { text: haystack, start: start, end: end }
+        Match { text: haystack, start, end }
     }
 }
 
@@ -255,7 +255,7 @@ impl Regex {
     pub fn captures<'t>(&self, text: &'t [u8]) -> Option<Captures<'t>> {
         let mut locs = self.capture_locations();
         self.captures_read_at(&mut locs, text, 0).map(move |_| Captures {
-            text: text,
+            text,
             locs: locs.0,
             named_groups: self.0.capture_name_idx().clone(),
         })
@@ -723,7 +723,7 @@ impl<'r, 't> Iterator for CaptureMatches<'r, 't> {
     fn next(&mut self) -> Option<Captures<'t>> {
         self.0.next().map(|locs| Captures {
             text: self.0.text(),
-            locs: locs,
+            locs,
             named_groups: self.0.regex().capture_name_idx().clone(),
         })
     }

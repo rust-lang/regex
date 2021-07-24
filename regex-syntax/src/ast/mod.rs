@@ -385,7 +385,7 @@ impl PartialOrd for Position {
 impl Span {
     /// Create a new span with the given positions.
     pub fn new(start: Position, end: Position) -> Span {
-        Span { start: start, end: end }
+        Span { start, end }
     }
 
     /// Create a new span using the given position as the start and end.
@@ -427,7 +427,7 @@ impl Position {
     ///
     /// `column` is the approximate column number, starting at `1`.
     pub fn new(offset: usize, line: usize, column: usize) -> Position {
-        Position { offset: offset, line: line, column: column }
+        Position { offset, line, column }
     }
 }
 

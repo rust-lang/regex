@@ -65,7 +65,7 @@ impl Printer {
     /// here are a `fmt::Formatter` (which is available in `fmt::Display`
     /// implementations) or a `&mut String`.
     pub fn print<W: fmt::Write>(&mut self, hir: &Hir, wtr: W) -> fmt::Result {
-        visitor::visit(hir, Writer { printer: self, wtr: wtr })
+        visitor::visit(hir, Writer { printer: self, wtr })
     }
 }
 
