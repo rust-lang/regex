@@ -11,6 +11,7 @@ pub struct RegexOptions {
     pub dot_matches_new_line: bool,
     pub swap_greed: bool,
     pub ignore_whitespace: bool,
+    pub throwaway_on_parse_error: bool,
     pub unicode: bool,
     pub octal: bool,
 }
@@ -27,6 +28,7 @@ impl Default for RegexOptions {
             dot_matches_new_line: false,
             swap_greed: false,
             ignore_whitespace: false,
+            throwaway_on_parse_error: false,
             unicode: true,
             octal: false,
         }
@@ -321,6 +323,19 @@ macro_rules! define_set_builder {
                     yes: bool,
                 ) -> &mut RegexSetBuilder {
                     self.0.ignore_whitespace = yes;
+                    self
+                }
+
+                /// Set the value for the throwaway on parse error (`x`) flag.
+                ///
+                /// When enabled, regexes that don't compile will be excluded
+                /// from the set, and RegexSetBuilder.build() will not return
+                /// an error if a bad regex is provided.
+                pub fn throwaway_on_parse_error(
+                    &mut self,
+                    yes: bool,
+                ) -> &mut RegexSetBuilder {
+                    self.0.throwaway_on_parse_error = yes;
                     self
                 }
 
