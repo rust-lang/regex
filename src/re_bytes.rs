@@ -578,7 +578,7 @@ impl Regex {
     /// context into consideration. For example, the `\A` anchor can only
     /// match when `start == 0`.
     pub fn is_match_at(&self, text: &[u8], start: usize) -> bool {
-        self.shortest_match_at(text, start).is_some()
+        self.0.searcher().is_match_at(text, start)
     }
 
     /// Returns the same as find, but starts the search at the given
