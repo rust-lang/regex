@@ -158,9 +158,6 @@ jobs:
 
     - if: matrix.build == 'nightly'
       name: Run marker-traits tests
-      uses: actions/setup-python@v2
-      with:
-        python-version: 3.8
       run: ./scripts/public-types-tests.py
 
   rustfmt:
