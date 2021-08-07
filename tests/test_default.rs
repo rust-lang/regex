@@ -44,6 +44,7 @@ mod api_str;
 mod crazy;
 mod flags;
 mod fowler;
+mod marker_traits;
 mod misc;
 mod multiline;
 mod noparse;
@@ -77,54 +78,6 @@ fn disallow_octal() {
 #[test]
 fn allow_octal() {
     assert!(regex::RegexBuilder::new(r"\0").octal(true).build().is_ok());
-}
-
-#[test]
-fn oibits() {
-    use regex::bytes;
-    use regex::{Regex, RegexBuilder, RegexSet, RegexSetBuilder};
-    use std::panic::{RefUnwindSafe, UnwindSafe};
-
-    fn assert_send<T: Send>() {}
-    fn assert_sync<T: Sync>() {}
-    fn assert_unwind_safe<T: UnwindSafe>() {}
-    fn assert_ref_unwind_safe<T: RefUnwindSafe>() {}
-
-    assert_send::<Regex>();
-    assert_sync::<Regex>();
-    assert_unwind_safe::<Regex>();
-    assert_ref_unwind_safe::<Regex>();
-    assert_send::<RegexBuilder>();
-    assert_sync::<RegexBuilder>();
-    assert_unwind_safe::<RegexBuilder>();
-    assert_ref_unwind_safe::<RegexBuilder>();
-
-    assert_send::<bytes::Regex>();
-    assert_sync::<bytes::Regex>();
-    assert_unwind_safe::<bytes::Regex>();
-    assert_ref_unwind_safe::<bytes::Regex>();
-    assert_send::<bytes::RegexBuilder>();
-    assert_sync::<bytes::RegexBuilder>();
-    assert_unwind_safe::<bytes::RegexBuilder>();
-    assert_ref_unwind_safe::<bytes::RegexBuilder>();
-
-    assert_send::<RegexSet>();
-    assert_sync::<RegexSet>();
-    assert_unwind_safe::<RegexSet>();
-    assert_ref_unwind_safe::<RegexSet>();
-    assert_send::<RegexSetBuilder>();
-    assert_sync::<RegexSetBuilder>();
-    assert_unwind_safe::<RegexSetBuilder>();
-    assert_ref_unwind_safe::<RegexSetBuilder>();
-
-    assert_send::<bytes::RegexSet>();
-    assert_sync::<bytes::RegexSet>();
-    assert_unwind_safe::<bytes::RegexSet>();
-    assert_ref_unwind_safe::<bytes::RegexSet>();
-    assert_send::<bytes::RegexSetBuilder>();
-    assert_sync::<bytes::RegexSetBuilder>();
-    assert_unwind_safe::<bytes::RegexSetBuilder>();
-    assert_ref_unwind_safe::<bytes::RegexSetBuilder>();
 }
 
 // See: https://github.com/rust-lang/regex/issues/568

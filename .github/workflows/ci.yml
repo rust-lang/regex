@@ -156,6 +156,10 @@ jobs:
       run: |
         cargo test --test default --no-default-features --features 'std pattern unicode-perl'
 
+    - if: matrix.build == 'nightly'
+      name: Run marker-traits tests
+      run: ./scripts/public-types-tests.py
+
   rustfmt:
     name: rustfmt
     runs-on: ubuntu-18.04
