@@ -55,9 +55,9 @@ macro_rules! define_builder {
                 ///
                 /// If the pattern is invalid, then an error will be returned when
                 /// `build` is called.
-                pub fn new(pattern: &str) -> RegexBuilder {
+                pub fn new<T: Into<String>>(pattern: T) -> RegexBuilder {
                     let mut builder = RegexBuilder(RegexOptions::default());
-                    builder.0.pats.push(pattern.to_owned());
+                    builder.0.pats.push(pattern.into());
                     builder
                 }
 

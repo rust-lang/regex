@@ -116,7 +116,31 @@ impl Regex {
     /// to search, split or replace text in a string.
     ///
     /// If an invalid expression is given, then an error is returned.
-    pub fn new(re: &str) -> Result<Regex, Error> {
+    ///
+    /// # Example
+    ///
+    /// Create a new Regex using a &str.
+    ///
+    /// ```rust
+    /// # use regex::bytes::Regex;
+    /// # fn main() {
+    /// let regex: &str = r"\b\w{13}\b";
+    /// Regex::new(regex);
+    /// # }
+    /// ```
+    ///
+    /// # Example
+    ///
+    /// Create a new Regex using a String.
+    ///
+    /// ```rust
+    /// # use regex::bytes::Regex;
+    /// # fn main() {
+    /// let regex: String = r"\b\w{13}\b".to_string();
+    /// Regex::new(regex);
+    /// # }
+    /// ```
+    pub fn new<T: Into<String>>(re: T) -> Result<Regex, Error> {
         RegexBuilder::new(re).build()
     }
 
