@@ -29,7 +29,9 @@ opt-level = 3
 debug = true
 
 [profile.dev]
-inherits = "release"
+opt-level = 3
+debug = true
 
 [profile.test]
-inherits = "release"
+opt-level = 3
+debug = true
