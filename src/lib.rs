@@ -221,7 +221,7 @@ Most features of the regular expressions in this crate are Unicode aware. Here
 are some examples:
 
 * `.` will match any valid UTF-8 encoded Unicode scalar value except for `\n`.
-  (To also match `\n`, enable the `s` flag, e.g., `(?s:.)`.)
+  (To also match `\n`, enable the `s` flag, e.g., `(?s)`.)
 * `\w`, `\d` and `\s` are Unicode aware. For example, `\s` will match all forms
   of whitespace categorized by Unicode.
 * `\b` matches a Unicode word boundary.
