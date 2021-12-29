@@ -311,7 +311,7 @@ impl ExecBuilder {
                 match_type: MatchType::Nothing,
             });
             let pool = ExecReadOnly::new_pool(&ro);
-            return Ok(Exec { ro: ro, pool });
+            return Ok(Exec { ro, pool });
         }
         let parsed = self.parse()?;
         let mut nfa = Compiler::new()
