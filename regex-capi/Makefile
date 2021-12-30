@@ -4,6 +4,6 @@ RS_SRC := $(shell find src -type f) Cargo.toml
 	cargo build --release
 
 install: ../target/release/librure.a ../target/release/librure.dylib
-	sudo cp ../target/release/librure.a /usr/local/lib/
-	sudo cp ../target/release/librure.dylib /usr/local/lib/
-	sudo cp include/rure.h /usr/local/include
+	cp ../target/release/librure.a /usr/local/lib/
+	cp ../target/release/librure.dylib /usr/local/lib/
+	cp include/rure.h /usr/local/include
