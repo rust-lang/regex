@@ -14,6 +14,17 @@ this library. Types and flags are documented first, and functions follow.
 The syntax and possibly other useful things are documented in the Rust
 API documentation: https://docs.rs/regex
 
+Installation
+------------
+
+With [Rust and Cargo installed](https://www.rust-lang.org/downloads.html):
+
+```
+$ git clone git://github.com/rust-lang/regex
+$ cd regex/regex-capi
+$ make
+$ sudo make install
+```
 
 Examples
 --------
