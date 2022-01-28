@@ -877,7 +877,7 @@ impl CaptureLocations {
         self.0.pos(i)
     }
 
-    /// Returns the total number of capturing groups.
+    /// Returns the total number of capture groups (even if they didn't match).
     ///
     /// This is always at least `1` since every regex has at least `1`
     /// capturing group that corresponds to the entire match.
@@ -979,7 +979,7 @@ impl<'t> Captures<'t> {
         expand_bytes(self, replacement, dst)
     }
 
-    /// Returns the number of captured groups.
+    /// Returns the total number of capture groups (even if they didn't match).
     ///
     /// This is always at least `1`, since every regex has at least one capture
     /// group that corresponds to the full match.
