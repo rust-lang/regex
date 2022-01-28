@@ -989,7 +989,7 @@ impl<'t> Captures<'t> {
         expand_str(self, replacement, dst)
     }
 
-    /// Returns the number of captured groups.
+    /// Returns the number of capture groups (even if they didn't match).
     ///
     /// This is always at least `1`, since every regex has at least one capture
     /// group that corresponds to the full match.
