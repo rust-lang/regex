@@ -1,3 +1,17 @@
+1.5.5 (2022-03-08)
+==================
+This releases fixes a security bug in the regex compiler. This bug permits a
+vector for a denial-of-service attack in cases where the regex being compiled
+is untrusted. There are no known problems where the regex is itself trusted,
+including in cases of untrusted haystacks.
+
+* [SECURITY #GHSA-m5pq-gvj9-9vr8](https://github.com/rust-lang/regex/security/advisories/GHSA-m5pq-gvj9-9vr8):
+  Fixes a bug in the regex compiler where empty sub-expressions subverted the
+  existing mitigations in place to enforce a size limit on compiled regexes.
+  The Rust Security Response WG published an advisory about this:
+  https://groups.google.com/g/rustlang-security-announcements/c/NcNNL1Jq7Yw
+
+
 1.5.4 (2021-05-06)
 ==================
 This release fixes another compilation failure when building regex. This time,
