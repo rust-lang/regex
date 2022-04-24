@@ -149,12 +149,12 @@ sherlock!(before_holmes, r"\w+\s+Holmes", 319);
 // and suffix optimizations.
 sherlock!(before_after_holmes, r"\w+\s+Holmes\s+\w+", 137);
 
-// Find Holmes co-occuring with Watson in a particular window of characters.
+// Find Holmes co-occurring with Watson in a particular window of characters.
 // This uses Aho-Corasick for the Holmes|Watson prefix, but the lazy DFA for
 // the rest.
 sherlock!(holmes_cochar_watson, r"Holmes.{0,25}Watson|Watson.{0,25}Holmes", 7);
 
-// Find Holmes co-occuring with Watson in a particular window of words.
+// Find Holmes co-occurring with Watson in a particular window of words.
 // This uses Aho-Corasick for the Holmes|Watson prefix, but the lazy DFA for
 // the rest.
 #[cfg(not(feature = "re-onig"))]
