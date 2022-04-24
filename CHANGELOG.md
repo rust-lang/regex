@@ -683,7 +683,7 @@ New features:
 * Empty sub-expressions are now permitted in most places. That is, `()+` is
   now a valid regex.
 * Almost everything in regex-syntax now uses constant stack space, even when
-  performing anaylsis that requires structural induction. This reduces the risk
+  performing analysis that requires structural induction. This reduces the risk
   of a user provided regular expression causing a stack overflow.
 * [FEATURE #174](https://github.com/rust-lang/regex/issues/174):
   The `Ast` type in `regex-syntax` now contains span information.
