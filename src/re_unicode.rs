@@ -1092,7 +1092,17 @@ impl<'c, 't> Iterator for SubCaptureMatches<'c, 't> {
             .next()
             .map(|cap| cap.map(|(s, e)| Match::new(self.caps.text, s, e)))
     }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.it.size_hint()
+    }
+
+    fn count(self) -> usize {
+        self.it.count()
+    }
 }
+
+impl<'c, 't> ExactSizeIterator for SubCaptureMatches<'c, 't> {}
 
 impl<'c, 't> FusedIterator for SubCaptureMatches<'c, 't> {}
 
