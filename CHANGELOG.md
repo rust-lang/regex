@@ -1,3 +1,10 @@
+TBD
+===
+
+* [BUG #680](https://github.com/rust-lang/regex/issues/680):
+  Fixes a bug where `[[:alnum:][:^ascii:]]` dropped `[:alnum:]` from the class.
+
+
 1.5.5 (2022-03-08)
 ==================
 This releases fixes a security bug in the regex compiler. This bug permits a
