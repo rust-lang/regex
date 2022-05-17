@@ -3139,6 +3139,9 @@ mod tests {
         assert!(t(r"\pL*").is_match_empty());
         assert!(t(r"a*|b").is_match_empty());
         assert!(t(r"b|a*").is_match_empty());
+        assert!(t(r"a|").is_match_empty());
+        assert!(t(r"|a").is_match_empty());
+        assert!(t(r"a||b").is_match_empty());
         assert!(t(r"a*a?(abcd)*").is_match_empty());
         assert!(t(r"^").is_match_empty());
         assert!(t(r"$").is_match_empty());
@@ -3148,6 +3151,8 @@ mod tests {
         assert!(t(r"\z").is_match_empty());
         assert!(t(r"\B").is_match_empty());
         assert!(t_bytes(r"(?-u)\B").is_match_empty());
+        assert!(t(r"\b").is_match_empty());
+        assert!(t(r"(?-u)\b").is_match_empty());
 
         // Negative examples.
         assert!(!t(r"a+").is_match_empty());
@@ -3157,8 +3162,6 @@ mod tests {
         assert!(!t(r"a{1,10}").is_match_empty());
         assert!(!t(r"b|a").is_match_empty());
         assert!(!t(r"a*a+(abcd)*").is_match_empty());
-        assert!(!t(r"\b").is_match_empty());
-        assert!(!t(r"(?-u)\b").is_match_empty());
     }
 
     #[test]
