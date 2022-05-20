@@ -6,6 +6,8 @@ The below are changes for the next release, which is to be determined.
   Fixes a bug where `[[:alnum:][:^ascii:]]` dropped `[:alnum:]` from the class.
 * [BUG #859](https://github.com/rust-lang/regex/issues/859):
   Fixes a bug where `Hir::is_match_empty` returned `false` for `\b`.
+* [BUG #862](https://github.com/rust-lang/regex/issues/862):
+  Fixes a bug where 'ab??' matches 'ab' instead of 'a' in 'ab'.
 
 
 1.5.5 (2022-03-08)
