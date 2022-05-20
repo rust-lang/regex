@@ -1,6 +1,7 @@
-TBD
-===
-The below are changes for the next release, which is to be determined.
+1.5.6 (2022-05-20)
+==================
+This release includes a few bug fixes, including a bug that produced incorrect
+matches when a non-greedy `?` operator was used.
 
 * [BUG #680](https://github.com/rust-lang/regex/issues/680):
   Fixes a bug where `[[:alnum:][:^ascii:]]` dropped `[:alnum:]` from the class.
