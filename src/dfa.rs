@@ -31,7 +31,7 @@ considerably more complex than one might expect out of a DFA. A number of
 tricks are employed to make it fast. Tread carefully.
 
 N.B. While this implementation is heavily commented, Russ Cox's series of
-articles on regexes is strongly recommended: https://swtch.com/~rsc/regexp/
+articles on regexes is strongly recommended: <https://swtch.com/~rsc/regexp/>
 (As is the DFA implementation in RE2, which heavily influenced this
 implementation.)
 */
