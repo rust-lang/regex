@@ -75,9 +75,11 @@ jobs:
     - name: Install and configure Cross
       if: matrix.target != ''
       run: |
-        # FIXME: to work around bugs in latest cross release, install master.
-        # See: https://github.com/rust-embedded/cross/issues/357
-        cargo install --git https://github.com/rust-embedded/cross
+        # We used to install 'cross' from master, but it kept failing. So now
+        # we build from a known-good version until 'cross' becomes more stable
+        # or we find an alternative. Notably, between v0.2.1 and current
+        # master (2022-06-14), the number of Cross's dependencies has doubled.
+        cargo install --bins --git https://github.com/rust-embedded/cross --tag v0.2.1
         echo "CARGO=cross" >> $GITHUB_ENV
         echo "TARGET=--target ${{ matrix.target }}" >> $GITHUB_ENV
 
