@@ -129,7 +129,7 @@ impl<'t> From<Match<'t>> for Range<usize> {
 /// assert!(haystack.contains(&re));
 /// assert_eq!(haystack.find(&re), Some(1));
 /// assert_eq!(haystack.match_indices(&re).collect::<Vec<_>>(),
-///            vec![(1, 4), (5, 8)]);
+///            vec![(1, "111"), (5, "222")]);
 /// assert_eq!(haystack.split(&re).collect::<Vec<_>>(), vec!["a", "b", "c"]);
 /// ```
 #[derive(Clone)]
