@@ -629,7 +629,7 @@ pub use crate::re_builder::unicode::*;
 pub use crate::re_set::unicode::*;
 #[cfg(feature = "std")]
 pub use crate::re_unicode::{
-    escape, CaptureLocations, CaptureMatches, CaptureNames, Captures,
+    escape, is_meta_character, CaptureLocations, CaptureMatches, CaptureNames, Captures,
     Locations, Match, Matches, NoExpand, Regex, Replacer, ReplacerRef, Split,
     SplitN, SubCaptureMatches,
 };

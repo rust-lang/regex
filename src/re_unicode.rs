@@ -22,6 +22,19 @@ pub fn escape(text: &str) -> String {
     regex_syntax::escape(text)
 }
 
+/// Returns true if the given character has significance in a regex.
+///
+/// These are the only characters that are allowed to be escaped, with one
+/// exception: an ASCII space character may be escaped when extended mode (with
+/// the `x` flag) is enabled. In particular, `is_meta_character(' ')` returns
+/// `false`.
+///
+/// Note that the set of characters for which this function returns `true` or
+/// `false` is fixed and won't change in a semver compatible release.
+pub fn is_meta_character(c: char) -> bool {
+    regex_syntax::is_meta_character(c)
+}
+
 /// Match represents a single match of a regex in a haystack.
 ///
 /// The lifetime parameter `'t` refers to the lifetime of the matched text.
