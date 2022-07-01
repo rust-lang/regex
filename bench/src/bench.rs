@@ -19,12 +19,8 @@ cfg_if! {
         pub use regex::bytes::{Regex, RegexSet};
     } else if #[cfg(feature = "re-re2")] {
         pub use ffi::re2::Regex;
-    } else if #[cfg(feature = "re-dphobos")] {
-        pub use ffi::d_phobos::Regex;
     } else if #[cfg(feature = "re-pcre2")] {
         pub use ffi::pcre2::Regex;
-    } else if #[cfg(any(feature = "re-stdcpp", feature = "re-boost"))] {
-        pub use ffi::stdcpp::Regex;
     } else if #[cfg(feature = "re-tcl")] {
         pub use ffi::tcl::Regex;
     } else {
@@ -299,10 +295,7 @@ cfg_if! {
         feature = "re-rust",
         feature = "re-rust-bytes",
         feature = "re-re2",
-        feature = "re-dphobos",
         feature = "re-pcre2",
-        feature = "re-stdcpp",
-        feature = "re-boost",
         feature = "re-tcl"
     ))] {
         mod ffi;

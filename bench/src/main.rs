@@ -17,7 +17,7 @@ Since this tool includes compilation of the <pattern>, sufficiently large
 haystacks should be used to amortize the cost of compilation. (e.g., >1MB.)
 
 Usage:
-    regex-run-one [options] [onig | pcre1 | pcre2 | stdcpp | re2 | rust | rust-bytes | tcl] <file> <pattern>
+    regex-run-one [options] [onig | pcre1 | pcre2 | re2 | rust | rust-bytes | tcl] <file> <pattern>
     regex-run-one [options] (-h | --help)
 
 Options:
@@ -31,7 +31,6 @@ struct Args {
     cmd_onig: bool,
     cmd_pcre1: bool,
     cmd_pcre2: bool,
-    cmd_stdcpp: bool,
     cmd_re2: bool,
     cmd_rust: bool,
     cmd_rust_bytes: bool,
@@ -59,8 +58,6 @@ impl Args {
             count_pcre1(pat, haystack)
         } else if self.cmd_pcre2 {
             count_pcre2(pat, haystack)
-        } else if self.cmd_stdcpp {
-            count_stdcpp(pat, haystack)
         } else if self.cmd_re2 {
             count_re2(pat, haystack)
         } else if self.cmd_rust {
@@ -106,14 +103,6 @@ nada!("re-pcre2", count_pcre2);
 #[cfg(feature = "re-pcre2")]
 fn count_pcre2(pat: &str, haystack: &str) -> usize {
     use ffi::pcre2::Regex;
-    Regex::new(pat).unwrap().find_iter(haystack).count()
-}
-
-#[cfg(not(any(feature = "re-stdcpp", feature = "re-boost",)))]
-nada!("re-stdcpp", count_stdcpp);
-#[cfg(any(feature = "re-stdcpp", feature = "re-boost",))]
-fn count_stdcpp(pat: &str, haystack: &str) -> usize {
-    use ffi::stdcpp::Regex;
     Regex::new(pat).unwrap().find_iter(haystack).count()
 }
 
