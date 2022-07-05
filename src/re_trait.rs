@@ -74,7 +74,18 @@ impl<'c> Iterator for SubCapturesPosIter<'c> {
         self.idx += 1;
         x
     }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let len = self.locs.len() - self.idx;
+        (len, Some(len))
+    }
+
+    fn count(self) -> usize {
+        self.len()
+    }
 }
+
+impl<'c> ExactSizeIterator for SubCapturesPosIter<'c> {}
 
 impl<'c> FusedIterator for SubCapturesPosIter<'c> {}
 
