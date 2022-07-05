@@ -7,14 +7,17 @@
 #
 #   $ mkdir ucd
 #   $ cd ucd
-#   $ curl -LO https://www.unicode.org/Public/zipped/12.1.0/UCD.zip
+#   $ curl -LO https://www.unicode.org/Public/zipped/14.0.0/UCD.zip
 #   $ unzip UCD.zip
-#   $ curl -LO https://unicode.org/Public/emoji/12.0/emoji-data.txt
 #
 # And then run this script from the root of this repository by pointing it at
 # the data directory downloaded above:
 #
 #   $ ./scripts/generate-unicode-tables path/to/ucd
+#
+# Once complete, if you are upgrading to a new version of Unicode,
+# you'll need to add a new "age" value to the 'ages' routine in
+# regex-syntax/src/unicode.rs.
 
 if [ $# != 1 ]; then
     echo "Usage: $(basename "$0") <ucd-data-directory>" >&2
