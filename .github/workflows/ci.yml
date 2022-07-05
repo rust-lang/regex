@@ -30,47 +30,45 @@ jobs:
         - win-gnu
         include:
         - build: pinned
-          os: ubuntu-18.04
+          os: ubuntu-latest
           rust: 1.41.1
         - build: stable
-          os: ubuntu-18.04
+          os: ubuntu-latest
           rust: stable
         - build: stable-32
-          os: ubuntu-18.04
+          os: ubuntu-latest
           rust: stable
           target: i686-unknown-linux-gnu
         - build: stable-mips
-          os: ubuntu-18.04
+          os: ubuntu-latest
           rust: stable
           target: mips64-unknown-linux-gnuabi64
         - build: beta
-          os: ubuntu-18.04
+          os: ubuntu-latest
           rust: beta
         - build: nightly
-          os: ubuntu-18.04
+          os: ubuntu-latest
           rust: nightly
         - build: macos
           os: macos-latest
           rust: stable
         - build: win-msvc
-          os: windows-2019
+          os: windows-latest
           rust: stable
         - build: win-gnu
-          os: windows-2019
+          os: windows-latest
           rust: stable-x86_64-gnu
     steps:
 
     - name: Checkout repository
-      uses: actions/checkout@v1
-      with:
-        fetch-depth: 1
+      uses: actions/checkout@v3
 
     - name: Install Rust
       uses: actions-rs/toolchain@v1
       with:
+        override: true
         toolchain: ${{ matrix.rust }}
         profile: minimal
-        override: true
 
     - name: Install and configure Cross
       if: matrix.target != ''
@@ -89,7 +87,7 @@ jobs:
         echo "target flag is: ${{ env.TARGET }}"
 
     - name: Show CPU info for debugging
-      if: matrix.os == 'ubuntu-18.04'
+      if: matrix.os == 'ubuntu-latest'
       run: lscpu
 
     - name: Basic build
@@ -163,18 +161,14 @@ jobs:
     runs-on: ubuntu-18.04
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v1
-      with:
-        fetch-depth: 1
+      uses: actions/checkout@v3
     - name: Install Rust
       uses: actions-rs/toolchain@v1
       with:
+        override: true
         toolchain: stable
         profile: minimal
-        override: true
         components: rustfmt
-    - name: Install rustfmt
-      run: rustup component add rustfmt
     - name: Check formatting
       run: |
         cargo fmt --all -- --check
