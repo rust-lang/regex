@@ -257,8 +257,8 @@ ffi_fn! {
     fn rure_iter_capture_names_free(it: *mut IterCaptureNames) {
         unsafe {
             let it = &mut *it;
-            while let Some(ptr) = it.name_ptrs.pop(){
-                CString::from_raw(ptr);
+            while let Some(ptr) = it.name_ptrs.pop() {
+                drop(CString::from_raw(ptr));
             }
             Box::from_raw(it);
         }
@@ -624,6 +624,6 @@ fn rure_escape(
 
 ffi_fn! {
     fn rure_cstring_free(s: *mut c_char) {
-        unsafe { CString::from_raw(s); }
+        unsafe { drop(CString::from_raw(s)); }
     }
 }
