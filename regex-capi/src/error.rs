@@ -54,7 +54,7 @@ ffi_fn! {
 
 ffi_fn! {
     fn rure_error_free(err: *mut Error) {
-        unsafe { Box::from_raw(err); }
+        unsafe { drop(Box::from_raw(err)); }
     }
 }
 

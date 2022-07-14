@@ -151,7 +151,7 @@ ffi_fn! {
 
 ffi_fn! {
     fn rure_free(re: *const Regex) {
-        unsafe { Box::from_raw(re as *mut Regex); }
+        unsafe { drop(Box::from_raw(re as *mut Regex)); }
     }
 }
 
@@ -260,7 +260,7 @@ ffi_fn! {
             while let Some(ptr) = it.name_ptrs.pop() {
                 drop(CString::from_raw(ptr));
             }
-            Box::from_raw(it);
+            drop(Box::from_raw(it));
         }
     }
 }
@@ -316,7 +316,7 @@ ffi_fn! {
 
 ffi_fn! {
     fn rure_iter_free(it: *mut Iter) {
-        unsafe { Box::from_raw(it); }
+        unsafe { drop(Box::from_raw(it)); }
     }
 }
 
@@ -407,7 +407,7 @@ ffi_fn! {
 
 ffi_fn! {
     fn rure_captures_free(captures: *const Captures) {
-        unsafe { Box::from_raw(captures as *mut Captures); }
+        unsafe { drop(Box::from_raw(captures as *mut Captures)); }
     }
 }
 
@@ -447,7 +447,7 @@ ffi_fn! {
 
 ffi_fn! {
     fn rure_options_free(options: *mut Options) {
-        unsafe { Box::from_raw(options); }
+        unsafe { drop(Box::from_raw(options)); }
     }
 }
 
@@ -527,7 +527,7 @@ ffi_fn! {
 
 ffi_fn! {
     fn rure_set_free(re: *const RegexSet) {
-        unsafe { Box::from_raw(re as *mut RegexSet); }
+        unsafe { drop(Box::from_raw(re as *mut RegexSet)); }
     }
 }
 
