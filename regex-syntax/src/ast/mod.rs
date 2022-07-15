@@ -202,13 +202,15 @@ impl error::Error for Error {
             GroupUnclosed => "unclosed group",
             GroupUnopened => "unopened group",
             NestLimitExceeded(_) => "nest limit exceeded",
+            RepetitionCountDecimalEmpty => {
+                "invalid decimal in repetition quantifier"
+            }
             RepetitionCountInvalid => "invalid repetition count range",
             RepetitionCountUnclosed => "unclosed counted repetition",
             RepetitionMissing => "repetition operator missing expression",
             UnicodeClassInvalid => "invalid Unicode character class",
             UnsupportedBackreference => "backreferences are not supported",
             UnsupportedLookAround => "look-around is not supported",
-            _ => unreachable!(),
         }
     }
 }
