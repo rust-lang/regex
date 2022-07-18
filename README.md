@@ -27,7 +27,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-regex = "1.5"
+regex = "1.6"
 ```
 
 Here's a simple example that matches a date in YYYY-MM-DD format and prints the
