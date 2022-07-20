@@ -2,7 +2,7 @@ Your friendly guide to understanding the performance characteristics of this
 crate.
 
 This guide assumes some familiarity with the public API of this crate, which
-can be found here: https://docs.rs/regex
+can be found here: <https://docs.rs/regex>
 
 ## Theory vs. Practice
 
@@ -31,7 +31,7 @@ bits of general advice.
 
 ## Thou Shalt Not Compile Regular Expressions In A Loop
 
-**Advice**: Use `lazy_static` to amortize the cost of `Regex` compilation.
+**Advice**: Use `once_cell` to amortize the cost of `Regex` compilation.
 
 Don't do it unless you really don't mind paying for it. Compiling a regular
 expression in this crate is quite expensive. It is conceivable that it may get
@@ -59,20 +59,20 @@ life-before-main, and therefore, one cannot utter this:
 Unfortunately, this would seem to imply that one must pass `Regex` objects
 around to everywhere they are used, which can be especially painful depending
 on how your program is structured. Thankfully, the
-[`lazy_static`](https://crates.io/crates/lazy_static)
+[`once_cell`](https://crates.io/crates/once_cell)
 crate provides an answer that works well:
 
-    use lazy_static::lazy_static;
+    use once_cell::sync::Lazy;
     use regex::Regex;
 
     fn some_helper_function(text: &str) -> bool {
-        lazy_static! {
-            static ref MY_REGEX: Regex = Regex::new("...").unwrap();
-        }
+        static MY_REGEX: Lazy<Regex> = Lazy::new(|| {
+            Regex::new("...").unwrap()
+        });
         MY_REGEX.is_match(text)
     }
 
-In other words, the `lazy_static!` macro enables us to define a `Regex` *as if*
+In other words, the `Lazy` construct enables us to define a `Regex` *as if*
 it were a global static value. What is actually happening under the covers is
 that the code inside the macro (i.e., `Regex::new(...)`) is run on *first use*
 of `MY_REGEX` via a `Deref` impl. The implementation is admittedly magical, but
@@ -88,8 +88,8 @@ its own copy. Cloning a regex does not incur any additional memory overhead
 than what would be used by using a `Regex` from multiple threads
 simultaneously. *Its only cost is ergonomics.*
 
-It is supported and encouraged to define your regexes using `lazy_static!` as
-if they were global static values, and then use them to search text from
+It is supported and encouraged to define your regexes using `once_cell::sync::Lazy`
+as if they were global static values, and then use them to search text from
 multiple threads simultaneously.
 
 One might imagine that this is possible because a `Regex` represents a
@@ -105,7 +105,7 @@ mutation should not be observable from users of this crate. Therefore, it uses
 interior mutability. This implies that `Regex` can either only be used from one
 thread, or it must do some sort of synchronization. Either choice is
 reasonable, but this crate chooses the latter, in particular because it is
-ergonomic and makes use with `lazy_static!` straight forward.
+ergonomic and makes use with `once_cell::sync::Lazy` straight forward.
 
 Synchronization implies *some* amount of overhead. When a `Regex` is used from
 a single thread, this overhead is negligible. When a `Regex` is used from

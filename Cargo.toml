@@ -1,6 +1,6 @@
 [package]
 name = "regex"
-version = "1.6.0"  #:version
+version = "1.6.0" #:version
 authors = ["The Rust Project Developers"]
 license = "MIT OR Apache-2.0"
 readme = "README.md"
@@ -17,9 +17,7 @@ exclude = ["/scripts/*", "/.github/*"]
 edition = "2018"
 
 [workspace]
-members = [
-  "bench", "regex-capi", "regex-debug", "regex-syntax",
-]
+members = ["bench", "regex-capi", "regex-debug", "regex-syntax"]
 
 [lib]
 # There are no benchmarks in the library code itself
@@ -122,11 +120,14 @@ default-features = false
 
 [dev-dependencies]
 # For examples.
-lazy_static = "1"
+once_cell = "1"
 # For property based tests.
 quickcheck = { version = "1.0.3", default-features = false }
 # For generating random test data.
-rand = { version = "0.8.3", default-features = false, features = ["getrandom", "small_rng"] }
+rand = { version = "0.8.3", default-features = false, features = [
+  "getrandom",
+  "small_rng",
+] }
 # To check README's example
 # TODO: Re-enable this once the MSRV is 1.43 or greater.
 # See: https://github.com/rust-lang/regex/issues/684

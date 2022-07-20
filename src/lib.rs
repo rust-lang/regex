@@ -56,23 +56,21 @@ optimizations that reuse allocations internally to the matching engines.
 
 In Rust, it can sometimes be a pain to pass regular expressions around if
 they're used from inside a helper function. Instead, we recommend using the
-[`lazy_static`](https://crates.io/crates/lazy_static) crate to ensure that
+[`once_cell`](https://crates.io/crates/once_cell) crate to ensure that
 regular expressions are compiled exactly once.
 
 For example:
 
 ```rust
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 use regex::Regex;
 
 fn some_helper_function(text: &str) -> bool {
-    lazy_static! {
-        static ref RE: Regex = Regex::new("...").unwrap();
-    }
+    static RE: Lazy<Regex> = Lazy::new(|| Regex::new("...").unwrap());
     RE.is_match(text)
 }
 
-fn main() {}
+# fn main() {}
 ```
 
 Specifically, in this example, the regex will be compiled when it is used for
