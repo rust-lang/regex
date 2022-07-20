@@ -74,7 +74,7 @@ crate provides an answer that works well:
 
 In other words, the `Lazy` construct enables us to define a `Regex` *as if*
 it were a global static value. What is actually happening under the covers is
-that the code inside the macro (i.e., `Regex::new(...)`) is run on *first use*
+that the code inside the closure (i.e., `Regex::new(...)`) is run on *first use*
 of `MY_REGEX` via a `Deref` impl. The implementation is admittedly magical, but
 it's self contained and everything works exactly as you expect. In particular,
 `MY_REGEX` can be used from multiple threads without wrapping it in an `Arc` or
