@@ -104,6 +104,9 @@ unstable = ["pattern"]
 # by default if the unstable feature is enabled.
 pattern = []
 
+# Enable to use the #[debugger_visualizer] attribute.
+debugger_visualizer = []
+
 # For very fast prefix literal matching.
 [dependencies.aho-corasick]
 version = "0.7.18"
@@ -132,6 +135,9 @@ rand = { version = "0.8.3", default-features = false, features = ["getrandom", "
 # See: https://github.com/rust-lang/regex/issues/684
 # See: https://github.com/rust-lang/regex/issues/685
 # doc-comment = "0.3"
+# To test debugger visualizers defined for the regex crate such as regex.natvis
+debugger_test = "0.1.0"
+debugger_test_parser = "0.1.0"
 
 # Run the test suite on the default behavior of Regex::new.
 # This includes a mish mash of NFAs and DFAs, which are chosen automatically
@@ -183,6 +189,10 @@ name = "backtrack-bytes"
 [[test]]
 path = "tests/test_crates_regex.rs"
 name = "crates-regex"
+
+[[test]]
+path = "tests/test_visualizers.rs"
+name = "visualizers"
 
 [profile.release]
 debug = true

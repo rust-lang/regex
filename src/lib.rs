@@ -610,6 +610,11 @@ another matching engine with fixed memory requirements.
 
 #![deny(missing_docs)]
 #![cfg_attr(feature = "pattern", feature(pattern))]
+#![cfg_attr(feature = "debugger_visualizer", feature(debugger_visualizer))]
+#![cfg_attr(
+    feature = "debugger_visualizer",
+    debugger_visualizer(natvis_file = "../regex.natvis")
+)]
 #![warn(missing_debug_implementations)]
 
 #[cfg(not(feature = "std"))]

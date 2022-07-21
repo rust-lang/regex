@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AutoVisualizer xmlns="http://schemas.microsoft.com/vstudio/debugger/natvis/2010">
+  <Type Name="regex::re_builder::unicode::RegexBuilder">
+    <DisplayString>{{ text={__0.pats[0]} }}</DisplayString>
+    <Expand>
+      <ExpandedItem>__0</ExpandedItem>
+    </Expand>
+  </Type>
+
+  <Type Name="regex::re_bytes::Captures">
+    <Intrinsic Name="discriminant" Expression="locs.__0.buf.ptr.pointer.pointer[i].discriminant">
+      <Parameter Name="i" Type="int" />
+    </Intrinsic>
+    <Intrinsic Name="location" Expression="locs.__0.buf.ptr.pointer.pointer[i].variant1.__0">
+      <Parameter Name="i" Type="int" />
+    </Intrinsic>
+    <Intrinsic Name="match_length" Expression="location(end)-location(start)">
+      <Parameter Name="start" Type="int" />
+      <Parameter Name="end" Type="int" />
+    </Intrinsic>
+    <DisplayString>{{ named_groups={named_groups.ptr.pointer->data.base.table.table.items} }}</DisplayString>
+    <Expand>
+      <Item Name="[text]">text</Item>
+      <Item Name="[named_groups]">named_groups</Item>
+      <CustomListItems>
+        <Variable Name="i" InitialValue="0" />
+        <Variable Name="index" InitialValue="0" />
+        <Variable Name="len" InitialValue="locs.__0.len" />
+        <Loop>
+          <Break Condition="i &gt;= len || discriminant(i) == 0" />
+          <Item Name="{index}">(char*)text.data_ptr+location(i),[location(i+1)-location(i)]s8</Item>
+          <Exec>i+=2</Exec>
+          <Exec>index++</Exec>
+        </Loop>
+      </CustomListItems>
+    </Expand>
+  </Type>
+
+  <Type Name="regex::re_bytes::Match">
+    <DisplayString>{text.data_ptr+start,[end-start]s8}</DisplayString>
+    <Expand>
+      <Item Name="[text]">text</Item>
+      <Synthetic Name="[match_text]">
+        <DisplayString>{(char*)text.data_ptr+start,[end-start]s8}</DisplayString>
+      </Synthetic>
+      <Item Name="[start]">start,d</Item>
+      <Item Name="[end]">end,d</Item>
+    </Expand>
+  </Type>
+
+  <Type Name="regex::re_bytes::Regex">
+    <DisplayString>{{ text={__0.ro.ptr.pointer->data.res[0]} }}</DisplayString>
+    <Expand>
+      <ExpandedItem>__0.ro</ExpandedItem>
+    </Expand>
+  </Type>
+
+  <Type Name="regex::re_unicode::Captures">
+    <Intrinsic Name="discriminant" Expression="locs.__0.buf.ptr.pointer.pointer[i].discriminant">
+      <Parameter Name="i" Type="int" />
+    </Intrinsic>
+    <Intrinsic Name="location" Expression="locs.__0.buf.ptr.pointer.pointer[i].variant1.__0">
+      <Parameter Name="i" Type="int" />
+    </Intrinsic>
+    <Intrinsic Name="match_length" Expression="location(end)-location(start)">
+      <Parameter Name="start" Type="int" />
+      <Parameter Name="end" Type="int" />
+    </Intrinsic>
+    <DisplayString>{{ named_groups={named_groups.ptr.pointer->data.base.table.table.items} }}</DisplayString>
+    <Expand>
+      <Item Name="[text]">text</Item>
+      <Item Name="[named_groups]">named_groups</Item>
+      <CustomListItems>
+        <Variable Name="i" InitialValue="0" />
+        <Variable Name="index" InitialValue="0" />
+        <Variable Name="len" InitialValue="locs.__0.len" />
+        <Loop>
+          <Break Condition="i &gt;= len || discriminant(i) == 0" />
+          <Item Name="{index}">(char*)text.data_ptr+location(i),[location(i+1)-location(i)]s8</Item>
+          <Exec>i+=2</Exec>
+          <Exec>index++</Exec>
+        </Loop>
+      </CustomListItems>
+    </Expand>
+  </Type>
+
+  <Type Name="regex::re_unicode::Match">
+    <DisplayString>{text.data_ptr+start,[end-start]s8}</DisplayString>
+    <Expand>
+      <Item Name="[text]">text</Item>
+      <Synthetic Name="[match_text]">
+        <DisplayString>{(char*)text.data_ptr+start,[end-start]s8}</DisplayString>
+      </Synthetic>
+      <Item Name="[start]">start,d</Item>
+      <Item Name="[end]">end,d</Item>
+    </Expand>
+  </Type>
+
+  <Type Name="regex::re_unicode::Regex">
+    <DisplayString>{{ text={__0.ro.ptr.pointer->data.res[0]} }}</DisplayString>
+    <Expand>
+      <ExpandedItem>__0.ro</ExpandedItem>
+    </Expand>
+  </Type>
+</AutoVisualizer>

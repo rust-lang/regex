@@ -27,6 +27,7 @@ jobs:
         - nightly
         - macos
         - win-msvc
+        - win-msvc (nightly)
         - win-gnu
         include:
         - build: pinned
@@ -55,6 +56,9 @@ jobs:
         - build: win-msvc
           os: windows-latest
           rust: stable
+        - build: win-msvc (nightly)
+          os: windows-latest
+          rust: nightly
         - build: win-gnu
           os: windows-latest
           rust: stable-x86_64-gnu
@@ -153,6 +157,13 @@ jobs:
       name: Run tests with pattern feature
       run: |
         cargo test --test default --no-default-features --features 'std pattern unicode-perl'
+
+    # The #[debugger_visualizer] attribute is currently gated behind an unstable feature flag.
+    # In order to test the visualizers for the regex crate, they have to be tested on a nightly build.
+    - if: matrix.build == 'win-msvc (nightly)'
+      name: Run tests with debugger_visualizer feature
+      run: |
+        cargo test --test visualizers --features 'debugger_visualizer' -- --test-threads=1
 
   rustfmt:
     name: rustfmt
