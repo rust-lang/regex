@@ -1,6 +1,8 @@
 use std::char;
 use std::cmp;
+use std::collections::hash_map::DefaultHasher;
 use std::fmt::Debug;
+use std::hash::{Hash, Hasher};
 use std::slice;
 use std::u8;
 
@@ -32,9 +34,10 @@ use crate::unicode;
 //
 // Tests on this are relegated to the public API of HIR in src/hir.rs.
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct IntervalSet<I> {
     ranges: Vec<I>,
+    folded: bool,
 }
 
 impl<I: Interval> IntervalSet<I> {
@@ -44,7 +47,10 @@ impl<I: Interval> IntervalSet<I> {
     /// The given ranges do not need to be in any specific order, and ranges
     /// may overlap.
     pub fn new<T: IntoIterator<Item = I>>(intervals: T) -> IntervalSet<I> {
-        let mut set = IntervalSet { ranges: intervals.into_iter().collect() };
+        let mut set = IntervalSet {
+            ranges: intervals.into_iter().collect(),
+            folded: false,
+        };
         set.canonicalize();
         set
     }
@@ -53,8 +59,13 @@ impl<I: Interval> IntervalSet<I> {
     pub fn push(&mut self, interval: I) {
         // TODO: This could be faster. e.g., Push the interval such that
         // it preserves canonicalization.
+
+        // don't collect hash if we're not going to use it
+        let before = if self.folded { self.get_hash() } else { 0 };
+
         self.ranges.push(interval);
         self.canonicalize();
+        self.folded = self.folded && before == self.get_hash();
     }
 
     /// Return an iterator over all intervals in this set.
@@ -79,6 +90,9 @@ impl<I: Interval> IntervalSet<I> {
     /// This returns an error if the necessary case mapping data is not
     /// available.
     pub fn case_fold_simple(&mut self) -> Result<(), unicode::CaseFoldError> {
+        if self.folded {
+            return Ok(());
+        }
         let len = self.ranges.len();
         for i in 0..len {
             let range = self.ranges[i];
@@ -88,14 +102,28 @@ impl<I: Interval> IntervalSet<I> {
             }
         }
         self.canonicalize();
+        self.folded = true;
         Ok(())
     }
 
     /// Union this set with the given set, in place.
     pub fn union(&mut self, other: &IntervalSet<I>) {
+        if other.ranges.is_empty() {
+            return;
+        }
+
+        // don't collect hash if we're not going to use it
+        let before_self = if self.folded { self.get_hash() } else { 0 };
+        let before_other = if other.folded { other.get_hash() } else { 0 };
+
         // This could almost certainly be done more efficiently.
         self.ranges.extend(&other.ranges);
         self.canonicalize();
+        self.folded = self.folded && other.folded || {
+            let current_hash = self.get_hash();
+            self.folded && before_self == current_hash
+                || other.folded && before_other == current_hash
+        };
     }
 
     /// Intersect this set with the given set, in place.
@@ -105,8 +133,13 @@ impl<I: Interval> IntervalSet<I> {
         }
         if other.ranges.is_empty() {
             self.ranges.clear();
+            self.folded = false;
             return;
         }
+
+        // don't collect hash if we're not going to use it
+        let before_self = if self.folded { self.get_hash() } else { 0 };
+        let before_other = if other.folded { other.get_hash() } else { 0 };
 
         // There should be a way to do this in-place with constant memory,
         // but I couldn't figure out a simple way to do it. So just append
@@ -134,6 +167,11 @@ impl<I: Interval> IntervalSet<I> {
             }
         }
         self.ranges.drain(..drain_end);
+        self.folded = self.folded && other.folded || {
+            let current_hash = self.get_hash();
+            self.folded && before_self == current_hash
+                || other.folded && before_other == current_hash
+        };
     }
 
     /// Subtract the given set from this set, in place.
@@ -141,6 +179,10 @@ impl<I: Interval> IntervalSet<I> {
         if self.ranges.is_empty() || other.ranges.is_empty() {
             return;
         }
+
+        // don't collect hash if we're not going to use it
+        let before_self = if self.folded { self.get_hash() } else { 0 };
+        let before_other = if other.folded { other.get_hash() } else { 0 };
 
         // This algorithm is (to me) surprisingly complex. A search of the
         // interwebs indicate that this is a potentially interesting problem.
@@ -226,6 +268,11 @@ impl<I: Interval> IntervalSet<I> {
             a += 1;
         }
         self.ranges.drain(..drain_end);
+        self.folded = self.folded && other.folded || {
+            let current_hash = self.get_hash();
+            self.folded && before_self == current_hash
+                || other.folded && before_other == current_hash
+        };
     }
 
     /// Compute the symmetric difference of the two sets, in place.
@@ -276,6 +323,9 @@ impl<I: Interval> IntervalSet<I> {
             self.ranges.push(I::create(lower, I::Bound::max_value()));
         }
         self.ranges.drain(..drain_end);
+
+        // we don't need to update foldedness here stays the same because, necessarily, any set of
+        // matching members is entirely present or entirely not present
     }
 
     /// Converts this set into a canonical ordering.
@@ -318,6 +368,33 @@ impl<I: Interval> IntervalSet<I> {
         }
         true
     }
+
+    fn get_hash(&self) -> u64 {
+        let mut hasher = DefaultHasher::default();
+        self.hash(&mut hasher);
+        hasher.finish()
+    }
+}
+
+impl<I> PartialEq for IntervalSet<I>
+where
+    I: Interval,
+{
+    fn eq(&self, other: &Self) -> bool {
+        self.ranges.eq(&other.ranges)
+    }
+}
+
+impl<I> Eq for IntervalSet<I> where I: Interval {}
+
+impl<I> Hash for IntervalSet<I>
+where
+    I: Interval,
+{
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        // don't hash the foldedness
+        self.ranges.hash(state)
+    }
 }
 
 /// An iterator over intervals.
@@ -333,7 +410,7 @@ impl<'a, I> Iterator for IntervalSetIter<'a, I> {
 }
 
 pub trait Interval:
-    Clone + Copy + Debug + Default + Eq + PartialEq + PartialOrd + Ord
+    Clone + Copy + Debug + Default + Eq + PartialEq + PartialOrd + Ord + Hash
 {
     type Bound: Bound;
 

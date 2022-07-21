@@ -969,7 +969,7 @@ impl<'a> Iterator for ClassUnicodeIter<'a> {
 ///
 /// The range is closed. That is, the start and end of the range are included
 /// in the range.
-#[derive(Clone, Copy, Default, Eq, PartialEq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Default, Eq, PartialEq, PartialOrd, Ord, Hash)]
 pub struct ClassUnicodeRange {
     start: char,
     end: char,
@@ -1028,20 +1028,33 @@ impl Interval for ClassUnicodeRange {
         }
         let start = self.start as u32;
         let end = (self.end as u32).saturating_add(1);
-        let mut next_simple_cp = None;
-        for cp in (start..end).filter_map(char::from_u32) {
-            if next_simple_cp.map_or(false, |next| cp < next) {
-                continue;
-            }
-            let it = match unicode::simple_fold(cp)? {
-                Ok(it) => it,
-                Err(next) => {
-                    next_simple_cp = next;
-                    continue;
+        let mut range = start..end;
+        let mut idx = 0;
+        while let Some(cp) = range.next() {
+            if let Some(c) = char::from_u32(cp) {
+                let it = match unicode::optimised_fold(idx, c)? {
+                    Ok((it, next_idx)) => {
+                        idx = next_idx;
+                        it
+                    }
+                    Err(next) => {
+                        if let Some((next, next_idx)) = next {
+                            let next = next as u32;
+                            range = next..end;
+                            idx = next_idx;
+                        }
+                        continue;
+                    }
+                };
+                for cp_folded in it {
+                    if let Some(last) = ranges.last_mut() {
+                        if last.end as u32 + 1 == cp_folded as u32 {
+                            last.end = cp_folded;
+                            continue;
+                        }
+                    }
+                    ranges.push(ClassUnicodeRange::new(cp_folded, cp_folded));
                 }
-            };
-            for cp_folded in it {
-                ranges.push(ClassUnicodeRange::new(cp_folded, cp_folded));
             }
         }
         Ok(())
@@ -1186,7 +1199,7 @@ impl<'a> Iterator for ClassBytesIter<'a> {
 ///
 /// The range is closed. That is, the start and end of the range are included
 /// in the range.
-#[derive(Clone, Copy, Default, Eq, PartialEq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Default, Eq, PartialEq, PartialOrd, Ord, Hash)]
 pub struct ClassBytesRange {
     start: u8,
     end: u8,

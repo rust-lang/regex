@@ -1,5 +1,6 @@
 use std::error;
 use std::fmt;
+use std::mem::size_of;
 use std::result;
 
 use crate::hir;
@@ -78,38 +79,82 @@ impl fmt::Display for UnicodeWordError {
 /// to, since there is some cost to fetching the equivalence class.
 ///
 /// This returns an error if the Unicode case folding tables are not available.
+#[allow(dead_code)]
 pub fn simple_fold(
     c: char,
 ) -> FoldResult<result::Result<impl Iterator<Item = char>, Option<char>>> {
+    match optimised_fold(0, c) {
+        Ok(Ok((iter, _))) => Ok(Ok(iter)),
+        Ok(Err(Some((c, _)))) => Ok(Err(Some(c))),
+        Ok(Err(None)) => Ok(Err(None)),
+        Err(e) => Err(e),
+    }
+}
+
+pub fn optimised_fold(
+    start: usize,
+    c: char,
+) -> FoldResult<
+    result::Result<(impl Iterator<Item = char>, usize), Option<(char, usize)>>,
+> {
     #[cfg(not(feature = "unicode-case"))]
     fn imp(
+        _: usize,
         _: char,
-    ) -> FoldResult<result::Result<impl Iterator<Item = char>, Option<char>>>
-    {
+    ) -> FoldResult<
+        result::Result<
+            (impl Iterator<Item = char>, usize),
+            Option<(char, usize)>,
+        >,
+    > {
         use std::option::IntoIter;
-        Err::<result::Result<IntoIter<char>, _>, _>(CaseFoldError(()))
+        Err::<result::Result<(IntoIter<char>, usize), _>, _>(CaseFoldError(()))
     }
 
     #[cfg(feature = "unicode-case")]
     fn imp(
+        start: usize,
         c: char,
-    ) -> FoldResult<result::Result<impl Iterator<Item = char>, Option<char>>>
-    {
+    ) -> FoldResult<
+        result::Result<
+            (impl Iterator<Item = char>, usize),
+            Option<(char, usize)>,
+        >,
+    > {
         use crate::unicode_tables::case_folding_simple::CASE_FOLDING_SIMPLE;
+        // this is the greatest number of steps before we are guaranteed to find our value
+        const DEPTH_MAX: usize = size_of::<usize>() * 8
+            - CASE_FOLDING_SIMPLE.len().leading_zeros() as usize
+            + 1;
+
+        // first, see if we can find it in less than depth; it's likely that we've recently looked
+        // up an adjacent value if we've provided a start
+        for (i, &(other, foldings)) in
+            CASE_FOLDING_SIMPLE[start..].iter().take(DEPTH_MAX).enumerate()
+        {
+            if other == c {
+                return Ok(Ok((foldings.iter().copied(), start + i + 1)));
+            } else if other > c {
+                return Ok(Err(Some((other, start + i))));
+            }
+        }
+        if start + DEPTH_MAX >= CASE_FOLDING_SIMPLE.len() {
+            return Ok(Err(None));
+        }
 
         Ok(CASE_FOLDING_SIMPLE
             .binary_search_by_key(&c, |&(c1, _)| c1)
-            .map(|i| CASE_FOLDING_SIMPLE[i].1.iter().copied())
+            .map(|i| (CASE_FOLDING_SIMPLE[i].1.iter().copied(), i + 1))
             .map_err(|i| {
                 if i >= CASE_FOLDING_SIMPLE.len() {
                     None
                 } else {
-                    Some(CASE_FOLDING_SIMPLE[i].0)
+                    Some((CASE_FOLDING_SIMPLE[i].0, i))
                 }
             }))
     }
 
-    imp(c)
+    imp(start, c)
 }
 
 /// Returns true if and only if the given (inclusive) range contains at least
