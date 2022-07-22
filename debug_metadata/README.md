@@ -87,6 +87,15 @@ fn test() {
 In the example above, the second expected statement uses pattern matching through a regular expression
 by using the `pattern:` prefix.
 
+#### Testing Locally
+
+Currently, only Natvis visualizations have been defined for the `regex` crate via `debug_metadata/regex.natvis`,
+which means the `tests/test_visualizer.rs` tests need to be run on Windows using the `*-pc-windows-msvc` targets.
+To run these tests locally, first ensure the debugging tools for Windows are installed or install them following
+the steps listed here, [Debugging Tools for Windows](https://docs.microsoft.com/en-us/windows-hardware/drivers/debugger/).
+Once the debugging tools have been installed, the tests can be run in the same manner as they are in the CI
+pipeline.
+
 #### Note
 
 When running the debugger visualizer tests, `tests/test_visualizer.rs`, they need to be run consecutively
