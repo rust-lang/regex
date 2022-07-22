@@ -613,7 +613,7 @@ another matching engine with fixed memory requirements.
 #![cfg_attr(feature = "debugger_visualizer", feature(debugger_visualizer))]
 #![cfg_attr(
     feature = "debugger_visualizer",
-    debugger_visualizer(natvis_file = "../regex.natvis")
+    debugger_visualizer(natvis_file = "../debug_metadata/regex.natvis")
 )]
 #![warn(missing_debug_implementations)]
 

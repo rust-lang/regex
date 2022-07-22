@@ -271,6 +271,13 @@ invoking `cargo test`. Note that this variable is inspected at compile
 time, so if the tests don't seem to be running, you may need to run
 `cargo clean`.
 
+This crate also supports defining and testing custom debugger visualizers.
+The `#[debugger_visualizer]` attribute is currently unstable and behind a
+`debugger_visualizer` feature gate. To test these visualizers, enable the
+`debugger_visualizer` feature for this crate and run the `tests/test_visualizer.rs`
+tests using the nightly toolchain. For more information on debugger visualizers,
+see `debug_metadata/README.md`.
+
 ## Benchmarking
 
 The benchmarking in this crate is made up of many micro-benchmarks. Currently,
