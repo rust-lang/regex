@@ -243,7 +243,12 @@ impl<'a> ClassQuery<'a> {
         // a general category. (Currently, we don't even support the
         // 'Case_Folding' property. But if we do in the future, users will be
         // required to spell it out.)
-        if norm != "cf" {
+        //
+        // Also 'sc' refers to the 'Currency_Symbol' general category, but is
+        // also the abbreviation for the 'Script' property. So we avoid calling
+        // 'canonical_prop' for it too, which would erroneously normalize it
+        // to 'Script'.
+        if norm != "cf" && norm != "sc" {
             if let Some(canon) = canonical_prop(&norm)? {
                 return Ok(CanonicalClassQuery::Binary(canon));
             }
