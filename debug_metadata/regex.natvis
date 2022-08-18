@@ -8,10 +8,10 @@
   </Type>
 
   <Type Name="regex::re_bytes::Captures">
-    <Intrinsic Name="discriminant" Expression="locs.__0.buf.ptr.pointer.pointer[i].discriminant">
+    <Intrinsic Name="tag" Expression="locs.__0.buf.ptr.pointer.pointer[i].tag">
       <Parameter Name="i" Type="int" />
     </Intrinsic>
-    <Intrinsic Name="location" Expression="locs.__0.buf.ptr.pointer.pointer[i].variant1.__0">
+    <Intrinsic Name="location" Expression="locs.__0.buf.ptr.pointer.pointer[i].variant1.value.__0">
       <Parameter Name="i" Type="int" />
     </Intrinsic>
     <Intrinsic Name="match_length" Expression="location(end)-location(start)">
@@ -27,7 +27,7 @@
         <Variable Name="index" InitialValue="0" />
         <Variable Name="len" InitialValue="locs.__0.len" />
         <Loop>
-          <Break Condition="i &gt;= len || discriminant(i) == 0" />
+          <Break Condition="i &gt;= len || tag(i) == 0" />
           <Item Name="{index}">(char*)text.data_ptr+location(i),[location(i+1)-location(i)]s8</Item>
           <Exec>i+=2</Exec>
           <Exec>index++</Exec>
@@ -56,10 +56,10 @@
   </Type>
 
   <Type Name="regex::re_unicode::Captures">
-    <Intrinsic Name="discriminant" Expression="locs.__0.buf.ptr.pointer.pointer[i].discriminant">
+    <Intrinsic Name="tag" Expression="locs.__0.buf.ptr.pointer.pointer[i].tag">
       <Parameter Name="i" Type="int" />
     </Intrinsic>
-    <Intrinsic Name="location" Expression="locs.__0.buf.ptr.pointer.pointer[i].variant1.__0">
+    <Intrinsic Name="location" Expression="locs.__0.buf.ptr.pointer.pointer[i].variant1.value.__0">
       <Parameter Name="i" Type="int" />
     </Intrinsic>
     <Intrinsic Name="match_length" Expression="location(end)-location(start)">
@@ -75,7 +75,7 @@
         <Variable Name="index" InitialValue="0" />
         <Variable Name="len" InitialValue="locs.__0.len" />
         <Loop>
-          <Break Condition="i &gt;= len || discriminant(i) == 0" />
+          <Break Condition="i &gt;= len || tag(i) == 0" />
           <Item Name="{index}">(char*)text.data_ptr+location(i),[location(i+1)-location(i)]s8</Item>
           <Exec>i+=2</Exec>
           <Exec>index++</Exec>

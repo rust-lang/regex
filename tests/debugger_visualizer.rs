@@ -26,8 +26,8 @@ re               : { text="^(?P<year>\d{4})-(?P<month>\d{2})-(?P<day>\d{2})$" } 
 [+0x320] dfa              [Type: regex::prog::Program]
 [+0x640] dfa_reverse      [Type: regex::prog::Program]
 [+0x960] suffixes         [Type: regex::literal::imp::LiteralSearcher]
-[+0xc18] ac               : None [Type: enum$<core::option::Option<aho_corasick::ahocorasick::AhoCorasick<u32> >, 0, 1, Some>]
-[+0xda0] match_type       : Dfa [Type: enum$<regex::exec::MatchType>]
+[+0xc18] ac               : None [Type: enum2$<core::option::Option<aho_corasick::ahocorasick::AhoCorasick<u32> > >]
+[+0xda0] match_type       : Dfa [Type: enum2$<regex::exec::MatchType>]
 
 captures         : { named_groups=0x3 } [Type: regex::re_unicode::Captures]
 [<Raw View>]     [Type: regex::re_unicode::Captures]
@@ -119,8 +119,8 @@ re               : { text="^(?P<year>\d{4})-(?P<month>\d{2})-(?P<day>\d{2})$" } 
 [+0x320] dfa              [Type: regex::prog::Program]
 [+0x640] dfa_reverse      [Type: regex::prog::Program]
 [+0x960] suffixes         [Type: regex::literal::imp::LiteralSearcher]
-[+0xc18] ac               : None [Type: enum$<core::option::Option<aho_corasick::ahocorasick::AhoCorasick<u32> >, 0, 1, Some>]
-[+0xda0] match_type       : Dfa [Type: enum$<regex::exec::MatchType>]
+[+0xc18] ac               : None [Type: enum2$<core::option::Option<aho_corasick::ahocorasick::AhoCorasick<u32> > >]
+[+0xda0] match_type       : Dfa [Type: enum2$<regex::exec::MatchType>]
 
 captures         : { named_groups=0x3 } [Type: regex::re_bytes::Captures]
 [<Raw View>]     [Type: regex::re_bytes::Captures]
