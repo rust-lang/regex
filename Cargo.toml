@@ -193,6 +193,8 @@ name = "crates-regex"
 [[test]]
 path = "tests/test_visualizers.rs"
 name = "visualizers"
+required-features = ["debugger_visualizer"]
+test = false
 
 [profile.release]
 debug = true
