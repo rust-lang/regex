@@ -795,11 +795,43 @@ impl Class {
     ///
     /// If this is a byte oriented character class, then this will be limited
     /// to the ASCII ranges `A-Z` and `a-z`.
+    ///
+    /// # Panics
+    ///
+    /// This routine panics when the case mapping data necessary for this
+    /// routine to complete is unavailable. This occurs when the `unicode-case`
+    /// feature is not enabled and the underlying class is Unicode oriented.
+    ///
+    /// Callers should prefer using `try_case_fold_simple` instead, which will
+    /// return an error instead of panicking.
     pub fn case_fold_simple(&mut self) {
         match *self {
             Class::Unicode(ref mut x) => x.case_fold_simple(),
             Class::Bytes(ref mut x) => x.case_fold_simple(),
         }
+    }
+
+    /// Apply Unicode simple case folding to this character class, in place.
+    /// The character class will be expanded to include all simple case folded
+    /// character variants.
+    ///
+    /// If this is a byte oriented character class, then this will be limited
+    /// to the ASCII ranges `A-Z` and `a-z`.
+    ///
+    /// # Error
+    ///
+    /// This routine returns an error when the case mapping data necessary
+    /// for this routine to complete is unavailable. This occurs when the
+    /// `unicode-case` feature is not enabled and the underlying class is
+    /// Unicode oriented.
+    pub fn try_case_fold_simple(
+        &mut self,
+    ) -> result::Result<(), CaseFoldError> {
+        match *self {
+            Class::Unicode(ref mut x) => x.try_case_fold_simple()?,
+            Class::Bytes(ref mut x) => x.case_fold_simple(),
+        }
+        Ok(())
     }
 
     /// Negate this character class in place.
