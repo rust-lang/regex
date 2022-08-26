@@ -90,6 +90,13 @@ pub enum ErrorKind {
     __Nonexhaustive,
 }
 
+// BREADCRUMBS:
+//
+// Remove EmptyClassNotAllowed
+// Make errors non_exhaustive
+// Simplify repetitions (get rid of ZeroOrOne, OneOrMore etc)
+// Get rid of deprecated things
+
 impl ErrorKind {
     // TODO: Remove this method entirely on the next breaking semver release.
     #[allow(deprecated)]
@@ -1013,12 +1020,12 @@ impl fmt::Debug for ClassUnicodeRange {
         {
             self.start.to_string()
         } else {
-            format!("0x{:X}", self.start as u32)
+            format!("0x{:X}", u32::from(self.start))
         };
         let end = if !self.end.is_whitespace() && !self.end.is_control() {
             self.end.to_string()
         } else {
-            format!("0x{:X}", self.end as u32)
+            format!("0x{:X}", u32::from(self.end))
         };
         f.debug_struct("ClassUnicodeRange")
             .field("start", &start)
@@ -1058,10 +1065,9 @@ impl Interval for ClassUnicodeRange {
         if !unicode::contains_simple_case_mapping(self.start, self.end)? {
             return Ok(());
         }
-        let start = self.start as u32;
-        let end = (self.end as u32).saturating_add(1);
+        let (start, end) = (u32::from(self.start), u32::from(self.end));
         let mut next_simple_cp = None;
-        for cp in (start..end).filter_map(char::from_u32) {
+        for cp in (start..=end).filter_map(char::from_u32) {
             if next_simple_cp.map_or(false, |next| cp < next) {
                 continue;
             }
@@ -1103,6 +1109,18 @@ impl ClassUnicodeRange {
     /// range.
     pub fn end(&self) -> char {
         self.end
+    }
+
+    /// Returns the number of codepoints in this range.
+    pub fn len(&self) -> usize {
+        let diff = 1 + u32::from(self.end) - u32::from(self.start);
+        // This is likely to panic in 16-bit targets since a usize can only fit
+        // 2^16. It's not clear what to do here, other than to return an error
+        // when building a Unicode class that contains a range whose length
+        // overflows usize. (Which, to be honest, is probably quite common on
+        // 16-bit targets. For example, this would imply that '.' and '\p{any}'
+        // would be impossible to build.)
+        usize::try_from(diff).expect("char class len fits in usize")
     }
 }
 
@@ -1291,18 +1309,27 @@ impl ClassBytesRange {
     pub fn end(&self) -> u8 {
         self.end
     }
+
+    /// Returns the number of bytes in this range.
+    pub fn len(&self) -> usize {
+        usize::from(self.end.checked_sub(self.start).unwrap())
+            .checked_add(1)
+            .unwrap()
+    }
 }
 
 impl fmt::Debug for ClassBytesRange {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut debug = f.debug_struct("ClassBytesRange");
         if self.start <= 0x7F {
-            debug.field("start", &(self.start as char));
+            let ch = char::try_from(self.start).unwrap();
+            debug.field("start", &ch);
         } else {
             debug.field("start", &self.start);
         }
         if self.end <= 0x7F {
-            debug.field("end", &(self.end as char));
+            let ch = char::try_from(self.start).unwrap();
+            debug.field("end", &ch);
         } else {
             debug.field("end", &self.end);
         }

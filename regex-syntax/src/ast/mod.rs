@@ -615,11 +615,12 @@ impl Literal {
     /// If this literal was written as a `\x` hex escape, then this returns
     /// the corresponding byte value. Otherwise, this returns `None`.
     pub fn byte(&self) -> Option<u8> {
-        let short_hex = LiteralKind::HexFixed(HexLiteralKind::X);
-        if self.c as u32 <= 255 && self.kind == short_hex {
-            Some(self.c as u8)
-        } else {
-            None
+        match self.kind {
+            LiteralKind::HexFixed(HexLiteralKind::X) => {
+                // MSRV(1.59): Use 'u8::try_from(self.c)' instead.
+                u8::try_from(u32::from(self.c)).ok()
+            }
+            _ => None,
         }
     }
 }
