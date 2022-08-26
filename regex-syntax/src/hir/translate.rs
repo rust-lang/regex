@@ -305,7 +305,7 @@ impl<'t, 'p> Visitor for TranslatorI<'t, 'p> {
                     let hcls = hir::Class::Unicode(cls);
                     self.push(HirFrame::Expr(Hir::class(hcls)));
                 } else {
-                    let cls = self.hir_perl_byte_class(x);
+                    let cls = self.hir_perl_byte_class(x)?;
                     let hcls = hir::Class::Bytes(cls);
                     self.push(HirFrame::Expr(Hir::class(hcls)));
                 }
@@ -445,7 +445,7 @@ impl<'t, 'p> Visitor for TranslatorI<'t, 'p> {
                     cls.union(&xcls);
                     self.push(HirFrame::ClassUnicode(cls));
                 } else {
-                    let xcls = self.hir_perl_byte_class(x);
+                    let xcls = self.hir_perl_byte_class(x)?;
                     let mut cls = self.pop().unwrap().unwrap_class_bytes();
                     cls.union(&xcls);
                     self.push(HirFrame::ClassBytes(cls));
@@ -879,7 +879,7 @@ impl<'t, 'p> TranslatorI<'t, 'p> {
     fn hir_perl_byte_class(
         &self,
         ast_class: &ast::ClassPerl,
-    ) -> hir::ClassBytes {
+    ) -> Result<hir::ClassBytes> {
         use crate::ast::ClassPerlKind::*;
 
         assert!(!self.flags().unicode());
@@ -893,7 +893,13 @@ impl<'t, 'p> TranslatorI<'t, 'p> {
         if ast_class.negated {
             class.negate();
         }
-        class
+        // Negating a Perl byte class is likely to cause it to match invalid
+        // UTF-8. That's only OK if the translator is configured to allow such
+        // things.
+        if !self.trans().allow_invalid_utf8 && !class.is_all_ascii() {
+            return Err(self.error(ast_class.span, ErrorKind::InvalidUtf8));
+        }
+        Ok(class)
     }
 
     /// Converts the given Unicode specific error to an HIR translation error.
@@ -1971,7 +1977,7 @@ mod tests {
 
     #[test]
     #[cfg(feature = "unicode-perl")]
-    fn class_perl() {
+    fn class_perl_unicode() {
         // Unicode
         assert_eq!(t(r"\d"), hir_uclass_query(ClassQuery::Binary("digit")));
         assert_eq!(t(r"\s"), hir_uclass_query(ClassQuery::Binary("space")));
@@ -2011,7 +2017,10 @@ mod tests {
         );
         #[cfg(feature = "unicode-case")]
         assert_eq!(t(r"(?i)\W"), hir_negate(hir_uclass_perl_word()));
+    }
 
+    #[test]
+    fn class_perl_ascii() {
         // ASCII only
         assert_eq!(
             t(r"(?-u)\d"),
@@ -2040,28 +2049,92 @@ mod tests {
 
         // ASCII only, negated
         assert_eq!(
-            t(r"(?-u)\D"),
+            t_bytes(r"(?-u)\D"),
             hir_negate(hir_ascii_bclass(&ast::ClassAsciiKind::Digit))
         );
         assert_eq!(
-            t(r"(?-u)\S"),
+            t_bytes(r"(?-u)\S"),
             hir_negate(hir_ascii_bclass(&ast::ClassAsciiKind::Space))
         );
         assert_eq!(
-            t(r"(?-u)\W"),
+            t_bytes(r"(?-u)\W"),
             hir_negate(hir_ascii_bclass(&ast::ClassAsciiKind::Word))
         );
         assert_eq!(
-            t(r"(?i-u)\D"),
+            t_bytes(r"(?i-u)\D"),
             hir_negate(hir_ascii_bclass(&ast::ClassAsciiKind::Digit))
         );
         assert_eq!(
-            t(r"(?i-u)\S"),
+            t_bytes(r"(?i-u)\S"),
             hir_negate(hir_ascii_bclass(&ast::ClassAsciiKind::Space))
         );
         assert_eq!(
-            t(r"(?i-u)\W"),
+            t_bytes(r"(?i-u)\W"),
             hir_negate(hir_ascii_bclass(&ast::ClassAsciiKind::Word))
+        );
+
+        // ASCII only, negated, with UTF-8 mode enabled.
+        // In this case, negating any Perl class results in an error because
+        // all such classes can match invalid UTF-8.
+        assert_eq!(
+            t_err(r"(?-u)\D"),
+            TestError {
+                kind: hir::ErrorKind::InvalidUtf8,
+                span: Span::new(
+                    Position::new(5, 1, 6),
+                    Position::new(7, 1, 8),
+                ),
+            },
+        );
+        assert_eq!(
+            t_err(r"(?-u)\S"),
+            TestError {
+                kind: hir::ErrorKind::InvalidUtf8,
+                span: Span::new(
+                    Position::new(5, 1, 6),
+                    Position::new(7, 1, 8),
+                ),
+            },
+        );
+        assert_eq!(
+            t_err(r"(?-u)\W"),
+            TestError {
+                kind: hir::ErrorKind::InvalidUtf8,
+                span: Span::new(
+                    Position::new(5, 1, 6),
+                    Position::new(7, 1, 8),
+                ),
+            },
+        );
+        assert_eq!(
+            t_err(r"(?i-u)\D"),
+            TestError {
+                kind: hir::ErrorKind::InvalidUtf8,
+                span: Span::new(
+                    Position::new(6, 1, 7),
+                    Position::new(8, 1, 9),
+                ),
+            },
+        );
+        assert_eq!(
+            t_err(r"(?i-u)\S"),
+            TestError {
+                kind: hir::ErrorKind::InvalidUtf8,
+                span: Span::new(
+                    Position::new(6, 1, 7),
+                    Position::new(8, 1, 9),
+                ),
+            },
+        );
+        assert_eq!(
+            t_err(r"(?i-u)\W"),
+            TestError {
+                kind: hir::ErrorKind::InvalidUtf8,
+                span: Span::new(
+                    Position::new(6, 1, 7),
+                    Position::new(8, 1, 9),
+                ),
+            },
         );
     }
 
