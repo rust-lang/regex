@@ -322,12 +322,6 @@ impl<'t, 'p> Visitor for TranslatorI<'t, 'p> {
                         ast.negated,
                         &mut cls,
                     )?;
-                    if cls.ranges().is_empty() {
-                        return Err(self.error(
-                            ast.span,
-                            ErrorKind::EmptyClassNotAllowed,
-                        ));
-                    }
                     let expr = Hir::class(hir::Class::Unicode(cls));
                     self.push(HirFrame::Expr(expr));
                 } else {
@@ -337,13 +331,6 @@ impl<'t, 'p> Visitor for TranslatorI<'t, 'p> {
                         ast.negated,
                         &mut cls,
                     )?;
-                    if cls.ranges().is_empty() {
-                        return Err(self.error(
-                            ast.span,
-                            ErrorKind::EmptyClassNotAllowed,
-                        ));
-                    }
-
                     let expr = Hir::class(hir::Class::Bytes(cls));
                     self.push(HirFrame::Expr(expr));
                 }
@@ -839,11 +826,6 @@ impl<'t, 'p> TranslatorI<'t, 'p> {
                 ast_class.negated,
                 class,
             )?;
-            if class.ranges().is_empty() {
-                let err = self
-                    .error(ast_class.span, ErrorKind::EmptyClassNotAllowed);
-                return Err(err);
-            }
         }
         result
     }
@@ -2357,16 +2339,7 @@ mod tests {
     #[test]
     #[cfg(feature = "unicode-gencat")]
     fn class_unicode_any_empty() {
-        assert_eq!(
-            t_err(r"\P{any}"),
-            TestError {
-                kind: hir::ErrorKind::EmptyClassNotAllowed,
-                span: Span::new(
-                    Position::new(0, 1, 1),
-                    Position::new(7, 1, 8)
-                ),
-            }
-        );
+        assert_eq!(t(r"\P{any}"), hir_uclass(&[]),);
     }
 
     #[test]
@@ -2518,27 +2491,9 @@ mod tests {
             }
         );
         #[cfg(any(feature = "unicode-perl", feature = "unicode-bool"))]
-        assert_eq!(
-            t_err(r"[^\s\S]"),
-            TestError {
-                kind: hir::ErrorKind::EmptyClassNotAllowed,
-                span: Span::new(
-                    Position::new(0, 1, 1),
-                    Position::new(7, 1, 8)
-                ),
-            }
-        );
+        assert_eq!(t(r"[^\s\S]"), hir_uclass(&[]),);
         #[cfg(any(feature = "unicode-perl", feature = "unicode-bool"))]
-        assert_eq!(
-            t_err(r"(?-u)[^\s\S]"),
-            TestError {
-                kind: hir::ErrorKind::EmptyClassNotAllowed,
-                span: Span::new(
-                    Position::new(5, 1, 6),
-                    Position::new(12, 1, 13)
-                ),
-            }
-        );
+        assert_eq!(t_bytes(r"(?-u)[^\s\S]"), hir_bclass(&[]),);
     }
 
     #[test]
@@ -2686,27 +2641,9 @@ mod tests {
             hir_uclass(&[('C', 'C'), ('c', 'c')])
         );
 
-        assert_eq!(
-            t_err(r"[^a-c[^c]]"),
-            TestError {
-                kind: hir::ErrorKind::EmptyClassNotAllowed,
-                span: Span::new(
-                    Position::new(0, 1, 1),
-                    Position::new(10, 1, 11)
-                ),
-            }
-        );
+        assert_eq!(t(r"[^a-c[^c]]"), hir_uclass(&[]),);
         #[cfg(feature = "unicode-case")]
-        assert_eq!(
-            t_err(r"(?i)[^a-c[^c]]"),
-            TestError {
-                kind: hir::ErrorKind::EmptyClassNotAllowed,
-                span: Span::new(
-                    Position::new(4, 1, 5),
-                    Position::new(14, 1, 15)
-                ),
-            }
-        );
+        assert_eq!(t(r"(?i)[^a-c[^c]]"), hir_uclass(&[]),);
     }
 
     #[test]

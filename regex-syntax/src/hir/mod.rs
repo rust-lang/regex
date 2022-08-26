@@ -78,20 +78,7 @@ pub enum ErrorKind {
     /// available, and the regular expression required Unicode aware case
     /// insensitivity.
     UnicodeCaseUnavailable,
-    /// This occurs when the translator attempts to construct a character class
-    /// that is empty.
-    ///
-    /// Note that this restriction in the translator may be removed in the
-    /// future.
-    EmptyClassNotAllowed,
 }
-
-// BREADCRUMBS:
-//
-// Remove EmptyClassNotAllowed
-// Make errors non_exhaustive
-// Simplify repetitions (get rid of ZeroOrOne, OneOrMore etc)
-// Get rid of deprecated things
 
 impl std::error::Error for Error {}
 
@@ -118,7 +105,6 @@ impl fmt::Display for ErrorKind {
                 "Unicode-aware case insensitivity matching is not available \
                  (make sure the unicode-case feature is enabled)"
             }
-            EmptyClassNotAllowed => "empty character classes are not allowed",
         };
         f.write_str(msg)
     }
