@@ -9,6 +9,10 @@ use crate::hir;
 pub type Result<T> = result::Result<T, Error>;
 
 /// This error type encompasses any error that can be returned by this crate.
+///
+/// This error type is marked as `non_exhaustive`. This means that adding a
+/// new variant is not considered a breaking change.
+#[non_exhaustive]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Error {
     /// An error that occurred while translating concrete syntax into abstract
@@ -17,13 +21,6 @@ pub enum Error {
     /// An error that occurred while translating abstract syntax into a high
     /// level intermediate representation (HIR).
     Translate(hir::Error),
-    /// Hints that destructuring should not be exhaustive.
-    ///
-    /// This enum may grow additional variants, so this makes sure clients
-    /// don't count on exhaustive matching. (Otherwise, adding a new variant
-    /// could break existing code.)
-    #[doc(hidden)]
-    __Nonexhaustive,
 }
 
 impl From<ast::Error> for Error {
@@ -45,7 +42,6 @@ impl fmt::Display for Error {
         match *self {
             Error::Parse(ref x) => x.fmt(f),
             Error::Translate(ref x) => x.fmt(f),
-            _ => unreachable!(),
         }
     }
 }

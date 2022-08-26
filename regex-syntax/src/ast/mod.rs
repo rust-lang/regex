@@ -64,6 +64,10 @@ impl Error {
 }
 
 /// The type of an error that occurred while building an AST.
+///
+/// This error type is marked as `non_exhaustive`. This means that adding a
+/// new variant is not considered a breaking change.
+#[non_exhaustive]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ErrorKind {
     /// The capturing group limit was exceeded.
@@ -168,13 +172,6 @@ pub enum ErrorKind {
     /// `(?<!re)`. Note that all of these syntaxes are otherwise invalid; this
     /// error is used to improve the user experience.
     UnsupportedLookAround,
-    /// Hints that destructuring should not be exhaustive.
-    ///
-    /// This enum may grow additional variants, so this makes sure clients
-    /// don't count on exhaustive matching. (Otherwise, adding a new variant
-    /// could break existing code.)
-    #[doc(hidden)]
-    __Nonexhaustive,
 }
 
 impl std::error::Error for Error {}
@@ -270,7 +267,6 @@ impl fmt::Display for ErrorKind {
                 "look-around, including look-ahead and look-behind, \
                  is not supported"
             ),
-            _ => unreachable!(),
         }
     }
 }
