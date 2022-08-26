@@ -3,7 +3,6 @@ Defines a high-level intermediate representation for regular expressions.
 */
 use std::char;
 use std::cmp;
-use std::error;
 use std::fmt;
 use std::result;
 use std::u8;
@@ -97,12 +96,19 @@ pub enum ErrorKind {
 // Simplify repetitions (get rid of ZeroOrOne, OneOrMore etc)
 // Get rid of deprecated things
 
-impl ErrorKind {
-    // TODO: Remove this method entirely on the next breaking semver release.
-    #[allow(deprecated)]
-    fn description(&self) -> &str {
+impl std::error::Error for Error {}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        crate::error::Formatter::from(self).fmt(f)
+    }
+}
+
+impl fmt::Display for ErrorKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         use self::ErrorKind::*;
-        match *self {
+
+        let msg = match *self {
             UnicodeNotAllowed => "Unicode not allowed here",
             InvalidUtf8 => "pattern can match invalid UTF-8",
             UnicodePropertyNotFound => "Unicode property not found",
@@ -117,29 +123,8 @@ impl ErrorKind {
             }
             EmptyClassNotAllowed => "empty character classes are not allowed",
             __Nonexhaustive => unreachable!(),
-        }
-    }
-}
-
-impl error::Error for Error {
-    // TODO: Remove this method entirely on the next breaking semver release.
-    #[allow(deprecated)]
-    fn description(&self) -> &str {
-        self.kind.description()
-    }
-}
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        crate::error::Formatter::from(self).fmt(f)
-    }
-}
-
-impl fmt::Display for ErrorKind {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // TODO: Remove this on the next breaking semver release.
-        #[allow(deprecated)]
-        f.write_str(self.description())
+        };
+        f.write_str(msg)
     }
 }
 
