@@ -457,7 +457,11 @@ impl Compiler {
     fn c_class(&mut self, ranges: &[hir::ClassUnicodeRange]) -> ResultOrEmpty {
         use std::mem::size_of;
 
-        assert!(!ranges.is_empty());
+        if ranges.is_empty() {
+            return Err(Error::Syntax(
+                "empty character classes are not allowed".to_string(),
+            ));
+        }
         if self.compiled.uses_bytes() {
             Ok(Some(CompileClass { c: self, ranges }.compile()?))
         } else {
@@ -482,7 +486,11 @@ impl Compiler {
         &mut self,
         ranges: &[hir::ClassBytesRange],
     ) -> ResultOrEmpty {
-        debug_assert!(!ranges.is_empty());
+        if ranges.is_empty() {
+            return Err(Error::Syntax(
+                "empty character classes are not allowed".to_string(),
+            ));
+        }
 
         let first_split_entry = self.insts.len();
         let mut holes = vec![];
