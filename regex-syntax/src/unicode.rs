@@ -419,7 +419,8 @@ pub fn is_word_character(c: char) -> result::Result<bool, UnicodeWordError> {
         use crate::unicode_tables::perl_word::PERL_WORD;
         use std::cmp::Ordering;
 
-        if c <= 0x7F as char && is_word_byte(c as u8) {
+        // MSRV(1.59): Use 'u8::try_from(c)' instead.
+        if u8::try_from(u32::from(c)).map_or(false, is_word_byte) {
             return Ok(true);
         }
         Ok(PERL_WORD

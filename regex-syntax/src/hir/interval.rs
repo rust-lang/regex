@@ -481,7 +481,7 @@ impl Bound for u8 {
         u8::MAX
     }
     fn as_u32(self) -> u32 {
-        self as u32
+        u32::from(self)
     }
     fn increment(self) -> Self {
         self.checked_add(1).unwrap()
@@ -499,20 +499,20 @@ impl Bound for char {
         '\u{10FFFF}'
     }
     fn as_u32(self) -> u32 {
-        self as u32
+        u32::from(self)
     }
 
     fn increment(self) -> Self {
         match self {
             '\u{D7FF}' => '\u{E000}',
-            c => char::from_u32((c as u32).checked_add(1).unwrap()).unwrap(),
+            c => char::from_u32(u32::from(c).checked_add(1).unwrap()).unwrap(),
         }
     }
 
     fn decrement(self) -> Self {
         match self {
             '\u{E000}' => '\u{D7FF}',
-            c => char::from_u32((c as u32).checked_sub(1).unwrap()).unwrap(),
+            c => char::from_u32(u32::from(c).checked_sub(1).unwrap()).unwrap(),
         }
     }
 }

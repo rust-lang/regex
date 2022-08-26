@@ -213,24 +213,24 @@ impl<W: fmt::Write> Writer<W> {
         match ast.kind {
             Verbatim => self.wtr.write_char(ast.c),
             Punctuation => write!(self.wtr, r"\{}", ast.c),
-            Octal => write!(self.wtr, r"\{:o}", ast.c as u32),
+            Octal => write!(self.wtr, r"\{:o}", u32::from(ast.c)),
             HexFixed(ast::HexLiteralKind::X) => {
-                write!(self.wtr, r"\x{:02X}", ast.c as u32)
+                write!(self.wtr, r"\x{:02X}", u32::from(ast.c))
             }
             HexFixed(ast::HexLiteralKind::UnicodeShort) => {
-                write!(self.wtr, r"\u{:04X}", ast.c as u32)
+                write!(self.wtr, r"\u{:04X}", u32::from(ast.c))
             }
             HexFixed(ast::HexLiteralKind::UnicodeLong) => {
-                write!(self.wtr, r"\U{:08X}", ast.c as u32)
+                write!(self.wtr, r"\U{:08X}", u32::from(ast.c))
             }
             HexBrace(ast::HexLiteralKind::X) => {
-                write!(self.wtr, r"\x{{{:X}}}", ast.c as u32)
+                write!(self.wtr, r"\x{{{:X}}}", u32::from(ast.c))
             }
             HexBrace(ast::HexLiteralKind::UnicodeShort) => {
-                write!(self.wtr, r"\u{{{:X}}}", ast.c as u32)
+                write!(self.wtr, r"\u{{{:X}}}", u32::from(ast.c))
             }
             HexBrace(ast::HexLiteralKind::UnicodeLong) => {
-                write!(self.wtr, r"\U{{{:X}}}", ast.c as u32)
+                write!(self.wtr, r"\U{{{:X}}}", u32::from(ast.c))
             }
             Special(ast::SpecialLiteralKind::Bell) => {
                 self.wtr.write_str(r"\a")

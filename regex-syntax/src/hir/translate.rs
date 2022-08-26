@@ -656,7 +656,7 @@ impl<'t, 'p> TranslatorI<'t, 'p> {
             Some(byte) => byte,
         };
         if byte <= 0x7F {
-            return Ok(hir::Literal::Unicode(byte as char));
+            return Ok(hir::Literal::Unicode(char::try_from(byte).unwrap()));
         }
         if !self.trans().allow_invalid_utf8 {
             return Err(self.error(lit.span, ErrorKind::InvalidUtf8));
@@ -704,7 +704,12 @@ impl<'t, 'p> TranslatorI<'t, 'p> {
             }
             let mut cls =
                 hir::ClassBytes::new(vec![hir::ClassBytesRange::new(
-                    c as u8, c as u8,
+                    // OK because 'c.len_utf8() == 1' which in turn implies
+                    // that 'c' is ASCII.
+                    //
+                    // MSRV(1.59): Use 'u8::try_from(c)' instead.
+                    u8::try_from(u32::from(c)).unwrap(),
+                    u8::try_from(u32::from(c)).unwrap(),
                 )]);
             cls.case_fold_simple();
             Ok(Hir::class(hir::Class::Bytes(cls)))
@@ -848,9 +853,8 @@ impl<'t, 'p> TranslatorI<'t, 'p> {
         ast: &ast::ClassAscii,
     ) -> Result<hir::ClassUnicode> {
         let mut cls = hir::ClassUnicode::new(
-            ascii_class(&ast.kind)
-                .iter()
-                .map(|&(s, e)| hir::ClassUnicodeRange::new(s, e)),
+            ascii_class_as_chars(&ast.kind)
+                .map(|(s, e)| hir::ClassUnicodeRange::new(s, e)),
         );
         self.unicode_fold_and_negate(&ast.span, ast.negated, &mut cls)?;
         Ok(cls)
@@ -862,8 +866,7 @@ impl<'t, 'p> TranslatorI<'t, 'p> {
     ) -> Result<hir::ClassBytes> {
         let mut cls = hir::ClassBytes::new(
             ascii_class(&ast.kind)
-                .iter()
-                .map(|&(s, e)| hir::ClassBytesRange::new(s as u8, e as u8)),
+                .map(|(s, e)| hir::ClassBytesRange::new(s, e)),
         );
         self.bytes_fold_and_negate(&ast.span, ast.negated, &mut cls)?;
         Ok(cls)
@@ -985,8 +988,9 @@ impl<'t, 'p> TranslatorI<'t, 'p> {
         match self.literal_to_char(ast)? {
             hir::Literal::Byte(byte) => Ok(byte),
             hir::Literal::Unicode(ch) => {
-                if ch <= 0x7F as char {
-                    Ok(ch as u8)
+                let cp = u32::from(ch);
+                if cp <= 0x7F {
+                    Ok(u8::try_from(cp).unwrap())
                 } else {
                     // We can't feasibly support Unicode in
                     // byte oriented classes. Byte classes don't
@@ -1085,38 +1089,44 @@ impl Flags {
 
 fn hir_ascii_class_bytes(kind: &ast::ClassAsciiKind) -> hir::ClassBytes {
     let ranges: Vec<_> = ascii_class(kind)
-        .iter()
-        .cloned()
-        .map(|(s, e)| hir::ClassBytesRange::new(s as u8, e as u8))
+        .map(|(s, e)| hir::ClassBytesRange::new(s, e))
         .collect();
     hir::ClassBytes::new(ranges)
 }
 
-fn ascii_class(kind: &ast::ClassAsciiKind) -> &'static [(char, char)] {
+fn ascii_class(kind: &ast::ClassAsciiKind) -> impl Iterator<Item = (u8, u8)> {
     use crate::ast::ClassAsciiKind::*;
-    match *kind {
-        Alnum => &[('0', '9'), ('A', 'Z'), ('a', 'z')],
-        Alpha => &[('A', 'Z'), ('a', 'z')],
-        Ascii => &[('\x00', '\x7F')],
-        Blank => &[('\t', '\t'), (' ', ' ')],
-        Cntrl => &[('\x00', '\x1F'), ('\x7F', '\x7F')],
-        Digit => &[('0', '9')],
-        Graph => &[('!', '~')],
-        Lower => &[('a', 'z')],
-        Print => &[(' ', '~')],
-        Punct => &[('!', '/'), (':', '@'), ('[', '`'), ('{', '~')],
+
+    let slice: &'static [(u8, u8)] = match *kind {
+        Alnum => &[(b'0', b'9'), (b'A', b'Z'), (b'a', b'z')],
+        Alpha => &[(b'A', b'Z'), (b'a', b'z')],
+        Ascii => &[(b'\x00', b'\x7F')],
+        Blank => &[(b'\t', b'\t'), (b' ', b' ')],
+        Cntrl => &[(b'\x00', b'\x1F'), (b'\x7F', b'\x7F')],
+        Digit => &[(b'0', b'9')],
+        Graph => &[(b'!', b'~')],
+        Lower => &[(b'a', b'z')],
+        Print => &[(b' ', b'~')],
+        Punct => &[(b'!', b'/'), (b':', b'@'), (b'[', b'`'), (b'{', b'~')],
         Space => &[
-            ('\t', '\t'),
-            ('\n', '\n'),
-            ('\x0B', '\x0B'),
-            ('\x0C', '\x0C'),
-            ('\r', '\r'),
-            (' ', ' '),
+            (b'\t', b'\t'),
+            (b'\n', b'\n'),
+            (b'\x0B', b'\x0B'),
+            (b'\x0C', b'\x0C'),
+            (b'\r', b'\r'),
+            (b' ', b' '),
         ],
-        Upper => &[('A', 'Z')],
-        Word => &[('0', '9'), ('A', 'Z'), ('_', '_'), ('a', 'z')],
-        Xdigit => &[('0', '9'), ('A', 'F'), ('a', 'f')],
-    }
+        Upper => &[(b'A', b'Z')],
+        Word => &[(b'0', b'9'), (b'A', b'Z'), (b'_', b'_'), (b'a', b'z')],
+        Xdigit => &[(b'0', b'9'), (b'A', b'F'), (b'a', b'f')],
+    };
+    slice.iter().copied()
+}
+
+fn ascii_class_as_chars(
+    kind: &ast::ClassAsciiKind,
+) -> impl Iterator<Item = (char, char)> {
+    ascii_class(kind).map(|(s, e)| (char::from(s), char::from(e)))
 }
 
 #[cfg(test)]
@@ -1126,7 +1136,7 @@ mod tests {
     use crate::hir::{self, Hir, HirKind};
     use crate::unicode::{self, ClassQuery};
 
-    use super::{ascii_class, TranslatorBuilder};
+    use super::{ascii_class, ascii_class_as_chars, TranslatorBuilder};
 
     // We create these errors to compare with real hir::Errors in the tests.
     // We define equality between TestError and hir::Error to disregard the
@@ -1281,6 +1291,19 @@ mod tests {
         Hir::class(hir::Class::Unicode(unicode::perl_word().unwrap()))
     }
 
+    fn hir_ascii_uclass(kind: &ast::ClassAsciiKind) -> Hir {
+        Hir::class(hir::Class::Unicode(hir::ClassUnicode::new(
+            ascii_class_as_chars(kind)
+                .map(|(s, e)| hir::ClassUnicodeRange::new(s, e)),
+        )))
+    }
+
+    fn hir_ascii_bclass(kind: &ast::ClassAsciiKind) -> Hir {
+        Hir::class(hir::Class::Bytes(hir::ClassBytes::new(
+            ascii_class(kind).map(|(s, e)| hir::ClassBytesRange::new(s, e)),
+        )))
+    }
+
     fn hir_uclass(ranges: &[(char, char)]) -> Hir {
         let ranges: Vec<hir::ClassUnicodeRange> = ranges
             .iter()
@@ -1293,18 +1316,6 @@ mod tests {
         let ranges: Vec<hir::ClassBytesRange> = ranges
             .iter()
             .map(|&(s, e)| hir::ClassBytesRange::new(s, e))
-            .collect();
-        Hir::class(hir::Class::Bytes(hir::ClassBytes::new(ranges)))
-    }
-
-    fn hir_bclass_from_char(ranges: &[(char, char)]) -> Hir {
-        let ranges: Vec<hir::ClassBytesRange> = ranges
-            .iter()
-            .map(|&(s, e)| {
-                assert!(s as u32 <= 0x7F);
-                assert!(e as u32 <= 0x7F);
-                hir::ClassBytesRange::new(s as u8, e as u8)
-            })
             .collect();
         Hir::class(hir::Class::Bytes(hir::ClassBytes::new(ranges)))
     }
@@ -1856,64 +1867,64 @@ mod tests {
     fn class_ascii() {
         assert_eq!(
             t("[[:alnum:]]"),
-            hir_uclass(ascii_class(&ast::ClassAsciiKind::Alnum))
+            hir_ascii_uclass(&ast::ClassAsciiKind::Alnum)
         );
         assert_eq!(
             t("[[:alpha:]]"),
-            hir_uclass(ascii_class(&ast::ClassAsciiKind::Alpha))
+            hir_ascii_uclass(&ast::ClassAsciiKind::Alpha)
         );
         assert_eq!(
             t("[[:ascii:]]"),
-            hir_uclass(ascii_class(&ast::ClassAsciiKind::Ascii))
+            hir_ascii_uclass(&ast::ClassAsciiKind::Ascii)
         );
         assert_eq!(
             t("[[:blank:]]"),
-            hir_uclass(ascii_class(&ast::ClassAsciiKind::Blank))
+            hir_ascii_uclass(&ast::ClassAsciiKind::Blank)
         );
         assert_eq!(
             t("[[:cntrl:]]"),
-            hir_uclass(ascii_class(&ast::ClassAsciiKind::Cntrl))
+            hir_ascii_uclass(&ast::ClassAsciiKind::Cntrl)
         );
         assert_eq!(
             t("[[:digit:]]"),
-            hir_uclass(ascii_class(&ast::ClassAsciiKind::Digit))
+            hir_ascii_uclass(&ast::ClassAsciiKind::Digit)
         );
         assert_eq!(
             t("[[:graph:]]"),
-            hir_uclass(ascii_class(&ast::ClassAsciiKind::Graph))
+            hir_ascii_uclass(&ast::ClassAsciiKind::Graph)
         );
         assert_eq!(
             t("[[:lower:]]"),
-            hir_uclass(ascii_class(&ast::ClassAsciiKind::Lower))
+            hir_ascii_uclass(&ast::ClassAsciiKind::Lower)
         );
         assert_eq!(
             t("[[:print:]]"),
-            hir_uclass(ascii_class(&ast::ClassAsciiKind::Print))
+            hir_ascii_uclass(&ast::ClassAsciiKind::Print)
         );
         assert_eq!(
             t("[[:punct:]]"),
-            hir_uclass(ascii_class(&ast::ClassAsciiKind::Punct))
+            hir_ascii_uclass(&ast::ClassAsciiKind::Punct)
         );
         assert_eq!(
             t("[[:space:]]"),
-            hir_uclass(ascii_class(&ast::ClassAsciiKind::Space))
+            hir_ascii_uclass(&ast::ClassAsciiKind::Space)
         );
         assert_eq!(
             t("[[:upper:]]"),
-            hir_uclass(ascii_class(&ast::ClassAsciiKind::Upper))
+            hir_ascii_uclass(&ast::ClassAsciiKind::Upper)
         );
         assert_eq!(
             t("[[:word:]]"),
-            hir_uclass(ascii_class(&ast::ClassAsciiKind::Word))
+            hir_ascii_uclass(&ast::ClassAsciiKind::Word)
         );
         assert_eq!(
             t("[[:xdigit:]]"),
-            hir_uclass(ascii_class(&ast::ClassAsciiKind::Xdigit))
+            hir_ascii_uclass(&ast::ClassAsciiKind::Xdigit)
         );
 
         assert_eq!(
             t("[[:^lower:]]"),
-            hir_negate(hir_uclass(ascii_class(&ast::ClassAsciiKind::Lower)))
+            hir_negate(hir_ascii_uclass(&ast::ClassAsciiKind::Lower))
         );
         #[cfg(feature = "unicode-case")]
         assert_eq!(
@@ -1928,13 +1939,11 @@ mod tests {
 
         assert_eq!(
             t("(?-u)[[:lower:]]"),
-            hir_bclass_from_char(ascii_class(&ast::ClassAsciiKind::Lower))
+            hir_ascii_bclass(&ast::ClassAsciiKind::Lower)
         );
         assert_eq!(
             t("(?i-u)[[:lower:]]"),
-            hir_case_fold(hir_bclass_from_char(ascii_class(
-                &ast::ClassAsciiKind::Lower
-            )))
+            hir_case_fold(hir_ascii_bclass(&ast::ClassAsciiKind::Lower))
         );
 
         assert_eq!(
@@ -1965,14 +1974,14 @@ mod tests {
         assert_eq!(
             t("[[:alnum:][:^ascii:]]"),
             hir_union(
-                hir_uclass(ascii_class(&ast::ClassAsciiKind::Alnum)),
+                hir_ascii_uclass(&ast::ClassAsciiKind::Alnum),
                 hir_uclass(&[('\u{80}', '\u{10FFFF}')]),
             ),
         );
         assert_eq!(
             t_bytes("(?-u)[[:alnum:][:^ascii:]]"),
             hir_union(
-                hir_bclass_from_char(ascii_class(&ast::ClassAsciiKind::Alnum)),
+                hir_ascii_bclass(&ast::ClassAsciiKind::Alnum),
                 hir_bclass(&[(0x80, 0xFF)]),
             ),
         );
@@ -2024,65 +2033,53 @@ mod tests {
         // ASCII only
         assert_eq!(
             t(r"(?-u)\d"),
-            hir_bclass_from_char(ascii_class(&ast::ClassAsciiKind::Digit))
+            hir_ascii_bclass(&ast::ClassAsciiKind::Digit)
         );
         assert_eq!(
             t(r"(?-u)\s"),
-            hir_bclass_from_char(ascii_class(&ast::ClassAsciiKind::Space))
+            hir_ascii_bclass(&ast::ClassAsciiKind::Space)
         );
         assert_eq!(
             t(r"(?-u)\w"),
-            hir_bclass_from_char(ascii_class(&ast::ClassAsciiKind::Word))
+            hir_ascii_bclass(&ast::ClassAsciiKind::Word)
         );
         assert_eq!(
             t(r"(?i-u)\d"),
-            hir_bclass_from_char(ascii_class(&ast::ClassAsciiKind::Digit))
+            hir_ascii_bclass(&ast::ClassAsciiKind::Digit)
         );
         assert_eq!(
             t(r"(?i-u)\s"),
-            hir_bclass_from_char(ascii_class(&ast::ClassAsciiKind::Space))
+            hir_ascii_bclass(&ast::ClassAsciiKind::Space)
         );
         assert_eq!(
             t(r"(?i-u)\w"),
-            hir_bclass_from_char(ascii_class(&ast::ClassAsciiKind::Word))
+            hir_ascii_bclass(&ast::ClassAsciiKind::Word)
         );
 
         // ASCII only, negated
         assert_eq!(
             t(r"(?-u)\D"),
-            hir_negate(hir_bclass_from_char(ascii_class(
-                &ast::ClassAsciiKind::Digit
-            )))
+            hir_negate(hir_ascii_bclass(&ast::ClassAsciiKind::Digit))
         );
         assert_eq!(
             t(r"(?-u)\S"),
-            hir_negate(hir_bclass_from_char(ascii_class(
-                &ast::ClassAsciiKind::Space
-            )))
+            hir_negate(hir_ascii_bclass(&ast::ClassAsciiKind::Space))
         );
         assert_eq!(
             t(r"(?-u)\W"),
-            hir_negate(hir_bclass_from_char(ascii_class(
-                &ast::ClassAsciiKind::Word
-            )))
+            hir_negate(hir_ascii_bclass(&ast::ClassAsciiKind::Word))
         );
         assert_eq!(
             t(r"(?i-u)\D"),
-            hir_negate(hir_bclass_from_char(ascii_class(
-                &ast::ClassAsciiKind::Digit
-            )))
+            hir_negate(hir_ascii_bclass(&ast::ClassAsciiKind::Digit))
         );
         assert_eq!(
             t(r"(?i-u)\S"),
-            hir_negate(hir_bclass_from_char(ascii_class(
-                &ast::ClassAsciiKind::Space
-            )))
+            hir_negate(hir_ascii_bclass(&ast::ClassAsciiKind::Space))
         );
         assert_eq!(
             t(r"(?i-u)\W"),
-            hir_negate(hir_bclass_from_char(ascii_class(
-                &ast::ClassAsciiKind::Word
-            )))
+            hir_negate(hir_ascii_bclass(&ast::ClassAsciiKind::Word))
         );
     }
 
@@ -2826,9 +2823,7 @@ mod tests {
         #[cfg(feature = "unicode-perl")]
         assert_eq!(
             t_bytes(r"(?-u)[^\w&&\d]"),
-            hir_negate(hir_bclass_from_char(ascii_class(
-                &ast::ClassAsciiKind::Digit
-            )))
+            hir_negate(hir_ascii_bclass(&ast::ClassAsciiKind::Digit))
         );
         assert_eq!(
             t_bytes(r"(?-u)[^[a-z&&a-c]]"),
@@ -2836,19 +2831,15 @@ mod tests {
         );
         assert_eq!(
             t_bytes(r"(?-u)[^[\w&&\d]]"),
-            hir_negate(hir_bclass_from_char(ascii_class(
-                &ast::ClassAsciiKind::Digit
-            )))
+            hir_negate(hir_ascii_bclass(&ast::ClassAsciiKind::Digit))
         );
         assert_eq!(
             t_bytes(r"(?-u)[^[^\w&&\d]]"),
-            hir_bclass_from_char(ascii_class(&ast::ClassAsciiKind::Digit))
+            hir_ascii_bclass(&ast::ClassAsciiKind::Digit)
         );
         assert_eq!(
             t_bytes(r"(?-u)[[[^\w]&&[^\d]]]"),
-            hir_negate(hir_bclass_from_char(ascii_class(
-                &ast::ClassAsciiKind::Word
-            )))
+            hir_negate(hir_ascii_bclass(&ast::ClassAsciiKind::Word))
         );
     }
 

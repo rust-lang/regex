@@ -475,8 +475,8 @@ impl Literals {
             base = vec![Literal::empty()];
         }
         for r in cls.iter() {
-            let (s, e) = (r.start as u32, r.end as u32 + 1);
-            for c in (s..e).filter_map(char::from_u32) {
+            let (s, e) = (u32::from(r.start), u32::from(r.end));
+            for c in (s..=e).filter_map(char::from_u32) {
                 for mut lit in base.clone() {
                     let mut bytes = c.to_string().into_bytes();
                     if reverse {
@@ -502,8 +502,7 @@ impl Literals {
             base = vec![Literal::empty()];
         }
         for r in cls.iter() {
-            let (s, e) = (r.start as u32, r.end as u32 + 1);
-            for b in (s..e).map(|b| b as u8) {
+            for b in r.start..=r.end {
                 for mut lit in base.clone() {
                     lit.push(b);
                     self.lits.push(lit);
@@ -784,7 +783,10 @@ fn repeat_range_literals<F: FnMut(&Hir, &mut Literals)>(
     lits: &mut Literals,
     mut f: F,
 ) {
-    if min == 0 {
+    // If 'min' somehow overflows usize, then we just treat it as 0, which is
+    // the most conservative thing we can do.
+    let umin = usize::try_from(min).unwrap_or(0);
+    if umin == 0 {
         // This is a bit conservative. If `max` is set, then we could
         // treat this as a finite set of alternations. For now, we
         // just treat it as `e*`.
@@ -797,11 +799,11 @@ fn repeat_range_literals<F: FnMut(&Hir, &mut Literals)>(
             lits,
         );
     } else {
-        if min > 0 {
-            let n = cmp::min(lits.limit_size, min as usize);
+        if umin > 0 {
+            let n = cmp::min(lits.limit_size, umin);
             let es = iter::repeat(e.clone()).take(n).collect();
             f(&Hir::concat(es), lits);
-            if n < min as usize || lits.contains_empty() {
+            if n < umin || lits.contains_empty() {
                 lits.cut();
             }
         }
@@ -928,12 +930,13 @@ fn escape_unicode(bytes: &[u8]) -> String {
     let mut space_escaped = String::new();
     for c in show.chars() {
         if c.is_whitespace() {
-            let escaped = if c as u32 <= 0x7F {
-                escape_byte(c as u8)
-            } else if c as u32 <= 0xFFFF {
-                format!(r"\u{{{:04x}}}", c as u32)
+            let cp = u32::from(c);
+            let escaped = if cp <= 0x7F {
+                escape_byte(u8::try_from(cp).unwrap())
+            } else if cp <= 0xFFFF {
+                format!(r"\u{{{:04x}}}", cp)
             } else {
-                format!(r"\U{{{:08x}}}", c as u32)
+                format!(r"\U{{{:08x}}}", cp)
             };
             space_escaped.push_str(&escaped);
         } else {
@@ -959,13 +962,11 @@ fn escape_byte(byte: u8) -> String {
 }
 
 fn cls_char_count(cls: &hir::ClassUnicode) -> usize {
-    cls.iter().map(|&r| 1 + (r.end as u32) - (r.start as u32)).sum::<u32>()
-        as usize
+    cls.iter().map(|&r| r.len()).sum()
 }
 
 fn cls_byte_count(cls: &hir::ClassBytes) -> usize {
-    cls.iter().map(|&r| 1 + (r.end as u32) - (r.start as u32)).sum::<u32>()
-        as usize
+    cls.iter().map(|&r| r.len()).sum()
 }
 
 #[cfg(test)]
