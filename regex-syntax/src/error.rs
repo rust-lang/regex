@@ -1,5 +1,4 @@
 use std::cmp;
-use std::error;
 use std::fmt;
 use std::result;
 
@@ -39,17 +38,7 @@ impl From<hir::Error> for Error {
     }
 }
 
-impl error::Error for Error {
-    // TODO: Remove this method entirely on the next breaking semver release.
-    #[allow(deprecated)]
-    fn description(&self) -> &str {
-        match *self {
-            Error::Parse(ref x) => x.description(),
-            Error::Translate(ref x) => x.description(),
-            _ => unreachable!(),
-        }
-    }
-}
+impl std::error::Error for Error {}
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
