@@ -2,11 +2,16 @@
 This module provides a regular expression printer for `Hir`.
 */
 
-use std::fmt;
+use core::fmt;
 
-use crate::hir::visitor::{self, Visitor};
-use crate::hir::{self, Hir, HirKind};
-use crate::is_meta_character;
+use crate::{
+    hir::{
+        self,
+        visitor::{self, Visitor},
+        Hir, HirKind,
+    },
+    is_meta_character,
+};
 
 /// A builder for constructing a printer.
 ///
@@ -235,8 +240,11 @@ impl<W: fmt::Write> Writer<W> {
 
 #[cfg(test)]
 mod tests {
-    use super::Printer;
+    use alloc::string::String;
+
     use crate::ParserBuilder;
+
+    use super::*;
 
     fn roundtrip(given: &str, expected: &str) {
         roundtrip_with(|b| b, given, expected);

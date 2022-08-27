@@ -1,9 +1,13 @@
-use std::cmp;
-use std::fmt;
-use std::result;
+use core::{cmp, fmt, result};
 
-use crate::ast;
-use crate::hir;
+use alloc::{
+    format,
+    string::{String, ToString},
+    vec,
+    vec::Vec,
+};
+
+use crate::{ast, hir};
 
 /// A type alias for dealing with errors returned by this crate.
 pub type Result<T> = result::Result<T, Error>;
@@ -35,6 +39,7 @@ impl From<hir::Error> for Error {
     }
 }
 
+#[cfg(feature = "std")]
 impl std::error::Error for Error {}
 
 impl fmt::Display for Error {
@@ -266,11 +271,13 @@ impl<'p> Spans<'p> {
 }
 
 fn repeat_char(c: char, count: usize) -> String {
-    ::std::iter::repeat(c).take(count).collect()
+    core::iter::repeat(c).take(count).collect()
 }
 
 #[cfg(test)]
 mod tests {
+    use alloc::string::ToString;
+
     use crate::ast::parse::Parser;
 
     fn assert_panic_message(pattern: &str, expected_msg: &str) {

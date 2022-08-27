@@ -2,14 +2,17 @@
 Defines a translator that converts an `Ast` to an `Hir`.
 */
 
-use std::cell::{Cell, RefCell};
-use std::result;
+use core::cell::{Cell, RefCell};
 
-use crate::ast::{self, Ast, Span, Visitor};
-use crate::hir::{self, Error, ErrorKind, Hir};
-use crate::unicode::{self, ClassQuery};
+use alloc::{boxed::Box, string::ToString, vec, vec::Vec};
 
-type Result<T> = result::Result<T, Error>;
+use crate::{
+    ast::{self, Ast, Span, Visitor},
+    hir::{self, Error, ErrorKind, Hir},
+    unicode::{self, ClassQuery},
+};
+
+type Result<T> = core::result::Result<T, Error>;
 
 /// A builder for constructing an AST->HIR translator.
 #[derive(Clone, Debug)]
@@ -1119,12 +1122,13 @@ fn ascii_class_as_chars(
 
 #[cfg(test)]
 mod tests {
-    use crate::ast::parse::ParserBuilder;
-    use crate::ast::{self, Ast, Position, Span};
-    use crate::hir::{self, Hir, HirKind};
-    use crate::unicode::{self, ClassQuery};
+    use crate::{
+        ast::{self, parse::ParserBuilder, Ast, Position, Span},
+        hir::{self, Hir, HirKind},
+        unicode::{self, ClassQuery},
+    };
 
-    use super::{ascii_class, ascii_class_as_chars, TranslatorBuilder};
+    use super::*;
 
     // We create these errors to compare with real hir::Errors in the tests.
     // We define equality between TestError and hir::Error to disregard the

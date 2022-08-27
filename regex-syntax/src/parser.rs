@@ -1,7 +1,4 @@
-use crate::ast;
-use crate::hir;
-
-use crate::Result;
+use crate::{ast, hir, Result};
 
 /// A builder for a regular expression parser.
 ///

@@ -1,8 +1,6 @@
-use std::char;
-use std::cmp;
-use std::fmt::Debug;
-use std::slice;
-use std::u8;
+use core::{char, cmp, fmt::Debug, slice};
+
+use alloc::vec::Vec;
 
 use crate::unicode;
 

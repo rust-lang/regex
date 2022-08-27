@@ -7,6 +7,7 @@ echo "===== DEFAULT FEATURES ==="
 cargo test
 
 features=(
+    std
     unicode
     unicode-age
     unicode-bool

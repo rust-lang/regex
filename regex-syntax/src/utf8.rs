@@ -80,12 +80,9 @@ I also got the idea from
 which uses it for executing automata on their term index.
 */
 
-#![deny(missing_docs)]
+use core::{char, fmt, iter::FusedIterator, slice};
 
-use std::char;
-use std::fmt;
-use std::iter::FusedIterator;
-use std::slice;
+use alloc::{vec, vec::Vec};
 
 const MAX_UTF8_BYTES: usize = 4;
 
@@ -457,7 +454,9 @@ fn max_scalar_value(nbytes: usize) -> u32 {
 
 #[cfg(test)]
 mod tests {
-    use std::char;
+    use core::char;
+
+    use alloc::{vec, vec::Vec};
 
     use crate::utf8::{Utf8Range, Utf8Sequences};
 
