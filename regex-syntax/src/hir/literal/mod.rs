@@ -2,11 +2,15 @@
 Provides routines for extracting literal prefixes and suffixes from an `Hir`.
 */
 
-use std::cmp;
-use std::fmt;
-use std::iter;
-use std::mem;
-use std::ops;
+use core::{cmp, iter, mem, ops};
+
+use alloc::{
+    boxed::Box,
+    format,
+    string::{String, ToString},
+    vec,
+    vec::Vec,
+};
 
 use crate::hir::{self, Hir, HirKind};
 
@@ -408,7 +412,7 @@ impl Literals {
         }
         if self.lits.is_empty() {
             let i = cmp::min(self.limit_size, bytes.len());
-            self.lits.push(Literal::new(bytes[..i].to_owned()));
+            self.lits.push(Literal::new(bytes[..i].to_vec()));
             self.lits[0].cut = i < bytes.len();
             return !self.lits[0].is_cut();
         }
@@ -465,8 +469,6 @@ impl Literals {
         cls: &hir::ClassUnicode,
         reverse: bool,
     ) -> bool {
-        use std::char;
-
         if self.class_exceeds_limits(cls_char_count(cls)) {
             return false;
         }
@@ -837,8 +839,8 @@ fn alternate_literals<F: FnMut(&Hir, &mut Literals)>(
     }
 }
 
-impl fmt::Debug for Literals {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl core::fmt::Debug for Literals {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("Literals")
             .field("lits", &self.lits)
             .field("limit_size", &self.limit_size)
@@ -881,8 +883,8 @@ impl PartialOrd for Literal {
     }
 }
 
-impl fmt::Debug for Literal {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl core::fmt::Debug for Literal {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         if self.is_cut() {
             write!(f, "Cut({})", escape_unicode(&self.v))
         } else {
@@ -923,7 +925,7 @@ fn position(needle: &[u8], mut haystack: &[u8]) -> Option<usize> {
 }
 
 fn escape_unicode(bytes: &[u8]) -> String {
-    let show = match ::std::str::from_utf8(bytes) {
+    let show = match core::str::from_utf8(bytes) {
         Ok(v) => v.to_string(),
         Err(_) => escape_bytes(bytes),
     };
@@ -955,7 +957,7 @@ fn escape_bytes(bytes: &[u8]) -> String {
 }
 
 fn escape_byte(byte: u8) -> String {
-    use std::ascii::escape_default;
+    use core::ascii::escape_default;
 
     let escaped: Vec<u8> = escape_default(byte).collect();
     String::from_utf8_lossy(&escaped).into_owned()
@@ -971,11 +973,15 @@ fn cls_byte_count(cls: &hir::ClassBytes) -> usize {
 
 #[cfg(test)]
 mod tests {
-    use std::fmt;
+    use alloc::{
+        string::{String, ToString},
+        vec,
+        vec::Vec,
+    };
 
-    use super::{escape_bytes, Literal, Literals};
-    use crate::hir::Hir;
-    use crate::ParserBuilder;
+    use crate::{hir::Hir, ParserBuilder};
+
+    use super::*;
 
     // To make test failures easier to read.
     #[derive(Debug, Eq, PartialEq)]
@@ -1013,8 +1019,8 @@ mod tests {
         }
     }
 
-    impl fmt::Debug for ULiteral {
-        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    impl core::fmt::Debug for ULiteral {
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
             if self.is_cut() {
                 write!(f, "Cut({})", self.v)
             } else {
@@ -1037,11 +1043,11 @@ mod tests {
 
     #[allow(non_snake_case)]
     fn C(s: &'static str) -> ULiteral {
-        ULiteral { v: s.to_owned(), cut: true }
+        ULiteral { v: s.to_string(), cut: true }
     }
     #[allow(non_snake_case)]
     fn M(s: &'static str) -> ULiteral {
-        ULiteral { v: s.to_owned(), cut: false }
+        ULiteral { v: s.to_string(), cut: false }
     }
 
     fn prefixes(lits: &mut Literals, expr: &Hir) {
@@ -1626,7 +1632,7 @@ mod tests {
                 let given: Vec<Literal> = $given
                     .into_iter()
                     .map(|s: &str| Literal {
-                        v: s.to_owned().into_bytes(),
+                        v: s.to_string().into_bytes(),
                         cut: false,
                     })
                     .collect();
@@ -1661,7 +1667,7 @@ mod tests {
                 let given: Vec<Literal> = $given
                     .into_iter()
                     .map(|s: &str| Literal {
-                        v: s.to_owned().into_bytes(),
+                        v: s.to_string().into_bytes(),
                         cut: false,
                     })
                     .collect();

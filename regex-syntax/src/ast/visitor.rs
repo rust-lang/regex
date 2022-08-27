@@ -1,4 +1,4 @@
-use std::fmt;
+use alloc::{vec, vec::Vec};
 
 use crate::ast::{self, Ast};
 
@@ -475,8 +475,8 @@ impl<'a> ClassInduct<'a> {
     }
 }
 
-impl<'a> fmt::Debug for ClassFrame<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl<'a> core::fmt::Debug for ClassFrame<'a> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let x = match *self {
             ClassFrame::Union { .. } => "Union",
             ClassFrame::Binary { .. } => "Binary",
@@ -487,8 +487,8 @@ impl<'a> fmt::Debug for ClassFrame<'a> {
     }
 }
 
-impl<'a> fmt::Debug for ClassInduct<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl<'a> core::fmt::Debug for ClassInduct<'a> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let x = match *self {
             ClassInduct::Item(it) => match *it {
                 ast::ClassSetItem::Empty(_) => "Item(Empty)",

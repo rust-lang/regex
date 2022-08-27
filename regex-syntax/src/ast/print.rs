@@ -2,10 +2,13 @@
 This module provides a regular expression printer for `Ast`.
 */
 
-use std::fmt;
+use core::fmt;
 
-use crate::ast::visitor::{self, Visitor};
-use crate::ast::{self, Ast};
+use crate::ast::{
+    self,
+    visitor::{self, Visitor},
+    Ast,
+};
 
 /// A builder for constructing a printer.
 ///
@@ -395,8 +398,11 @@ impl<W: fmt::Write> Writer<W> {
 
 #[cfg(test)]
 mod tests {
-    use super::Printer;
+    use alloc::string::String;
+
     use crate::ast::parse::ParserBuilder;
+
+    use super::*;
 
     fn roundtrip(given: &str) {
         roundtrip_with(|b| b, given);

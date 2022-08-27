@@ -1,18 +1,27 @@
 /*!
 Defines a high-level intermediate representation for regular expressions.
 */
-use std::char;
-use std::cmp;
-use std::fmt;
-use std::result;
-use std::u8;
 
-use crate::ast::Span;
-use crate::hir::interval::{Interval, IntervalSet, IntervalSetIter};
-use crate::unicode;
+use core::{char, cmp};
 
-pub use crate::hir::visitor::{visit, Visitor};
-pub use crate::unicode::CaseFoldError;
+use alloc::{
+    boxed::Box,
+    format,
+    string::{String, ToString},
+    vec,
+    vec::Vec,
+};
+
+use crate::{
+    ast::Span,
+    hir::interval::{Interval, IntervalSet, IntervalSetIter},
+    unicode,
+};
+
+pub use crate::{
+    hir::visitor::{visit, Visitor},
+    unicode::CaseFoldError,
+};
 
 mod interval;
 pub mod literal;
@@ -80,16 +89,17 @@ pub enum ErrorKind {
     UnicodeCaseUnavailable,
 }
 
+#[cfg(feature = "std")]
 impl std::error::Error for Error {}
 
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         crate::error::Formatter::from(self).fmt(f)
     }
 }
 
-impl fmt::Display for ErrorKind {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl core::fmt::Display for ErrorKind {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         use self::ErrorKind::*;
 
         let msg = match *self {
@@ -197,8 +207,7 @@ impl Hir {
     /// Consumes ownership of this HIR expression and returns its underlying
     /// `HirKind`.
     pub fn into_kind(mut self) -> HirKind {
-        use std::mem;
-        mem::replace(&mut self.kind, HirKind::Empty)
+        core::mem::replace(&mut self.kind, HirKind::Empty)
     }
 
     /// Returns an empty HIR expression.
@@ -704,8 +713,8 @@ impl HirKind {
 ///
 /// This implementation uses constant stack space and heap space proportional
 /// to the size of the `Hir`.
-impl fmt::Display for Hir {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl core::fmt::Display for Hir {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         use crate::hir::print::Printer;
         Printer::new().print(self, f)
     }
@@ -800,7 +809,7 @@ impl Class {
     /// Unicode oriented.
     pub fn try_case_fold_simple(
         &mut self,
-    ) -> result::Result<(), CaseFoldError> {
+    ) -> core::result::Result<(), CaseFoldError> {
         match *self {
             Class::Unicode(ref mut x) => x.try_case_fold_simple()?,
             Class::Bytes(ref mut x) => x.case_fold_simple(),
@@ -909,7 +918,7 @@ impl ClassUnicode {
     /// `unicode-case` feature is not enabled.
     pub fn try_case_fold_simple(
         &mut self,
-    ) -> result::Result<(), CaseFoldError> {
+    ) -> core::result::Result<(), CaseFoldError> {
         self.set.case_fold_simple()
     }
 
@@ -981,8 +990,8 @@ pub struct ClassUnicodeRange {
     end: char,
 }
 
-impl fmt::Debug for ClassUnicodeRange {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl core::fmt::Debug for ClassUnicodeRange {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let start = if !self.start.is_whitespace() && !self.start.is_control()
         {
             self.start.to_string()
@@ -1285,8 +1294,8 @@ impl ClassBytesRange {
     }
 }
 
-impl fmt::Debug for ClassBytesRange {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl core::fmt::Debug for ClassBytesRange {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let mut debug = f.debug_struct("ClassBytesRange");
         if self.start <= 0x7F {
             let ch = char::try_from(self.start).unwrap();
@@ -1459,7 +1468,7 @@ pub enum RepetitionRange {
 /// space but heap space proportional to the depth of the total `Hir`.
 impl Drop for Hir {
     fn drop(&mut self) {
-        use std::mem;
+        use core::mem;
 
         match *self.kind() {
             HirKind::Empty

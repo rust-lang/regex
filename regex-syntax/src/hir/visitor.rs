@@ -1,3 +1,5 @@
+use alloc::{vec, vec::Vec};
+
 use crate::hir::{self, Hir, HirKind};
 
 /// A trait for visiting the high-level IR (HIR) in depth first order.

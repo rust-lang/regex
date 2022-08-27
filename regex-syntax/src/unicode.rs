@@ -1,11 +1,12 @@
-use std::error;
-use std::fmt;
-use std::result;
+use alloc::{
+    string::{String, ToString},
+    vec::Vec,
+};
 
 use crate::hir;
 
 /// A type alias for errors specific to Unicode handling of classes.
-pub type Result<T> = result::Result<T, Error>;
+pub type Result<T> = core::result::Result<T, Error>;
 
 /// An inclusive range of codepoints from a generated file (hence the static
 /// lifetime).
@@ -25,7 +26,7 @@ pub enum Error {
 }
 
 /// A type alias for errors specific to Unicode case folding.
-pub type FoldResult<T> = result::Result<T, CaseFoldError>;
+pub type FoldResult<T> = core::result::Result<T, CaseFoldError>;
 
 /// An error that occurs when Unicode-aware simple case folding fails.
 ///
@@ -35,10 +36,11 @@ pub type FoldResult<T> = result::Result<T, CaseFoldError>;
 #[derive(Debug)]
 pub struct CaseFoldError(());
 
-impl error::Error for CaseFoldError {}
+#[cfg(feature = "std")]
+impl std::error::Error for CaseFoldError {}
 
-impl fmt::Display for CaseFoldError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl core::fmt::Display for CaseFoldError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(
             f,
             "Unicode-aware case folding is not available \
@@ -55,10 +57,11 @@ impl fmt::Display for CaseFoldError {
 #[derive(Debug)]
 pub struct UnicodeWordError(());
 
-impl error::Error for UnicodeWordError {}
+#[cfg(feature = "std")]
+impl std::error::Error for UnicodeWordError {}
 
-impl fmt::Display for UnicodeWordError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl core::fmt::Display for UnicodeWordError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(
             f,
             "Unicode-aware \\w class is not available \
@@ -80,21 +83,24 @@ impl fmt::Display for UnicodeWordError {
 /// This returns an error if the Unicode case folding tables are not available.
 pub fn simple_fold(
     c: char,
-) -> FoldResult<result::Result<impl Iterator<Item = char>, Option<char>>> {
+) -> FoldResult<core::result::Result<impl Iterator<Item = char>, Option<char>>>
+{
     #[cfg(not(feature = "unicode-case"))]
     fn imp(
         _: char,
-    ) -> FoldResult<result::Result<impl Iterator<Item = char>, Option<char>>>
-    {
-        use std::option::IntoIter;
-        Err::<result::Result<IntoIter<char>, _>, _>(CaseFoldError(()))
+    ) -> FoldResult<
+        core::result::Result<impl Iterator<Item = char>, Option<char>>,
+    > {
+        use core::option::IntoIter;
+        Err::<core::result::Result<IntoIter<char>, _>, _>(CaseFoldError(()))
     }
 
     #[cfg(feature = "unicode-case")]
     fn imp(
         c: char,
-    ) -> FoldResult<result::Result<impl Iterator<Item = char>, Option<char>>>
-    {
+    ) -> FoldResult<
+        core::result::Result<impl Iterator<Item = char>, Option<char>>,
+    > {
         use crate::unicode_tables::case_folding_simple::CASE_FOLDING_SIMPLE;
 
         Ok(CASE_FOLDING_SIMPLE
@@ -130,8 +136,9 @@ pub fn contains_simple_case_mapping(
 
     #[cfg(feature = "unicode-case")]
     fn imp(start: char, end: char) -> FoldResult<bool> {
+        use core::cmp::Ordering;
+
         use crate::unicode_tables::case_folding_simple::CASE_FOLDING_SIMPLE;
-        use std::cmp::Ordering;
 
         assert!(start <= end);
         Ok(CASE_FOLDING_SIMPLE
@@ -407,17 +414,17 @@ pub fn hir_class(ranges: &[(char, char)]) -> hir::ClassUnicode {
 /// Returns true only if the given codepoint is in the `\w` character class.
 ///
 /// If the `unicode-perl` feature is not enabled, then this returns an error.
-pub fn is_word_character(c: char) -> result::Result<bool, UnicodeWordError> {
+pub fn is_word_character(
+    c: char,
+) -> core::result::Result<bool, UnicodeWordError> {
     #[cfg(not(feature = "unicode-perl"))]
-    fn imp(_: char) -> result::Result<bool, UnicodeWordError> {
+    fn imp(_: char) -> core::result::Result<bool, UnicodeWordError> {
         Err(UnicodeWordError(()))
     }
 
     #[cfg(feature = "unicode-perl")]
-    fn imp(c: char) -> result::Result<bool, UnicodeWordError> {
-        use crate::is_word_byte;
-        use crate::unicode_tables::perl_word::PERL_WORD;
-        use std::cmp::Ordering;
+    fn imp(c: char) -> core::result::Result<bool, UnicodeWordError> {
+        use crate::{is_word_byte, unicode_tables::perl_word::PERL_WORD};
 
         // MSRV(1.59): Use 'u8::try_from(c)' instead.
         if u8::try_from(u32::from(c)).map_or(false, is_word_byte) {
@@ -425,6 +432,8 @@ pub fn is_word_character(c: char) -> result::Result<bool, UnicodeWordError> {
         }
         Ok(PERL_WORD
             .binary_search_by(|&(start, end)| {
+                use core::cmp::Ordering;
+
                 if start <= c && c <= end {
                     Ordering::Equal
                 } else if start > c {
@@ -583,7 +592,7 @@ fn property_set(
 fn ages(canonical_age: &str) -> Result<impl Iterator<Item = Range>> {
     #[cfg(not(feature = "unicode-age"))]
     fn imp(_: &str) -> Result<impl Iterator<Item = Range>> {
-        use std::option::IntoIter;
+        use core::option::IntoIter;
         Err::<IntoIter<Range>, _>(Error::PropertyNotFound)
     }
 
@@ -884,10 +893,7 @@ fn symbolic_name_normalize_bytes(slice: &mut [u8]) -> &mut [u8] {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        contains_simple_case_mapping, simple_fold, symbolic_name_normalize,
-        symbolic_name_normalize_bytes,
-    };
+    use super::*;
 
     #[cfg(feature = "unicode-case")]
     fn simple_fold_ok(c: char) -> impl Iterator<Item = char> {
@@ -911,23 +917,23 @@ mod tests {
     #[cfg(feature = "unicode-case")]
     fn simple_fold_k() {
         let xs: Vec<char> = simple_fold_ok('k').collect();
-        assert_eq!(xs, vec!['K', 'K']);
+        assert_eq!(xs, alloc::vec!['K', 'K']);
 
         let xs: Vec<char> = simple_fold_ok('K').collect();
-        assert_eq!(xs, vec!['k', 'K']);
+        assert_eq!(xs, alloc::vec!['k', 'K']);
 
         let xs: Vec<char> = simple_fold_ok('K').collect();
-        assert_eq!(xs, vec!['K', 'k']);
+        assert_eq!(xs, alloc::vec!['K', 'k']);
     }
 
     #[test]
     #[cfg(feature = "unicode-case")]
     fn simple_fold_a() {
         let xs: Vec<char> = simple_fold_ok('a').collect();
-        assert_eq!(xs, vec!['A']);
+        assert_eq!(xs, alloc::vec!['A']);
 
         let xs: Vec<char> = simple_fold_ok('A').collect();
-        assert_eq!(xs, vec!['a']);
+        assert_eq!(xs, alloc::vec!['a']);
     }
 
     #[test]

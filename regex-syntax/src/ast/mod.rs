@@ -2,8 +2,9 @@
 Defines an abstract syntax for regular expressions.
 */
 
-use std::cmp::Ordering;
-use std::fmt;
+use core::cmp::Ordering;
+
+use alloc::{boxed::Box, string::String, vec, vec::Vec};
 
 pub use crate::ast::visitor::{visit, Visitor};
 
@@ -174,23 +175,24 @@ pub enum ErrorKind {
     UnsupportedLookAround,
 }
 
+#[cfg(feature = "std")]
 impl std::error::Error for Error {}
 
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         crate::error::Formatter::from(self).fmt(f)
     }
 }
 
-impl fmt::Display for ErrorKind {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl core::fmt::Display for ErrorKind {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         use self::ErrorKind::*;
         match *self {
             CaptureLimitExceeded => write!(
                 f,
                 "exceeded the maximum number of \
                  capturing groups ({})",
-                ::std::u32::MAX
+                u32::MAX
             ),
             ClassEscapeInvalid => {
                 write!(f, "invalid escape sequence found in character class")
@@ -283,8 +285,8 @@ pub struct Span {
     pub end: Position,
 }
 
-impl fmt::Debug for Span {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl core::fmt::Debug for Span {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "Span({:?}, {:?})", self.start, self.end)
     }
 }
@@ -316,8 +318,8 @@ pub struct Position {
     pub column: usize,
 }
 
-impl fmt::Debug for Position {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl core::fmt::Debug for Position {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(
             f,
             "Position(o: {:?}, l: {:?}, c: {:?})",
@@ -497,8 +499,8 @@ impl Ast {
 ///
 /// This implementation uses constant stack space and heap space proportional
 /// to the size of the `Ast`.
-impl fmt::Display for Ast {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl core::fmt::Display for Ast {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         use crate::ast::print::Printer;
         Printer::new().print(self, f)
     }
@@ -1315,7 +1317,7 @@ pub enum Flag {
 /// space but heap space proportional to the depth of the `Ast`.
 impl Drop for Ast {
     fn drop(&mut self) {
-        use std::mem;
+        use core::mem;
 
         match *self {
             Ast::Empty(_)
@@ -1365,7 +1367,7 @@ impl Drop for Ast {
 /// stack space but heap space proportional to the depth of the `ClassSet`.
 impl Drop for ClassSet {
     fn drop(&mut self) {
-        use std::mem;
+        use core::mem;
 
         match *self {
             ClassSet::Item(ref item) => match *item {

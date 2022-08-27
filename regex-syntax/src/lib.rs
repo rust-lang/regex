@@ -116,6 +116,11 @@ match semantics of a regular expression.
 
 The following features are available:
 
+* **std** -
+  Enables support for the standard library. This feature is enabled by default.
+  When disabled, only `core` and `alloc` are used. Otherwise, enabling `std`
+  generally just enables `std::error::Error` trait impls for the various error
+  types.
 * **unicode** -
   Enables all Unicode features. This feature is enabled by default, and will
   always cover all Unicode features, even if more are added in the future.
@@ -154,13 +159,23 @@ The following features are available:
   `\p{sb=ATerm}`.
 */
 
+#![forbid(unsafe_code)]
 #![deny(missing_docs)]
 #![warn(missing_debug_implementations)]
-#![forbid(unsafe_code)]
+#![no_std]
 
-pub use crate::error::{Error, Result};
-pub use crate::parser::{Parser, ParserBuilder};
-pub use crate::unicode::UnicodeWordError;
+#[cfg(any(test, feature = "std"))]
+extern crate std;
+
+extern crate alloc;
+
+pub use crate::{
+    error::{Error, Result},
+    parser::{Parser, ParserBuilder},
+    unicode::UnicodeWordError,
+};
+
+use alloc::string::String;
 
 pub mod ast;
 mod either;
@@ -248,7 +263,7 @@ pub fn is_word_character(c: char) -> bool {
 /// returns an error.
 pub fn try_is_word_character(
     c: char,
-) -> std::result::Result<bool, UnicodeWordError> {
+) -> core::result::Result<bool, UnicodeWordError> {
     unicode::is_word_character(c)
 }
 
@@ -265,6 +280,8 @@ pub fn is_word_byte(c: u8) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use alloc::string::ToString;
+
     use super::*;
 
     #[test]

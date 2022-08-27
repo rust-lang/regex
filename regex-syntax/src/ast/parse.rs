@@ -2,17 +2,26 @@
 This module provides a regular expression parser.
 */
 
-use std::borrow::Borrow;
-use std::cell::{Cell, RefCell};
-use std::mem;
-use std::result;
+use core::{
+    borrow::Borrow,
+    cell::{Cell, RefCell},
+    mem,
+};
 
-use crate::ast::{self, Ast, Position, Span};
-use crate::either::Either;
+use alloc::{
+    boxed::Box,
+    string::{String, ToString},
+    vec,
+    vec::Vec,
+};
 
-use crate::is_meta_character;
+use crate::{
+    ast::{self, Ast, Position, Span},
+    either::Either,
+    is_meta_character,
+};
 
-type Result<T> = result::Result<T, ast::Error>;
+type Result<T> = core::result::Result<T, ast::Error>;
 
 /// A primitive is an expression with no sub-expressions. This includes
 /// literals, assertions and non-set character classes. This representation
@@ -1533,9 +1542,6 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
     /// Assuming the preconditions are met, this routine can never fail.
     #[inline(never)]
     fn parse_octal(&self) -> ast::Literal {
-        use std::char;
-        use std::u32;
-
         assert!(self.parser().octal);
         assert!('0' <= self.char() && self.char() <= '7');
         let start = self.pos();
@@ -1600,9 +1606,6 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
         &self,
         kind: ast::HexLiteralKind,
     ) -> Result<ast::Literal> {
-        use std::char;
-        use std::u32;
-
         let mut scratch = self.parser().scratch.borrow_mut();
         scratch.clear();
 
@@ -1646,9 +1649,6 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
         &self,
         kind: ast::HexLiteralKind,
     ) -> Result<ast::Literal> {
-        use std::char;
-        use std::u32;
-
         let mut scratch = self.parser().scratch.borrow_mut();
         scratch.clear();
 
@@ -2146,7 +2146,7 @@ impl<'p, 's, P: Borrow<Parser>> NestLimiter<'p, 's, P> {
         let new = self.depth.checked_add(1).ok_or_else(|| {
             self.p.error(
                 span.clone(),
-                ast::ErrorKind::NestLimitExceeded(::std::u32::MAX),
+                ast::ErrorKind::NestLimitExceeded(u32::MAX),
             )
         })?;
         let limit = self.p.parser().nest_limit;
@@ -2297,10 +2297,13 @@ fn specialize_err<T>(
 
 #[cfg(test)]
 mod tests {
-    use std::ops::Range;
+    use core::ops::Range;
 
-    use super::{Parser, ParserBuilder, ParserI, Primitive};
+    use alloc::format;
+
     use crate::ast::{self, Ast, Position, Span};
+
+    use super::*;
 
     // Our own assert_eq, which has slightly better formatting (but honestly
     // still kind of crappy).
@@ -4272,7 +4275,7 @@ bar
                 Ok(Primitive::Literal(ast::Literal {
                     span: span(0..pat.len()),
                     kind: ast::LiteralKind::Octal,
-                    c: ::std::char::from_u32(i).unwrap(),
+                    c: char::from_u32(i).unwrap(),
                 }))
             );
         }
@@ -4347,7 +4350,7 @@ bar
                 Ok(Primitive::Literal(ast::Literal {
                     span: span(0..pat.len()),
                     kind: ast::LiteralKind::HexFixed(ast::HexLiteralKind::X),
-                    c: ::std::char::from_u32(i).unwrap(),
+                    c: char::from_u32(i).unwrap(),
                 }))
             );
         }
@@ -4378,7 +4381,7 @@ bar
     #[test]
     fn parse_hex_four() {
         for i in 0..65536 {
-            let c = match ::std::char::from_u32(i) {
+            let c = match char::from_u32(i) {
                 None => continue,
                 Some(c) => c,
             };
@@ -4442,7 +4445,7 @@ bar
     #[test]
     fn parse_hex_eight() {
         for i in 0..65536 {
-            let c = match ::std::char::from_u32(i) {
+            let c = match char::from_u32(i) {
                 None => continue,
                 Some(c) => c,
             };
