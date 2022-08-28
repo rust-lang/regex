@@ -602,26 +602,19 @@ fn prefixes(expr: &Hir, lits: &mut Literals) {
         HirKind::Group(hir::Group { ref hir, .. }) => {
             prefixes(&**hir, lits);
         }
-        HirKind::Repetition(ref x) => match x.kind {
-            hir::RepetitionKind::ZeroOrOne => {
+        HirKind::Repetition(ref x) => match (x.min, x.max) {
+            (0, Some(1)) => {
                 repeat_zero_or_one_literals(&x.hir, lits, prefixes);
             }
-            hir::RepetitionKind::ZeroOrMore => {
+            (0, None) => {
                 repeat_zero_or_more_literals(&x.hir, lits, prefixes);
             }
-            hir::RepetitionKind::OneOrMore => {
+            (1, None) => {
                 repeat_one_or_more_literals(&x.hir, lits, prefixes);
             }
-            hir::RepetitionKind::Range(ref rng) => {
-                let (min, max) = match *rng {
-                    hir::RepetitionRange::Exactly(m) => (m, Some(m)),
-                    hir::RepetitionRange::AtLeast(m) => (m, None),
-                    hir::RepetitionRange::Bounded(m, n) => (m, Some(n)),
-                };
-                repeat_range_literals(
-                    &x.hir, min, max, x.greedy, lits, prefixes,
-                )
-            }
+            (min, max) => repeat_range_literals(
+                &x.hir, min, max, x.greedy, lits, prefixes,
+            ),
         },
         HirKind::Concat(ref es) if es.is_empty() => {}
         HirKind::Concat(ref es) if es.len() == 1 => prefixes(&es[0], lits),
@@ -678,26 +671,19 @@ fn suffixes(expr: &Hir, lits: &mut Literals) {
         HirKind::Group(hir::Group { ref hir, .. }) => {
             suffixes(&**hir, lits);
         }
-        HirKind::Repetition(ref x) => match x.kind {
-            hir::RepetitionKind::ZeroOrOne => {
+        HirKind::Repetition(ref x) => match (x.min, x.max) {
+            (0, Some(1)) => {
                 repeat_zero_or_one_literals(&x.hir, lits, suffixes);
             }
-            hir::RepetitionKind::ZeroOrMore => {
+            (0, None) => {
                 repeat_zero_or_more_literals(&x.hir, lits, suffixes);
             }
-            hir::RepetitionKind::OneOrMore => {
+            (1, None) => {
                 repeat_one_or_more_literals(&x.hir, lits, suffixes);
             }
-            hir::RepetitionKind::Range(ref rng) => {
-                let (min, max) = match *rng {
-                    hir::RepetitionRange::Exactly(m) => (m, Some(m)),
-                    hir::RepetitionRange::AtLeast(m) => (m, None),
-                    hir::RepetitionRange::Bounded(m, n) => (m, Some(n)),
-                };
-                repeat_range_literals(
-                    &x.hir, min, max, x.greedy, lits, suffixes,
-                )
-            }
+            (min, max) => repeat_range_literals(
+                &x.hir, min, max, x.greedy, lits, suffixes,
+            ),
         },
         HirKind::Concat(ref es) if es.is_empty() => {}
         HirKind::Concat(ref es) if es.len() == 1 => suffixes(&es[0], lits),
@@ -736,7 +722,8 @@ fn repeat_zero_or_one_literals<F: FnMut(&Hir, &mut Literals)>(
 ) {
     f(
         &Hir::repetition(hir::Repetition {
-            kind: hir::RepetitionKind::ZeroOrMore,
+            min: 0,
+            max: None,
             // FIXME: Our literal extraction doesn't care about greediness.
             // Which is partially why we're treating 'e?' as 'e*'. Namely,
             // 'ab??' yields [Complete(ab), Complete(a)], but it should yield
@@ -794,7 +781,8 @@ fn repeat_range_literals<F: FnMut(&Hir, &mut Literals)>(
         // just treat it as `e*`.
         f(
             &Hir::repetition(hir::Repetition {
-                kind: hir::RepetitionKind::ZeroOrMore,
+                min: 0,
+                max: None,
                 greedy,
                 hir: Box::new(e.clone()),
             }),

@@ -772,26 +772,29 @@ impl<'t, 'p> TranslatorI<'t, 'p> {
     }
 
     fn hir_repetition(&self, rep: &ast::Repetition, expr: Hir) -> Hir {
-        let kind = match rep.op.kind {
-            ast::RepetitionKind::ZeroOrOne => hir::RepetitionKind::ZeroOrOne,
-            ast::RepetitionKind::ZeroOrMore => hir::RepetitionKind::ZeroOrMore,
-            ast::RepetitionKind::OneOrMore => hir::RepetitionKind::OneOrMore,
+        let (min, max) = match rep.op.kind {
+            ast::RepetitionKind::ZeroOrOne => (0, Some(1)),
+            ast::RepetitionKind::ZeroOrMore => (0, None),
+            ast::RepetitionKind::OneOrMore => (1, None),
             ast::RepetitionKind::Range(ast::RepetitionRange::Exactly(m)) => {
-                hir::RepetitionKind::Range(hir::RepetitionRange::Exactly(m))
+                (m, Some(m))
             }
             ast::RepetitionKind::Range(ast::RepetitionRange::AtLeast(m)) => {
-                hir::RepetitionKind::Range(hir::RepetitionRange::AtLeast(m))
+                (m, None)
             }
             ast::RepetitionKind::Range(ast::RepetitionRange::Bounded(
                 m,
                 n,
-            )) => {
-                hir::RepetitionKind::Range(hir::RepetitionRange::Bounded(m, n))
-            }
+            )) => (m, Some(n)),
         };
         let greedy =
             if self.flags().swap_greed() { !rep.greedy } else { rep.greedy };
-        Hir::repetition(hir::Repetition { kind, greedy, hir: Box::new(expr) })
+        Hir::repetition(hir::Repetition {
+            min,
+            max,
+            greedy,
+            hir: Box::new(expr),
+        })
     }
 
     fn hir_unicode_class(
@@ -1229,7 +1232,8 @@ mod tests {
 
     fn hir_quest(greedy: bool, expr: Hir) -> Hir {
         Hir::repetition(hir::Repetition {
-            kind: hir::RepetitionKind::ZeroOrOne,
+            min: 0,
+            max: Some(1),
             greedy,
             hir: Box::new(expr),
         })
@@ -1237,7 +1241,8 @@ mod tests {
 
     fn hir_star(greedy: bool, expr: Hir) -> Hir {
         Hir::repetition(hir::Repetition {
-            kind: hir::RepetitionKind::ZeroOrMore,
+            min: 0,
+            max: None,
             greedy,
             hir: Box::new(expr),
         })
@@ -1245,15 +1250,17 @@ mod tests {
 
     fn hir_plus(greedy: bool, expr: Hir) -> Hir {
         Hir::repetition(hir::Repetition {
-            kind: hir::RepetitionKind::OneOrMore,
+            min: 1,
+            max: None,
             greedy,
             hir: Box::new(expr),
         })
     }
 
-    fn hir_range(greedy: bool, range: hir::RepetitionRange, expr: Hir) -> Hir {
+    fn hir_range(greedy: bool, min: u32, max: Option<u32>, expr: Hir) -> Hir {
         Hir::repetition(hir::Repetition {
-            kind: hir::RepetitionKind::Range(range),
+            min,
+            max,
             greedy,
             hir: Box::new(expr),
         })
@@ -1745,34 +1752,12 @@ mod tests {
         assert_eq!(t("a*?"), hir_star(false, hir_lit("a")));
         assert_eq!(t("a+?"), hir_plus(false, hir_lit("a")));
 
-        assert_eq!(
-            t("a{1}"),
-            hir_range(true, hir::RepetitionRange::Exactly(1), hir_lit("a"),)
-        );
-        assert_eq!(
-            t("a{1,}"),
-            hir_range(true, hir::RepetitionRange::AtLeast(1), hir_lit("a"),)
-        );
-        assert_eq!(
-            t("a{1,2}"),
-            hir_range(true, hir::RepetitionRange::Bounded(1, 2), hir_lit("a"),)
-        );
-        assert_eq!(
-            t("a{1}?"),
-            hir_range(false, hir::RepetitionRange::Exactly(1), hir_lit("a"),)
-        );
-        assert_eq!(
-            t("a{1,}?"),
-            hir_range(false, hir::RepetitionRange::AtLeast(1), hir_lit("a"),)
-        );
-        assert_eq!(
-            t("a{1,2}?"),
-            hir_range(
-                false,
-                hir::RepetitionRange::Bounded(1, 2),
-                hir_lit("a"),
-            )
-        );
+        assert_eq!(t("a{1}"), hir_range(true, 1, Some(1), hir_lit("a"),));
+        assert_eq!(t("a{1,}"), hir_range(true, 1, None, hir_lit("a"),));
+        assert_eq!(t("a{1,2}"), hir_range(true, 1, Some(2), hir_lit("a"),));
+        assert_eq!(t("a{1}?"), hir_range(false, 1, Some(1), hir_lit("a"),));
+        assert_eq!(t("a{1,}?"), hir_range(false, 1, None, hir_lit("a"),));
+        assert_eq!(t("a{1,2}?"), hir_range(false, 1, Some(2), hir_lit("a"),));
 
         assert_eq!(
             t("ab?"),
@@ -2916,11 +2901,7 @@ mod tests {
     , # comment
     10 # comment
 } # comment"),
-            hir_range(
-                true,
-                hir::RepetitionRange::Bounded(5, 10),
-                hir_lit("a")
-            )
+            hir_range(true, 5, Some(10), hir_lit("a"))
         );
 
         assert_eq!(t(r"(?x)a\  # hi there"), hir_lit("a "));
