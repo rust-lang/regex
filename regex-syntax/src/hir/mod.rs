@@ -1353,16 +1353,6 @@ pub enum WordBoundary {
     AsciiNegate,
 }
 
-impl WordBoundary {
-    /// Returns true if and only if this word boundary assertion is negated.
-    pub fn is_negated(&self) -> bool {
-        match *self {
-            WordBoundary::Unicode | WordBoundary::Ascii => false,
-            WordBoundary::UnicodeNegate | WordBoundary::AsciiNegate => true,
-        }
-    }
-}
-
 /// The high-level intermediate representation for a group.
 ///
 /// This represents one of three possible group types:
