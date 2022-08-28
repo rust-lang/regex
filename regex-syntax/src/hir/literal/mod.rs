@@ -627,7 +627,7 @@ fn prefixes(expr: &Hir, lits: &mut Literals) {
         HirKind::Concat(ref es) if es.len() == 1 => prefixes(&es[0], lits),
         HirKind::Concat(ref es) => {
             for e in es {
-                if let HirKind::Anchor(hir::Anchor::StartText) = *e.kind() {
+                if let HirKind::Look(hir::Look::Start) = *e.kind() {
                     if !lits.is_empty() {
                         lits.cut();
                         break;
@@ -703,7 +703,7 @@ fn suffixes(expr: &Hir, lits: &mut Literals) {
         HirKind::Concat(ref es) if es.len() == 1 => suffixes(&es[0], lits),
         HirKind::Concat(ref es) => {
             for e in es.iter().rev() {
-                if let HirKind::Anchor(hir::Anchor::EndText) = *e.kind() {
+                if let HirKind::Look(hir::Look::End) = *e.kind() {
                     if !lits.is_empty() {
                         lits.cut();
                         break;

@@ -125,30 +125,32 @@ impl<W: fmt::Write> Visitor for Writer<W> {
                 }
                 self.wtr.write_str("])")?;
             }
-            HirKind::Anchor(hir::Anchor::StartLine) => {
-                self.wtr.write_str("(?m:^)")?;
-            }
-            HirKind::Anchor(hir::Anchor::EndLine) => {
-                self.wtr.write_str("(?m:$)")?;
-            }
-            HirKind::Anchor(hir::Anchor::StartText) => {
-                self.wtr.write_str(r"\A")?;
-            }
-            HirKind::Anchor(hir::Anchor::EndText) => {
-                self.wtr.write_str(r"\z")?;
-            }
-            HirKind::WordBoundary(hir::WordBoundary::Unicode) => {
-                self.wtr.write_str(r"\b")?;
-            }
-            HirKind::WordBoundary(hir::WordBoundary::UnicodeNegate) => {
-                self.wtr.write_str(r"\B")?;
-            }
-            HirKind::WordBoundary(hir::WordBoundary::Ascii) => {
-                self.wtr.write_str(r"(?-u:\b)")?;
-            }
-            HirKind::WordBoundary(hir::WordBoundary::AsciiNegate) => {
-                self.wtr.write_str(r"(?-u:\B)")?;
-            }
+            HirKind::Look(ref look) => match *look {
+                hir::Look::Start => {
+                    self.wtr.write_str(r"\A")?;
+                }
+                hir::Look::End => {
+                    self.wtr.write_str(r"\z")?;
+                }
+                hir::Look::StartLF => {
+                    self.wtr.write_str("(?m:^)")?;
+                }
+                hir::Look::EndLF => {
+                    self.wtr.write_str("(?m:$)")?;
+                }
+                hir::Look::WordAscii => {
+                    self.wtr.write_str(r"(?-u:\b)")?;
+                }
+                hir::Look::WordAsciiNegate => {
+                    self.wtr.write_str(r"(?-u:\B)")?;
+                }
+                hir::Look::WordUnicode => {
+                    self.wtr.write_str(r"\b")?;
+                }
+                hir::Look::WordUnicodeNegate => {
+                    self.wtr.write_str(r"\B")?;
+                }
+            },
             HirKind::Group(ref x) => match x.kind {
                 hir::GroupKind::Capture { ref name, .. } => {
                     self.wtr.write_str("(")?;
@@ -170,8 +172,7 @@ impl<W: fmt::Write> Visitor for Writer<W> {
             HirKind::Empty
             | HirKind::Literal(_)
             | HirKind::Class(_)
-            | HirKind::Anchor(_)
-            | HirKind::WordBoundary(_)
+            | HirKind::Look(_)
             | HirKind::Concat(_)
             | HirKind::Alternation(_) => {}
             HirKind::Repetition(ref x) => {
