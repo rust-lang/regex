@@ -722,30 +722,26 @@ impl<'t, 'p> TranslatorI<'t, 'p> {
         let unicode = self.flags().unicode();
         let multi_line = self.flags().multi_line();
         Ok(match asst.kind {
-            ast::AssertionKind::StartLine => Hir::anchor(if multi_line {
-                hir::Anchor::StartLine
+            ast::AssertionKind::StartLine => Hir::look(if multi_line {
+                hir::Look::StartLF
             } else {
-                hir::Anchor::StartText
+                hir::Look::Start
             }),
-            ast::AssertionKind::EndLine => Hir::anchor(if multi_line {
-                hir::Anchor::EndLine
+            ast::AssertionKind::EndLine => Hir::look(if multi_line {
+                hir::Look::EndLF
             } else {
-                hir::Anchor::EndText
+                hir::Look::End
             }),
-            ast::AssertionKind::StartText => {
-                Hir::anchor(hir::Anchor::StartText)
-            }
-            ast::AssertionKind::EndText => Hir::anchor(hir::Anchor::EndText),
-            ast::AssertionKind::WordBoundary => {
-                Hir::word_boundary(if unicode {
-                    hir::WordBoundary::Unicode
-                } else {
-                    hir::WordBoundary::Ascii
-                })
-            }
+            ast::AssertionKind::StartText => Hir::look(hir::Look::Start),
+            ast::AssertionKind::EndText => Hir::look(hir::Look::End),
+            ast::AssertionKind::WordBoundary => Hir::look(if unicode {
+                hir::Look::WordUnicode
+            } else {
+                hir::Look::WordAscii
+            }),
             ast::AssertionKind::NotWordBoundary => {
-                Hir::word_boundary(if unicode {
-                    hir::WordBoundary::UnicodeNegate
+                Hir::look(if unicode {
+                    hir::Look::WordUnicodeNegate
                 } else {
                     // It is possible for negated ASCII word boundaries to
                     // match at invalid UTF-8 boundaries, even when searching
@@ -755,7 +751,7 @@ impl<'t, 'p> TranslatorI<'t, 'p> {
                             self.error(asst.span, ErrorKind::InvalidUtf8)
                         );
                     }
-                    hir::WordBoundary::AsciiNegate
+                    hir::Look::WordAsciiNegate
                 })
             }
         })
@@ -1364,12 +1360,8 @@ mod tests {
         }
     }
 
-    fn hir_anchor(anchor: hir::Anchor) -> Hir {
-        Hir::anchor(anchor)
-    }
-
-    fn hir_word(wb: hir::WordBoundary) -> Hir {
-        Hir::word_boundary(wb)
+    fn hir_look(look: hir::Look) -> Hir {
+        Hir::look(look)
     }
 
     #[test]
@@ -1563,22 +1555,19 @@ mod tests {
 
     #[test]
     fn assertions() {
-        assert_eq!(t("^"), hir_anchor(hir::Anchor::StartText));
-        assert_eq!(t("$"), hir_anchor(hir::Anchor::EndText));
-        assert_eq!(t(r"\A"), hir_anchor(hir::Anchor::StartText));
-        assert_eq!(t(r"\z"), hir_anchor(hir::Anchor::EndText));
-        assert_eq!(t("(?m)^"), hir_anchor(hir::Anchor::StartLine));
-        assert_eq!(t("(?m)$"), hir_anchor(hir::Anchor::EndLine));
-        assert_eq!(t(r"(?m)\A"), hir_anchor(hir::Anchor::StartText));
-        assert_eq!(t(r"(?m)\z"), hir_anchor(hir::Anchor::EndText));
+        assert_eq!(t("^"), hir_look(hir::Look::Start));
+        assert_eq!(t("$"), hir_look(hir::Look::End));
+        assert_eq!(t(r"\A"), hir_look(hir::Look::Start));
+        assert_eq!(t(r"\z"), hir_look(hir::Look::End));
+        assert_eq!(t("(?m)^"), hir_look(hir::Look::StartLF));
+        assert_eq!(t("(?m)$"), hir_look(hir::Look::EndLF));
+        assert_eq!(t(r"(?m)\A"), hir_look(hir::Look::Start));
+        assert_eq!(t(r"(?m)\z"), hir_look(hir::Look::End));
 
-        assert_eq!(t(r"\b"), hir_word(hir::WordBoundary::Unicode));
-        assert_eq!(t(r"\B"), hir_word(hir::WordBoundary::UnicodeNegate));
-        assert_eq!(t(r"(?-u)\b"), hir_word(hir::WordBoundary::Ascii));
-        assert_eq!(
-            t_bytes(r"(?-u)\B"),
-            hir_word(hir::WordBoundary::AsciiNegate)
-        );
+        assert_eq!(t(r"\b"), hir_look(hir::Look::WordUnicode));
+        assert_eq!(t(r"\B"), hir_look(hir::Look::WordUnicodeNegate));
+        assert_eq!(t(r"(?-u)\b"), hir_look(hir::Look::WordAscii));
+        assert_eq!(t_bytes(r"(?-u)\B"), hir_look(hir::Look::WordAsciiNegate));
 
         assert_eq!(
             t_err(r"(?-u)\B"),
@@ -1693,7 +1682,7 @@ mod tests {
             t("(?im)a^"),
             hir_cat(vec![
                 hir_uclass(&[('A', 'A'), ('a', 'a')]),
-                hir_anchor(hir::Anchor::StartLine),
+                hir_look(hir::Look::StartLF),
             ])
         );
         #[cfg(feature = "unicode-case")]
@@ -1701,9 +1690,9 @@ mod tests {
             t("(?im)a^(?i-m)a^"),
             hir_cat(vec![
                 hir_uclass(&[('A', 'A'), ('a', 'a')]),
-                hir_anchor(hir::Anchor::StartLine),
+                hir_look(hir::Look::StartLF),
                 hir_uclass(&[('A', 'A'), ('a', 'a')]),
-                hir_anchor(hir::Anchor::StartText),
+                hir_look(hir::Look::Start),
             ])
         );
         assert_eq!(

@@ -175,11 +175,8 @@ pub enum HirKind {
     /// class. A class can either consist of Unicode scalar values as
     /// characters, or it can use bytes.
     Class(Class),
-    /// An anchor assertion. An anchor assertion match always has zero length.
-    Anchor(Anchor),
-    /// A word boundary assertion, which may or may not be Unicode aware. A
-    /// word boundary assertion match always has zero length.
-    WordBoundary(WordBoundary),
+    /// A look-around assertion. A look-around match always has zero length.
+    Look(Look),
     /// A repetition operation applied to a child expression.
     Repetition(Repetition),
     /// A possibly capturing group, which contains a child expression.
@@ -271,8 +268,8 @@ impl Hir {
         Hir { kind: HirKind::Class(class), info }
     }
 
-    /// Creates an anchor assertion HIR expression.
-    pub fn anchor(anchor: Anchor) -> Hir {
+    /// Creates a look-around assertion HIR expression.
+    pub fn look(look: Look) -> Hir {
         let mut info = HirInfo::new();
         info.set_always_utf8(true);
         info.set_all_assertions(true);
@@ -282,53 +279,34 @@ impl Hir {
         info.set_line_anchored_end(false);
         info.set_any_anchored_start(false);
         info.set_any_anchored_end(false);
+        // All look-around assertions always produce zero-length or "empty"
+        // matches. This is true even though not all of them (like \b) match
+        // the empty string itself. That is, '\b' does not match ''. But it
+        // does match the empty string between '!' and 'a' in '!a'.
         info.set_match_empty(true);
         info.set_literal(false);
         info.set_alternation_literal(false);
-        if let Anchor::StartText = anchor {
+        if let Look::Start = look {
             info.set_anchored_start(true);
             info.set_line_anchored_start(true);
             info.set_any_anchored_start(true);
         }
-        if let Anchor::EndText = anchor {
+        if let Look::End = look {
             info.set_anchored_end(true);
             info.set_line_anchored_end(true);
             info.set_any_anchored_end(true);
         }
-        if let Anchor::StartLine = anchor {
+        if let Look::StartLF = look {
             info.set_line_anchored_start(true);
         }
-        if let Anchor::EndLine = anchor {
+        if let Look::EndLF = look {
             info.set_line_anchored_end(true);
         }
-        Hir { kind: HirKind::Anchor(anchor), info }
-    }
-
-    /// Creates a word boundary assertion HIR expression.
-    pub fn word_boundary(word_boundary: WordBoundary) -> Hir {
-        let mut info = HirInfo::new();
-        info.set_always_utf8(true);
-        info.set_all_assertions(true);
-        info.set_anchored_start(false);
-        info.set_anchored_end(false);
-        info.set_line_anchored_start(false);
-        info.set_line_anchored_end(false);
-        info.set_any_anchored_start(false);
-        info.set_any_anchored_end(false);
-        info.set_literal(false);
-        info.set_alternation_literal(false);
-        // A negated word boundary matches '', so that's fine. But \b does not
-        // match \b, so why do we say it can match the empty string? Well,
-        // because, if you search for \b against 'a', it will report [0, 0) and
-        // [1, 1) as matches, and both of those matches correspond to the empty
-        // string. Thus, only *certain* empty strings match \b, which similarly
-        // applies to \B.
-        info.set_match_empty(true);
-        // Negated ASCII word boundaries can match invalid UTF-8.
-        if let WordBoundary::AsciiNegate = word_boundary {
+        if let Look::WordAsciiNegate = look {
+            // Negated ASCII word boundaries can match invalid UTF-8.
             info.set_always_utf8(false);
         }
-        Hir { kind: HirKind::WordBoundary(word_boundary), info }
+        Hir { kind: HirKind::Look(look), info }
     }
 
     /// Creates a repetition HIR expression.
@@ -697,8 +675,7 @@ impl HirKind {
             HirKind::Empty
             | HirKind::Literal(_)
             | HirKind::Class(_)
-            | HirKind::Anchor(_)
-            | HirKind::WordBoundary(_) => false,
+            | HirKind::Look(_) => false,
             HirKind::Group(_)
             | HirKind::Repetition(_)
             | HirKind::Concat(_)
@@ -1313,44 +1290,37 @@ impl core::fmt::Debug for ClassBytesRange {
     }
 }
 
-/// The high-level intermediate representation for an anchor assertion.
+/// The high-level intermediate representation for a look-around assertion.
 ///
-/// A matching anchor assertion is always zero-length.
+/// An assertion match is always zero-length. Also called an "empty match."
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub enum Anchor {
+pub enum Look {
+    /// Match the beginning of text. Specifically, this matches at the starting
+    /// position of the input.
+    Start,
+    /// Match the end of text. Specifically, this matches at the ending
+    /// position of the input.
+    End,
     /// Match the beginning of a line or the beginning of text. Specifically,
     /// this matches at the starting position of the input, or at the position
     /// immediately following a `\n` character.
-    StartLine,
-    /// Match the end of a line or the end of text. Specifically,
-    /// this matches at the end position of the input, or at the position
-    /// immediately preceding a `\n` character.
-    EndLine,
-    /// Match the beginning of text. Specifically, this matches at the starting
-    /// position of the input.
-    StartText,
-    /// Match the end of text. Specifically, this matches at the ending
-    /// position of the input.
-    EndText,
-}
-
-/// The high-level intermediate representation for a word-boundary assertion.
-///
-/// A matching word boundary assertion is always zero-length.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum WordBoundary {
-    /// Match a Unicode-aware word boundary. That is, this matches a position
-    /// where the left adjacent character and right adjacent character
-    /// correspond to a word and non-word or a non-word and word character.
-    Unicode,
-    /// Match a Unicode-aware negation of a word boundary.
-    UnicodeNegate,
+    StartLF,
+    /// Match the end of a line or the end of text. Specifically, this matches
+    /// at the end position of the input, or at the position immediately
+    /// preceding a `\n` character.
+    EndLF,
     /// Match an ASCII-only word boundary. That is, this matches a position
     /// where the left adjacent character and right adjacent character
     /// correspond to a word and non-word or a non-word and word character.
-    Ascii,
+    WordAscii,
     /// Match an ASCII-only negation of a word boundary.
-    AsciiNegate,
+    WordAsciiNegate,
+    /// Match a Unicode-aware word boundary. That is, this matches a position
+    /// where the left adjacent character and right adjacent character
+    /// correspond to a word and non-word or a non-word and word character.
+    WordUnicode,
+    /// Match a Unicode-aware negation of a word boundary.
+    WordUnicodeNegate,
 }
 
 /// The high-level intermediate representation for a group.
@@ -1461,8 +1431,7 @@ impl Drop for Hir {
             HirKind::Empty
             | HirKind::Literal(_)
             | HirKind::Class(_)
-            | HirKind::Anchor(_)
-            | HirKind::WordBoundary(_) => return,
+            | HirKind::Look(_) => return,
             HirKind::Group(ref x) if !x.hir.kind.has_subexprs() => return,
             HirKind::Repetition(ref x) if !x.hir.kind.has_subexprs() => return,
             HirKind::Concat(ref x) if x.is_empty() => return,
@@ -1476,8 +1445,7 @@ impl Drop for Hir {
                 HirKind::Empty
                 | HirKind::Literal(_)
                 | HirKind::Class(_)
-                | HirKind::Anchor(_)
-                | HirKind::WordBoundary(_) => {}
+                | HirKind::Look(_) => {}
                 HirKind::Group(ref mut x) => {
                     stack.push(mem::replace(&mut x.hir, Hir::empty()));
                 }
