@@ -1362,8 +1362,18 @@ pub enum GroupKind {
 /// sub-expression.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Repetition {
-    /// The kind of this repetition operator.
-    pub kind: RepetitionKind,
+    /// The minimum range of the repetition.
+    ///
+    /// Note that special cases like `?`, `+` and `*` all get translated into
+    /// the ranges `{0,1}`, `{1,}` and `{0,}`, respectively.
+    pub min: u32,
+    /// The maximum range of the repetition.
+    ///
+    /// Note that when `max` is `None`, `min` acts as a lower bound but where
+    /// there is no upper bound. For something like `x{5}` where the min and
+    /// max are equivalent, `min` will be set to `5` and `max` will be set to
+    /// `Some(5)`.
+    pub max: Option<u32>,
     /// Whether this repetition operator is greedy or not. A greedy operator
     /// will match as much as it can. A non-greedy operator will match as
     /// little as it can.
@@ -1385,40 +1395,12 @@ impl Repetition {
     /// string and one or more occurrences of something that matches the
     /// empty string will always match the empty string. In order to get the
     /// inductive definition, see the corresponding method on [`Hir`].
+    ///
+    /// This returns true in precisely the cases that [`Repetition::min`]
+    /// is equal to `0`.
     pub fn is_match_empty(&self) -> bool {
-        match self.kind {
-            RepetitionKind::ZeroOrOne => true,
-            RepetitionKind::ZeroOrMore => true,
-            RepetitionKind::OneOrMore => false,
-            RepetitionKind::Range(RepetitionRange::Exactly(m)) => m == 0,
-            RepetitionKind::Range(RepetitionRange::AtLeast(m)) => m == 0,
-            RepetitionKind::Range(RepetitionRange::Bounded(m, _)) => m == 0,
-        }
+        self.min == 0
     }
-}
-
-/// The kind of a repetition operator.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum RepetitionKind {
-    /// Matches a sub-expression zero or one times.
-    ZeroOrOne,
-    /// Matches a sub-expression zero or more times.
-    ZeroOrMore,
-    /// Matches a sub-expression one or more times.
-    OneOrMore,
-    /// Matches a sub-expression within a bounded range of times.
-    Range(RepetitionRange),
-}
-
-/// The kind of a counted repetition operator.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum RepetitionRange {
-    /// Matches a sub-expression exactly this many times.
-    Exactly(u32),
-    /// Matches a sub-expression at least this many times.
-    AtLeast(u32),
-    /// Matches a sub-expression at least `m` times and at most `n` times.
-    Bounded(u32, u32),
 }
 
 /// A custom `Drop` impl is used for `HirKind` such that it uses constant stack
@@ -2257,7 +2239,8 @@ mod tests {
                     hir: Box::new(expr),
                 });
                 expr = Hir::repetition(Repetition {
-                    kind: RepetitionKind::ZeroOrOne,
+                    min: 0,
+                    max: Some(1),
                     greedy: true,
                     hir: Box::new(expr),
                 });

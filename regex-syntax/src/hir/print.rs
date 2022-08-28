@@ -176,27 +176,31 @@ impl<W: fmt::Write> Visitor for Writer<W> {
             | HirKind::Concat(_)
             | HirKind::Alternation(_) => {}
             HirKind::Repetition(ref x) => {
-                match x.kind {
-                    hir::RepetitionKind::ZeroOrOne => {
+                match (x.min, x.max) {
+                    (0, Some(1)) => {
                         self.wtr.write_str("?")?;
                     }
-                    hir::RepetitionKind::ZeroOrMore => {
+                    (0, None) => {
                         self.wtr.write_str("*")?;
                     }
-                    hir::RepetitionKind::OneOrMore => {
+                    (1, None) => {
                         self.wtr.write_str("+")?;
                     }
-                    hir::RepetitionKind::Range(ref x) => match *x {
-                        hir::RepetitionRange::Exactly(m) => {
-                            write!(self.wtr, "{{{}}}", m)?;
-                        }
-                        hir::RepetitionRange::AtLeast(m) => {
-                            write!(self.wtr, "{{{},}}", m)?;
-                        }
-                        hir::RepetitionRange::Bounded(m, n) => {
-                            write!(self.wtr, "{{{},{}}}", m, n)?;
-                        }
-                    },
+                    (1, Some(1)) => {
+                        // 'a{1}' and 'a{1}?' are exactly equivalent to 'a'.
+                        return Ok(());
+                    }
+                    (m, None) => {
+                        write!(self.wtr, "{{{},}}", m)?;
+                    }
+                    (m, Some(n)) if m == n => {
+                        write!(self.wtr, "{{{}}}", m)?;
+                        // a{m} and a{m}? are always exactly equivalent.
+                        return Ok(());
+                    }
+                    (m, Some(n)) => {
+                        write!(self.wtr, "{{{},{}}}", m, n)?;
+                    }
                 }
                 if !x.greedy {
                     self.wtr.write_str("?")?;
@@ -241,7 +245,10 @@ impl<W: fmt::Write> Writer<W> {
 
 #[cfg(test)]
 mod tests {
-    use alloc::string::String;
+    use alloc::{
+        boxed::Box,
+        string::{String, ToString},
+    };
 
     use crate::ParserBuilder;
 
@@ -338,14 +345,17 @@ mod tests {
         roundtrip("a+?", "a+?");
         roundtrip("(?U)a+", "a+?");
 
-        roundtrip("a{1}", "a{1}");
-        roundtrip("a{1,}", "a{1,}");
+        roundtrip("a{1}", "a");
+        roundtrip("a{2}", "a{2}");
+        roundtrip("a{1,}", "a+");
         roundtrip("a{1,5}", "a{1,5}");
-        roundtrip("a{1}?", "a{1}?");
-        roundtrip("a{1,}?", "a{1,}?");
+        roundtrip("a{1}?", "a");
+        roundtrip("a{2}?", "a{2}");
+        roundtrip("a{1,}?", "a+?");
         roundtrip("a{1,5}?", "a{1,5}?");
-        roundtrip("(?U)a{1}", "a{1}?");
-        roundtrip("(?U)a{1,}", "a{1,}?");
+        roundtrip("(?U)a{1}", "a");
+        roundtrip("(?U)a{2}", "a{2}");
+        roundtrip("(?U)a{1,}", "a+?");
         roundtrip("(?U)a{1,5}", "a{1,5}?");
     }
 
@@ -370,5 +380,86 @@ mod tests {
         roundtrip("a|b", "a|b");
         roundtrip("a|b|c", "a|b|c");
         roundtrip("foo|bar|quux", "foo|bar|quux");
+    }
+
+    // This is a regression test that stresses a peculiarity of how the HIR
+    // is both constructed and printed. Namely, it is legal for a repetition
+    // to directly contain a concatenation. This particular construct isn't
+    // really possible to build from the concrete syntax directly, since you'd
+    // be forced to put the concatenation into (at least) a non-capturing
+    // group. Concurrently, the printer doesn't consider this case and just
+    // kind of naively prints the child expression and tacks on the repetition
+    // operator.
+    //
+    // As a result, if you attached '+' to a 'concat(a, b)', the printer gives
+    // you 'ab+', but clearly it really should be '(?:ab)+'.
+    //
+    // This bug isn't easy to surface because most ways of building an HIR
+    // come directly from the concrete syntax, and as mentioned above, it just
+    // isn't possible to build this kind of HIR from the concrete syntax.
+    // Nevertheless, this is definitely a bug.
+    //
+    // See: https://github.com/rust-lang/regex/issues/731
+    #[test]
+    fn regression_repetition_concat() {
+        let expr = Hir::concat(alloc::vec![
+            Hir::literal(hir::Literal::Unicode('x')),
+            Hir::repetition(hir::Repetition {
+                min: 1,
+                max: None,
+                greedy: true,
+                hir: Box::new(Hir::concat(alloc::vec![
+                    Hir::literal(hir::Literal::Unicode('a')),
+                    Hir::literal(hir::Literal::Unicode('b')),
+                ])),
+            }),
+            Hir::literal(hir::Literal::Unicode('y')),
+        ]);
+        assert_eq!(r"x(?:ab)+y", expr.to_string());
+    }
+
+    // Just like regression_repetition_concat, but with the repetition using
+    // an alternation as a child expression instead.
+    //
+    // See: https://github.com/rust-lang/regex/issues/731
+    #[test]
+    fn regression_repetition_alternation() {
+        let expr = Hir::concat(alloc::vec![
+            Hir::literal(hir::Literal::Unicode('x')),
+            Hir::repetition(hir::Repetition {
+                min: 1,
+                max: None,
+                greedy: true,
+                hir: Box::new(Hir::alternation(alloc::vec![
+                    Hir::literal(hir::Literal::Unicode('a')),
+                    Hir::literal(hir::Literal::Unicode('b')),
+                ])),
+            }),
+            Hir::literal(hir::Literal::Unicode('y')),
+        ]);
+        assert_eq!(r"x(?:a|b)+y", expr.to_string());
+    }
+
+    // This regression test is very similar in flavor to
+    // regression_repetition_concat in that the root of the issue lies in a
+    // peculiarity of how the HIR is represented and how the printer writes it
+    // out. Like the other regression, this one is also rooted in the fact that
+    // you can't produce the peculiar HIR from the concrete syntax. Namely, you
+    // just can't have a 'concat(a, alt(b, c))' because the 'alt' will normally
+    // be in (at least) a non-capturing group. Why? Because the '|' has very
+    // low precedence (lower that concatenation), and so something like 'ab|c'
+    // is actually 'alt(ab, c)'.
+    //
+    // See: https://github.com/rust-lang/regex/issues/516
+    #[test]
+    fn regression_alternation_concat() {
+        let expr = Hir::concat(alloc::vec![
+            Hir::literal(hir::Literal::Unicode('a')),
+            Hir::alternation(alloc::vec![
+                Hir::literal(hir::Literal::Unicode('b')),
+                Hir::literal(hir::Literal::Unicode('c')),
+            ]),
+        ]);
+        assert_eq!(r"a(?:b|c)", expr.to_string());
     }
 }
