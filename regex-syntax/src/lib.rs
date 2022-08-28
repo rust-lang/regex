@@ -162,6 +162,7 @@ The following features are available:
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 #![warn(missing_debug_implementations)]
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
 #![no_std]
 
 #[cfg(any(test, feature = "std"))]
