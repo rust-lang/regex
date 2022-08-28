@@ -11,15 +11,12 @@ use crate::ast::{self, Ast};
 /// may be proportional to end user input.
 ///
 /// Typical usage of this trait involves providing an implementation and then
-/// running it using the [`visit`](fn.visit.html) function.
+/// running it using the [`visit`] function.
 ///
 /// Note that the abstract syntax tree for a regular expression is quite
-/// complex. Unless you specifically need it, you might be able to use the
-/// much simpler
-/// [high-level intermediate representation](../hir/struct.Hir.html)
-/// and its
-/// [corresponding `Visitor` trait](../hir/trait.Visitor.html)
-/// instead.
+/// complex. Unless you specifically need it, you might be able to use the much
+/// simpler [high-level intermediate representation](crate::hir::Hir) and its
+/// [corresponding `Visitor` trait](crate::hir::Visitor) instead.
 pub trait Visitor {
     /// The result of visiting an AST.
     type Output;
@@ -46,13 +43,12 @@ pub trait Visitor {
     }
 
     /// This method is called between child nodes of an
-    /// [`Alternation`](struct.Alternation.html).
+    /// [`Alternation`](ast::Alternation).
     fn visit_alternation_in(&mut self) -> Result<(), Self::Err> {
         Ok(())
     }
 
-    /// This method is called on every
-    /// [`ClassSetItem`](enum.ClassSetItem.html)
+    /// This method is called on every [`ClassSetItem`](ast::ClassSetItem)
     /// before descending into child nodes.
     fn visit_class_set_item_pre(
         &mut self,
@@ -61,8 +57,7 @@ pub trait Visitor {
         Ok(())
     }
 
-    /// This method is called on every
-    /// [`ClassSetItem`](enum.ClassSetItem.html)
+    /// This method is called on every [`ClassSetItem`](ast::ClassSetItem)
     /// after descending into child nodes.
     fn visit_class_set_item_post(
         &mut self,
@@ -72,8 +67,8 @@ pub trait Visitor {
     }
 
     /// This method is called on every
-    /// [`ClassSetBinaryOp`](struct.ClassSetBinaryOp.html)
-    /// before descending into child nodes.
+    /// [`ClassSetBinaryOp`](ast::ClassSetBinaryOp) before descending into
+    /// child nodes.
     fn visit_class_set_binary_op_pre(
         &mut self,
         _ast: &ast::ClassSetBinaryOp,
@@ -82,8 +77,8 @@ pub trait Visitor {
     }
 
     /// This method is called on every
-    /// [`ClassSetBinaryOp`](struct.ClassSetBinaryOp.html)
-    /// after descending into child nodes.
+    /// [`ClassSetBinaryOp`](ast::ClassSetBinaryOp) after descending into child
+    /// nodes.
     fn visit_class_set_binary_op_post(
         &mut self,
         _ast: &ast::ClassSetBinaryOp,
@@ -92,7 +87,7 @@ pub trait Visitor {
     }
 
     /// This method is called between the left hand and right hand child nodes
-    /// of a [`ClassSetBinaryOp`](struct.ClassSetBinaryOp.html).
+    /// of a [`ClassSetBinaryOp`](ast::ClassSetBinaryOp).
     fn visit_class_set_binary_op_in(
         &mut self,
         _ast: &ast::ClassSetBinaryOp,
@@ -104,8 +99,7 @@ pub trait Visitor {
 /// Executes an implementation of `Visitor` in constant stack space.
 ///
 /// This function will visit every node in the given `Ast` while calling the
-/// appropriate methods provided by the
-/// [`Visitor`](trait.Visitor.html) trait.
+/// appropriate methods provided by the [`Visitor`] trait.
 ///
 /// The primary use case for this method is when one wants to perform case
 /// analysis over an `Ast` without using a stack size proportional to the depth

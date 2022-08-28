@@ -30,11 +30,11 @@ use crate::hir::{self, Hir, HirKind};
 /// bounded to some low number by default using heuristics, but the limits can
 /// be tweaked.
 ///
-/// **WARNING**: Literal extraction uses stack space proportional to the size
-/// of the `Hir` expression. At some point, this drawback will be eliminated.
-/// To protect yourself, set a reasonable
-/// [`nest_limit` on your `Parser`](../../struct.ParserBuilder.html#method.nest_limit).
-/// This is done for you by default.
+/// **WARNING**: Literal extraction uses stack space proportional to the
+/// size of the `Hir` expression. At some point, this drawback will be
+/// eliminated. To protect yourself, set a reasonable [`nest_limit` on your
+/// `Parser`](crate::ParserBuilder::nest_limit). This is done for you by
+/// default.
 #[derive(Clone, Eq, PartialEq)]
 pub struct Literals {
     lits: Vec<Literal>,

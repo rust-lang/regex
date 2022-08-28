@@ -4,10 +4,9 @@ use crate::{ast, hir, Result};
 ///
 /// This builder permits modifying configuration options for the parser.
 ///
-/// This type combines the builder options for both the
-/// [AST `ParserBuilder`](ast/parse/struct.ParserBuilder.html)
-/// and the
-/// [HIR `TranslatorBuilder`](hir/translate/struct.TranslatorBuilder.html).
+/// This type combines the builder options for both the [AST
+/// `ParserBuilder`](ast::parse::ParserBuilder) and the [HIR
+/// `TranslatorBuilder`](hir::translate::TranslatorBuilder).
 #[derive(Clone, Debug, Default)]
 pub struct ParserBuilder {
     ast: ast::parse::ParserBuilder,
@@ -164,10 +163,9 @@ impl ParserBuilder {
 /// convenience for never having to deal with it at all.
 ///
 /// If callers have more fine grained use cases that need an AST, then please
-/// see the [`ast::parse`](ast/parse/index.html) module.
+/// see the [`ast::parse`] module.
 ///
-/// A `Parser` can be configured in more detail via a
-/// [`ParserBuilder`](struct.ParserBuilder.html).
+/// A `Parser` can be configured in more detail via a [`ParserBuilder`].
 #[derive(Clone, Debug)]
 pub struct Parser {
     ast: ast::parse::Parser,
@@ -181,8 +179,7 @@ impl Parser {
     /// a high level intermediate representation of the given regular
     /// expression.
     ///
-    /// To set configuration options on the parser, use
-    /// [`ParserBuilder`](struct.ParserBuilder.html).
+    /// To set configuration options on the parser, use [`ParserBuilder`].
     pub fn new() -> Parser {
         ParserBuilder::new().build()
     }

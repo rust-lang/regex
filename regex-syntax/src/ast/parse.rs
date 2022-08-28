@@ -229,8 +229,7 @@ impl ParserBuilder {
 /// abstract syntax tree. The size of the tree is proportional to the length
 /// of the regular expression pattern.
 ///
-/// A `Parser` can be configured in more detail via a
-/// [`ParserBuilder`](struct.ParserBuilder.html).
+/// A `Parser` can be configured in more detail via a [`ParserBuilder`].
 #[derive(Clone, Debug)]
 pub struct Parser {
     /// The current position of the parser.
@@ -336,8 +335,7 @@ impl Parser {
     /// The parser can be run with either the `parse` or `parse_with_comments`
     /// methods. The parse methods return an abstract syntax tree.
     ///
-    /// To set configuration options on the parser, use
-    /// [`ParserBuilder`](struct.ParserBuilder.html).
+    /// To set configuration options on the parser, use [`ParserBuilder`].
     pub fn new() -> Parser {
         ParserBuilder::new().build()
     }
