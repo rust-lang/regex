@@ -11,7 +11,7 @@ use crate::hir::{self, Hir, HirKind};
 /// important since the size of an HIR may be proportional to end user input.
 ///
 /// Typical usage of this trait involves providing an implementation and then
-/// running it using the [`visit`](fn.visit.html) function.
+/// running it using the [`visit`] function.
 pub trait Visitor {
     /// The result of visiting an HIR.
     type Output;
@@ -46,8 +46,7 @@ pub trait Visitor {
 /// Executes an implementation of `Visitor` in constant stack space.
 ///
 /// This function will visit every node in the given `Hir` while calling
-/// appropriate methods provided by the
-/// [`Visitor`](trait.Visitor.html) trait.
+/// appropriate methods provided by the [`Visitor`] trait.
 ///
 /// The primary use case for this method is when one wants to perform case
 /// analysis over an `Hir` without using a stack size proportional to the depth

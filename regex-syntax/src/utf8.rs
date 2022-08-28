@@ -3,7 +3,7 @@ Converts ranges of Unicode scalar values to equivalent ranges of UTF-8 bytes.
 
 This is sub-module is useful for constructing byte based automatons that need
 to embed UTF-8 decoding. The most common use of this module is in conjunction
-with the [`hir::ClassUnicodeRange`](../hir/struct.ClassUnicodeRange.html) type.
+with the [`hir::ClassUnicodeRange`](crate::hir::ClassUnicodeRange) type.
 
 See the documentation on the `Utf8Sequences` iterator for more details and
 an example.

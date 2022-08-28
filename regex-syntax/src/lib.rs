@@ -3,14 +3,14 @@ This crate provides a robust regular expression parser.
 
 This crate defines two primary types:
 
-* [`Ast`](ast/enum.Ast.html) is the abstract syntax of a regular expression.
+* [`Ast`](ast::Ast) is the abstract syntax of a regular expression.
   An abstract syntax corresponds to a *structured representation* of the
   concrete syntax of a regular expression, where the concrete syntax is the
   pattern string itself (e.g., `foo(bar)+`). Given some abstract syntax, it
   can be converted back to the original concrete syntax (modulo some details,
   like whitespace). To a first approximation, the abstract syntax is complex
   and difficult to analyze.
-* [`Hir`](hir/struct.Hir.html) is the high-level intermediate representation
+* [`Hir`](hir::Hir) is the high-level intermediate representation
   ("HIR" or "high-level IR" for short) of regular expression. It corresponds to
   an intermediate state of a regular expression that sits between the abstract
   syntax and the low level compiled opcodes that are eventually responsible for
@@ -22,14 +22,14 @@ This crate defines two primary types:
 
 These two types come with conversion routines:
 
-* An [`ast::parse::Parser`](ast/parse/struct.Parser.html) converts concrete
-  syntax (a `&str`) to an [`Ast`](ast/enum.Ast.html).
-* A [`hir::translate::Translator`](hir/translate/struct.Translator.html)
-  converts an [`Ast`](ast/enum.Ast.html) to a [`Hir`](hir/struct.Hir.html).
+* An [`ast::parse::Parser`] converts concrete syntax (a `&str`) to an
+[`Ast`](ast::Ast).
+* A [`hir::translate::Translator`] converts an [`Ast`](ast::Ast) to a
+[`Hir`](hir::Hir).
 
 As a convenience, the above two conversion routines are combined into one via
-the top-level [`Parser`](struct.Parser.html) type. This `Parser` will first
-convert your pattern to an `Ast` and then convert the `Ast` to an `Hir`.
+the top-level [`Parser`] type. This `Parser` will first convert your pattern to
+an `Ast` and then convert the `Ast` to an `Hir`.
 
 
 # Example
@@ -81,10 +81,10 @@ in a monospace font.
 
 # Literal extraction
 
-This crate provides limited support for
-[literal extraction from `Hir` values](hir/literal/struct.Literals.html).
-Be warned that literal extraction currently uses recursion, and therefore,
-stack size proportional to the size of the `Hir`.
+This crate provides limited support for [literal extraction from `Hir`
+values](hir::literal::Literals). Be warned that literal extraction currently
+uses recursion, and therefore, stack size proportional to the size of the
+`Hir`.
 
 The purpose of literal extraction is to speed up searches. That is, if you
 know a regular expression must match a prefix or suffix literal, then it is
@@ -159,11 +159,12 @@ The following features are available:
   `\p{sb=ATerm}`.
 */
 
+#![no_std]
 #![forbid(unsafe_code)]
-#![deny(missing_docs)]
+#![deny(missing_docs, rustdoc::broken_intra_doc_links)]
+#![doc(test(attr(deny(warnings))))]
 #![warn(missing_debug_implementations)]
 #![cfg_attr(docsrs, feature(doc_auto_cfg))]
-#![no_std]
 
 #[cfg(any(test, feature = "std"))]
 extern crate std;
@@ -240,10 +241,9 @@ pub fn is_meta_character(c: char) -> bool {
 ///
 /// # Panics
 ///
-/// If the `unicode-perl` feature is not enabled, then this function panics.
-/// For this reason, it is recommended that callers use
-/// [`try_is_word_character`](fn.try_is_word_character.html)
-/// instead.
+/// If the `unicode-perl` feature is not enabled, then this function
+/// panics. For this reason, it is recommended that callers use
+/// [`try_is_word_character`] instead.
 pub fn is_word_character(c: char) -> bool {
     try_is_word_character(c).expect("unicode-perl feature must be enabled")
 }

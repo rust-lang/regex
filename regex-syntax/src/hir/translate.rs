@@ -103,7 +103,7 @@ impl TranslatorBuilder {
 /// many abstract syntax trees.
 ///
 /// A `Translator` can be configured in more detail via a
-/// [`TranslatorBuilder`](struct.TranslatorBuilder.html).
+/// [`TranslatorBuilder`].
 #[derive(Clone, Debug)]
 pub struct Translator {
     /// Our call stack, but on the heap.

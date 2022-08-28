@@ -681,8 +681,8 @@ impl HirKind {
     /// Return true if and only if this HIR is the empty regular expression.
     ///
     /// Note that this is not defined inductively. That is, it only tests if
-    /// this kind is the `Empty` variant. To get the inductive definition,
-    /// use the `is_match_empty` method on [`Hir`](struct.Hir.html).
+    /// this kind is the `Empty` variant. To get the inductive definition, use
+    /// the `is_match_empty` method on [`Hir`].
     pub fn is_empty(&self) -> bool {
         match *self {
             HirKind::Empty => true,
@@ -756,12 +756,12 @@ impl Literal {
 /// A character class, regardless of its character type, is represented by a
 /// sequence of non-overlapping non-adjacent ranges of characters.
 ///
-/// Note that unlike [`Literal`](enum.Literal.html), a `Bytes` variant may
-/// be produced even when it exclusively matches valid UTF-8. This is because
-/// a `Bytes` variant represents an intention by the author of the regular
-/// expression to disable Unicode mode, which in turn impacts the semantics of
-/// case insensitive matching. For example, `(?i)k` and `(?i-u)k` will not
-/// match the same set of strings.
+/// Note that unlike [`Literal`], a `Bytes` variant may be produced even when
+/// it exclusively matches valid UTF-8. This is because a `Bytes` variant
+/// represents an intention by the author of the regular expression to disable
+/// Unicode mode, which in turn impacts the semantics of case insensitive
+/// matching. For example, `(?i)k` and `(?i-u)k` will not match the same set of
+/// strings.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Class {
     /// A set of characters represented by Unicode scalar values.
@@ -1424,10 +1424,9 @@ impl Repetition {
     ///
     /// Note that this is not defined inductively. For example, while `a*`
     /// will report `true`, `()+` will not, even though `()` matches the empty
-    /// string and one or more occurrences of something that matches the empty
-    /// string will always match the empty string. In order to get the
-    /// inductive definition, see the corresponding method on
-    /// [`Hir`](struct.Hir.html).
+    /// string and one or more occurrences of something that matches the
+    /// empty string will always match the empty string. In order to get the
+    /// inductive definition, see the corresponding method on [`Hir`].
     pub fn is_match_empty(&self) -> bool {
         match self.kind {
             RepetitionKind::ZeroOrOne => true,
