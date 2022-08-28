@@ -150,11 +150,11 @@ impl<W: fmt::Write> Visitor for Writer<W> {
                 self.wtr.write_str(r"(?-u:\B)")?;
             }
             HirKind::Group(ref x) => match x.kind {
-                hir::GroupKind::CaptureIndex(_) => {
+                hir::GroupKind::Capture { ref name, .. } => {
                     self.wtr.write_str("(")?;
-                }
-                hir::GroupKind::CaptureName { ref name, .. } => {
-                    write!(self.wtr, "(?P<{}>", name)?;
+                    if let Some(ref name) = *name {
+                        write!(self.wtr, "?P<{}>", name)?;
+                    }
                 }
                 hir::GroupKind::NonCapturing => {
                     self.wtr.write_str("(?:")?;

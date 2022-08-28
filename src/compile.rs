@@ -362,17 +362,13 @@ impl Compiler {
             }
             Group(ref g) => match g.kind {
                 hir::GroupKind::NonCapturing => self.c(&g.hir),
-                hir::GroupKind::CaptureIndex(index) => {
+                hir::GroupKind::Capture { index, ref name } => {
                     if index as usize >= self.compiled.captures.len() {
-                        self.compiled.captures.push(None);
-                    }
-                    self.c_capture(2 * index as usize, &g.hir)
-                }
-                hir::GroupKind::CaptureName { index, ref name } => {
-                    if index as usize >= self.compiled.captures.len() {
-                        let n = name.to_string();
-                        self.compiled.captures.push(Some(n.clone()));
-                        self.capture_name_idx.insert(n, index as usize);
+                        self.compiled.captures.push(name.clone());
+                        if let Some(ref name) = *name {
+                            self.capture_name_idx
+                                .insert(name.clone(), index as usize);
+                        }
                     }
                     self.c_capture(2 * index as usize, &g.hir)
                 }
