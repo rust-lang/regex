@@ -763,15 +763,13 @@ impl<'t, 'p> TranslatorI<'t, 'p> {
 
     fn hir_group(&self, group: &ast::Group, expr: Hir) -> Hir {
         let kind = match group.kind {
-            ast::GroupKind::CaptureIndex(idx) => {
-                hir::GroupKind::CaptureIndex(idx)
+            ast::GroupKind::CaptureIndex(index) => {
+                hir::GroupKind::Capture { index, name: None }
             }
-            ast::GroupKind::CaptureName(ref capname) => {
-                hir::GroupKind::CaptureName {
-                    name: capname.name.clone(),
-                    index: capname.index,
-                }
-            }
+            ast::GroupKind::CaptureName(ref cap) => hir::GroupKind::Capture {
+                index: cap.index,
+                name: Some(cap.name.clone()),
+            },
             ast::GroupKind::NonCapturing(_) => hir::GroupKind::NonCapturing,
         };
         Hir::group(hir::Group { kind, hir: Box::new(expr) })
@@ -1211,16 +1209,16 @@ mod tests {
 
     fn hir_group(i: u32, expr: Hir) -> Hir {
         Hir::group(hir::Group {
-            kind: hir::GroupKind::CaptureIndex(i),
+            kind: hir::GroupKind::Capture { index: i, name: None },
             hir: Box::new(expr),
         })
     }
 
     fn hir_group_name(i: u32, name: &str, expr: Hir) -> Hir {
         Hir::group(hir::Group {
-            kind: hir::GroupKind::CaptureName {
-                name: name.to_string(),
+            kind: hir::GroupKind::Capture {
                 index: i,
+                name: Some(name.to_string()),
             },
             hir: Box::new(expr),
         })

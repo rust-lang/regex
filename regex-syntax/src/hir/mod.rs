@@ -1383,19 +1383,17 @@ pub struct Group {
 /// The kind of group.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum GroupKind {
-    /// A normal unnamed capturing group.
-    ///
-    /// The value is the capture index of the group.
-    CaptureIndex(u32),
-    /// A named capturing group.
-    CaptureName {
-        /// The name of the group.
-        name: String,
-        /// The capture index of the group.
-        index: u32,
-    },
     /// A non-capturing group.
     NonCapturing,
+    /// A capturing group with an optional name.
+    ///
+    /// The value is the capture index of the group.
+    Capture {
+        /// The capture index of the group.
+        index: u32,
+        /// The name of the group, if it exists.
+        name: Option<String>,
+    },
 }
 
 /// The high-level intermediate representation of a repetition operator.
