@@ -89,10 +89,9 @@ impl<W: fmt::Write> Visitor for Writer<W> {
 
     fn visit_pre(&mut self, hir: &Hir) -> fmt::Result {
         match *hir.kind() {
-            HirKind::Empty
-            | HirKind::Repetition(_)
-            | HirKind::Concat(_)
-            | HirKind::Alternation(_) => {}
+            // Empty is represented by nothing in the concrete syntax, and
+            // repetition operators are strictly suffix oriented.
+            HirKind::Empty | HirKind::Repetition(_) => {}
             HirKind::Literal(hir::Literal::Unicode(c)) => {
                 self.write_literal_char(c)?;
             }
@@ -162,6 +161,22 @@ impl<W: fmt::Write> Visitor for Writer<W> {
                     self.wtr.write_str("(?:")?;
                 }
             },
+            // Why do this? Wrapping concats and alts in non-capturing groups
+            // is not *always* necessary, but is sometimes necessary. For
+            // example, 'concat(a, alt(b, c))' should be written as 'a(?:b|c)'
+            // and not 'ab|c'. The former is clearly the intended meaning, but
+            // the latter is actually 'alt(concat(a, b), c)'.
+            //
+            // It would be possible to only group these things in cases where
+            // it's strictly necessary, but it requires knowing the parent
+            // expression. And since this technique is simpler and always
+            // correct, we take this route. More to the point, it is a non-goal
+            // of an HIR printer to show a nice easy-to-read regex. Indeed,
+            // its construction forbids it from doing so. Therefore, inserting
+            // extra groups where they aren't necessary is perfectly okay.
+            HirKind::Concat(_) | HirKind::Alternation(_) => {
+                self.wtr.write_str(r"(?:")?;
+            }
         }
         Ok(())
     }
@@ -172,9 +187,7 @@ impl<W: fmt::Write> Visitor for Writer<W> {
             HirKind::Empty
             | HirKind::Literal(_)
             | HirKind::Class(_)
-            | HirKind::Look(_)
-            | HirKind::Concat(_)
-            | HirKind::Alternation(_) => {}
+            | HirKind::Look(_) => {}
             HirKind::Repetition(ref x) => {
                 match (x.min, x.max) {
                     (0, Some(1)) => {
@@ -206,8 +219,10 @@ impl<W: fmt::Write> Visitor for Writer<W> {
                     self.wtr.write_str("?")?;
                 }
             }
-            HirKind::Group(_) => {
-                self.wtr.write_str(")")?;
+            HirKind::Group(_)
+            | HirKind::Concat(_)
+            | HirKind::Alternation(_) => {
+                self.wtr.write_str(r")")?;
             }
         }
         Ok(())
@@ -374,12 +389,12 @@ mod tests {
 
     #[test]
     fn print_alternation() {
-        roundtrip("|", "|");
-        roundtrip("||", "||");
+        roundtrip("|", "(?:|)");
+        roundtrip("||", "(?:||)");
 
-        roundtrip("a|b", "a|b");
-        roundtrip("a|b|c", "a|b|c");
-        roundtrip("foo|bar|quux", "foo|bar|quux");
+        roundtrip("a|b", "(?:a|b)");
+        roundtrip("a|b|c", "(?:a|b|c)");
+        roundtrip("foo|bar|quux", "(?:(?:foo)|(?:bar)|(?:quux))");
     }
 
     // This is a regression test that stresses a peculiarity of how the HIR
@@ -415,7 +430,7 @@ mod tests {
             }),
             Hir::literal(hir::Literal::Unicode('y')),
         ]);
-        assert_eq!(r"x(?:ab)+y", expr.to_string());
+        assert_eq!(r"(?:x(?:ab)+y)", expr.to_string());
     }
 
     // Just like regression_repetition_concat, but with the repetition using
@@ -437,7 +452,7 @@ mod tests {
             }),
             Hir::literal(hir::Literal::Unicode('y')),
         ]);
-        assert_eq!(r"x(?:a|b)+y", expr.to_string());
+        assert_eq!(r"(?:x(?:a|b)+y)", expr.to_string());
     }
 
     // This regression test is very similar in flavor to
@@ -460,6 +475,6 @@ mod tests {
                 Hir::literal(hir::Literal::Unicode('c')),
             ]),
         ]);
-        assert_eq!(r"a(?:b|c)", expr.to_string());
+        assert_eq!(r"(?:a(?:b|c))", expr.to_string());
     }
 }
