@@ -311,6 +311,12 @@ impl Hir {
 
     /// Creates a repetition HIR expression.
     pub fn repetition(rep: Repetition) -> Hir {
+        // The regex 'a{0}' is always equivalent to the empty regex. This is
+        // true even when 'a' is an expression that never matches anything
+        // (like '\P{any}').
+        if rep.min == 0 && rep.max == Some(0) {
+            return Hir::empty();
+        }
         let mut info = HirInfo::new();
         info.set_always_utf8(rep.hir.is_always_utf8());
         info.set_all_assertions(rep.hir.is_all_assertions());

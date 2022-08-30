@@ -372,6 +372,17 @@ mod tests {
         roundtrip("(?U)a{2}", "a{2}");
         roundtrip("(?U)a{1,}", "a+?");
         roundtrip("(?U)a{1,5}", "a{1,5}?");
+
+        // Test that various zero-length repetitions always translate to an
+        // empty regex. This is more a property of HIR's smart constructors
+        // than the printer though.
+        roundtrip("a{0}", "");
+        roundtrip("(?:ab){0}", "");
+        #[cfg(feature = "unicode-gencat")]
+        {
+            roundtrip(r"\p{any}{0}", "");
+            roundtrip(r"\P{any}{0}", "");
+        }
     }
 
     #[test]
