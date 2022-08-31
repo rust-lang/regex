@@ -4,7 +4,7 @@ use std::iter;
 use std::result;
 use std::sync::Arc;
 
-use regex_syntax::hir::{self, Hir};
+use regex_syntax::hir::{self, Hir, Look};
 use regex_syntax::is_word_byte;
 use regex_syntax::utf8::{Utf8Range, Utf8Sequence, Utf8Sequences};
 
@@ -142,8 +142,10 @@ impl Compiler {
         // Other matching engines handle this by baking the logic into the
         // matching engine itself.
         let mut dotstar_patch = Patch { hole: Hole::None, entry: 0 };
-        self.compiled.is_anchored_start = expr.is_anchored_start();
-        self.compiled.is_anchored_end = expr.is_anchored_end();
+        self.compiled.is_anchored_start =
+            expr.properties().look_set_prefix().contains(Look::Start);
+        self.compiled.is_anchored_end =
+            expr.properties().look_set_suffix().contains(Look::End);
         if self.compiled.needs_dotstar() {
             dotstar_patch = self.c_dotstar()?;
             self.compiled.start = dotstar_patch.entry;
@@ -168,10 +170,12 @@ impl Compiler {
     ) -> result::Result<Program, Error> {
         debug_assert!(exprs.len() > 1);
 
-        self.compiled.is_anchored_start =
-            exprs.iter().all(|e| e.is_anchored_start());
-        self.compiled.is_anchored_end =
-            exprs.iter().all(|e| e.is_anchored_end());
+        self.compiled.is_anchored_start = exprs
+            .iter()
+            .all(|e| e.properties().look_set_prefix().contains(Look::Start));
+        self.compiled.is_anchored_end = exprs
+            .iter()
+            .all(|e| e.properties().look_set_suffix().contains(Look::End));
         let mut dotstar_patch = Patch { hole: Hole::None, entry: 0 };
         if self.compiled.needs_dotstar() {
             dotstar_patch = self.c_dotstar()?;

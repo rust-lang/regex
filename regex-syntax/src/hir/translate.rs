@@ -1270,7 +1270,7 @@ fn ascii_class_as_chars(
 mod tests {
     use crate::{
         ast::{self, parse::ParserBuilder, Ast, Position, Span},
-        hir::{self, Hir, HirKind},
+        hir::{self, Hir, HirKind, Look, Properties},
         unicode::{self, ClassQuery},
     };
 
@@ -1323,6 +1323,14 @@ mod tests {
             .build()
             .translate(pattern, &parse(pattern))
             .unwrap()
+    }
+
+    fn props(pattern: &str) -> Properties {
+        t(pattern).properties().clone()
+    }
+
+    fn props_bytes(pattern: &str) -> Properties {
+        t_bytes(pattern).properties().clone()
     }
 
     fn hir_lit(s: &str) -> Hir {
@@ -3027,273 +3035,258 @@ mod tests {
     }
 
     #[test]
-    fn analysis_is_always_utf8() {
+    fn analysis_is_utf8() {
         // Positive examples.
-        assert!(t_bytes(r"a").is_always_utf8());
-        assert!(t_bytes(r"ab").is_always_utf8());
-        assert!(t_bytes(r"(?-u)a").is_always_utf8());
-        assert!(t_bytes(r"(?-u)ab").is_always_utf8());
-        assert!(t_bytes(r"\xFF").is_always_utf8());
-        assert!(t_bytes(r"\xFF\xFF").is_always_utf8());
-        assert!(t_bytes(r"[^a]").is_always_utf8());
-        assert!(t_bytes(r"[^a][^a]").is_always_utf8());
-        assert!(t_bytes(r"\b").is_always_utf8());
-        assert!(t_bytes(r"\B").is_always_utf8());
-        assert!(t_bytes(r"(?-u)\b").is_always_utf8());
+        assert!(props_bytes(r"a").is_utf8());
+        assert!(props_bytes(r"ab").is_utf8());
+        assert!(props_bytes(r"(?-u)a").is_utf8());
+        assert!(props_bytes(r"(?-u)ab").is_utf8());
+        assert!(props_bytes(r"\xFF").is_utf8());
+        assert!(props_bytes(r"\xFF\xFF").is_utf8());
+        assert!(props_bytes(r"[^a]").is_utf8());
+        assert!(props_bytes(r"[^a][^a]").is_utf8());
+        assert!(props_bytes(r"\b").is_utf8());
+        assert!(props_bytes(r"\B").is_utf8());
+        assert!(props_bytes(r"(?-u)\b").is_utf8());
 
         // Negative examples.
-        assert!(!t_bytes(r"(?-u)\xFF").is_always_utf8());
-        assert!(!t_bytes(r"(?-u)\xFF\xFF").is_always_utf8());
-        assert!(!t_bytes(r"(?-u)[^a]").is_always_utf8());
-        assert!(!t_bytes(r"(?-u)[^a][^a]").is_always_utf8());
-        assert!(!t_bytes(r"(?-u)\B").is_always_utf8());
+        assert!(!props_bytes(r"(?-u)\xFF").is_utf8());
+        assert!(!props_bytes(r"(?-u)\xFF\xFF").is_utf8());
+        assert!(!props_bytes(r"(?-u)[^a]").is_utf8());
+        assert!(!props_bytes(r"(?-u)[^a][^a]").is_utf8());
+        assert!(!props_bytes(r"(?-u)\B").is_utf8());
     }
 
     #[test]
     fn analysis_is_all_assertions() {
         // Positive examples.
-        assert!(t(r"\b").is_all_assertions());
-        assert!(t(r"\B").is_all_assertions());
-        assert!(t(r"^").is_all_assertions());
-        assert!(t(r"$").is_all_assertions());
-        assert!(t(r"\A").is_all_assertions());
-        assert!(t(r"\z").is_all_assertions());
-        assert!(t(r"$^\z\A\b\B").is_all_assertions());
-        assert!(t(r"$|^|\z|\A|\b|\B").is_all_assertions());
-        assert!(t(r"^$|$^").is_all_assertions());
-        assert!(t(r"((\b)+())*^").is_all_assertions());
+        let p = props(r"\b");
+        assert!(!p.look_set().is_empty());
+        assert_eq!(p.minimum_len(), Some(0));
+
+        let p = props(r"\B");
+        assert!(!p.look_set().is_empty());
+        assert_eq!(p.minimum_len(), Some(0));
+
+        let p = props(r"^");
+        assert!(!p.look_set().is_empty());
+        assert_eq!(p.minimum_len(), Some(0));
+
+        let p = props(r"$");
+        assert!(!p.look_set().is_empty());
+        assert_eq!(p.minimum_len(), Some(0));
+
+        let p = props(r"\A");
+        assert!(!p.look_set().is_empty());
+        assert_eq!(p.minimum_len(), Some(0));
+
+        let p = props(r"\z");
+        assert!(!p.look_set().is_empty());
+        assert_eq!(p.minimum_len(), Some(0));
+
+        let p = props(r"$^\z\A\b\B");
+        assert!(!p.look_set().is_empty());
+        assert_eq!(p.minimum_len(), Some(0));
+
+        let p = props(r"$|^|\z|\A|\b|\B");
+        assert!(!p.look_set().is_empty());
+        assert_eq!(p.minimum_len(), Some(0));
+
+        let p = props(r"^$|$^");
+        assert!(!p.look_set().is_empty());
+        assert_eq!(p.minimum_len(), Some(0));
+
+        let p = props(r"((\b)+())*^");
+        assert!(!p.look_set().is_empty());
+        assert_eq!(p.minimum_len(), Some(0));
 
         // Negative examples.
-        assert!(!t(r"^a").is_all_assertions());
+        let p = props(r"^a");
+        assert!(!p.look_set().is_empty());
+        assert_eq!(p.minimum_len(), Some(1));
     }
 
     #[test]
     fn analysis_is_anchored() {
+        let is_start = |p| props(p).look_set_prefix().contains(Look::Start);
+        let is_end = |p| props(p).look_set_suffix().contains(Look::End);
+
         // Positive examples.
-        assert!(t(r"^").is_anchored_start());
-        assert!(t(r"$").is_anchored_end());
-        assert!(t(r"^").is_line_anchored_start());
-        assert!(t(r"$").is_line_anchored_end());
+        assert!(is_start(r"^"));
+        assert!(is_end(r"$"));
 
-        assert!(t(r"^^").is_anchored_start());
-        assert!(t(r"$$").is_anchored_end());
-        assert!(t(r"^^").is_line_anchored_start());
-        assert!(t(r"$$").is_line_anchored_end());
+        assert!(is_start(r"^^"));
+        assert!(props(r"$$").look_set_suffix().contains(Look::End));
 
-        assert!(t(r"^$").is_anchored_start());
-        assert!(t(r"^$").is_anchored_end());
-        assert!(t(r"^$").is_line_anchored_start());
-        assert!(t(r"^$").is_line_anchored_end());
+        assert!(is_start(r"^$"));
+        assert!(is_end(r"^$"));
 
-        assert!(t(r"^foo").is_anchored_start());
-        assert!(t(r"foo$").is_anchored_end());
-        assert!(t(r"^foo").is_line_anchored_start());
-        assert!(t(r"foo$").is_line_anchored_end());
+        assert!(is_start(r"^foo"));
+        assert!(is_end(r"foo$"));
 
-        assert!(t(r"^foo|^bar").is_anchored_start());
-        assert!(t(r"foo$|bar$").is_anchored_end());
-        assert!(t(r"^foo|^bar").is_line_anchored_start());
-        assert!(t(r"foo$|bar$").is_line_anchored_end());
+        assert!(is_start(r"^foo|^bar"));
+        assert!(is_end(r"foo$|bar$"));
 
-        assert!(t(r"^(foo|bar)").is_anchored_start());
-        assert!(t(r"(foo|bar)$").is_anchored_end());
-        assert!(t(r"^(foo|bar)").is_line_anchored_start());
-        assert!(t(r"(foo|bar)$").is_line_anchored_end());
+        assert!(is_start(r"^(foo|bar)"));
+        assert!(is_end(r"(foo|bar)$"));
 
-        assert!(t(r"^+").is_anchored_start());
-        assert!(t(r"$+").is_anchored_end());
-        assert!(t(r"^+").is_line_anchored_start());
-        assert!(t(r"$+").is_line_anchored_end());
-        assert!(t(r"^++").is_anchored_start());
-        assert!(t(r"$++").is_anchored_end());
-        assert!(t(r"^++").is_line_anchored_start());
-        assert!(t(r"$++").is_line_anchored_end());
-        assert!(t(r"(^)+").is_anchored_start());
-        assert!(t(r"($)+").is_anchored_end());
-        assert!(t(r"(^)+").is_line_anchored_start());
-        assert!(t(r"($)+").is_line_anchored_end());
+        assert!(is_start(r"^+"));
+        assert!(is_end(r"$+"));
+        assert!(is_start(r"^++"));
+        assert!(is_end(r"$++"));
+        assert!(is_start(r"(^)+"));
+        assert!(is_end(r"($)+"));
 
-        assert!(t(r"$^").is_anchored_start());
-        assert!(t(r"$^").is_anchored_start());
-        assert!(t(r"$^").is_line_anchored_end());
-        assert!(t(r"$^").is_line_anchored_end());
-        assert!(t(r"$^|^$").is_anchored_start());
-        assert!(t(r"$^|^$").is_anchored_end());
-        assert!(t(r"$^|^$").is_line_anchored_start());
-        assert!(t(r"$^|^$").is_line_anchored_end());
+        assert!(is_start(r"$^"));
+        assert!(is_start(r"$^"));
+        assert!(is_start(r"$^|^$"));
+        assert!(is_end(r"$^|^$"));
 
-        assert!(t(r"\b^").is_anchored_start());
-        assert!(t(r"$\b").is_anchored_end());
-        assert!(t(r"\b^").is_line_anchored_start());
-        assert!(t(r"$\b").is_line_anchored_end());
-        assert!(t(r"^(?m:^)").is_anchored_start());
-        assert!(t(r"(?m:$)$").is_anchored_end());
-        assert!(t(r"^(?m:^)").is_line_anchored_start());
-        assert!(t(r"(?m:$)$").is_line_anchored_end());
-        assert!(t(r"(?m:^)^").is_anchored_start());
-        assert!(t(r"$(?m:$)").is_anchored_end());
-        assert!(t(r"(?m:^)^").is_line_anchored_start());
-        assert!(t(r"$(?m:$)").is_line_anchored_end());
+        assert!(is_start(r"\b^"));
+        assert!(is_end(r"$\b"));
+        assert!(is_start(r"^(?m:^)"));
+        assert!(is_end(r"(?m:$)$"));
+        assert!(is_start(r"(?m:^)^"));
+        assert!(is_end(r"$(?m:$)"));
 
         // Negative examples.
-        assert!(!t(r"(?m)^").is_anchored_start());
-        assert!(!t(r"(?m)$").is_anchored_end());
-        assert!(!t(r"(?m:^$)|$^").is_anchored_start());
-        assert!(!t(r"(?m:^$)|$^").is_anchored_end());
-        assert!(!t(r"$^|(?m:^$)").is_anchored_start());
-        assert!(!t(r"$^|(?m:^$)").is_anchored_end());
+        assert!(!is_start(r"(?m)^"));
+        assert!(!is_end(r"(?m)$"));
+        assert!(!is_start(r"(?m:^$)|$^"));
+        assert!(!is_end(r"(?m:^$)|$^"));
+        assert!(!is_start(r"$^|(?m:^$)"));
+        assert!(!is_end(r"$^|(?m:^$)"));
 
-        assert!(!t(r"a^").is_anchored_start());
-        assert!(!t(r"$a").is_anchored_start());
-        assert!(!t(r"a^").is_line_anchored_start());
-        assert!(!t(r"$a").is_line_anchored_start());
+        assert!(!is_start(r"a^"));
+        assert!(!is_start(r"$a"));
 
-        assert!(!t(r"a^").is_anchored_end());
-        assert!(!t(r"$a").is_anchored_end());
-        assert!(!t(r"a^").is_line_anchored_end());
-        assert!(!t(r"$a").is_line_anchored_end());
+        assert!(!is_end(r"a^"));
+        assert!(!is_end(r"$a"));
 
-        assert!(!t(r"^foo|bar").is_anchored_start());
-        assert!(!t(r"foo|bar$").is_anchored_end());
-        assert!(!t(r"^foo|bar").is_line_anchored_start());
-        assert!(!t(r"foo|bar$").is_line_anchored_end());
+        assert!(!is_start(r"^foo|bar"));
+        assert!(!is_end(r"foo|bar$"));
 
-        assert!(!t(r"^*").is_anchored_start());
-        assert!(!t(r"$*").is_anchored_end());
-        assert!(!t(r"^*").is_line_anchored_start());
-        assert!(!t(r"$*").is_line_anchored_end());
-        assert!(!t(r"^*+").is_anchored_start());
-        assert!(!t(r"$*+").is_anchored_end());
-        assert!(!t(r"^*+").is_line_anchored_start());
-        assert!(!t(r"$*+").is_line_anchored_end());
-        assert!(!t(r"^+*").is_anchored_start());
-        assert!(!t(r"$+*").is_anchored_end());
-        assert!(!t(r"^+*").is_line_anchored_start());
-        assert!(!t(r"$+*").is_line_anchored_end());
-        assert!(!t(r"(^)*").is_anchored_start());
-        assert!(!t(r"($)*").is_anchored_end());
-        assert!(!t(r"(^)*").is_line_anchored_start());
-        assert!(!t(r"($)*").is_line_anchored_end());
-    }
-
-    #[test]
-    fn analysis_is_line_anchored() {
-        assert!(t(r"(?m)^(foo|bar)").is_line_anchored_start());
-        assert!(t(r"(?m)(foo|bar)$").is_line_anchored_end());
-
-        assert!(t(r"(?m)^foo|^bar").is_line_anchored_start());
-        assert!(t(r"(?m)foo$|bar$").is_line_anchored_end());
-
-        assert!(t(r"(?m)^").is_line_anchored_start());
-        assert!(t(r"(?m)$").is_line_anchored_end());
-
-        assert!(t(r"(?m:^$)|$^").is_line_anchored_start());
-        assert!(t(r"(?m:^$)|$^").is_line_anchored_end());
-
-        assert!(t(r"$^|(?m:^$)").is_line_anchored_start());
-        assert!(t(r"$^|(?m:^$)").is_line_anchored_end());
+        assert!(!is_start(r"^*"));
+        assert!(!is_end(r"$*"));
+        assert!(!is_start(r"^*+"));
+        assert!(!is_end(r"$*+"));
+        assert!(!is_start(r"^+*"));
+        assert!(!is_end(r"$+*"));
+        assert!(!is_start(r"(^)*"));
+        assert!(!is_end(r"($)*"));
     }
 
     #[test]
     fn analysis_is_any_anchored() {
+        let is_start = |p| props(p).look_set().contains(Look::Start);
+        let is_end = |p| props(p).look_set().contains(Look::End);
+
         // Positive examples.
-        assert!(t(r"^").is_any_anchored_start());
-        assert!(t(r"$").is_any_anchored_end());
-        assert!(t(r"\A").is_any_anchored_start());
-        assert!(t(r"\z").is_any_anchored_end());
+        assert!(is_start(r"^"));
+        assert!(is_end(r"$"));
+        assert!(is_start(r"\A"));
+        assert!(is_end(r"\z"));
 
         // Negative examples.
-        assert!(!t(r"(?m)^").is_any_anchored_start());
-        assert!(!t(r"(?m)$").is_any_anchored_end());
-        assert!(!t(r"$").is_any_anchored_start());
-        assert!(!t(r"^").is_any_anchored_end());
+        assert!(!is_start(r"(?m)^"));
+        assert!(!is_end(r"(?m)$"));
+        assert!(!is_start(r"$"));
+        assert!(!is_end(r"^"));
     }
 
     #[test]
-    fn analysis_is_match_empty() {
+    fn analysis_can_empty() {
         // Positive examples.
-        assert!(t(r"").is_match_empty());
-        assert!(t(r"()").is_match_empty());
-        assert!(t(r"()*").is_match_empty());
-        assert!(t(r"()+").is_match_empty());
-        assert!(t(r"()?").is_match_empty());
-        assert!(t(r"a*").is_match_empty());
-        assert!(t(r"a?").is_match_empty());
-        assert!(t(r"a{0}").is_match_empty());
-        assert!(t(r"a{0,}").is_match_empty());
-        assert!(t(r"a{0,1}").is_match_empty());
-        assert!(t(r"a{0,10}").is_match_empty());
+        let assert_empty =
+            |p| assert_eq!(Some(0), props_bytes(p).minimum_len());
+        assert_empty(r"");
+        assert_empty(r"()");
+        assert_empty(r"()*");
+        assert_empty(r"()+");
+        assert_empty(r"()?");
+        assert_empty(r"a*");
+        assert_empty(r"a?");
+        assert_empty(r"a{0}");
+        assert_empty(r"a{0,}");
+        assert_empty(r"a{0,1}");
+        assert_empty(r"a{0,10}");
         #[cfg(feature = "unicode-gencat")]
-        assert!(t(r"\pL*").is_match_empty());
-        assert!(t(r"a*|b").is_match_empty());
-        assert!(t(r"b|a*").is_match_empty());
-        assert!(t(r"a|").is_match_empty());
-        assert!(t(r"|a").is_match_empty());
-        assert!(t(r"a||b").is_match_empty());
-        assert!(t(r"a*a?(abcd)*").is_match_empty());
-        assert!(t(r"^").is_match_empty());
-        assert!(t(r"$").is_match_empty());
-        assert!(t(r"(?m)^").is_match_empty());
-        assert!(t(r"(?m)$").is_match_empty());
-        assert!(t(r"\A").is_match_empty());
-        assert!(t(r"\z").is_match_empty());
-        assert!(t(r"\B").is_match_empty());
-        assert!(t_bytes(r"(?-u)\B").is_match_empty());
-        assert!(t(r"\b").is_match_empty());
-        assert!(t(r"(?-u)\b").is_match_empty());
+        assert_empty(r"\pL*");
+        assert_empty(r"a*|b");
+        assert_empty(r"b|a*");
+        assert_empty(r"a|");
+        assert_empty(r"|a");
+        assert_empty(r"a||b");
+        assert_empty(r"a*a?(abcd)*");
+        assert_empty(r"^");
+        assert_empty(r"$");
+        assert_empty(r"(?m)^");
+        assert_empty(r"(?m)$");
+        assert_empty(r"\A");
+        assert_empty(r"\z");
+        assert_empty(r"\B");
+        assert_empty(r"(?-u)\B");
+        assert_empty(r"\b");
+        assert_empty(r"(?-u)\b");
 
         // Negative examples.
-        assert!(!t(r"a+").is_match_empty());
-        assert!(!t(r"a{1}").is_match_empty());
-        assert!(!t(r"a{1,}").is_match_empty());
-        assert!(!t(r"a{1,2}").is_match_empty());
-        assert!(!t(r"a{1,10}").is_match_empty());
-        assert!(!t(r"b|a").is_match_empty());
-        assert!(!t(r"a*a+(abcd)*").is_match_empty());
+        let assert_non_empty =
+            |p| assert_ne!(Some(0), props_bytes(p).minimum_len());
+        assert_non_empty(r"a+");
+        assert_non_empty(r"a{1}");
+        assert_non_empty(r"a{1,}");
+        assert_non_empty(r"a{1,2}");
+        assert_non_empty(r"a{1,10}");
+        assert_non_empty(r"b|a");
+        assert_non_empty(r"a*a+(abcd)*");
+        #[cfg(feature = "unicode-gencat")]
+        assert_non_empty(r"\P{any}");
+        assert_non_empty(r"[a--a]");
+        assert_non_empty(r"[a&&b]");
     }
 
     #[test]
     fn analysis_is_literal() {
         // Positive examples.
-        assert!(t(r"a").is_literal());
-        assert!(t(r"ab").is_literal());
-        assert!(t(r"abc").is_literal());
-        assert!(t(r"(?m)abc").is_literal());
+        assert!(props(r"a").is_literal());
+        assert!(props(r"ab").is_literal());
+        assert!(props(r"abc").is_literal());
+        assert!(props(r"(?m)abc").is_literal());
 
         // Negative examples.
-        assert!(!t(r"").is_literal());
-        assert!(!t(r"^").is_literal());
-        assert!(!t(r"a|b").is_literal());
-        assert!(!t(r"(a)").is_literal());
-        assert!(!t(r"a+").is_literal());
-        assert!(!t(r"foo(a)").is_literal());
-        assert!(!t(r"(a)foo").is_literal());
-        assert!(!t(r"[a]").is_literal());
+        assert!(!props(r"").is_literal());
+        assert!(!props(r"^").is_literal());
+        assert!(!props(r"a|b").is_literal());
+        assert!(!props(r"(a)").is_literal());
+        assert!(!props(r"a+").is_literal());
+        assert!(!props(r"foo(a)").is_literal());
+        assert!(!props(r"(a)foo").is_literal());
+        assert!(!props(r"[a]").is_literal());
     }
 
     #[test]
     fn analysis_is_alternation_literal() {
         // Positive examples.
-        assert!(t(r"a").is_alternation_literal());
-        assert!(t(r"ab").is_alternation_literal());
-        assert!(t(r"abc").is_alternation_literal());
-        assert!(t(r"(?m)abc").is_alternation_literal());
-        assert!(t(r"a|b").is_alternation_literal());
-        assert!(t(r"a|b|c").is_alternation_literal());
-        assert!(t(r"foo|bar").is_alternation_literal());
-        assert!(t(r"foo|bar|baz").is_alternation_literal());
+        assert!(props(r"a").is_alternation_literal());
+        assert!(props(r"ab").is_alternation_literal());
+        assert!(props(r"abc").is_alternation_literal());
+        assert!(props(r"(?m)abc").is_alternation_literal());
+        assert!(props(r"a|b").is_alternation_literal());
+        assert!(props(r"a|b|c").is_alternation_literal());
+        assert!(props(r"foo|bar").is_alternation_literal());
+        assert!(props(r"foo|bar|baz").is_alternation_literal());
 
         // Negative examples.
-        assert!(!t(r"").is_alternation_literal());
-        assert!(!t(r"^").is_alternation_literal());
-        assert!(!t(r"(a)").is_alternation_literal());
-        assert!(!t(r"a+").is_alternation_literal());
-        assert!(!t(r"foo(a)").is_alternation_literal());
-        assert!(!t(r"(a)foo").is_alternation_literal());
-        assert!(!t(r"[a]").is_alternation_literal());
-        assert!(!t(r"[a]|b").is_alternation_literal());
-        assert!(!t(r"a|[b]").is_alternation_literal());
-        assert!(!t(r"(a)|b").is_alternation_literal());
-        assert!(!t(r"a|(b)").is_alternation_literal());
+        assert!(!props(r"").is_alternation_literal());
+        assert!(!props(r"^").is_alternation_literal());
+        assert!(!props(r"(a)").is_alternation_literal());
+        assert!(!props(r"a+").is_alternation_literal());
+        assert!(!props(r"foo(a)").is_alternation_literal());
+        assert!(!props(r"(a)foo").is_alternation_literal());
+        assert!(!props(r"[a]").is_alternation_literal());
+        assert!(!props(r"[a]|b").is_alternation_literal());
+        assert!(!props(r"a|[b]").is_alternation_literal());
+        assert!(!props(r"(a)|b").is_alternation_literal());
+        assert!(!props(r"a|(b)").is_alternation_literal());
     }
 }

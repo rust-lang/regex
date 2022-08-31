@@ -6,7 +6,7 @@ use std::sync::Arc;
 #[cfg(feature = "perf-literal")]
 use aho_corasick::{AhoCorasick, AhoCorasickBuilder, MatchKind};
 use regex_syntax::hir::literal::Literals;
-use regex_syntax::hir::Hir;
+use regex_syntax::hir::{Hir, Look};
 use regex_syntax::ParserBuilder;
 
 use crate::backtrack;
@@ -248,14 +248,19 @@ impl ExecBuilder {
                 .build();
             let expr =
                 parser.parse(pat).map_err(|e| Error::Syntax(e.to_string()))?;
-            bytes = bytes || !expr.is_always_utf8();
+            let props = expr.properties();
+            bytes = bytes || !props.is_utf8();
 
             if cfg!(feature = "perf-literal") {
-                if !expr.is_anchored_start() && expr.is_any_anchored_start() {
+                if !props.look_set_prefix().contains(Look::Start)
+                    && props.look_set().contains(Look::Start)
+                {
                     // Partial anchors unfortunately make it hard to use
                     // prefixes, so disable them.
                     prefixes = None;
-                } else if is_set && expr.is_anchored_start() {
+                } else if is_set
+                    && props.look_set_prefix().contains(Look::Start)
+                {
                     // Regex sets with anchors do not go well with literal
                     // optimizations.
                     prefixes = None;
@@ -268,11 +273,14 @@ impl ExecBuilder {
                     }
                 });
 
-                if !expr.is_anchored_end() && expr.is_any_anchored_end() {
+                if !props.look_set_suffix().contains(Look::End)
+                    && props.look_set().contains(Look::End)
+                {
                     // Partial anchors unfortunately make it hard to use
                     // suffixes, so disable them.
                     suffixes = None;
-                } else if is_set && expr.is_anchored_end() {
+                } else if is_set && props.look_set_suffix().contains(Look::End)
+                {
                     // Regex sets with anchors do not go well with literal
                     // optimizations.
                     suffixes = None;
@@ -1557,7 +1565,7 @@ fn alternation_literals(expr: &Hir) -> Option<Vec<Vec<u8>>> {
     // optimization pipeline, because this is a terribly inflexible way to go
     // about things.
 
-    if !expr.is_alternation_literal() {
+    if !expr.properties().is_alternation_literal() {
         return None;
     }
     let alts = match *expr.kind() {
