@@ -582,12 +582,8 @@ impl Literals {
 
 fn prefixes(expr: &Hir, lits: &mut Literals) {
     match *expr.kind() {
-        HirKind::Literal(hir::Literal::Unicode(c)) => {
-            let mut buf = [0; 4];
-            lits.cross_add(c.encode_utf8(&mut buf).as_bytes());
-        }
-        HirKind::Literal(hir::Literal::Byte(b)) => {
-            lits.cross_add(&[b]);
+        HirKind::Literal(hir::Literal(ref bytes)) => {
+            lits.cross_add(bytes);
         }
         HirKind::Class(hir::Class::Unicode(ref cls)) => {
             if !lits.add_char_class(cls) {
@@ -648,15 +644,10 @@ fn prefixes(expr: &Hir, lits: &mut Literals) {
 
 fn suffixes(expr: &Hir, lits: &mut Literals) {
     match *expr.kind() {
-        HirKind::Literal(hir::Literal::Unicode(c)) => {
-            let mut buf = [0u8; 4];
-            let i = c.encode_utf8(&mut buf).len();
-            let buf = &mut buf[..i];
-            buf.reverse();
-            lits.cross_add(buf);
-        }
-        HirKind::Literal(hir::Literal::Byte(b)) => {
-            lits.cross_add(&[b]);
+        HirKind::Literal(hir::Literal(ref bytes)) => {
+            let mut bytes = bytes.to_vec();
+            bytes.reverse();
+            lits.cross_add(&bytes);
         }
         HirKind::Class(hir::Class::Unicode(ref cls)) => {
             if !lits.add_char_class_reverse(cls) {

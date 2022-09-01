@@ -272,10 +272,14 @@ impl Compiler {
         self.check_size()?;
         match *expr.kind() {
             Empty => self.c_empty(),
-            Literal(hir::Literal::Unicode(c)) => self.c_char(c),
-            Literal(hir::Literal::Byte(b)) => {
-                assert!(self.compiled.uses_bytes());
-                self.c_byte(b)
+            Literal(hir::Literal(ref bytes)) => {
+                if self.compiled.is_reverse {
+                    let mut bytes = bytes.to_vec();
+                    bytes.reverse();
+                    self.c_literal(&bytes)
+                } else {
+                    self.c_literal(bytes)
+                }
             }
             Class(hir::Class::Unicode(ref cls)) => self.c_class(cls.ranges()),
             Class(hir::Class::Bytes(ref cls)) => {
@@ -517,6 +521,52 @@ impl Compiler {
     fn c_empty_look(&mut self, look: EmptyLook) -> ResultOrEmpty {
         let hole = self.push_hole(InstHole::EmptyLook { look });
         Ok(Some(Patch { hole, entry: self.insts.len() - 1 }))
+    }
+
+    fn c_literal(&mut self, bytes: &[u8]) -> ResultOrEmpty {
+        match core::str::from_utf8(bytes) {
+            Ok(string) => {
+                let mut it = string.chars();
+                let Patch { mut hole, entry } = loop {
+                    match it.next() {
+                        None => return self.c_empty(),
+                        Some(ch) => {
+                            if let Some(p) = self.c_char(ch)? {
+                                break p;
+                            }
+                        }
+                    }
+                };
+                for ch in it {
+                    if let Some(p) = self.c_char(ch)? {
+                        self.fill(hole, p.entry);
+                        hole = p.hole;
+                    }
+                }
+                Ok(Some(Patch { hole, entry }))
+            }
+            Err(_) => {
+                assert!(self.compiled.uses_bytes());
+                let mut it = bytes.iter().copied();
+                let Patch { mut hole, entry } = loop {
+                    match it.next() {
+                        None => return self.c_empty(),
+                        Some(byte) => {
+                            if let Some(p) = self.c_byte(byte)? {
+                                break p;
+                            }
+                        }
+                    }
+                };
+                for byte in it {
+                    if let Some(p) = self.c_byte(byte)? {
+                        self.fill(hole, p.entry);
+                        hole = p.hole;
+                    }
+                }
+                Ok(Some(Patch { hole, entry }))
+            }
+        }
     }
 
     fn c_concat<'a, I>(&mut self, exprs: I) -> ResultOrEmpty

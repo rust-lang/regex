@@ -1565,25 +1565,19 @@ fn alternation_literals(expr: &Hir) -> Option<Vec<Vec<u8>>> {
         _ => return None, // one literal isn't worth it
     };
 
-    let extendlit = |lit: &Literal, dst: &mut Vec<u8>| match *lit {
-        Literal::Unicode(c) => {
-            let mut buf = [0; 4];
-            dst.extend_from_slice(c.encode_utf8(&mut buf).as_bytes());
-        }
-        Literal::Byte(b) => {
-            dst.push(b);
-        }
-    };
-
     let mut lits = vec![];
     for alt in alts {
         let mut lit = vec![];
         match *alt.kind() {
-            HirKind::Literal(ref x) => extendlit(x, &mut lit),
+            HirKind::Literal(Literal(ref bytes)) => {
+                lit.extend_from_slice(bytes)
+            }
             HirKind::Concat(ref exprs) => {
                 for e in exprs {
                     match *e.kind() {
-                        HirKind::Literal(ref x) => extendlit(x, &mut lit),
+                        HirKind::Literal(Literal(ref bytes)) => {
+                            lit.extend_from_slice(bytes);
+                        }
                         _ => unreachable!("expected literal, got {:?}", e),
                     }
                 }
