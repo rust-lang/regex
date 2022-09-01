@@ -92,11 +92,37 @@ impl<W: fmt::Write> Visitor for Writer<W> {
             // Empty is represented by nothing in the concrete syntax, and
             // repetition operators are strictly suffix oriented.
             HirKind::Empty | HirKind::Repetition(_) => {}
-            HirKind::Literal(hir::Literal::Unicode(c)) => {
-                self.write_literal_char(c)?;
-            }
-            HirKind::Literal(hir::Literal::Byte(b)) => {
-                self.write_literal_byte(b)?;
+            HirKind::Literal(hir::Literal(ref bytes)) => {
+                // See the comment on the 'Concat' and 'Alternation' case below
+                // for why we put parens here. Literals are, conceptually,
+                // a special case of concatenation where each element is a
+                // character. The HIR flattens this into a Box<[u8]>, but we
+                // still need to treat it like a concatenation for correct
+                // printing. As a special case, we don't write parens if there
+                // is only one character. One character means there is no
+                // concat so we don't need parens. Adding parens would still be
+                // correct, but we drop them here because it tends to create
+                // rather noisy regexes even in simple cases.
+                let result = core::str::from_utf8(bytes);
+                let len = result.map_or(bytes.len(), |s| s.chars().count());
+                if len > 1 {
+                    self.wtr.write_str(r"(?:")?;
+                }
+                match result {
+                    Ok(string) => {
+                        for c in string.chars() {
+                            self.write_literal_char(c)?;
+                        }
+                    }
+                    Err(_) => {
+                        for &b in bytes.iter() {
+                            self.write_literal_byte(b)?;
+                        }
+                    }
+                }
+                if len > 1 {
+                    self.wtr.write_str(r")")?;
+                }
             }
             HirKind::Class(hir::Class::Unicode(ref cls)) => {
                 self.wtr.write_str("[")?;
@@ -429,19 +455,31 @@ mod tests {
     #[test]
     fn regression_repetition_concat() {
         let expr = Hir::concat(alloc::vec![
-            Hir::literal(hir::Literal::Unicode('x')),
+            Hir::literal("x".as_bytes()),
+            Hir::repetition(hir::Repetition {
+                min: 1,
+                max: None,
+                greedy: true,
+                hir: Box::new(Hir::literal("ab".as_bytes())),
+            }),
+            Hir::literal("y".as_bytes()),
+        ]);
+        assert_eq!(r"(?:x(?:ab)+y)", expr.to_string());
+
+        let expr = Hir::concat(alloc::vec![
+            Hir::look(hir::Look::Start),
             Hir::repetition(hir::Repetition {
                 min: 1,
                 max: None,
                 greedy: true,
                 hir: Box::new(Hir::concat(alloc::vec![
-                    Hir::literal(hir::Literal::Unicode('a')),
-                    Hir::literal(hir::Literal::Unicode('b')),
+                    Hir::look(hir::Look::Start),
+                    Hir::look(hir::Look::End),
                 ])),
             }),
-            Hir::literal(hir::Literal::Unicode('y')),
+            Hir::look(hir::Look::End),
         ]);
-        assert_eq!(r"(?:x(?:ab)+y)", expr.to_string());
+        assert_eq!(r"(?:\A(?:\A\z)+\z)", expr.to_string());
     }
 
     // Just like regression_repetition_concat, but with the repetition using
@@ -451,19 +489,34 @@ mod tests {
     #[test]
     fn regression_repetition_alternation() {
         let expr = Hir::concat(alloc::vec![
-            Hir::literal(hir::Literal::Unicode('x')),
+            Hir::literal("x".as_bytes()),
             Hir::repetition(hir::Repetition {
                 min: 1,
                 max: None,
                 greedy: true,
                 hir: Box::new(Hir::alternation(alloc::vec![
-                    Hir::literal(hir::Literal::Unicode('a')),
-                    Hir::literal(hir::Literal::Unicode('b')),
+                    Hir::literal("a".as_bytes()),
+                    Hir::literal("b".as_bytes()),
                 ])),
             }),
-            Hir::literal(hir::Literal::Unicode('y')),
+            Hir::literal("y".as_bytes()),
         ]);
         assert_eq!(r"(?:x(?:a|b)+y)", expr.to_string());
+
+        let expr = Hir::concat(alloc::vec![
+            Hir::look(hir::Look::Start),
+            Hir::repetition(hir::Repetition {
+                min: 1,
+                max: None,
+                greedy: true,
+                hir: Box::new(Hir::alternation(alloc::vec![
+                    Hir::look(hir::Look::Start),
+                    Hir::look(hir::Look::End),
+                ])),
+            }),
+            Hir::look(hir::Look::End),
+        ]);
+        assert_eq!(r"(?:\A(?:\A|\z)+\z)", expr.to_string());
     }
 
     // This regression test is very similar in flavor to
@@ -480,12 +533,21 @@ mod tests {
     #[test]
     fn regression_alternation_concat() {
         let expr = Hir::concat(alloc::vec![
-            Hir::literal(hir::Literal::Unicode('a')),
+            Hir::literal("a".as_bytes()),
             Hir::alternation(alloc::vec![
-                Hir::literal(hir::Literal::Unicode('b')),
-                Hir::literal(hir::Literal::Unicode('c')),
+                Hir::literal("b".as_bytes()),
+                Hir::literal("c".as_bytes()),
             ]),
         ]);
         assert_eq!(r"(?:a(?:b|c))", expr.to_string());
+
+        let expr = Hir::concat(alloc::vec![
+            Hir::look(hir::Look::Start),
+            Hir::alternation(alloc::vec![
+                Hir::look(hir::Look::Start),
+                Hir::look(hir::Look::End),
+            ]),
+        ]);
+        assert_eq!(r"(?:\A(?:\A|\z))", expr.to_string());
     }
 }

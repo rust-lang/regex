@@ -8,6 +8,7 @@ use alloc::{boxed::Box, string::ToString, vec, vec::Vec};
 
 use crate::{
     ast::{self, Ast, Span, Visitor},
+    either::Either,
     hir::{self, Error, ErrorKind, Hir},
     unicode::{self, ClassQuery},
 };
@@ -146,6 +147,12 @@ enum HirFrame {
     /// case in the Ast. They get popped after an inductive (i.e., recursive)
     /// step is complete.
     Expr(Hir),
+    /// A literal that is being constructed, character by character, from the
+    /// AST. We need this because the AST gives each individual character its
+    /// own node. So as we see characters, we peek at the top-most HirFrame.
+    /// If it's a literal, then we add to it. Otherwise, we push a new literal.
+    /// When it comes time to pop it, we convert it to an Hir via Hir::literal.
+    Literal(Vec<u8>),
     /// A Unicode character class. This frame is mutated as we descend into
     /// the Ast of a character class (which is itself its own mini recursive
     /// structure).
@@ -158,6 +165,13 @@ enum HirFrame {
     /// If `allow_invalid_utf8` is disabled (the default), then a byte
     /// character is only permitted to match ASCII text.
     ClassBytes(hir::ClassBytes),
+    /// This is pushed whenever a repetition is observed. After visiting every
+    /// sub-expression in the repetition, the translator's stack is expected to
+    /// have this sentinel at the top.
+    ///
+    /// This sentinel only exists to stop other things (like flattening
+    /// literals) from reaching across repetition operators.
+    Repetition,
     /// This is pushed on to the stack upon first seeing any kind of group,
     /// indicated by parentheses (including non-capturing groups). It is popped
     /// upon leaving a group.
@@ -184,6 +198,14 @@ enum HirFrame {
     /// every sub-expression in the alternation, the translator's stack is
     /// popped until it sees an Alternation frame.
     Alternation,
+    /// This is pushed immediately before each sub-expression in an
+    /// alternation. This separates the branches of an alternation on the
+    /// stack and prevents literal flattening from reaching across alternation
+    /// branches.
+    ///
+    /// It is popped after each expression in a branch until an 'Alternation'
+    /// frame is observed when doing a post visit on an alternation.
+    AlternationBranch,
 }
 
 impl HirFrame {
@@ -191,6 +213,7 @@ impl HirFrame {
     fn unwrap_expr(self) -> Hir {
         match self {
             HirFrame::Expr(expr) => expr,
+            HirFrame::Literal(lit) => Hir::literal(lit),
             _ => panic!("tried to unwrap expr from HirFrame, got: {:?}", self),
         }
     }
@@ -221,6 +244,20 @@ impl HirFrame {
         }
     }
 
+    /// Assert that the current stack frame is a repetition sentinel. If it
+    /// isn't, then panic.
+    fn unwrap_repetition(self) {
+        match self {
+            HirFrame::Repetition => {}
+            _ => {
+                panic!(
+                    "tried to unwrap repetition from HirFrame, got: {:?}",
+                    self
+                )
+            }
+        }
+    }
+
     /// Assert that the current stack frame is a group indicator and return
     /// its corresponding flags (the flags that were active at the time the
     /// group was entered).
@@ -229,6 +266,20 @@ impl HirFrame {
             HirFrame::Group { old_flags } => old_flags,
             _ => {
                 panic!("tried to unwrap group from HirFrame, got: {:?}", self)
+            }
+        }
+    }
+
+    /// Assert that the current stack frame is an alternation pipe sentinel. If
+    /// it isn't, then panic.
+    fn unwrap_alternation_pipe(self) {
+        match self {
+            HirFrame::AlternationBranch => {}
+            _ => {
+                panic!(
+                    "tried to unwrap alt pipe from HirFrame, got: {:?}",
+                    self
+                )
             }
         }
     }
@@ -255,6 +306,7 @@ impl<'t, 'p> Visitor for TranslatorI<'t, 'p> {
                     self.push(HirFrame::ClassBytes(cls));
                 }
             }
+            Ast::Repetition(_) => self.push(HirFrame::Repetition),
             Ast::Group(ref x) => {
                 let old_flags = x
                     .flags()
@@ -269,6 +321,7 @@ impl<'t, 'p> Visitor for TranslatorI<'t, 'p> {
             Ast::Alternation(ref x) if x.asts.is_empty() => {}
             Ast::Alternation(_) => {
                 self.push(HirFrame::Alternation);
+                self.push(HirFrame::AlternationBranch);
             }
             _ => {}
         }
@@ -294,7 +347,20 @@ impl<'t, 'p> Visitor for TranslatorI<'t, 'p> {
                 self.push(HirFrame::Expr(Hir::empty()));
             }
             Ast::Literal(ref x) => {
-                self.push(HirFrame::Expr(self.hir_literal(x)?));
+                match self.ast_literal_to_scalar(x)? {
+                    Either::Right(byte) => self.push_byte(byte),
+                    Either::Left(ch) => {
+                        if !self.flags().unicode() && ch.len_utf8() > 1 {
+                            return Err(self
+                                .error(x.span, ErrorKind::UnicodeNotAllowed));
+                        }
+                        match self.case_fold_char(x.span, ch)? {
+                            None => self.push_char(ch),
+                            Some(expr) => self.push(HirFrame::Expr(expr)),
+                        }
+                    }
+                }
+                // self.push(HirFrame::Expr(self.hir_literal(x)?));
             }
             Ast::Dot(span) => {
                 self.push(HirFrame::Expr(self.hir_dot(span)?));
@@ -340,6 +406,7 @@ impl<'t, 'p> Visitor for TranslatorI<'t, 'p> {
             }
             Ast::Repetition(ref x) => {
                 let expr = self.pop().unwrap().unwrap_expr();
+                self.pop().unwrap().unwrap_repetition();
                 self.push(HirFrame::Expr(self.hir_repetition(x, expr)));
             }
             Ast::Group(ref x) => {
@@ -350,7 +417,7 @@ impl<'t, 'p> Visitor for TranslatorI<'t, 'p> {
             }
             Ast::Concat(_) => {
                 let mut exprs = vec![];
-                while let Some(HirFrame::Expr(expr)) = self.pop() {
+                while let Some(expr) = self.pop_concat_expr() {
                     if !expr.kind().is_empty() {
                         exprs.push(expr);
                     }
@@ -360,13 +427,19 @@ impl<'t, 'p> Visitor for TranslatorI<'t, 'p> {
             }
             Ast::Alternation(_) => {
                 let mut exprs = vec![];
-                while let Some(HirFrame::Expr(expr)) = self.pop() {
+                while let Some(expr) = self.pop_alt_expr() {
+                    self.pop().unwrap().unwrap_alternation_pipe();
                     exprs.push(expr);
                 }
                 exprs.reverse();
                 self.push(HirFrame::Expr(Hir::alternation(exprs)));
             }
         }
+        Ok(())
+    }
+
+    fn visit_alternation_in(&mut self) -> Result<()> {
+        self.push(HirFrame::AlternationBranch);
         Ok(())
     }
 
@@ -592,9 +665,101 @@ impl<'t, 'p> TranslatorI<'t, 'p> {
         self.trans().stack.borrow_mut().push(frame);
     }
 
+    /// Push the given literal char on to the call stack.
+    ///
+    /// If the top-most element of the stack is a literal, then the char
+    /// is appended to the end of that literal. Otherwise, a new literal
+    /// containing just the given char is pushed to the top of the stack.
+    fn push_char(&self, ch: char) {
+        let mut buf = [0; 4];
+        let bytes = ch.encode_utf8(&mut buf).as_bytes();
+        let mut stack = self.trans().stack.borrow_mut();
+        if let Some(HirFrame::Literal(ref mut literal)) = stack.last_mut() {
+            literal.extend_from_slice(bytes);
+        } else {
+            stack.push(HirFrame::Literal(bytes.to_vec()));
+        }
+    }
+
+    /// Push the given literal byte on to the call stack.
+    ///
+    /// If the top-most element of the stack is a literal, then the byte
+    /// is appended to the end of that literal. Otherwise, a new literal
+    /// containing just the given byte is pushed to the top of the stack.
+    fn push_byte(&self, byte: u8) {
+        let mut stack = self.trans().stack.borrow_mut();
+        if let Some(HirFrame::Literal(ref mut literal)) = stack.last_mut() {
+            literal.push(byte);
+        } else {
+            stack.push(HirFrame::Literal(vec![byte]));
+        }
+    }
+
     /// Pop the top of the call stack. If the call stack is empty, return None.
     fn pop(&self) -> Option<HirFrame> {
         self.trans().stack.borrow_mut().pop()
+    }
+
+    /// Pop an HIR expression from the top of the stack for a concatenation.
+    ///
+    /// This returns None if the stack is empty or when a concat frame is seen.
+    /// Otherwise, it panics if it could not find an HIR expression.
+    fn pop_concat_expr(&self) -> Option<Hir> {
+        let frame = self.pop()?;
+        match frame {
+            HirFrame::Concat => None,
+            HirFrame::Expr(expr) => Some(expr),
+            HirFrame::Literal(lit) => Some(Hir::literal(lit)),
+            HirFrame::ClassUnicode(_) => {
+                unreachable!("expected expr or concat, got Unicode class")
+            }
+            HirFrame::ClassBytes(_) => {
+                unreachable!("expected expr or concat, got byte class")
+            }
+            HirFrame::Repetition => {
+                unreachable!("expected expr or concat, got repetition")
+            }
+            HirFrame::Group { .. } => {
+                unreachable!("expected expr or concat, got group")
+            }
+            HirFrame::Alternation => {
+                unreachable!("expected expr or concat, got alt marker")
+            }
+            HirFrame::AlternationBranch => {
+                unreachable!("expected expr or concat, got alt branch marker")
+            }
+        }
+    }
+
+    /// Pop an HIR expression from the top of the stack for an alternation.
+    ///
+    /// This returns None if the stack is empty or when an alternation frame is
+    /// seen. Otherwise, it panics if it could not find an HIR expression.
+    fn pop_alt_expr(&self) -> Option<Hir> {
+        let frame = self.pop()?;
+        match frame {
+            HirFrame::Alternation => None,
+            HirFrame::Expr(expr) => Some(expr),
+            HirFrame::Literal(lit) => Some(Hir::literal(lit)),
+            HirFrame::ClassUnicode(_) => {
+                unreachable!("expected expr or alt, got Unicode class")
+            }
+            HirFrame::ClassBytes(_) => {
+                unreachable!("expected expr or alt, got byte class")
+            }
+            HirFrame::Repetition => {
+                unreachable!("expected expr or alt, got repetition")
+            }
+            HirFrame::Group { .. } => {
+                unreachable!("expected expr or alt, got group")
+            }
+            HirFrame::Concat => {
+                unreachable!("expected expr or alt, got concat marker")
+            }
+            HirFrame::AlternationBranch => {
+                unreachable!("expected expr or alt, got alt branch marker")
+            }
+        }
     }
 
     /// Create a new error with the given span and error type.
@@ -617,55 +782,39 @@ impl<'t, 'p> TranslatorI<'t, 'p> {
         old_flags
     }
 
-    fn hir_literal(&self, lit: &ast::Literal) -> Result<Hir> {
-        let ch = match self.literal_to_char(lit)? {
-            byte @ hir::Literal::Byte(_) => return Ok(Hir::literal(byte)),
-            hir::Literal::Unicode(ch) => ch,
-        };
-        if self.flags().case_insensitive() {
-            self.hir_from_char_case_insensitive(lit.span, ch)
-        } else {
-            self.hir_from_char(lit.span, ch)
-        }
-    }
-
     /// Convert an Ast literal to its scalar representation.
     ///
     /// When Unicode mode is enabled, then this always succeeds and returns a
     /// `char` (Unicode scalar value).
     ///
-    /// When Unicode mode is disabled, then a raw byte is returned. If that
-    /// byte is not ASCII and invalid UTF-8 is not allowed, then this returns
-    /// an error.
-    fn literal_to_char(&self, lit: &ast::Literal) -> Result<hir::Literal> {
+    /// When Unicode mode is disabled, then a `char` will still be returned
+    /// whenever possible. A byte is returned only when invalid UTF-8 is
+    /// allowed and when the byte is not ASCII. Otherwise, a non-ASCII byte
+    /// will result in an error when invalid UTF-8 is not allowed.
+    fn ast_literal_to_scalar(
+        &self,
+        lit: &ast::Literal,
+    ) -> Result<Either<char, u8>> {
         if self.flags().unicode() {
-            return Ok(hir::Literal::Unicode(lit.c));
+            return Ok(Either::Left(lit.c));
         }
         let byte = match lit.byte() {
-            None => return Ok(hir::Literal::Unicode(lit.c)),
+            None => return Ok(Either::Left(lit.c)),
             Some(byte) => byte,
         };
         if byte <= 0x7F {
-            return Ok(hir::Literal::Unicode(char::try_from(byte).unwrap()));
+            return Ok(Either::Left(char::try_from(byte).unwrap()));
         }
         if !self.trans().allow_invalid_utf8 {
             return Err(self.error(lit.span, ErrorKind::InvalidUtf8));
         }
-        Ok(hir::Literal::Byte(byte))
+        Ok(Either::Right(byte))
     }
 
-    fn hir_from_char(&self, span: Span, c: char) -> Result<Hir> {
-        if !self.flags().unicode() && c.len_utf8() > 1 {
-            return Err(self.error(span, ErrorKind::UnicodeNotAllowed));
+    fn case_fold_char(&self, span: Span, c: char) -> Result<Option<Hir>> {
+        if !self.flags().case_insensitive() {
+            return Ok(None);
         }
-        Ok(Hir::literal(hir::Literal::Unicode(c)))
-    }
-
-    fn hir_from_char_case_insensitive(
-        &self,
-        span: Span,
-        c: char,
-    ) -> Result<Hir> {
         if self.flags().unicode() {
             // If case folding won't do anything, then don't bother trying.
             let map =
@@ -673,7 +822,7 @@ impl<'t, 'p> TranslatorI<'t, 'p> {
                     self.error(span, ErrorKind::UnicodeCaseUnavailable)
                 })?;
             if !map {
-                return self.hir_from_char(span, c);
+                return Ok(None);
             }
             let mut cls =
                 hir::ClassUnicode::new(vec![hir::ClassUnicodeRange::new(
@@ -682,7 +831,7 @@ impl<'t, 'p> TranslatorI<'t, 'p> {
             cls.try_case_fold_simple().map_err(|_| {
                 self.error(span, ErrorKind::UnicodeCaseUnavailable)
             })?;
-            Ok(Hir::class(hir::Class::Unicode(cls)))
+            Ok(Some(Hir::class(hir::Class::Unicode(cls))))
         } else {
             if c.len_utf8() > 1 {
                 return Err(self.error(span, ErrorKind::UnicodeNotAllowed));
@@ -690,7 +839,7 @@ impl<'t, 'p> TranslatorI<'t, 'p> {
             // If case folding won't do anything, then don't bother trying.
             match c {
                 'A'..='Z' | 'a'..='z' => {}
-                _ => return self.hir_from_char(span, c),
+                _ => return Ok(None),
             }
             let mut cls =
                 hir::ClassBytes::new(vec![hir::ClassBytesRange::new(
@@ -702,7 +851,7 @@ impl<'t, 'p> TranslatorI<'t, 'p> {
                     u8::try_from(u32::from(c)).unwrap(),
                 )]);
             cls.case_fold_simple();
-            Ok(Hir::class(hir::Class::Bytes(cls)))
+            Ok(Some(Hir::class(hir::Class::Bytes(cls))))
         }
     }
 
@@ -973,9 +1122,9 @@ impl<'t, 'p> TranslatorI<'t, 'p> {
     /// Return a scalar byte value suitable for use as a literal in a byte
     /// character class.
     fn class_literal_byte(&self, ast: &ast::Literal) -> Result<u8> {
-        match self.literal_to_char(ast)? {
-            hir::Literal::Byte(byte) => Ok(byte),
-            hir::Literal::Unicode(ch) => {
+        match self.ast_literal_to_scalar(ast)? {
+            Either::Right(byte) => Ok(byte),
+            Either::Left(ch) => {
                 let cp = u32::from(ch);
                 if cp <= 0x7F {
                     Ok(u8::try_from(cp).unwrap())
@@ -1177,33 +1326,11 @@ mod tests {
     }
 
     fn hir_lit(s: &str) -> Hir {
-        match s.len() {
-            0 => Hir::empty(),
-            _ => {
-                let lits = s
-                    .chars()
-                    .map(hir::Literal::Unicode)
-                    .map(Hir::literal)
-                    .collect();
-                Hir::concat(lits)
-            }
-        }
+        Hir::literal(s.as_bytes())
     }
 
     fn hir_blit(s: &[u8]) -> Hir {
-        match s.len() {
-            0 => Hir::empty(),
-            1 => Hir::literal(hir::Literal::Byte(s[0])),
-            _ => {
-                let lits = s
-                    .iter()
-                    .cloned()
-                    .map(hir::Literal::Byte)
-                    .map(Hir::literal)
-                    .collect();
-                Hir::concat(lits)
-            }
-        }
+        Hir::literal(s)
     }
 
     fn hir_group(i: u32, expr: Hir) -> Hir {
@@ -1763,13 +1890,7 @@ mod tests {
             t("ab?"),
             hir_cat(vec![hir_lit("a"), hir_quest(true, hir_lit("b")),])
         );
-        assert_eq!(
-            t("(ab)?"),
-            hir_quest(
-                true,
-                hir_group(1, hir_cat(vec![hir_lit("a"), hir_lit("b"),]))
-            )
-        );
+        assert_eq!(t("(ab)?"), hir_quest(true, hir_group(1, hir_lit("ab"))));
         assert_eq!(
             t("a|b?"),
             hir_alt(vec![hir_lit("a"), hir_quest(true, hir_lit("b")),])
@@ -1778,48 +1899,46 @@ mod tests {
 
     #[test]
     fn cat_alt() {
+        let a = || hir_look(hir::Look::Start);
+        let b = || hir_look(hir::Look::End);
+        let c = || hir_look(hir::Look::WordUnicode);
+        let d = || hir_look(hir::Look::WordUnicodeNegate);
+
+        assert_eq!(t("(^$)"), hir_group(1, hir_cat(vec![a(), b()])));
+        assert_eq!(t("^|$"), hir_alt(vec![a(), b()]));
+        assert_eq!(t(r"^|$|\b"), hir_alt(vec![a(), b(), c()]));
         assert_eq!(
-            t("(ab)"),
-            hir_group(1, hir_cat(vec![hir_lit("a"), hir_lit("b"),]))
+            t(r"^$|$\b|\b\B"),
+            hir_alt(vec![
+                hir_cat(vec![a(), b()]),
+                hir_cat(vec![b(), c()]),
+                hir_cat(vec![c(), d()]),
+            ])
         );
-        assert_eq!(t("a|b"), hir_alt(vec![hir_lit("a"), hir_lit("b"),]));
+        assert_eq!(t("(^|$)"), hir_group(1, hir_alt(vec![a(), b()])));
+        assert_eq!(t(r"(^|$|\b)"), hir_group(1, hir_alt(vec![a(), b(), c()])));
         assert_eq!(
-            t("a|b|c"),
-            hir_alt(vec![hir_lit("a"), hir_lit("b"), hir_lit("c"),])
-        );
-        assert_eq!(
-            t("ab|bc|cd"),
-            hir_alt(vec![hir_lit("ab"), hir_lit("bc"), hir_lit("cd"),])
-        );
-        assert_eq!(
-            t("(a|b)"),
-            hir_group(1, hir_alt(vec![hir_lit("a"), hir_lit("b"),]))
-        );
-        assert_eq!(
-            t("(a|b|c)"),
-            hir_group(
-                1,
-                hir_alt(vec![hir_lit("a"), hir_lit("b"), hir_lit("c"),])
-            )
-        );
-        assert_eq!(
-            t("(ab|bc|cd)"),
-            hir_group(
-                1,
-                hir_alt(vec![hir_lit("ab"), hir_lit("bc"), hir_lit("cd"),])
-            )
-        );
-        assert_eq!(
-            t("(ab|(bc|(cd)))"),
+            t(r"(^$|$\b|\b\B)"),
             hir_group(
                 1,
                 hir_alt(vec![
-                    hir_lit("ab"),
+                    hir_cat(vec![a(), b()]),
+                    hir_cat(vec![b(), c()]),
+                    hir_cat(vec![c(), d()]),
+                ])
+            )
+        );
+        assert_eq!(
+            t(r"(^$|($\b|(\b\B)))"),
+            hir_group(
+                1,
+                hir_alt(vec![
+                    hir_cat(vec![a(), b()]),
                     hir_group(
                         2,
                         hir_alt(vec![
-                            hir_lit("bc"),
-                            hir_group(3, hir_lit("cd")),
+                            hir_cat(vec![b(), c()]),
+                            hir_group(3, hir_cat(vec![c(), d()])),
                         ])
                     ),
                 ])

@@ -169,7 +169,7 @@ pub enum HirKind {
     /// The empty regular expression, which matches everything, including the
     /// empty string.
     Empty,
-    /// A single literal character that matches exactly this character.
+    /// A literalstring that matches exactly these bytes.
     Literal(Literal),
     /// A single character class that matches any of the characters in the
     /// class. A class can either consist of Unicode scalar values as
@@ -231,13 +231,14 @@ impl Hir {
     /// If the given literal has a `Byte` variant with an ASCII byte, then this
     /// method panics. This enforces the invariant that `Byte` variants are
     /// only used to express matching of invalid UTF-8.
-    pub fn literal(lit: Literal) -> Hir {
-        if let Literal::Byte(b) = lit {
-            assert!(b > 0x7F);
+    pub fn literal<B: Into<Box<[u8]>>>(lit: B) -> Hir {
+        let bytes = lit.into();
+        if bytes.is_empty() {
+            return Hir::empty();
         }
 
         let mut info = HirInfo::new();
-        info.set_always_utf8(lit.is_unicode());
+        info.set_always_utf8(core::str::from_utf8(&bytes).is_ok());
         info.set_all_assertions(false);
         info.set_anchored_start(false);
         info.set_anchored_end(false);
@@ -248,7 +249,7 @@ impl Hir {
         info.set_match_empty(false);
         info.set_literal(true);
         info.set_alternation_literal(true);
-        Hir { kind: HirKind::Literal(lit), info }
+        Hir { kind: HirKind::Literal(Literal(bytes)), info }
     }
 
     /// Creates a class HIR expression.
@@ -710,24 +711,7 @@ impl core::fmt::Display for Hir {
 /// are preferred whenever possible. In particular, a `Byte` variant is only
 /// ever produced when it could match invalid UTF-8.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub enum Literal {
-    /// A single character represented by a Unicode scalar value.
-    Unicode(char),
-    /// A single character represented by an arbitrary byte.
-    Byte(u8),
-}
-
-impl Literal {
-    /// Returns true if and only if this literal corresponds to a Unicode
-    /// scalar value.
-    pub fn is_unicode(&self) -> bool {
-        match *self {
-            Literal::Unicode(_) => true,
-            Literal::Byte(b) if b <= 0x7F => true,
-            Literal::Byte(_) => false,
-        }
-    }
-}
+pub struct Literal(pub Box<[u8]>);
 
 /// The high-level intermediate representation of a character class.
 ///
@@ -739,12 +723,11 @@ impl Literal {
 /// A character class, regardless of its character type, is represented by a
 /// sequence of non-overlapping non-adjacent ranges of characters.
 ///
-/// Note that unlike [`Literal`], a `Bytes` variant may be produced even when
-/// it exclusively matches valid UTF-8. This is because a `Bytes` variant
-/// represents an intention by the author of the regular expression to disable
-/// Unicode mode, which in turn impacts the semantics of case insensitive
-/// matching. For example, `(?i)k` and `(?i-u)k` will not match the same set of
-/// strings.
+/// Note that `Bytes` variant may be produced even when it exclusively matches
+/// valid UTF-8. This is because a `Bytes` variant represents an intention by
+/// the author of the regular expression to disable Unicode mode, which in turn
+/// impacts the semantics of case insensitive matching. For example, `(?i)k`
+/// and `(?i-u)k` will not match the same set of strings.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Class {
     /// A set of characters represented by Unicode scalar values.
@@ -2220,12 +2203,6 @@ mod tests {
         let cls2 = bclass(&[(b'g', b't')]);
         let expected = bclass(&[(b'a', b'f'), (b'n', b't')]);
         assert_eq!(expected, bsymdifference(&cls1, &cls2));
-    }
-
-    #[test]
-    #[should_panic]
-    fn hir_byte_literal_non_ascii() {
-        Hir::literal(Literal::Byte(b'a'));
     }
 
     // We use a thread with an explicit stack size to test that our destructor
