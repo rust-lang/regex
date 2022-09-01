@@ -699,8 +699,7 @@ impl HirKind {
 /// to the size of the `Hir`.
 impl core::fmt::Display for Hir {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        use crate::hir::print::Printer;
-        Printer::new().print(self, f)
+        crate::hir::print::Printer::new().print(self, f)
     }
 }
 
@@ -710,8 +709,14 @@ impl core::fmt::Display for Hir {
 /// defined by a Unicode scalar value or an arbitrary byte. Unicode characters
 /// are preferred whenever possible. In particular, a `Byte` variant is only
 /// ever produced when it could match invalid UTF-8.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct Literal(pub Box<[u8]>);
+
+impl core::fmt::Debug for Literal {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        crate::debug::Bytes(&self.0).fmt(f)
+    }
+}
 
 /// The high-level intermediate representation of a character class.
 ///
@@ -1262,20 +1267,10 @@ impl ClassBytesRange {
 
 impl core::fmt::Debug for ClassBytesRange {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        let mut debug = f.debug_struct("ClassBytesRange");
-        if self.start <= 0x7F {
-            let ch = char::try_from(self.start).unwrap();
-            debug.field("start", &ch);
-        } else {
-            debug.field("start", &self.start);
-        }
-        if self.end <= 0x7F {
-            let ch = char::try_from(self.start).unwrap();
-            debug.field("end", &ch);
-        } else {
-            debug.field("end", &self.end);
-        }
-        debug.finish()
+        f.debug_struct("ClassBytesRange")
+            .field("start", &crate::debug::Byte(self.start))
+            .field("end", &crate::debug::Byte(self.end))
+            .finish()
     }
 }
 
