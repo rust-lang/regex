@@ -1326,7 +1326,7 @@ mod tests {
     }
 
     fn hir_lit(s: &str) -> Hir {
-        Hir::literal(s.as_bytes())
+        hir_blit(s.as_bytes())
     }
 
     fn hir_blit(s: &[u8]) -> Hir {

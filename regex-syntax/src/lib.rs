@@ -180,6 +180,7 @@ pub use crate::{
 use alloc::string::String;
 
 pub mod ast;
+mod debug;
 mod either;
 mod error;
 pub mod hir;
