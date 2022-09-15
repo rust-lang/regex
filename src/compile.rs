@@ -368,19 +368,19 @@ impl Compiler {
                     self.c_empty_look(prog::EmptyLook::NotWordBoundary)
                 }
             },
-            Group(ref g) => match g.kind {
-                hir::GroupKind::NonCapturing => self.c(&g.hir),
-                hir::GroupKind::Capture { index, ref name } => {
-                    if index as usize >= self.compiled.captures.len() {
-                        self.compiled.captures.push(name.clone());
-                        if let Some(ref name) = *name {
-                            self.capture_name_idx
-                                .insert(name.clone(), index as usize);
-                        }
+            Group(hir::Group { index, ref name, ref hir }) => {
+                if index as usize >= self.compiled.captures.len() {
+                    let name = match *name {
+                        None => None,
+                        Some(ref boxed_str) => Some(boxed_str.to_string()),
+                    };
+                    self.compiled.captures.push(name.clone());
+                    if let Some(name) = name {
+                        self.capture_name_idx.insert(name, index as usize);
                     }
-                    self.c_capture(2 * index as usize, &g.hir)
                 }
-            },
+                self.c_capture(2 * index as usize, hir)
+            }
             Concat(ref es) => {
                 if self.compiled.is_reverse {
                     self.c_concat(es.iter().rev())

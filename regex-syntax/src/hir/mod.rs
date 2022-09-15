@@ -1118,37 +1118,23 @@ impl Look {
     }
 }
 
-/// The high-level intermediate representation for a group.
+/// The high-level intermediate representation for a capturing group.
 ///
-/// This represents one of three possible group types:
+/// A capturing group always has an index and a child expression. It may
+/// also have a name associated with it (e.g., `(?P<foo>\w)`), but it's not
+/// necessary.
 ///
-/// 1. A non-capturing group (e.g., `(?:expr)`).
-/// 2. A capturing group (e.g., `(expr)`).
-/// 3. A named capturing group (e.g., `(?P<name>expr)`).
+/// Note that there is no explicit representation of a non-capturing group
+/// in a `Hir`. Instead, non-capturing grouping is handled automatically by
+/// the recursive structure of the `Hir` itself.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Group {
-    /// The kind of this group. If it is a capturing group, then the kind
-    /// contains the capture group index (and the name, if it is a named
-    /// group).
-    pub kind: GroupKind,
+    /// The capture index of the group.
+    pub index: u32,
+    /// The name of the group, if it exists.
+    pub name: Option<Box<str>>,
     /// The expression inside the capturing group, which may be empty.
     pub hir: Box<Hir>,
-}
-
-/// The kind of group.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum GroupKind {
-    /// A non-capturing group.
-    NonCapturing,
-    /// A capturing group with an optional name.
-    ///
-    /// The value is the capture index of the group.
-    Capture {
-        /// The capture index of the group.
-        index: u32,
-        /// The name of the group, if it exists.
-        name: Option<String>,
-    },
 }
 
 /// The high-level intermediate representation of a repetition operator.
@@ -2452,7 +2438,8 @@ mod tests {
             let mut expr = Hir::empty();
             for _ in 0..100 {
                 expr = Hir::group(Group {
-                    kind: GroupKind::NonCapturing,
+                    index: 1,
+                    name: None,
                     hir: Box::new(expr),
                 });
                 expr = Hir::repetition(Repetition {
