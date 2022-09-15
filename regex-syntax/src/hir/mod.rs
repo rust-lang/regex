@@ -310,44 +310,52 @@ impl Hir {
 
     /// Build an HIR expression for `.`.
     ///
-    /// A `.` expression matches any character except for `\n`. To build an
-    /// expression that matches any character, including `\n`, use the `any`
-    /// method.
-    ///
-    /// If `bytes` is `true`, then this assumes characters are limited to a
-    /// single byte.
-    pub fn dot(bytes: bool) -> Hir {
-        if bytes {
-            let mut cls = ClassBytes::empty();
-            cls.push(ClassBytesRange::new(b'\0', b'\x09'));
-            cls.push(ClassBytesRange::new(b'\x0B', b'\xFF'));
-            Hir::class(Class::Bytes(cls))
-        } else {
-            let mut cls = ClassUnicode::empty();
-            cls.push(ClassUnicodeRange::new('\0', '\x09'));
-            cls.push(ClassUnicodeRange::new('\x0B', '\u{10FFFF}'));
-            Hir::class(Class::Unicode(cls))
-        }
+    /// A `.` expression matches any character except for a newline terminator.
+    /// To build an expression that matches any character, including newline
+    /// terminators, use the `any_char` method.
+    pub fn dot_char() -> Hir {
+        let mut cls = ClassUnicode::empty();
+        cls.push(ClassUnicodeRange::new('\0', '\x09'));
+        cls.push(ClassUnicodeRange::new('\x0B', '\u{10FFFF}'));
+        Hir::class(Class::Unicode(cls))
     }
 
-    /// Build an HIR expression for `(?s).`.
+    /// Build an HIR expression for `(?-u:.)`.
     ///
-    /// A `(?s).` expression matches any character, including `\n`. To build an
-    /// expression that matches any character except for `\n`, then use the
-    /// `dot` method.
+    /// A non-Unicode `.` expression matches any byte except for a newline
+    /// terminator. To build an expression that matches any byte, including
+    /// newline terminators, use the `any_byte` method.
+    pub fn dot_byte() -> Hir {
+        let mut cls = ClassBytes::empty();
+        cls.push(ClassBytesRange::new(b'\0', b'\x09'));
+        cls.push(ClassBytesRange::new(b'\x0B', b'\xFF'));
+        Hir::class(Class::Bytes(cls))
+    }
+
+    /// Build an HIR expression for `(?s:.)`.
     ///
-    /// If `bytes` is `true`, then this assumes characters are limited to a
-    /// single byte.
-    pub fn any(bytes: bool) -> Hir {
-        if bytes {
-            let mut cls = ClassBytes::empty();
-            cls.push(ClassBytesRange::new(b'\0', b'\xFF'));
-            Hir::class(Class::Bytes(cls))
-        } else {
-            let mut cls = ClassUnicode::empty();
-            cls.push(ClassUnicodeRange::new('\0', '\u{10FFFF}'));
-            Hir::class(Class::Unicode(cls))
-        }
+    /// A `(?s:.)` expression matches any character, including newline
+    /// terminators. To build an expression that matches any character except
+    /// for newline terminators, use the `dot_char` method.
+    ///
+    /// Note that `(?s:)` is equivalent to `\p{any}`.
+    pub fn any_char() -> Hir {
+        let mut cls = ClassUnicode::empty();
+        cls.push(ClassUnicodeRange::new('\0', '\u{10FFFF}'));
+        Hir::class(Class::Unicode(cls))
+    }
+
+    /// Build an HIR expression for `(?s-u:.)`.
+    ///
+    /// A `(?s-u:.)` expression matches any byte, including newline terminators.
+    /// To build an expression that matches any byte except for newline
+    /// terminators, use the `dot_byte` method.
+    ///
+    /// Note that `(?s-u:.)` is equivalent to `(?-u:[\x00-\xFF])`.
+    pub fn any_byte() -> Hir {
+        let mut cls = ClassBytes::empty();
+        cls.push(ClassBytesRange::new(b'\0', b'\xFF'));
+        Hir::class(Class::Bytes(cls))
     }
 }
 

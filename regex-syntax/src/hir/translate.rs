@@ -861,9 +861,17 @@ impl<'t, 'p> TranslatorI<'t, 'p> {
             return Err(self.error(span, ErrorKind::InvalidUtf8));
         }
         Ok(if self.flags().dot_matches_new_line() {
-            Hir::any(!unicode)
+            if unicode {
+                Hir::any_char()
+            } else {
+                Hir::any_byte()
+            }
         } else {
-            Hir::dot(!unicode)
+            if unicode {
+                Hir::dot_char()
+            } else {
+                Hir::dot_byte()
+            }
         })
     }
 
