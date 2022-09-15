@@ -236,6 +236,29 @@ impl Hir {
         Hir { kind: HirKind::Empty, props }
     }
 
+    /// Returns an HIR expression that can never match anything. That is, the
+    /// set of strings in the language described by the HIR returned is `0`.
+    ///
+    /// This is distinct from [`Hir::empty`] in that the empty string matches
+    /// the HIR returned by `Hir::empty`. That is, the set of strings in the
+    /// language describe described by `Hir::empty` is non-empty.
+    ///
+    /// Note that currently, the HIR returned uses an empty character class to
+    /// indicate that nothing can match. An equivalent expression that cannot
+    /// match is an empty alternation, but all such "fail" expressions are
+    /// normalized (via smart constructors) to empty character classes. This is
+    /// because empty character classes can be spelled in the concrete syntax
+    /// of a regex (e.g., `\P{any}` or `(?-u:[^\x00-\xFF])` or `[a&&b]`), but
+    /// empty alternations cannot.
+    pub fn fail() -> Hir {
+        let class = Class::Bytes(ClassBytes::empty());
+        let props = Properties::class(&class);
+        // We can't just call Hir::class here because it defers to Hir::fail
+        // in order to canonicalize the Hir value used to represent "cannot
+        // match."
+        Hir { kind: HirKind::Class(class), props }
+    }
+
     /// Creates a literal HIR expression.
     ///
     /// If the given literal has a `Byte` variant with an ASCII byte, then this
@@ -254,7 +277,9 @@ impl Hir {
 
     /// Creates a class HIR expression.
     pub fn class(class: Class) -> Hir {
-        if let Some(bytes) = class.literal() {
+        if class.is_empty() {
+            return Hir::fail();
+        } else if let Some(bytes) = class.literal() {
             return Hir::literal(bytes);
         }
         let props = Properties::class(&class);
@@ -293,20 +318,24 @@ impl Hir {
     ///
     /// This flattens the concatenation as appropriate.
     pub fn concat(mut exprs: Vec<Hir>) -> Hir {
-        match exprs.len() {
-            0 => Hir::empty(),
-            1 => exprs.pop().unwrap(),
-            _ => {
-                let props = Properties::concat(&exprs);
-                Hir { kind: HirKind::Concat(exprs), props }
-            }
+        if exprs.is_empty() {
+            return Hir::empty();
+        } else if exprs.len() == 1 {
+            return exprs.pop().unwrap();
         }
+        let props = Properties::concat(&exprs);
+        Hir { kind: HirKind::Concat(exprs), props }
     }
 
     /// Returns the alternation of the given expressions.
     ///
     /// This flattens the alternation as appropriate.
     pub fn alternation(mut exprs: Vec<Hir>) -> Hir {
+        if exprs.is_empty() {
+            return Hir::fail();
+        } else if exprs.len() == 1 {
+            return exprs.pop().unwrap();
+        }
         match exprs.len() {
             0 => Hir::empty(),
             1 => exprs.pop().unwrap(),
@@ -535,6 +564,17 @@ impl Class {
         match *self {
             Class::Unicode(ref x) => x.maximum_len(),
             Class::Bytes(ref x) => x.maximum_len(),
+        }
+    }
+
+    /// Returns true if and only if this character class is empty. That is,
+    /// it has no elements.
+    ///
+    /// An empty character can never match anything, including an empty string.
+    pub fn is_empty(&self) -> bool {
+        match *self {
+            Class::Unicode(ref x) => x.ranges().is_empty(),
+            Class::Bytes(ref x) => x.ranges().is_empty(),
         }
     }
 
