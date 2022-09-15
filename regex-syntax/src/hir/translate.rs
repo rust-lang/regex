@@ -856,23 +856,10 @@ impl<'t, 'p> TranslatorI<'t, 'p> {
     }
 
     fn hir_dot(&self, span: Span) -> Result<Hir> {
-        let unicode = self.flags().unicode();
-        if !unicode && !self.trans().allow_invalid_utf8 {
+        if !self.flags().unicode() && !self.trans().allow_invalid_utf8 {
             return Err(self.error(span, ErrorKind::InvalidUtf8));
         }
-        Ok(if self.flags().dot_matches_new_line() {
-            if unicode {
-                Hir::any_char()
-            } else {
-                Hir::any_byte()
-            }
-        } else {
-            if unicode {
-                Hir::dot_char()
-            } else {
-                Hir::dot_byte()
-            }
-        })
+        Ok(Hir::dot(self.flags().dot()))
     }
 
     fn hir_assertion(&self, asst: &ast::Assertion) -> Result<Hir> {
@@ -1207,6 +1194,22 @@ impl Flags {
         }
         if self.unicode.is_none() {
             self.unicode = previous.unicode;
+        }
+    }
+
+    fn dot(&self) -> hir::Dot {
+        if self.dot_matches_new_line() {
+            if self.unicode() {
+                hir::Dot::AnyChar
+            } else {
+                hir::Dot::AnyByte
+            }
+        } else {
+            if self.unicode() {
+                hir::Dot::AnyCharExceptNL
+            } else {
+                hir::Dot::AnyByteExceptNL
+            }
         }
     }
 

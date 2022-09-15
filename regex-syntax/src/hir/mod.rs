@@ -317,54 +317,41 @@ impl Hir {
         }
     }
 
-    /// Build an HIR expression for `.`.
+    /// Returns an HIR expression for `.`.
     ///
-    /// A `.` expression matches any character except for a newline terminator.
-    /// To build an expression that matches any character, including newline
-    /// terminators, use the `any_char` method.
-    pub fn dot_char() -> Hir {
-        let mut cls = ClassUnicode::empty();
-        cls.push(ClassUnicodeRange::new('\0', '\x09'));
-        cls.push(ClassUnicodeRange::new('\x0B', '\u{10FFFF}'));
-        Hir::class(Class::Unicode(cls))
-    }
-
-    /// Build an HIR expression for `(?-u:.)`.
+    /// * [`Dot::AnyChar`] maps to `(?su:.)`.
+    /// * [`Dot::AnyByte`] maps to `(?s-u:.)`.
+    /// * [`Dot::AnyCharExceptNL`] maps to `(?u-s:.)`.
+    /// * [`Dot::AnyByteExceptNL`] maps to `(?-su:.)`.
     ///
-    /// A non-Unicode `.` expression matches any byte except for a newline
-    /// terminator. To build an expression that matches any byte, including
-    /// newline terminators, use the `any_byte` method.
-    pub fn dot_byte() -> Hir {
-        let mut cls = ClassBytes::empty();
-        cls.push(ClassBytesRange::new(b'\0', b'\x09'));
-        cls.push(ClassBytesRange::new(b'\x0B', b'\xFF'));
-        Hir::class(Class::Bytes(cls))
-    }
-
-    /// Build an HIR expression for `(?s:.)`.
-    ///
-    /// A `(?s:.)` expression matches any character, including newline
-    /// terminators. To build an expression that matches any character except
-    /// for newline terminators, use the `dot_char` method.
-    ///
-    /// Note that `(?s:)` is equivalent to `\p{any}`.
-    pub fn any_char() -> Hir {
-        let mut cls = ClassUnicode::empty();
-        cls.push(ClassUnicodeRange::new('\0', '\u{10FFFF}'));
-        Hir::class(Class::Unicode(cls))
-    }
-
-    /// Build an HIR expression for `(?s-u:.)`.
-    ///
-    /// A `(?s-u:.)` expression matches any byte, including newline terminators.
-    /// To build an expression that matches any byte except for newline
-    /// terminators, use the `dot_byte` method.
-    ///
-    /// Note that `(?s-u:.)` is equivalent to `(?-u:[\x00-\xFF])`.
-    pub fn any_byte() -> Hir {
-        let mut cls = ClassBytes::empty();
-        cls.push(ClassBytesRange::new(b'\0', b'\xFF'));
-        Hir::class(Class::Bytes(cls))
+    /// Note that this is a convenience routine for constructing the correct
+    /// character class based on the value of `Dot`. There is no explicit "dot"
+    /// HIR value. It is just an abbreviation for a common character class.
+    pub fn dot(dot: Dot) -> Hir {
+        match dot {
+            Dot::AnyChar => {
+                let mut cls = ClassUnicode::empty();
+                cls.push(ClassUnicodeRange::new('\0', '\u{10FFFF}'));
+                Hir::class(Class::Unicode(cls))
+            }
+            Dot::AnyByte => {
+                let mut cls = ClassBytes::empty();
+                cls.push(ClassBytesRange::new(b'\0', b'\xFF'));
+                Hir::class(Class::Bytes(cls))
+            }
+            Dot::AnyCharExceptNL => {
+                let mut cls = ClassUnicode::empty();
+                cls.push(ClassUnicodeRange::new('\0', '\x09'));
+                cls.push(ClassUnicodeRange::new('\x0B', '\u{10FFFF}'));
+                Hir::class(Class::Unicode(cls))
+            }
+            Dot::AnyByteExceptNL => {
+                let mut cls = ClassBytes::empty();
+                cls.push(ClassBytesRange::new(b'\0', b'\x09'));
+                cls.push(ClassBytesRange::new(b'\x0B', b'\xFF'));
+                Hir::class(Class::Bytes(cls))
+            }
+        }
     }
 }
 
@@ -1231,6 +1218,31 @@ impl Repetition {
     pub fn is_match_empty(&self) -> bool {
         self.min == 0
     }
+}
+
+/// A type describing the different flavors of `.`.
+///
+/// This type is meant to be used with [`Hir::dot`], which is a convenience
+/// routine for building HIR values derived from the `.` regex.
+#[non_exhaustive]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Dot {
+    /// Matches the UTF-8 encoding of any Unicode scalar value.
+    ///
+    /// This is equivalent to `(?su:.)` and also `\p{any}`.
+    AnyChar,
+    /// Matches any byte value.
+    ///
+    /// This is equivalent to `(?s-u:.)` and also `(?-u:[\x00-\xFF])`.
+    AnyByte,
+    /// Matches the UTF-8 encoding of any Unicode scalar value except for `\n`.
+    ///
+    /// This is equivalent to `(?u-s:.)` and also `[\p{any}--\n]`.
+    AnyCharExceptNL,
+    /// Matches any byte value except for `\n`.
+    ///
+    /// This is equivalent to `(?-su:.)` and also `(?-u:[[\x00-\xFF]--\n])`.
+    AnyByteExceptNL,
 }
 
 /// A custom `Drop` impl is used for `HirKind` such that it uses constant stack
