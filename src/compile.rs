@@ -424,23 +424,19 @@ impl Compiler {
     }
 
     fn c_dotstar(&mut self) -> Result {
-        Ok(if !self.compiled.only_utf8() {
-            self.c(&Hir::repetition(hir::Repetition {
-                min: 0,
-                max: None,
-                greedy: false,
-                hir: Box::new(Hir::any(true)),
-            }))?
-            .unwrap()
+        let hir = if self.compiled.only_utf8() {
+            Hir::any_char()
         } else {
-            self.c(&Hir::repetition(hir::Repetition {
+            Hir::any_byte()
+        };
+        Ok(self
+            .c(&Hir::repetition(hir::Repetition {
                 min: 0,
                 max: None,
                 greedy: false,
-                hir: Box::new(Hir::any(false)),
+                hir: Box::new(hir),
             }))?
-            .unwrap()
-        })
+            .unwrap())
     }
 
     fn c_char(&mut self, c: char) -> ResultOrEmpty {
