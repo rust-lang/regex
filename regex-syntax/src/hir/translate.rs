@@ -2803,7 +2803,7 @@ mod tests {
     fn class_bracketed_nested() {
         assert_eq!(t(r"[a[^c]]"), class_negate(uclass(&[('c', 'c')])));
         assert_eq!(t(r"[a-b[^c]]"), class_negate(uclass(&[('c', 'c')])));
-        assert_eq!(t(r"[a-c[^c]]"), hir_negate(hir_uclass(&[])));
+        assert_eq!(t(r"[a-c[^c]]"), class_negate(uclass(&[])));
 
         assert_eq!(t(r"[^a[^c]]"), hir_uclass(&[('c', 'c')]));
         assert_eq!(t(r"[^a-b[^c]]"), hir_uclass(&[('c', 'c')]));
