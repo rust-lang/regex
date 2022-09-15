@@ -425,9 +425,9 @@ impl Compiler {
 
     fn c_dotstar(&mut self) -> Result {
         let hir = if self.compiled.only_utf8() {
-            Hir::any_char()
+            Hir::dot(hir::Dot::AnyChar)
         } else {
-            Hir::any_byte()
+            Hir::dot(hir::Dot::AnyByte)
         };
         Ok(self
             .c(&Hir::repetition(hir::Repetition {
