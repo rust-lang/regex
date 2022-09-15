@@ -176,17 +176,12 @@ impl<W: fmt::Write> Visitor for Writer<W> {
                     self.wtr.write_str(r"\B")?;
                 }
             },
-            HirKind::Group(ref x) => match x.kind {
-                hir::GroupKind::Capture { ref name, .. } => {
-                    self.wtr.write_str("(")?;
-                    if let Some(ref name) = *name {
-                        write!(self.wtr, "?P<{}>", name)?;
-                    }
+            HirKind::Group(hir::Group { ref name, .. }) => {
+                self.wtr.write_str("(")?;
+                if let Some(ref name) = *name {
+                    write!(self.wtr, "?P<{}>", name)?;
                 }
-                hir::GroupKind::NonCapturing => {
-                    self.wtr.write_str("(?:")?;
-                }
-            },
+            }
             // Why do this? Wrapping concats and alts in non-capturing groups
             // is not *always* necessary, but is sometimes necessary. For
             // example, 'concat(a, alt(b, c))' should be written as 'a(?:b|c)'
@@ -415,11 +410,11 @@ mod tests {
     fn print_group() {
         roundtrip("()", "()");
         roundtrip("(?P<foo>)", "(?P<foo>)");
-        roundtrip("(?:)", "(?:)");
+        roundtrip("(?:)", "");
 
         roundtrip("(a)", "(a)");
         roundtrip("(?P<foo>a)", "(?P<foo>a)");
-        roundtrip("(?:a)", "(?:a)");
+        roundtrip("(?:a)", "a");
 
         roundtrip("((((a))))", "((((a))))");
     }

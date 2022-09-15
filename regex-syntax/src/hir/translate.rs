@@ -915,17 +915,16 @@ impl<'t, 'p> TranslatorI<'t, 'p> {
     }
 
     fn hir_group(&self, group: &ast::Group, expr: Hir) -> Hir {
-        let kind = match group.kind {
-            ast::GroupKind::CaptureIndex(index) => {
-                hir::GroupKind::Capture { index, name: None }
+        let (index, name) = match group.kind {
+            ast::GroupKind::CaptureIndex(index) => (index, None),
+            ast::GroupKind::CaptureName(ref cap) => {
+                (cap.index, Some(cap.name.clone().into_boxed_str()))
             }
-            ast::GroupKind::CaptureName(ref cap) => hir::GroupKind::Capture {
-                index: cap.index,
-                name: Some(cap.name.clone()),
-            },
-            ast::GroupKind::NonCapturing(_) => hir::GroupKind::NonCapturing,
+            // The HIR doesn't need to use non-capturing groups, since the way
+            // in which the data type is defined handles this automatically.
+            ast::GroupKind::NonCapturing(_) => return expr,
         };
-        Hir::group(hir::Group { kind, hir: Box::new(expr) })
+        Hir::group(hir::Group { index, name, hir: Box::new(expr) })
     }
 
     fn hir_repetition(&self, rep: &ast::Repetition, expr: Hir) -> Hir {
@@ -1349,26 +1348,14 @@ mod tests {
         Hir::literal(s)
     }
 
-    fn hir_group(i: u32, expr: Hir) -> Hir {
-        Hir::group(hir::Group {
-            kind: hir::GroupKind::Capture { index: i, name: None },
-            hir: Box::new(expr),
-        })
+    fn hir_group(index: u32, expr: Hir) -> Hir {
+        Hir::group(hir::Group { index, name: None, hir: Box::new(expr) })
     }
 
-    fn hir_group_name(i: u32, name: &str, expr: Hir) -> Hir {
+    fn hir_group_name(index: u32, name: &str, expr: Hir) -> Hir {
         Hir::group(hir::Group {
-            kind: hir::GroupKind::Capture {
-                index: i,
-                name: Some(name.to_string()),
-            },
-            hir: Box::new(expr),
-        })
-    }
-
-    fn hir_group_nocap(expr: Hir) -> Hir {
-        Hir::group(hir::Group {
-            kind: hir::GroupKind::NonCapturing,
+            index,
+            name: Some(name.into()),
             hir: Box::new(expr),
         })
     }
@@ -1519,7 +1506,7 @@ mod tests {
         assert_eq!(t(""), Hir::empty());
         assert_eq!(t("(?i)"), Hir::empty());
         assert_eq!(t("()"), hir_group(1, Hir::empty()));
-        assert_eq!(t("(?:)"), hir_group_nocap(Hir::empty()));
+        assert_eq!(t("(?:)"), Hir::empty());
         assert_eq!(t("(?P<wat>)"), hir_group_name(1, "wat", Hir::empty()));
         assert_eq!(t("|"), hir_alt(vec![Hir::empty(), Hir::empty()]));
         assert_eq!(
@@ -1592,10 +1579,7 @@ mod tests {
         #[cfg(feature = "unicode-case")]
         assert_eq!(t("(?i)a"), hir_uclass(&[('A', 'A'), ('a', 'a'),]));
         #[cfg(feature = "unicode-case")]
-        assert_eq!(
-            t("(?i:a)"),
-            hir_group_nocap(hir_uclass(&[('A', 'A'), ('a', 'a')],))
-        );
+        assert_eq!(t("(?i:a)"), hir_uclass(&[('A', 'A'), ('a', 'a')]));
         #[cfg(feature = "unicode-case")]
         assert_eq!(
             t("a(?i)a(?-i)a"),
@@ -1757,20 +1741,17 @@ mod tests {
                 hir_group_name(2, "bar", hir_lit("b")),
             ])
         );
-        assert_eq!(t("(?:)"), hir_group_nocap(Hir::empty()));
-        assert_eq!(t("(?:a)"), hir_group_nocap(hir_lit("a")));
+        assert_eq!(t("(?:)"), Hir::empty());
+        assert_eq!(t("(?:a)"), hir_lit("a"));
         assert_eq!(
             t("(?:a)(b)"),
-            hir_cat(vec![
-                hir_group_nocap(hir_lit("a")),
-                hir_group(1, hir_lit("b")),
-            ])
+            hir_cat(vec![hir_lit("a"), hir_group(1, hir_lit("b")),])
         );
         assert_eq!(
             t("(a)(?:b)(c)"),
             hir_cat(vec![
                 hir_group(1, hir_lit("a")),
-                hir_group_nocap(hir_lit("b")),
+                hir_lit("b"),
                 hir_group(2, hir_lit("c")),
             ])
         );
@@ -1793,22 +1774,21 @@ mod tests {
         #[cfg(feature = "unicode-case")]
         assert_eq!(
             t("(?i:a)a"),
-            hir_cat(vec![
-                hir_group_nocap(hir_uclass(&[('A', 'A'), ('a', 'a')])),
-                hir_lit("a"),
-            ])
+            hir_cat(
+                vec![hir_uclass(&[('A', 'A'), ('a', 'a')]), hir_lit("a"),]
+            )
         );
         assert_eq!(
             t("(?i-u:a)β"),
             hir_cat(vec![
-                hir_group_nocap(hir_bclass(&[(b'A', b'A'), (b'a', b'a')])),
+                hir_bclass(&[(b'A', b'A'), (b'a', b'a')]),
                 hir_lit("β"),
             ])
         );
         assert_eq!(
             t("(?:(?i-u)a)b"),
             hir_cat(vec![
-                hir_group_nocap(hir_bclass(&[(b'A', b'A'), (b'a', b'a')])),
+                hir_bclass(&[(b'A', b'A'), (b'a', b'a')]),
                 hir_lit("b"),
             ])
         );
@@ -1822,10 +1802,9 @@ mod tests {
         #[cfg(feature = "unicode-case")]
         assert_eq!(
             t("(?i)(?-i:a)a"),
-            hir_cat(vec![
-                hir_group_nocap(hir_lit("a")),
-                hir_uclass(&[('A', 'A'), ('a', 'a')]),
-            ])
+            hir_cat(
+                vec![hir_lit("a"), hir_uclass(&[('A', 'A'), ('a', 'a')]),]
+            )
         );
         #[cfg(feature = "unicode-case")]
         assert_eq!(
@@ -1858,10 +1837,10 @@ mod tests {
         assert_eq!(
             t("(?:a(?i)a)a"),
             hir_cat(vec![
-                hir_group_nocap(hir_cat(vec![
+                hir_cat(vec![
                     hir_lit("a"),
                     hir_uclass(&[('A', 'A'), ('a', 'a')]),
-                ])),
+                ]),
                 hir_lit("a"),
             ])
         );
@@ -1869,10 +1848,10 @@ mod tests {
         assert_eq!(
             t("(?i)(?:a(?-i)a)a"),
             hir_cat(vec![
-                hir_group_nocap(hir_cat(vec![
+                hir_cat(vec![
                     hir_uclass(&[('A', 'A'), ('a', 'a')]),
                     hir_lit("a"),
-                ])),
+                ]),
                 hir_uclass(&[('A', 'A'), ('a', 'a')]),
             ])
         );
