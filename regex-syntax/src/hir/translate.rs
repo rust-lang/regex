@@ -1428,19 +1428,11 @@ mod tests {
     }
 
     fn hir_uclass(ranges: &[(char, char)]) -> Hir {
-        let ranges: Vec<hir::ClassUnicodeRange> = ranges
-            .iter()
-            .map(|&(s, e)| hir::ClassUnicodeRange::new(s, e))
-            .collect();
-        Hir::class(hir::Class::Unicode(hir::ClassUnicode::new(ranges)))
+        Hir::class(uclass(ranges))
     }
 
     fn hir_bclass(ranges: &[(u8, u8)]) -> Hir {
-        let ranges: Vec<hir::ClassBytesRange> = ranges
-            .iter()
-            .map(|&(s, e)| hir::ClassBytesRange::new(s, e))
-            .collect();
-        Hir::class(hir::Class::Bytes(hir::ClassBytes::new(ranges)))
+        Hir::class(bclass(ranges))
     }
 
     fn hir_case_fold(expr: Hir) -> Hir {
@@ -1461,6 +1453,33 @@ mod tests {
             }
             _ => panic!("cannot negate non-class Hir expr"),
         }
+    }
+
+    fn uclass(ranges: &[(char, char)]) -> hir::Class {
+        let ranges: Vec<hir::ClassUnicodeRange> = ranges
+            .iter()
+            .map(|&(s, e)| hir::ClassUnicodeRange::new(s, e))
+            .collect();
+        hir::Class::Unicode(hir::ClassUnicode::new(ranges))
+    }
+
+    fn bclass(ranges: &[(u8, u8)]) -> hir::Class {
+        let ranges: Vec<hir::ClassBytesRange> = ranges
+            .iter()
+            .map(|&(s, e)| hir::ClassBytesRange::new(s, e))
+            .collect();
+        hir::Class::Bytes(hir::ClassBytes::new(ranges))
+    }
+
+    #[cfg(feature = "unicode-case")]
+    fn class_case_fold(mut cls: hir::Class) -> Hir {
+        cls.case_fold_simple();
+        Hir::class(cls)
+    }
+
+    fn class_negate(mut cls: hir::Class) -> Hir {
+        cls.negate();
+        Hir::class(cls)
     }
 
     #[allow(dead_code)]
@@ -2522,8 +2541,9 @@ mod tests {
 
     #[test]
     fn class_bracketed() {
-        assert_eq!(t("[a]"), hir_uclass(&[('a', 'a')]));
-        assert_eq!(t("[^[a]]"), hir_negate(hir_uclass(&[('a', 'a')])));
+        assert_eq!(t("[a]"), hir_lit("a"));
+        assert_eq!(t("[ab]"), hir_uclass(&[('a', 'b')]));
+        assert_eq!(t("[^[a]]"), class_negate(uclass(&[('a', 'a')])));
         assert_eq!(t("[a-z]"), hir_uclass(&[('a', 'z')]));
         assert_eq!(t("[a-fd-h]"), hir_uclass(&[('a', 'h')]));
         assert_eq!(t("[a-fg-m]"), hir_uclass(&[('a', 'm')]));
@@ -2586,11 +2606,11 @@ mod tests {
         );
         assert_eq!(t("(?i-u)[k]"), hir_bclass(&[(b'K', b'K'), (b'k', b'k'),]));
 
-        assert_eq!(t("[^a]"), hir_negate(hir_uclass(&[('a', 'a')])));
-        assert_eq!(t(r"[^\x00]"), hir_negate(hir_uclass(&[('\0', '\0')])));
+        assert_eq!(t("[^a]"), class_negate(uclass(&[('a', 'a')])));
+        assert_eq!(t(r"[^\x00]"), class_negate(uclass(&[('\0', '\0')])));
         assert_eq!(
             t_bytes("(?-u)[^a]"),
-            hir_negate(hir_bclass(&[(b'a', b'a')]))
+            class_negate(bclass(&[(b'a', b'a')]))
         );
         #[cfg(any(feature = "unicode-perl", feature = "unicode-gencat"))]
         assert_eq!(
@@ -2778,8 +2798,8 @@ mod tests {
 
     #[test]
     fn class_bracketed_nested() {
-        assert_eq!(t(r"[a[^c]]"), hir_negate(hir_uclass(&[('c', 'c')])));
-        assert_eq!(t(r"[a-b[^c]]"), hir_negate(hir_uclass(&[('c', 'c')])));
+        assert_eq!(t(r"[a[^c]]"), class_negate(uclass(&[('c', 'c')])));
+        assert_eq!(t(r"[a-b[^c]]"), class_negate(uclass(&[('c', 'c')])));
         assert_eq!(t(r"[a-c[^c]]"), hir_negate(hir_uclass(&[])));
 
         assert_eq!(t(r"[^a[^c]]"), hir_uclass(&[('c', 'c')]));
@@ -2788,12 +2808,12 @@ mod tests {
         #[cfg(feature = "unicode-case")]
         assert_eq!(
             t(r"(?i)[a[^c]]"),
-            hir_negate(hir_case_fold(hir_uclass(&[('c', 'c')])))
+            hir_negate(class_case_fold(uclass(&[('c', 'c')])))
         );
         #[cfg(feature = "unicode-case")]
         assert_eq!(
             t(r"(?i)[a-b[^c]]"),
-            hir_negate(hir_case_fold(hir_uclass(&[('c', 'c')])))
+            hir_negate(class_case_fold(uclass(&[('c', 'c')])))
         );
 
         #[cfg(feature = "unicode-case")]
@@ -3239,6 +3259,10 @@ mod tests {
         assert!(props(r"ab").is_literal());
         assert!(props(r"abc").is_literal());
         assert!(props(r"(?m)abc").is_literal());
+        assert!(props(r"(?:a)").is_literal());
+        assert!(props(r"foo(?:a)").is_literal());
+        assert!(props(r"(?:a)foo").is_literal());
+        assert!(props(r"[a]").is_literal());
 
         // Negative examples.
         assert!(!props(r"").is_literal());
@@ -3248,7 +3272,7 @@ mod tests {
         assert!(!props(r"a+").is_literal());
         assert!(!props(r"foo(a)").is_literal());
         assert!(!props(r"(a)foo").is_literal());
-        assert!(!props(r"[a]").is_literal());
+        assert!(!props(r"[ab]").is_literal());
     }
 
     #[test]
@@ -3262,6 +3286,11 @@ mod tests {
         assert!(props(r"a|b|c").is_alternation_literal());
         assert!(props(r"foo|bar").is_alternation_literal());
         assert!(props(r"foo|bar|baz").is_alternation_literal());
+        assert!(props(r"[a]").is_alternation_literal());
+        assert!(props(r"[a]|b").is_alternation_literal());
+        assert!(props(r"a|[b]").is_alternation_literal());
+        assert!(props(r"(?:a)|b").is_alternation_literal());
+        assert!(props(r"a|(?:b)").is_alternation_literal());
 
         // Negative examples.
         assert!(!props(r"").is_alternation_literal());
@@ -3270,9 +3299,9 @@ mod tests {
         assert!(!props(r"a+").is_alternation_literal());
         assert!(!props(r"foo(a)").is_alternation_literal());
         assert!(!props(r"(a)foo").is_alternation_literal());
-        assert!(!props(r"[a]").is_alternation_literal());
-        assert!(!props(r"[a]|b").is_alternation_literal());
-        assert!(!props(r"a|[b]").is_alternation_literal());
+        assert!(!props(r"[ab]").is_alternation_literal());
+        assert!(!props(r"[ab]|b").is_alternation_literal());
+        assert!(!props(r"a|[ab]").is_alternation_literal());
         assert!(!props(r"(a)|b").is_alternation_literal());
         assert!(!props(r"a|(b)").is_alternation_literal());
     }

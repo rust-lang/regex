@@ -122,16 +122,16 @@ impl core::fmt::Display for ErrorKind {
 
 /// A high-level intermediate representation (HIR) for a regular expression.
 ///
-/// The HIR of a regular expression represents an intermediate step between its
-/// abstract syntax (a structured description of the concrete syntax) and
-/// compiled byte codes. The purpose of HIR is to make regular expressions
+/// The HIR of a regular expression represents an intermediate step between
+/// its abstract syntax (a structured description of the concrete syntax) and
+/// an actual regex matcher. The purpose of HIR is to make regular expressions
 /// easier to analyze. In particular, the AST is much more complex than the
 /// HIR. For example, while an AST supports arbitrarily nested character
 /// classes, the HIR will flatten all nested classes into a single set. The HIR
 /// will also "compile away" every flag present in the concrete syntax. For
 /// example, users of HIR expressions never need to worry about case folding;
-/// it is handled automatically by the translator (e.g., by translating `(?i)A`
-/// to `[aA]`).
+/// it is handled automatically by the translator (e.g., by translating
+/// `(?i:A)` to `[aA]`).
 ///
 /// If the HIR was produced by a translator that disallows invalid UTF-8, then
 /// the HIR is guaranteed to match UTF-8 exclusively.
@@ -150,11 +150,13 @@ impl core::fmt::Display for ErrorKind {
 /// 2. Every HIR expression contains attributes that are defined inductively,
 ///    and can be computed cheaply during the construction process. For
 ///    example, one such attribute is whether the expression must match at the
-///    beginning of the text.
+///    beginning of the haystack.
 ///
 /// Also, an `Hir`'s `fmt::Display` implementation prints an HIR as a regular
 /// expression pattern string, and uses constant stack space and heap space
-/// proportional to the size of the `Hir`.
+/// proportional to the size of the `Hir`. The regex it prints is guaranteed to
+/// be _semantically_ equivalent to the original concrete syntax, but it may
+/// look very different. (And potentially not practically readable by a human.)
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Hir {
     /// The underlying HIR kind.
@@ -252,6 +254,9 @@ impl Hir {
 
     /// Creates a class HIR expression.
     pub fn class(class: Class) -> Hir {
+        if let Some(bytes) = class.literal() {
+            return Hir::literal(bytes);
+        }
         let props = Properties::class(&class);
         Hir { kind: HirKind::Class(class), props }
     }
@@ -267,8 +272,12 @@ impl Hir {
         // The regex 'a{0}' is always equivalent to the empty regex. This is
         // true even when 'a' is an expression that never matches anything
         // (like '\P{any}').
+        //
+        // Additionally, the regex 'a{1}' is always equivalent to 'a'.
         if rep.min == 0 && rep.max == Some(0) {
             return Hir::empty();
+        } else if rep.min == 1 && rep.max == Some(1) {
+            return *rep.hir;
         }
         let props = Properties::repetition(&rep);
         Hir { kind: HirKind::Repetition(rep), props }
@@ -541,6 +550,18 @@ impl Class {
             Class::Bytes(ref x) => x.maximum_len(),
         }
     }
+
+    /// If this class consists of exactly one element (whether a codepoint or a
+    /// byte), then return it as a literal byte string.
+    ///
+    /// If this class is empty or contains more than one element, then `None`
+    /// is returned.
+    pub fn literal(&self) -> Option<Vec<u8>> {
+        match *self {
+            Class::Unicode(ref x) => x.literal(),
+            Class::Bytes(ref x) => x.literal(),
+        }
+    }
 }
 
 /// A set of characters represented by Unicode scalar values.
@@ -679,6 +700,20 @@ impl ClassUnicode {
         let last = self.ranges().last()?;
         // Correct because c1 < c2 implies c1.len_utf8() < c2.len_utf8().
         Some(last.end.len_utf8())
+    }
+
+    /// If this class consists of exactly one codepoint, then return it as
+    /// a literal byte string.
+    ///
+    /// If this class is empty or contains more than one codepoint, then `None`
+    /// is returned.
+    pub fn literal(&self) -> Option<Vec<u8>> {
+        let rs = self.ranges();
+        if rs.len() == 1 && rs[0].start == rs[0].end {
+            Some(rs[0].start.encode_utf8(&mut [0; 4]).to_string().into_bytes())
+        } else {
+            None
+        }
     }
 }
 
@@ -930,6 +965,20 @@ impl ClassBytes {
             None
         } else {
             Some(1)
+        }
+    }
+
+    /// If this class consists of exactly one byte, then return it as
+    /// a literal byte string.
+    ///
+    /// If this class is empty or contains more than one byte, then `None`
+    /// is returned.
+    pub fn literal(&self) -> Option<Vec<u8>> {
+        let rs = self.ranges();
+        if rs.len() == 1 && rs[0].start == rs[0].end {
+            Some(vec![rs[0].start])
+        } else {
+            None
         }
     }
 }

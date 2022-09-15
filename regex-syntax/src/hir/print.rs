@@ -129,6 +129,11 @@ impl<W: fmt::Write> Visitor for Writer<W> {
                 for range in cls.iter() {
                     if range.start() == range.end() {
                         self.write_literal_char(range.start())?;
+                    } else if u32::from(range.start()) + 1
+                        == u32::from(range.end())
+                    {
+                        self.write_literal_char(range.start())?;
+                        self.write_literal_char(range.end())?;
                     } else {
                         self.write_literal_char(range.start())?;
                         self.wtr.write_str("-")?;
@@ -142,6 +147,9 @@ impl<W: fmt::Write> Visitor for Writer<W> {
                 for range in cls.iter() {
                     if range.start() == range.end() {
                         self.write_literal_class_byte(range.start())?;
+                    } else if range.start() + 1 == range.end() {
+                        self.write_literal_class_byte(range.start())?;
+                        self.write_literal_class_byte(range.end())?;
                     } else {
                         self.write_literal_class_byte(range.start())?;
                         self.wtr.write_str("-")?;
@@ -327,26 +335,28 @@ mod tests {
 
     #[test]
     fn print_class() {
-        roundtrip(r"[a]", r"[a]");
+        roundtrip(r"[a]", r"a");
+        roundtrip(r"[ab]", r"[ab]");
         roundtrip(r"[a-z]", r"[a-z]");
         roundtrip(r"[a-z--b-c--x-y]", r"[ad-wz]");
-        roundtrip(r"[^\x01-\u{10FFFF}]", "[\u{0}]");
-        roundtrip(r"[-]", r"[\-]");
+        roundtrip(r"[^\x01-\u{10FFFF}]", "\u{0}");
+        roundtrip(r"[-]", r"\-");
         roundtrip(r"[☃-⛄]", r"[☃-⛄]");
 
-        roundtrip(r"(?-u)[a]", r"(?-u:[a])");
+        roundtrip(r"(?-u)[a]", r"a");
+        roundtrip(r"(?-u)[ab]", r"(?-u:[ab])");
         roundtrip(r"(?-u)[a-z]", r"(?-u:[a-z])");
         roundtrip_bytes(r"(?-u)[a-\xFF]", r"(?-u:[a-\xFF])");
 
         // The following test that the printer escapes meta characters
         // in character classes.
-        roundtrip(r"[\[]", r"[\[]");
+        roundtrip(r"[\[]", r"\[");
         roundtrip(r"[Z-_]", r"[Z-_]");
         roundtrip(r"[Z-_--Z]", r"[\[-_]");
 
         // The following test that the printer escapes meta characters
         // in byte oriented character classes.
-        roundtrip_bytes(r"(?-u)[\[]", r"(?-u:[\[])");
+        roundtrip_bytes(r"(?-u)[\[]", r"\[");
         roundtrip_bytes(r"(?-u)[Z-_]", r"(?-u:[Z-_])");
         roundtrip_bytes(r"(?-u)[Z-_--Z]", r"(?-u:[\[-_])");
     }
