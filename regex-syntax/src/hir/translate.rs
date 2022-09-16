@@ -3308,4 +3308,31 @@ mod tests {
         assert!(!props(r"(a)|b").is_alternation_literal());
         assert!(!props(r"a|(b)").is_alternation_literal());
     }
+
+    // This tests that the smart Hir::concat constructor simplifies the given
+    // exprs in a way we expect.
+    #[test]
+    fn smart_concat() {
+        assert_eq!(t(""), Hir::empty());
+        assert_eq!(t("(?:)"), Hir::empty());
+        assert_eq!(t("abc"), hir_lit("abc"));
+        assert_eq!(t("(?:foo)(?:bar)"), hir_lit("foobar"));
+        assert_eq!(t("quux(?:foo)(?:bar)baz"), hir_lit("quuxfoobarbaz"));
+        assert_eq!(
+            t("foo(?:bar^baz)quux"),
+            hir_cat(vec![
+                hir_lit("foobar"),
+                hir_look(hir::Look::Start),
+                hir_lit("bazquux"),
+            ])
+        );
+        assert_eq!(
+            t("foo(?:ba(?:r^b)az)quux"),
+            hir_cat(vec![
+                hir_lit("foobar"),
+                hir_look(hir::Look::Start),
+                hir_lit("bazquux"),
+            ])
+        );
+    }
 }
