@@ -221,6 +221,17 @@ impl Hir {
     pub fn properties(&self) -> &Properties {
         &self.props
     }
+
+    /// Splits this HIR into its constituent parts.
+    ///
+    /// This is useful because `let Hir { kind, props } = hir;` does not work
+    /// because of `Hir`'s custom `Drop` implementation.
+    fn into_parts(mut self) -> (HirKind, Properties) {
+        (
+            core::mem::replace(&mut self.kind, HirKind::Empty),
+            core::mem::replace(&mut self.props, Properties::empty()),
+        )
+    }
 }
 
 /// Smart constructors for HIR values.
@@ -324,14 +335,67 @@ impl Hir {
     /// Returns the concatenation of the given expressions.
     ///
     /// This flattens the concatenation as appropriate.
-    pub fn concat(mut exprs: Vec<Hir>) -> Hir {
-        if exprs.is_empty() {
-            return Hir::empty();
-        } else if exprs.len() == 1 {
-            return exprs.pop().unwrap();
+    pub fn concat(hirs: Vec<Hir>) -> Hir {
+        // We rebuild the concatenation by simplifying it. Would be nice to do
+        // it in place, but that seems a little tricky?
+        let mut new = vec![];
+        // This gobbles up any adjacent literals in a concatenation and smushes
+        // them together. Basically, when we see a literal, we add its bytes
+        // to 'prior_lit', and whenever we see anything else, we first take
+        // any bytes in 'prior_lit' and add it to the 'new' concatenation.
+        let mut prior_lit: Option<Vec<u8>> = None;
+        for hir in hirs {
+            let (kind, props) = hir.into_parts();
+            match kind {
+                HirKind::Literal(Literal(bytes)) => {
+                    if let Some(ref mut prior_bytes) = prior_lit {
+                        prior_bytes.extend_from_slice(&bytes);
+                    } else {
+                        prior_lit = Some(bytes.to_vec());
+                    }
+                }
+                // We also flatten concats that are direct children of another
+                // concat. We only need to do this one level deep since
+                // Hir::concat is the only way to build concatenations, and so
+                // flattening happens inductively.
+                HirKind::Concat(hirs2) => {
+                    for hir2 in hirs2 {
+                        let (kind2, props2) = hir2.into_parts();
+                        match kind2 {
+                            HirKind::Literal(Literal(bytes)) => {
+                                if let Some(ref mut prior_bytes) = prior_lit {
+                                    prior_bytes.extend_from_slice(&bytes);
+                                } else {
+                                    prior_lit = Some(bytes.to_vec());
+                                }
+                            }
+                            kind2 => {
+                                if let Some(prior_bytes) = prior_lit.take() {
+                                    new.push(Hir::literal(prior_bytes));
+                                }
+                                new.push(Hir { kind: kind2, props: props2 });
+                            }
+                        }
+                    }
+                }
+                kind => {
+                    if let Some(prior_bytes) = prior_lit.take() {
+                        new.push(Hir::literal(prior_bytes));
+                    }
+                    new.push(Hir { kind, props });
+                }
+            }
         }
-        let props = Properties::concat(&exprs);
-        Hir { kind: HirKind::Concat(exprs), props }
+        if let Some(prior_bytes) = prior_lit.take() {
+            new.push(Hir::literal(prior_bytes));
+        }
+        if new.is_empty() {
+            return Hir::empty();
+        } else if new.len() == 1 {
+            return new.pop().unwrap();
+        }
+        let props = Properties::concat(&new);
+        Hir { kind: HirKind::Concat(new), props }
     }
 
     /// Returns the alternation of the given expressions.
