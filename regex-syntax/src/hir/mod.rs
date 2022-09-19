@@ -159,11 +159,8 @@ impl core::fmt::Display for ErrorKind {
 /// look very different. (And potentially not practically readable by a human.)
 ///
 /// An `Hir`'s `fmt::Debug` implementation currently does not use constant
-/// stack space. The default implementation will also suppress some details
-/// (such as the `Properties` inlined into every `Hir` value to make it less
-/// noisy), but using the "[alternate]" format option will show everything.
-///
-/// [alternate]: https://doc.rust-lang.org/std/fmt/struct.Formatter.html#method.alternate
+/// stack space. The implementation will also suppress some details (such as
+/// the `Properties` inlined into every `Hir` value to make it less noisy).
 #[derive(Clone, Eq, PartialEq)]
 pub struct Hir {
     /// The underlying HIR kind.
@@ -486,14 +483,7 @@ impl HirKind {
 
 impl core::fmt::Debug for Hir {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        if f.alternate() {
-            f.debug_struct("Hir")
-                .field("kind", &self.kind)
-                .field("props", &self.props)
-                .finish()
-        } else {
-            self.kind.fmt(f)
-        }
+        self.kind.fmt(f)
     }
 }
 
