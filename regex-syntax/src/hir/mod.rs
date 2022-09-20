@@ -398,20 +398,29 @@ impl Hir {
     /// Returns the alternation of the given expressions.
     ///
     /// This flattens the alternation as appropriate.
-    pub fn alternation(mut exprs: Vec<Hir>) -> Hir {
-        if exprs.is_empty() {
-            return Hir::fail();
-        } else if exprs.len() == 1 {
-            return exprs.pop().unwrap();
-        }
-        match exprs.len() {
-            0 => Hir::empty(),
-            1 => exprs.pop().unwrap(),
-            _ => {
-                let props = Properties::alternation(&exprs);
-                Hir { kind: HirKind::Alternation(exprs), props }
+    pub fn alternation(hirs: Vec<Hir>) -> Hir {
+        // We rebuild the alternation by simplifying it. We proceed similarly
+        // as the concatenation case. But in this case, there's no literal
+        // simplification happening. We're just flattening alternations.
+        let mut new = vec![];
+        for hir in hirs {
+            let (kind, props) = hir.into_parts();
+            match kind {
+                HirKind::Alternation(hirs2) => {
+                    new.extend(hirs2);
+                }
+                kind => {
+                    new.push(Hir { kind, props });
+                }
             }
         }
+        if new.is_empty() {
+            return Hir::fail();
+        } else if new.len() == 1 {
+            return new.pop().unwrap();
+        }
+        let props = Properties::alternation(&new);
+        Hir { kind: HirKind::Alternation(new), props }
     }
 
     /// Returns an HIR expression for `.`.

@@ -3335,4 +3335,24 @@ mod tests {
             ])
         );
     }
+
+    // This tests that the smart Hir::alternation constructor simplifies the
+    // given exprs in a way we expect.
+    #[test]
+    fn smart_alternation() {
+        assert_eq!(
+            t("(?:foo)|(?:bar)"),
+            hir_alt(vec![hir_lit("foo"), hir_lit("bar")])
+        );
+        assert_eq!(
+            t("quux|(?:abc|def|xyz)|baz"),
+            hir_alt(vec![
+                hir_lit("quux"),
+                hir_lit("abc"),
+                hir_lit("def"),
+                hir_lit("xyz"),
+                hir_lit("baz"),
+            ])
+        );
+    }
 }
