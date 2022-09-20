@@ -419,6 +419,25 @@ impl Hir {
         } else if new.len() == 1 {
             return new.pop().unwrap();
         }
+        // Now that it's completely flattened, look for the special case of
+        // 'char1|char2|...|charN' and collapse that into a class. Note that we
+        // look for 'char' first and then bytes. The issue here is that if we
+        // find both non-ASCII codepoints and non-ASCII singleton bytes, then
+        // it isn't actually possible to smush them into a single class. So we
+        // look for all chars and then all bytes, and don't handle anything
+        // else.
+        if let Some(singletons) = singleton_chars(&new) {
+            let it = singletons
+                .into_iter()
+                .map(|ch| ClassUnicodeRange { start: ch, end: ch });
+            return Hir::class(Class::Unicode(ClassUnicode::new(it)));
+        }
+        if let Some(singletons) = singleton_bytes(&new) {
+            let it = singletons
+                .into_iter()
+                .map(|b| ClassBytesRange { start: b, end: b });
+            return Hir::class(Class::Bytes(ClassBytes::new(it)));
+        }
         let props = Properties::alternation(&new);
         Hir { kind: HirKind::Alternation(new), props }
     }
@@ -1884,6 +1903,47 @@ impl Iterator for LookSetIter {
         self.set.remove(look);
         Some(look)
     }
+}
+
+/// Given a sequence of HIR values where each value corresponds to a literal
+/// that is a single `char`, return that sequence of `char`s. Otherwise return
+/// None. No deduplication is done.
+fn singleton_chars(hirs: &[Hir]) -> Option<Vec<char>> {
+    let mut singletons = vec![];
+    for hir in hirs.iter() {
+        let literal = match *hir.kind() {
+            HirKind::Literal(Literal(ref bytes)) => bytes,
+            _ => return None,
+        };
+        let ch = match crate::debug::utf8_decode(literal) {
+            None => return None,
+            Some(Err(_)) => return None,
+            Some(Ok(ch)) => ch,
+        };
+        if literal.len() != ch.len_utf8() {
+            return None;
+        }
+        singletons.push(ch);
+    }
+    Some(singletons)
+}
+
+/// Given a sequence of HIR values where each value corresponds to a literal
+/// that is a single byte, return that sequence of bytes. Otherwise return
+/// None. No deduplication is done.
+fn singleton_bytes(hirs: &[Hir]) -> Option<Vec<u8>> {
+    let mut singletons = vec![];
+    for hir in hirs.iter() {
+        let literal = match *hir.kind() {
+            HirKind::Literal(Literal(ref bytes)) => bytes,
+            _ => return None,
+        };
+        if literal.len() != 1 {
+            return None;
+        }
+        singletons.push(literal[0]);
+    }
+    Some(singletons)
 }
 
 #[cfg(test)]

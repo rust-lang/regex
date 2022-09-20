@@ -3285,15 +3285,11 @@ mod tests {
         assert!(props(r"ab").is_alternation_literal());
         assert!(props(r"abc").is_alternation_literal());
         assert!(props(r"(?m)abc").is_alternation_literal());
-        assert!(props(r"a|b").is_alternation_literal());
-        assert!(props(r"a|b|c").is_alternation_literal());
         assert!(props(r"foo|bar").is_alternation_literal());
         assert!(props(r"foo|bar|baz").is_alternation_literal());
         assert!(props(r"[a]").is_alternation_literal());
-        assert!(props(r"[a]|b").is_alternation_literal());
-        assert!(props(r"a|[b]").is_alternation_literal());
-        assert!(props(r"(?:a)|b").is_alternation_literal());
-        assert!(props(r"a|(?:b)").is_alternation_literal());
+        assert!(props(r"(?:ab)|cd").is_alternation_literal());
+        assert!(props(r"ab|(?:cd)").is_alternation_literal());
 
         // Negative examples.
         assert!(!props(r"").is_alternation_literal());
@@ -3307,6 +3303,12 @@ mod tests {
         assert!(!props(r"a|[ab]").is_alternation_literal());
         assert!(!props(r"(a)|b").is_alternation_literal());
         assert!(!props(r"a|(b)").is_alternation_literal());
+        assert!(!props(r"a|b").is_alternation_literal());
+        assert!(!props(r"a|b|c").is_alternation_literal());
+        assert!(!props(r"[a]|b").is_alternation_literal());
+        assert!(!props(r"a|[b]").is_alternation_literal());
+        assert!(!props(r"(?:a)|b").is_alternation_literal());
+        assert!(!props(r"a|(?:b)").is_alternation_literal());
     }
 
     // This tests that the smart Hir::concat constructor simplifies the given
@@ -3353,6 +3355,21 @@ mod tests {
                 hir_lit("xyz"),
                 hir_lit("baz"),
             ])
+        );
+        assert_eq!(
+            t("quux|(?:abc|(?:def|mno)|xyz)|baz"),
+            hir_alt(vec![
+                hir_lit("quux"),
+                hir_lit("abc"),
+                hir_lit("def"),
+                hir_lit("mno"),
+                hir_lit("xyz"),
+                hir_lit("baz"),
+            ])
+        );
+        assert_eq!(
+            t("a|b|c|d|e|f|x|y|z"),
+            hir_uclass(&[('a', 'f'), ('x', 'z')]),
         );
     }
 }

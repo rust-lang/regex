@@ -434,8 +434,10 @@ mod tests {
         roundtrip("|", "(?:|)");
         roundtrip("||", "(?:||)");
 
-        roundtrip("a|b", "(?:a|b)");
-        roundtrip("a|b|c", "(?:a|b|c)");
+        roundtrip("a|b", "[ab]");
+        roundtrip("ab|cd", "(?:(?:ab)|(?:cd))");
+        roundtrip("a|b|c", "[a-c]");
+        roundtrip("ab|cd|ef", "(?:(?:ab)|(?:cd)|(?:ef))");
         roundtrip("foo|bar|quux", "(?:(?:foo)|(?:bar)|(?:quux))");
     }
 
@@ -494,19 +496,19 @@ mod tests {
     #[test]
     fn regression_repetition_alternation() {
         let expr = Hir::concat(alloc::vec![
-            Hir::literal("x".as_bytes()),
+            Hir::literal("ab".as_bytes()),
             Hir::repetition(hir::Repetition {
                 min: 1,
                 max: None,
                 greedy: true,
                 hir: Box::new(Hir::alternation(alloc::vec![
-                    Hir::literal("a".as_bytes()),
-                    Hir::literal("b".as_bytes()),
+                    Hir::literal("cd".as_bytes()),
+                    Hir::literal("ef".as_bytes()),
                 ])),
             }),
-            Hir::literal("y".as_bytes()),
+            Hir::literal("gh".as_bytes()),
         ]);
-        assert_eq!(r"(?:x(?:a|b)+y)", expr.to_string());
+        assert_eq!(r"(?:(?:ab)(?:(?:cd)|(?:ef))+(?:gh))", expr.to_string());
 
         let expr = Hir::concat(alloc::vec![
             Hir::look(hir::Look::Start),
@@ -538,13 +540,13 @@ mod tests {
     #[test]
     fn regression_alternation_concat() {
         let expr = Hir::concat(alloc::vec![
-            Hir::literal("a".as_bytes()),
+            Hir::literal("ab".as_bytes()),
             Hir::alternation(alloc::vec![
-                Hir::literal("b".as_bytes()),
-                Hir::literal("c".as_bytes()),
+                Hir::literal("mn".as_bytes()),
+                Hir::literal("xy".as_bytes()),
             ]),
         ]);
-        assert_eq!(r"(?:a(?:b|c))", expr.to_string());
+        assert_eq!(r"(?:(?:ab)(?:(?:mn)|(?:xy)))", expr.to_string());
 
         let expr = Hir::concat(alloc::vec![
             Hir::look(hir::Look::Start),
