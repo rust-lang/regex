@@ -289,6 +289,12 @@ impl RegexSet {
     }
 }
 
+impl Default for RegexSet {
+    fn default() -> Self {
+        RegexSet::empty()
+    }
+}
+
 /// A set of matches returned by a regex set.
 #[derive(Clone, Debug)]
 pub struct SetMatches {
