@@ -125,6 +125,9 @@ impl<W: fmt::Write> Visitor for Writer<W> {
                 }
             }
             HirKind::Class(hir::Class::Unicode(ref cls)) => {
+                if cls.ranges().is_empty() {
+                    return self.wtr.write_str("[a&&b]");
+                }
                 self.wtr.write_str("[")?;
                 for range in cls.iter() {
                     if range.start() == range.end() {
@@ -143,6 +146,9 @@ impl<W: fmt::Write> Visitor for Writer<W> {
                 self.wtr.write_str("]")?;
             }
             HirKind::Class(hir::Class::Bytes(ref cls)) => {
+                if cls.ranges().is_empty() {
+                    return self.wtr.write_str("[a&&b]");
+                }
                 self.wtr.write_str("(?-u:[")?;
                 for range in cls.iter() {
                     if range.start() == range.end() {
@@ -359,6 +365,11 @@ mod tests {
         roundtrip_bytes(r"(?-u)[\[]", r"\[");
         roundtrip_bytes(r"(?-u)[Z-_]", r"(?-u:[Z-_])");
         roundtrip_bytes(r"(?-u)[Z-_--Z]", r"(?-u:[\[-_])");
+
+        // This tests that an empty character class is correctly roundtripped.
+        #[cfg(feature = "unicode-gencat")]
+        roundtrip(r"\P{any}", r"[a&&b]");
+        roundtrip_bytes(r"(?-u)[^\x00-\xFF]", r"[a&&b]");
     }
 
     #[test]
