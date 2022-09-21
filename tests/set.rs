@@ -65,3 +65,10 @@ fn len_and_empty() {
     assert_eq!(not_empty.len(), 2);
     assert!(!not_empty.is_empty());
 }
+
+#[test]
+fn default_set_is_empty() {
+    let set: regex::bytes::RegexSet = Default::default();
+    assert_eq!(set.len(), 0);
+    assert!(set.is_empty());
+}
