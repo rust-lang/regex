@@ -157,12 +157,15 @@ fn participating_captures_len() {
         ("(foo)(?:bar)", Some(1)),
         ("(foo(?:bar)+)(?:baz(boo))", Some(2)),
         ("(?P<bar>foo)(?:bar)(bal|loon)", Some(2)),
-        (r"(?:(\w)(\s))?", None),
         (r#"<(a)[^>]+href="([^"]+)"|<(img)[^>]+src="([^"]+)""#, Some(2)),
     ];
     for (test_regex, expected) in tests {
         let re = regex!(test_regex);
-        assert_eq!(re.participating_captures_len(), expected, "for regex {test_regex}");
+        assert_eq!(
+            re.participating_captures_len(),
+            expected,
+            "for regex {test_regex}"
+        );
     }
 }
 

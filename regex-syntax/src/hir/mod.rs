@@ -579,9 +579,11 @@ impl Hir {
                     let x = info.is_alternation_literal() && e.is_literal();
                     info.set_alternation_literal(x);
                 }
-                let mut capture_counts = exprs.iter().map(|e| e.info.static_capture_count);
+                let mut capture_counts =
+                    exprs.iter().map(|e| e.info.static_capture_count);
                 let first = capture_counts.next().unwrap_or(Some(0));
-                info.static_capture_count = capture_counts.fold(first, |a, b| if a == b { a } else { None });
+                info.static_capture_count = capture_counts
+                    .fold(first, |a, b| if a == b { a } else { None });
                 Hir { kind: HirKind::Alternation(exprs), info }
             }
         }
@@ -732,7 +734,7 @@ impl Hir {
     pub fn is_alternation_literal(&self) -> bool {
         self.info.is_alternation_literal()
     }
-    
+
     /// Returns the number of captures groups that would participate in a
     /// successful match of this expression. If this number can not be
     /// statically determined from the regex this function returns `None`.
