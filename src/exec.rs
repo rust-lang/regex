@@ -70,7 +70,7 @@ struct ExecReadOnly {
     /// A compiled program that is used in the NFA simulation and backtracking.
     /// It can be byte-based or Unicode codepoint based.
     ///
-    /// N.B. It is not possibly to make this byte-based from the public API.
+    /// N.B. It is not possible to make this byte-based from the public API.
     /// It is only used for testing byte based programs in the NFA simulations.
     nfa: Program,
     /// A compiled byte based program for DFA execution. This is only used
@@ -1310,6 +1310,13 @@ impl Exec {
     /// group position).
     pub fn capture_name_idx(&self) -> &Arc<HashMap<String, usize>> {
         &self.ro.nfa.capture_name_idx
+    }
+
+    /// Returns the number of participating captures that this regex will
+    /// return on a successful match. If this number can not be statically
+    /// determined from the regex this function returns `None`.
+    pub fn participating_captures_len(&self) -> Option<usize> {
+        self.ro.nfa.participating_captures_len
     }
 }
 

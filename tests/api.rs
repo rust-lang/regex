@@ -129,6 +129,44 @@ fn capture_index_lifetime() {
 }
 
 #[test]
+fn participating_captures_len() {
+    let tests = [
+        ("", Some(0)),
+        ("foo|bar", Some(0)),
+        ("(foo)|bar", None),
+        ("foo|(bar)", None),
+        ("(foo|bar)", Some(1)),
+        ("(a|b|c|d|e|f)", Some(1)),
+        ("(a)|(b)|(c)|(d)|(e)|(f)", Some(1)),
+        ("(a)(b)|(c)(d)|(e)(f)", Some(2)),
+        ("(a)(b)(c)|(d)(e)(f)", Some(3)),
+        ("(a)(b)(c)(d)(e)(f)", Some(6)),
+        ("(a)(b)(extra)|(a)(b)()", Some(3)),
+        ("(a)(b)((?:extra)?)", Some(3)),
+        ("(a)(b)(extra)?", None),
+        ("(foo)|(bar)", Some(1)),
+        ("(foo)(bar)", Some(2)),
+        ("(foo)+(bar)", Some(2)),
+        ("(foo)*(bar)", None),
+        ("(foo)?{0}", Some(0)),
+        ("(foo)?{1}", None),
+        ("(foo){1}", Some(1)),
+        ("(foo){1,}", Some(1)),
+        ("(foo){1,}?", Some(1)),
+        ("(foo){0,}", None),
+        ("(foo)(?:bar)", Some(1)),
+        ("(foo(?:bar)+)(?:baz(boo))", Some(2)),
+        ("(?P<bar>foo)(?:bar)(bal|loon)", Some(2)),
+        (r"(?:(\w)(\s))?", None),
+        (r#"<(a)[^>]+href="([^"]+)"|<(img)[^>]+src="([^"]+)""#, Some(2)),
+    ];
+    for (test_regex, expected) in tests {
+        let re = regex!(test_regex);
+        assert_eq!(re.participating_captures_len(), expected, "for regex {test_regex}");
+    }
+}
+
+#[test]
 fn capture_misc() {
     let re = regex!(r"(.)(?P<a>a)?(.)(?P<b>.)");
     let cap = re.captures(t!("abc")).unwrap();

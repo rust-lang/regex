@@ -666,6 +666,13 @@ impl Regex {
     pub fn captures_len(&self) -> usize {
         self.0.capture_names().len()
     }
+    
+    /// Returns the number of participating captures that this regex will
+    /// return on a successful match. If this number can not be statically
+    /// determined from the regex this function returns `None`.
+    pub fn participating_captures_len(&self) -> Option<usize> {
+        self.0.participating_captures_len()
+    }
 
     /// Returns an empty set of capture locations that can be reused in
     /// multiple calls to `captures_read` or `captures_read_at`.

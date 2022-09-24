@@ -25,6 +25,9 @@ pub struct Program {
     /// The ordered sequence of all capture groups extracted from the AST.
     /// Unnamed groups are `None`.
     pub captures: Vec<Option<String>>,
+    /// The number of capture groups that participate in a successful match.
+    /// None if this can't be determined statically at compile time.
+    pub participating_captures_len: Option<usize>,
     /// Pointers to all named capture groups into `captures`.
     pub capture_name_idx: Arc<HashMap<String, usize>>,
     /// A pointer to the start instruction. This can vary depending on how
@@ -82,6 +85,7 @@ impl Program {
             insts: vec![],
             matches: vec![],
             captures: vec![],
+            participating_captures_len: None,
             capture_name_idx: Arc::new(HashMap::new()),
             start: 0,
             byte_classes: vec![0; 256],

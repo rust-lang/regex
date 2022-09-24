@@ -149,6 +149,7 @@ impl Compiler {
             self.compiled.start = dotstar_patch.entry;
         }
         self.compiled.captures = vec![None];
+        self.compiled.participating_captures_len = expr.participating_captures_len();
         let patch =
             self.c_capture(0, expr)?.unwrap_or_else(|| self.next_inst());
         if self.compiled.needs_dotstar() {

@@ -243,6 +243,7 @@ impl Hir {
         info.set_match_empty(true);
         info.set_literal(false);
         info.set_alternation_literal(false);
+        info.static_capture_count = Some(0);
         Hir { kind: HirKind::Empty, info }
     }
 
@@ -268,6 +269,7 @@ impl Hir {
         info.set_match_empty(false);
         info.set_literal(true);
         info.set_alternation_literal(true);
+        info.static_capture_count = Some(0);
         Hir { kind: HirKind::Literal(lit), info }
     }
 
@@ -285,6 +287,7 @@ impl Hir {
         info.set_match_empty(false);
         info.set_literal(false);
         info.set_alternation_literal(false);
+        info.static_capture_count = Some(0);
         Hir { kind: HirKind::Class(class), info }
     }
 
@@ -318,6 +321,7 @@ impl Hir {
         if let Anchor::EndLine = anchor {
             info.set_line_anchored_end(true);
         }
+        info.static_capture_count = Some(0);
         Hir { kind: HirKind::Anchor(anchor), info }
     }
 
@@ -345,6 +349,7 @@ impl Hir {
         if let WordBoundary::AsciiNegate = word_boundary {
             info.set_always_utf8(false);
         }
+        info.static_capture_count = Some(0);
         Hir { kind: HirKind::WordBoundary(word_boundary), info }
     }
 
@@ -372,6 +377,28 @@ impl Hir {
         info.set_match_empty(rep.is_match_empty() || rep.hir.is_match_empty());
         info.set_literal(false);
         info.set_alternation_literal(false);
+        info.static_capture_count = {
+            use RepetitionRange::{AtLeast, Bounded, Exactly};
+            match (&rep.kind, rep.hir.info.static_capture_count) {
+                // Always zero.
+                (_, Some(0)) => Some(0),
+                (RepetitionKind::Range(Exactly(0)), _) => Some(0),
+                (RepetitionKind::Range(Bounded(_, 0)), _) => Some(0),
+
+                // Impossible to know statically.
+                (_, None) => None,
+                (RepetitionKind::ZeroOrOne, _) => None,
+                (RepetitionKind::ZeroOrMore, _) => None,
+                (RepetitionKind::Range(AtLeast(0)), _) => None,
+                (RepetitionKind::Range(Bounded(0, _)), _) => None,
+
+                // Guaranteed to be static.
+                (RepetitionKind::OneOrMore, Some(n)) => Some(n),
+                (RepetitionKind::Range(Exactly(_)), Some(n)) => Some(n),
+                (RepetitionKind::Range(AtLeast(_)), Some(n)) => Some(n),
+                (RepetitionKind::Range(Bounded(_, _)), Some(n)) => Some(n),
+            }
+        };
         Hir { kind: HirKind::Repetition(rep), info }
     }
 
@@ -389,6 +416,12 @@ impl Hir {
         info.set_match_empty(group.hir.is_match_empty());
         info.set_literal(false);
         info.set_alternation_literal(false);
+        info.static_capture_count = match group.kind {
+            GroupKind::NonCapturing { .. } => {
+                group.hir.info.static_capture_count
+            }
+            _ => group.hir.info.static_capture_count.map(|n| n + 1),
+        };
         Hir { kind: HirKind::Group(group), info }
     }
 
@@ -480,6 +513,10 @@ impl Hir {
                         })
                         .any(|e| e.is_line_anchored_end()),
                 );
+                info.static_capture_count =
+                    exprs.iter().fold(Some(0), |cnt, e| {
+                        Some(cnt? + e.info.static_capture_count?)
+                    });
                 Hir { kind: HirKind::Concat(exprs), info }
             }
         }
@@ -542,6 +579,9 @@ impl Hir {
                     let x = info.is_alternation_literal() && e.is_literal();
                     info.set_alternation_literal(x);
                 }
+                let mut capture_counts = exprs.iter().map(|e| e.info.static_capture_count);
+                let first = capture_counts.next().unwrap_or(Some(0));
+                info.static_capture_count = capture_counts.fold(first, |a, b| if a == b { a } else { None });
                 Hir { kind: HirKind::Alternation(exprs), info }
             }
         }
@@ -691,6 +731,13 @@ impl Hir {
     /// are not (even though that contain sub-expressions that are literals).
     pub fn is_alternation_literal(&self) -> bool {
         self.info.is_alternation_literal()
+    }
+    
+    /// Returns the number of captures groups that would participate in a
+    /// successful match of this expression. If this number can not be
+    /// statically determined from the regex this function returns `None`.
+    pub fn participating_captures_len(&self) -> Option<usize> {
+        self.info.static_capture_count.map(|c| c as usize)
     }
 }
 
@@ -1484,6 +1531,11 @@ struct HirInfo {
     /// If more attributes need to be added, it is OK to increase the size of
     /// this as appropriate.
     bools: u16,
+
+    /// How many capture groups this HIR expression deterministically fills.
+    /// If this number could depend on the input (e.g. an Alternation where the
+    /// two branches have a different number of capture groups), this is None.
+    static_capture_count: Option<u32>,
 }
 
 // A simple macro for defining bitfield accessors/mutators.
@@ -1505,7 +1557,7 @@ macro_rules! define_bool {
 
 impl HirInfo {
     fn new() -> HirInfo {
-        HirInfo { bools: 0 }
+        HirInfo { bools: 0, static_capture_count: None }
     }
 
     define_bool!(0, is_always_utf8, set_always_utf8);
