@@ -246,6 +246,7 @@ impl Hir {
     /// Returns an empty HIR expression.
     ///
     /// An empty HIR expression always matches, including the empty string.
+    #[inline]
     pub fn empty() -> Hir {
         let props = Properties::empty();
         Hir { kind: HirKind::Empty, props }
@@ -265,6 +266,7 @@ impl Hir {
     /// because empty character classes can be spelled in the concrete syntax
     /// of a regex (e.g., `\P{any}` or `(?-u:[^\x00-\xFF])` or `[a&&b]`), but
     /// empty alternations cannot.
+    #[inline]
     pub fn fail() -> Hir {
         let class = Class::Bytes(ClassBytes::empty());
         let props = Properties::class(&class);
@@ -279,6 +281,7 @@ impl Hir {
     /// If the given literal has a `Byte` variant with an ASCII byte, then this
     /// method panics. This enforces the invariant that `Byte` variants are
     /// only used to express matching of invalid UTF-8.
+    #[inline]
     pub fn literal<B: Into<Box<[u8]>>>(lit: B) -> Hir {
         let bytes = lit.into();
         if bytes.is_empty() {
@@ -291,6 +294,7 @@ impl Hir {
     }
 
     /// Creates a class HIR expression.
+    #[inline]
     pub fn class(class: Class) -> Hir {
         if class.is_empty() {
             return Hir::fail();
@@ -302,12 +306,14 @@ impl Hir {
     }
 
     /// Creates a look-around assertion HIR expression.
+    #[inline]
     pub fn look(look: Look) -> Hir {
         let props = Properties::look(look);
         Hir { kind: HirKind::Look(look), props }
     }
 
     /// Creates a repetition HIR expression.
+    #[inline]
     pub fn repetition(rep: Repetition) -> Hir {
         // The regex 'a{0}' is always equivalent to the empty regex. This is
         // true even when 'a' is an expression that never matches anything
@@ -324,6 +330,7 @@ impl Hir {
     }
 
     /// Creates a group HIR expression.
+    #[inline]
     pub fn group(group: Group) -> Hir {
         let props = Properties::group(&group);
         Hir { kind: HirKind::Group(group), props }
@@ -375,6 +382,8 @@ impl Hir {
                         }
                     }
                 }
+                // We can just skip empty HIRs.
+                HirKind::Empty => {}
                 kind => {
                     if let Some(prior_bytes) = prior_lit.take() {
                         new.push(Hir::literal(prior_bytes));
@@ -452,6 +461,7 @@ impl Hir {
     /// Note that this is a convenience routine for constructing the correct
     /// character class based on the value of `Dot`. There is no explicit "dot"
     /// HIR value. It is just an abbreviation for a common character class.
+    #[inline]
     pub fn dot(dot: Dot) -> Hir {
         match dot {
             Dot::AnyChar => {
