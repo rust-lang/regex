@@ -12,7 +12,7 @@ use crate::literal::LiteralSearcher;
 /// `InstPtr` represents the index of an instruction in a regex program.
 pub type InstPtr = usize;
 
-/// Program is a sequence of instructions and various facts about thos
+/// Program is a sequence of instructions and various facts about those
 /// instructions.
 #[derive(Clone)]
 pub struct Program {
