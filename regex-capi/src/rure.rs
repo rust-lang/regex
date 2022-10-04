@@ -6,7 +6,7 @@ use std::slice;
 use std::str;
 
 use libc::{c_char, size_t};
-use regex::bytes;
+use regex_old::bytes;
 
 use crate::error::{Error, ErrorKind};
 
@@ -609,7 +609,7 @@ fn rure_escape(
             return ptr::null();
         },
     };
-    let esc_pat = regex::escape(str_pat);
+    let esc_pat = regex_old::escape(str_pat);
     let c_esc_pat = match CString::new(esc_pat) {
         Ok(val) => val,
         Err(err) => unsafe {

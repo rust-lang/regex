@@ -1,7 +1,5 @@
 #![cfg_attr(feature = "pattern", feature(pattern))]
 
-use regex;
-
 // Due to macro scoping rules, this definition only applies for the modules
 // defined below. Effectively, it allows us to use the same tests for both
 // native and dynamic regexes.
@@ -11,7 +9,7 @@ use regex;
 // regex and the input. Other dynamic tests explicitly set the engine to use.
 macro_rules! regex_new {
     ($re:expr) => {{
-        use regex::Regex;
+        use regex_old::Regex;
         Regex::new($re)
     }};
 }
@@ -24,7 +22,7 @@ macro_rules! regex {
 
 macro_rules! regex_set_new {
     ($re:expr) => {{
-        use regex::RegexSet;
+        use regex_old::RegexSet;
         RegexSet::new($re)
     }};
 }
@@ -63,26 +61,26 @@ mod word_boundary_unicode;
 
 #[test]
 fn disallow_non_utf8() {
-    assert!(regex::Regex::new(r"(?-u)\xFF").is_err());
-    assert!(regex::Regex::new(r"(?-u).").is_err());
-    assert!(regex::Regex::new(r"(?-u)[\xFF]").is_err());
-    assert!(regex::Regex::new(r"(?-u)☃").is_err());
+    assert!(regex_old::Regex::new(r"(?-u)\xFF").is_err());
+    assert!(regex_old::Regex::new(r"(?-u).").is_err());
+    assert!(regex_old::Regex::new(r"(?-u)[\xFF]").is_err());
+    assert!(regex_old::Regex::new(r"(?-u)☃").is_err());
 }
 
 #[test]
 fn disallow_octal() {
-    assert!(regex::Regex::new(r"\0").is_err());
+    assert!(regex_old::Regex::new(r"\0").is_err());
 }
 
 #[test]
 fn allow_octal() {
-    assert!(regex::RegexBuilder::new(r"\0").octal(true).build().is_ok());
+    assert!(regex_old::RegexBuilder::new(r"\0").octal(true).build().is_ok());
 }
 
 #[test]
 fn oibits() {
-    use regex::bytes;
-    use regex::{Regex, RegexBuilder, RegexSet, RegexSetBuilder};
+    use regex_old::bytes;
+    use regex_old::{Regex, RegexBuilder, RegexSet, RegexSetBuilder};
     use std::panic::{RefUnwindSafe, UnwindSafe};
 
     fn assert_send<T: Send>() {}
@@ -130,7 +128,7 @@ fn oibits() {
 // See: https://github.com/rust-lang/regex/issues/568
 #[test]
 fn oibits_regression() {
-    use regex::Regex;
+    use regex_old::Regex;
     use std::panic;
 
     let _ = panic::catch_unwind(|| Regex::new("a").unwrap());
@@ -142,8 +140,8 @@ fn oibits_regression() {
 fn regex_is_reasonably_small() {
     use std::mem::size_of;
 
-    use regex::bytes;
-    use regex::{Regex, RegexSet};
+    use regex_old::bytes;
+    use regex_old::{Regex, RegexSet};
 
     assert_eq!(16, size_of::<Regex>());
     assert_eq!(16, size_of::<RegexSet>());
@@ -187,7 +185,7 @@ fn regex_is_reasonably_small() {
 // check that we are properly returning an error at some point.
 #[test]
 fn big_empty_regex_fails() {
-    use regex::Regex;
+    use regex_old::Regex;
 
     let result = Regex::new("(?:){4294967295}");
     assert!(result.is_err());
@@ -196,7 +194,7 @@ fn big_empty_regex_fails() {
 // Below is a "billion laughs" variant of the previous test case.
 #[test]
 fn big_empty_reps_chain_regex_fails() {
-    use regex::Regex;
+    use regex_old::Regex;
 
     let result = Regex::new("(?:){64}{64}{64}{64}{64}{64}");
     assert!(result.is_err());
@@ -206,7 +204,7 @@ fn big_empty_reps_chain_regex_fails() {
 // introduced.
 #[test]
 fn big_zero_reps_regex_fails() {
-    use regex::Regex;
+    use regex_old::Regex;
 
     let result = Regex::new(r"x{0}{4294967295}");
     assert!(result.is_err());
@@ -215,7 +213,7 @@ fn big_zero_reps_regex_fails() {
 // Testing another case for completeness.
 #[test]
 fn empty_alt_regex_fails() {
-    use regex::Regex;
+    use regex_old::Regex;
 
     let result = Regex::new(r"(?:|){4294967295}");
     assert!(result.is_err());

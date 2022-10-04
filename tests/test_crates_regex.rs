@@ -5,7 +5,7 @@
  * (in `tests/crates_regex.rs`).
 #[test]
 fn word_boundary_backtracking_default_mismatch() {
-    use regex::internal::ExecBuilder;
+    use regex_old::internal::ExecBuilder;
 
     let backtrack_re = ExecBuilder::new(r"\b")
         .bounded_backtracking()

@@ -85,7 +85,7 @@ matiter!(
 // See https://github.com/rust-lang/regex/issues/303
 #[test]
 fn negated_full_byte_range() {
-    assert!(::regex::bytes::Regex::new(r#"(?-u)[^\x00-\xff]"#).is_err());
+    assert!(::regex_old::bytes::Regex::new(r#"(?-u)[^\x00-\xff]"#).is_err());
 }
 
 matiter!(word_boundary_ascii1, r"(?-u:\B)x(?-u:\B)", "áxβ");

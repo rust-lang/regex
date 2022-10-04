@@ -19,8 +19,8 @@ libc = "0.2"
 onig = { version = "3", optional = true }
 libpcre-sys = { version = "0.2", optional = true }
 memmap = "0.6.2"
-regex = { version = "1", path = ".." }
-regex-syntax = { version = "0.6", path = "../regex-syntax" }
+regex-old = { version = "1", path = ".." }
+regex-syntax-old = { version = "0.6", path = "../regex-syntax" }
 serde = { version = "1", features = ["derive"] }
 cfg-if = "0.1"
 

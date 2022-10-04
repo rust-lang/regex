@@ -1546,7 +1546,7 @@ impl ProgramCacheInner {
 /// literals, and if so, returns them. Otherwise, this returns None.
 #[cfg(feature = "perf-literal")]
 fn alternation_literals(expr: &Hir) -> Option<Vec<Vec<u8>>> {
-    use regex_syntax::hir::{HirKind, Literal};
+    use regex_syntax_old::hir::{HirKind, Literal};
 
     // This is pretty hacky, but basically, if `is_alternation_literal` is
     // true, then we can make several assumptions about the structure of our

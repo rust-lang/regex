@@ -14,7 +14,7 @@ fuzz_target!(|data: &[u8]| {
         let char_index = data.char_indices().nth(split_off_point);
         if let Some((char_index, _)) = char_index {
             let (pattern, input) = data.split_at(char_index);
-            if let Ok(re) = regex::Regex::new(pattern) {
+            if let Ok(re) = regex_old::Regex::new(pattern) {
                 re.is_match(input);
             }
         }

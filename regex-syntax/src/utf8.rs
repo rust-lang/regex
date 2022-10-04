@@ -264,7 +264,7 @@ impl fmt::Debug for Utf8Range {
 /// scalar values.
 ///
 /// ```rust
-/// use regex_syntax::utf8::{Utf8Sequences, Utf8Sequence};
+/// use regex_syntax_old::utf8::{Utf8Sequences, Utf8Sequence};
 ///
 /// fn matches(seqs: &[Utf8Sequence], bytes: &[u8]) -> bool {
 ///     for range in seqs {

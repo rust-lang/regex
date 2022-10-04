@@ -16,7 +16,7 @@ use std::thread;
 
 macro_rules! regex {
     ($re:expr) => {
-        ::regex::Regex::new($re).unwrap()
+        ::regex_old::Regex::new($re).unwrap()
     };
 }
 

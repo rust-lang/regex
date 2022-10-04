@@ -1,5 +1,5 @@
 [package]
-name = "regex"
+name = "regex-old"
 version = "1.7.1"  #:version
 authors = ["The Rust Project Developers"]
 license = "MIT OR Apache-2.0"
@@ -32,7 +32,7 @@ doctest = false
 # Features are documented in the "Crate features" section of the crate docs:
 # https://docs.rs/regex/*/#crate-features
 [features]
-default = ["std", "perf", "unicode", "regex-syntax/default"]
+default = ["std", "perf", "unicode", "regex-syntax-old/default"]
 
 # ECOSYSTEM FEATURES
 
@@ -75,22 +75,22 @@ unicode = [
   "unicode-perl",
   "unicode-script",
   "unicode-segment",
-  "regex-syntax/unicode",
+  "regex-syntax-old/unicode",
 ]
 # Enables use of the `Age` property, e.g., `\p{Age:3.0}`.
-unicode-age = ["regex-syntax/unicode-age"]
+unicode-age = ["regex-syntax-old/unicode-age"]
 # Enables use of a smattering of boolean properties, e.g., `\p{Emoji}`.
-unicode-bool = ["regex-syntax/unicode-bool"]
+unicode-bool = ["regex-syntax-old/unicode-bool"]
 # Enables Unicode-aware case insensitive matching, e.g., `(?i)β`.
-unicode-case = ["regex-syntax/unicode-case"]
+unicode-case = ["regex-syntax-old/unicode-case"]
 # Enables Unicode general categories, e.g., `\p{Letter}` or `\pL`.
-unicode-gencat = ["regex-syntax/unicode-gencat"]
+unicode-gencat = ["regex-syntax-old/unicode-gencat"]
 # Enables Unicode-aware Perl classes corresponding to `\w`, `\s` and `\d`.
-unicode-perl = ["regex-syntax/unicode-perl"]
+unicode-perl = ["regex-syntax-old/unicode-perl"]
 # Enables Unicode scripts and script extensions, e.g., `\p{Greek}`.
-unicode-script = ["regex-syntax/unicode-script"]
+unicode-script = ["regex-syntax-old/unicode-script"]
 # Enables Unicode segmentation properties, e.g., `\p{gcb=Extend}`.
-unicode-segment = ["regex-syntax/unicode-segment"]
+unicode-segment = ["regex-syntax-old/unicode-segment"]
 
 
 # UNSTABLE FEATURES (requires Rust nightly)
@@ -116,7 +116,7 @@ version = "2.4.0"
 optional = true
 
 # For parsing regular expressions.
-[dependencies.regex-syntax]
+[dependencies.regex-syntax-old]
 path = "regex-syntax"
 version = "0.6.27"
 default-features = false

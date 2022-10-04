@@ -2,7 +2,7 @@
 
 macro_rules! regex_new {
     ($re:expr) => {{
-        use regex::internal::ExecBuilder;
+        use regex_old::internal::ExecBuilder;
         ExecBuilder::new($re)
             .bounded_backtracking()
             .build()
@@ -18,7 +18,7 @@ macro_rules! regex {
 
 macro_rules! regex_set_new {
     ($re:expr) => {{
-        use regex::internal::ExecBuilder;
+        use regex_old::internal::ExecBuilder;
         ExecBuilder::new_many($re)
             .bounded_backtracking()
             .build()

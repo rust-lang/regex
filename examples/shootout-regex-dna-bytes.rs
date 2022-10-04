@@ -11,7 +11,7 @@ use std::thread;
 
 macro_rules! regex {
     ($re:expr) => {
-        ::regex::bytes::Regex::new($re).unwrap()
+        ::regex_old::bytes::Regex::new($re).unwrap()
     };
 }
 

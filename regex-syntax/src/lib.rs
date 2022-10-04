@@ -37,8 +37,8 @@ convert your pattern to an `Ast` and then convert the `Ast` to an `Hir`.
 This example shows how to parse a pattern string into its HIR:
 
 ```
-use regex_syntax::Parser;
-use regex_syntax::hir::{self, Hir};
+use regex_syntax_old::Parser;
+use regex_syntax_old::hir::{self, Hir};
 
 let hir = Parser::new().parse("a|b").unwrap();
 assert_eq!(hir, Hir::alternation(vec![

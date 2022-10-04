@@ -1,13 +1,13 @@
 macro_rules! regex_new {
     ($re:expr) => {{
-        use regex::bytes::Regex;
+        use regex_old::bytes::Regex;
         Regex::new($re)
     }};
 }
 
 macro_rules! regex_set_new {
     ($res:expr) => {{
-        use regex::bytes::RegexSet;
+        use regex_old::bytes::RegexSet;
         RegexSet::new($res)
     }};
 }

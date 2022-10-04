@@ -1,4 +1,4 @@
-use regex::internal::ExecBuilder;
+use regex_old::internal::ExecBuilder;
 
 /// Given a regex, check if all of the backends produce the same
 /// results on a number of different inputs.
@@ -232,7 +232,7 @@ macro_rules! checker {
     }; // rule case
 } // macro_rules!
 
-checker!(string_checker, ::regex::Regex, |gen| String::arbitrary(gen));
-checker!(bytes_checker, ::regex::bytes::Regex, |gen| Vec::<u8>::arbitrary(
+checker!(string_checker, ::regex_old::Regex, |gen| String::arbitrary(gen));
+checker!(bytes_checker, ::regex_old::bytes::Regex, |gen| Vec::<u8>::arbitrary(
     gen
 ));

@@ -1,4 +1,4 @@
-use regex_syntax::Expr;
+use regex_syntax_old::Expr;
 use test::Bencher;
 
 #[bench]

@@ -70,7 +70,7 @@ $(#[$doc_regexset_example])*
 /// independently compiled patterns:
 ///
 /// ```rust
-/// use regex::{Regex, RegexSet};
+/// use regex_old::{Regex, RegexSet};
 ///
 /// let patterns = ["foo", "bar"];
 /// // Both patterns will match different ranges of this string.
@@ -119,7 +119,7 @@ impl RegexSet {
     /// Create a new regex set from an iterator of strings:
     ///
     /// ```rust
-    /// # use regex::RegexSet;
+    /// # use regex_old::RegexSet;
     /// let set = RegexSet::new(&[r"\w+", r"\d+"]).unwrap();
     /// assert!(set.is_match("foo"));
     /// ```
@@ -133,7 +133,7 @@ impl RegexSet {
     /// # Example
     ///
     /// ```rust
-    /// # use regex::RegexSet;
+    /// # use regex_old::RegexSet;
     /// let set = RegexSet::empty();
     /// assert!(set.is_empty());
     /// ```
@@ -160,7 +160,7 @@ impl RegexSet {
     /// Tests whether a set matches some text:
     ///
     /// ```rust
-    /// # use regex::RegexSet;
+    /// # use regex_old::RegexSet;
     /// let set = RegexSet::new(&[r"\w+", r"\d+"]).unwrap();
     /// assert!(set.is_match("foo"));
     /// assert!(!set.is_match("☃"));
@@ -198,7 +198,7 @@ impl RegexSet {
     /// Tests which regular expressions match the given text:
     ///
     /// ```rust
-    /// # use regex::RegexSet;
+    /// # use regex_old::RegexSet;
     /// let set = RegexSet::new(&[
     ///     r"\w+",
     ///     r"\d+",
@@ -267,7 +267,7 @@ impl RegexSet {
     /// # Example
     ///
     /// ```rust
-    /// # use regex::RegexSet;
+    /// # use regex_old::RegexSet;
     /// let set = RegexSet::new(&[
     ///     r"\w+",
     ///     r"\d+",
@@ -454,7 +454,7 @@ define_set! {
     &str,
     as_bytes_str,
 /// ```rust
-/// # use regex::RegexSet;
+/// # use regex_old::RegexSet;
 /// let set = RegexSet::new(&[
 ///     r"[a-z]+@[a-z]+\.(com|org|net)",
 ///     r"[a-z]+\.(com|org|net)",
@@ -483,7 +483,7 @@ define_set! {
     &[u8],
     as_bytes_bytes,
 /// ```rust
-/// # use regex::bytes::RegexSet;
+/// # use regex_old::bytes::RegexSet;
 /// let set = RegexSet::new(&[
 ///     r"[a-z]+@[a-z]+\.(com|org|net)",
 ///     r"[a-z]+\.(com|org|net)",

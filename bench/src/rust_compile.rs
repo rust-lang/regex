@@ -1,7 +1,7 @@
-use regex_syntax::Parser;
+use regex_syntax_old::Parser;
 use test::Bencher;
 
-use regex::internal::Compiler;
+use regex_old::internal::Compiler;
 
 #[bench]
 fn compile_simple(b: &mut Bencher) {

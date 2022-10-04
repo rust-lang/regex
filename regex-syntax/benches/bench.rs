@@ -2,7 +2,7 @@
 
 extern crate test;
 
-use regex_syntax::Parser;
+use regex_syntax_old::Parser;
 use test::Bencher;
 
 #[bench]

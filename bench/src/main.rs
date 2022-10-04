@@ -116,14 +116,14 @@ fn count_re2(pat: &str, haystack: &str) -> usize {
 nada!("re-rust", count_rust);
 #[cfg(feature = "re-rust")]
 fn count_rust(pat: &str, haystack: &str) -> usize {
-    use regex::Regex;
+    use regex_old::Regex;
     Regex::new(pat).unwrap().find_iter(haystack).count()
 }
 
 nada!("re-rust-bytes", count_rust_bytes);
 #[cfg(feature = "re-rust-bytes")]
 fn count_rust_bytes(pat: &str, haystack: &str) -> usize {
-    use regex::bytes::Regex;
+    use regex_old::bytes::Regex;
     Regex::new(pat).unwrap().find_iter(haystack.as_bytes()).count()
 }
 

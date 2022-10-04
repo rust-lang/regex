@@ -19,4 +19,4 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 
 [dependencies]
 libc = "0.2"
-regex = { version = "1", path = ".." }
+regex-old = { version = "1", path = ".." }

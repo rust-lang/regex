@@ -16,7 +16,7 @@ pub struct Error {
 pub enum ErrorKind {
     None,
     Str(str::Utf8Error),
-    Regex(regex::Error),
+    Regex(regex_old::Error),
     Nul(ffi::NulError),
 }
 

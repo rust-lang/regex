@@ -4,9 +4,9 @@ use std::process;
 use std::result;
 
 use docopt::Docopt;
-use regex::internal::{Compiler, LiteralSearcher};
-use regex_syntax::hir::literal::Literals;
-use regex_syntax::hir::Hir;
+use regex_old::internal::{Compiler, LiteralSearcher};
+use regex_syntax_old::hir::literal::Literals;
+use regex_syntax_old::hir::Hir;
 
 const USAGE: &'static str = "
 Usage:
@@ -120,7 +120,7 @@ fn run(args: &Args) -> Result<()> {
 }
 
 fn cmd_ast(args: &Args) -> Result<()> {
-    use regex_syntax::ast::parse::Parser;
+    use regex_syntax_old::ast::parse::Parser;
 
     let mut parser = Parser::new();
     let ast = parser.parse(&args.arg_pattern)?;
@@ -129,7 +129,7 @@ fn cmd_ast(args: &Args) -> Result<()> {
 }
 
 fn cmd_hir(args: &Args) -> Result<()> {
-    use regex_syntax::ParserBuilder;
+    use regex_syntax_old::ParserBuilder;
 
     let mut parser = ParserBuilder::new().allow_invalid_utf8(false).build();
     let hir = parser.parse(&args.arg_pattern)?;
@@ -218,9 +218,9 @@ fn cmd_compile(args: &Args) -> Result<()> {
 }
 
 fn cmd_utf8_ranges(args: &Args) -> Result<()> {
-    use regex_syntax::hir::{self, HirKind};
-    use regex_syntax::utf8::Utf8Sequences;
-    use regex_syntax::ParserBuilder;
+    use regex_syntax_old::hir::{self, HirKind};
+    use regex_syntax_old::utf8::Utf8Sequences;
+    use regex_syntax_old::ParserBuilder;
 
     let hir = ParserBuilder::new()
         .build()
@@ -251,9 +251,9 @@ fn cmd_utf8_ranges(args: &Args) -> Result<()> {
 }
 
 fn cmd_utf8_ranges_rev(args: &Args) -> Result<()> {
-    use regex_syntax::hir::{self, HirKind};
-    use regex_syntax::utf8::Utf8Sequences;
-    use regex_syntax::ParserBuilder;
+    use regex_syntax_old::hir::{self, HirKind};
+    use regex_syntax_old::utf8::Utf8Sequences;
+    use regex_syntax_old::ParserBuilder;
 
     let hir = ParserBuilder::new()
         .build()
@@ -327,7 +327,7 @@ impl Args {
 }
 
 fn parse(re: &str) -> Result<Hir> {
-    use regex_syntax::ParserBuilder;
+    use regex_syntax_old::ParserBuilder;
     ParserBuilder::new()
         .allow_invalid_utf8(true)
         .build()

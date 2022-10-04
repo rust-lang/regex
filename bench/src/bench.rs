@@ -14,9 +14,9 @@ cfg_if! {
     } else if #[cfg(feature = "re-onig")] {
         pub use ffi::onig::Regex;
     } else if #[cfg(any(feature = "re-rust"))] {
-        pub use regex::{Regex, RegexSet};
+        pub use regex_old::{Regex, RegexSet};
     } else if #[cfg(feature = "re-rust-bytes")] {
-        pub use regex::bytes::{Regex, RegexSet};
+        pub use regex_old::bytes::{Regex, RegexSet};
     } else if #[cfg(feature = "re-re2")] {
         pub use ffi::re2::Regex;
     } else if #[cfg(feature = "re-pcre2")] {

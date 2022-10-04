@@ -164,7 +164,7 @@ fn dfa_handles_pathological_case() {
 
 #[test]
 fn nest_limit_makes_it_parse() {
-    use regex::RegexBuilder;
+    use regex_old::RegexBuilder;
 
     RegexBuilder::new(
         r#"(?-u)

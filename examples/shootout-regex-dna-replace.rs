@@ -2,7 +2,7 @@ use std::io::{self, Read};
 
 macro_rules! regex {
     ($re:expr) => {{
-        use regex::internal::ExecBuilder;
+        use regex_old::internal::ExecBuilder;
         ExecBuilder::new($re).build().unwrap().into_regex()
     }};
 }

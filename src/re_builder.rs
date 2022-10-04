@@ -295,8 +295,8 @@ macro_rules! define_set_builder {
                 /// anything when `s` is set and matches anything except for new line when
                 /// it is not set (the default).
                 ///
-                /// N.B. "matches anything" means "any byte" for `regex::bytes::RegexSet`
-                /// expressions and means "any Unicode scalar value" for `regex::RegexSet`
+                /// N.B. "matches anything" means "any byte" for `regex_old::bytes::RegexSet`
+                /// expressions and means "any Unicode scalar value" for `regex_old::RegexSet`
                 /// expressions.
                 pub fn dot_matches_new_line(
                     &mut self,

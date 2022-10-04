@@ -2,7 +2,7 @@
 
 macro_rules! regex_new {
     ($re:expr) => {{
-        use regex::internal::ExecBuilder;
+        use regex_old::internal::ExecBuilder;
         ExecBuilder::new($re).nfa().build().map(|e| e.into_regex())
     }};
 }
@@ -15,7 +15,7 @@ macro_rules! regex {
 
 macro_rules! regex_set_new {
     ($re:expr) => {{
-        use regex::internal::ExecBuilder;
+        use regex_old::internal::ExecBuilder;
         ExecBuilder::new_many($re).nfa().build().map(|e| e.into_regex_set())
     }};
 }

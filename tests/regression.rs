@@ -196,7 +196,7 @@ mat!(
 #[test]
 #[cfg(feature = "unicode-perl")]
 fn regression_nfa_stops1() {
-    let re = ::regex::bytes::Regex::new(r"\bs(?:[ab])").unwrap();
+    let re = ::regex_old::bytes::Regex::new(r"\bs(?:[ab])").unwrap();
     assert_eq!(0, re.find_iter(b"s\xE4").count());
 }
 
