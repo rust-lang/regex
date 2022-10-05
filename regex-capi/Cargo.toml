@@ -15,7 +15,7 @@ edition = "2018"
 
 [lib]
 name = "rure"
-crate-type = ["staticlib", "cdylib"]
+crate-type = ["staticlib", "cdylib", "rlib"]
 
 [dependencies]
 libc = "0.2"
