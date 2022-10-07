@@ -6,7 +6,7 @@ mod imp;
 #[allow(missing_docs)]
 #[cfg(not(feature = "perf-literal"))]
 mod imp {
-    use regex_syntax::hir::literal::Literals;
+    use regex_syntax::hir::literal::Seq;
 
     #[derive(Clone, Debug)]
     pub struct LiteralSearcher(());
@@ -16,11 +16,11 @@ mod imp {
             LiteralSearcher(())
         }
 
-        pub fn prefixes(_: Literals) -> Self {
+        pub fn prefixes(_: Seq) -> Self {
             LiteralSearcher(())
         }
 
-        pub fn suffixes(_: Literals) -> Self {
+        pub fn suffixes(_: Seq) -> Self {
             LiteralSearcher(())
         }
 
