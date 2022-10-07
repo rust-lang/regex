@@ -2,7 +2,7 @@ use std::mem;
 
 use aho_corasick::{self, packed, AhoCorasick, AhoCorasickBuilder};
 use memchr::{memchr, memchr2, memchr3, memmem};
-use regex_syntax::hir::literal::{Literal, Literals};
+use regex_syntax::hir::literal::{Literal, Seq};
 
 /// A prefix extracted from a compiled regular expression.
 ///
@@ -39,27 +39,26 @@ enum Matcher {
 impl LiteralSearcher {
     /// Returns a matcher that never matches and never advances the input.
     pub fn empty() -> Self {
-        Self::new(Literals::empty(), Matcher::Empty)
+        Self::new(Seq::infinite(), Matcher::Empty)
     }
 
     /// Returns a matcher for literal prefixes from the given set.
-    pub fn prefixes(lits: Literals) -> Self {
+    pub fn prefixes(lits: Seq) -> Self {
         let matcher = Matcher::prefixes(&lits);
         Self::new(lits, matcher)
     }
 
     /// Returns a matcher for literal suffixes from the given set.
-    pub fn suffixes(lits: Literals) -> Self {
+    pub fn suffixes(lits: Seq) -> Self {
         let matcher = Matcher::suffixes(&lits);
         Self::new(lits, matcher)
     }
 
-    fn new(lits: Literals, matcher: Matcher) -> Self {
-        let complete = lits.all_complete();
+    fn new(lits: Seq, matcher: Matcher) -> Self {
         LiteralSearcher {
-            complete,
-            lcp: Memmem::new(lits.longest_common_prefix()),
-            lcs: Memmem::new(lits.longest_common_suffix()),
+            complete: lits.is_exact(),
+            lcp: Memmem::new(lits.longest_common_prefix().unwrap_or(b"")),
+            lcs: Memmem::new(lits.longest_common_suffix().unwrap_or(b"")),
             matcher,
         }
     }
@@ -169,20 +168,24 @@ impl LiteralSearcher {
 }
 
 impl Matcher {
-    fn prefixes(lits: &Literals) -> Self {
+    fn prefixes(lits: &Seq) -> Self {
         let sset = SingleByteSet::prefixes(lits);
         Matcher::new(lits, sset)
     }
 
-    fn suffixes(lits: &Literals) -> Self {
+    fn suffixes(lits: &Seq) -> Self {
         let sset = SingleByteSet::suffixes(lits);
         Matcher::new(lits, sset)
     }
 
-    fn new(lits: &Literals, sset: SingleByteSet) -> Self {
-        if lits.literals().is_empty() {
+    fn new(lits: &Seq, sset: SingleByteSet) -> Self {
+        if lits.is_empty() || lits.min_literal_len() == Some(0) {
             return Matcher::Empty;
         }
+        let lits = match lits.literals() {
+            None => return Matcher::Empty,
+            Some(members) => members,
+        };
         if sset.dense.len() >= 26 {
             // Avoid trying to match a large number of single bytes.
             // This is *very* sensitive to a frequency analysis comparison
@@ -195,18 +198,18 @@ impl Matcher {
         if sset.complete {
             return Matcher::Bytes(sset);
         }
-        if lits.literals().len() == 1 {
-            return Matcher::Memmem(Memmem::new(&lits.literals()[0]));
+        if lits.len() == 1 {
+            return Matcher::Memmem(Memmem::new(lits[0].as_bytes()));
         }
 
-        let pats = lits.literals().to_owned();
+        let pats: Vec<&[u8]> = lits.iter().map(|lit| lit.as_bytes()).collect();
         let is_aho_corasick_fast = sset.dense.len() <= 1 && sset.all_ascii;
-        if lits.literals().len() <= 100 && !is_aho_corasick_fast {
+        if lits.len() <= 100 && !is_aho_corasick_fast {
             let mut builder = packed::Config::new()
                 .match_kind(packed::MatchKind::LeftmostFirst)
                 .builder();
             if let Some(s) = builder.extend(&pats).build() {
-                return Matcher::Packed { s, lits: pats };
+                return Matcher::Packed { s, lits: lits.to_owned() };
             }
         }
         let ac = AhoCorasickBuilder::new()
@@ -214,7 +217,7 @@ impl Matcher {
             .dfa(true)
             .build_with_size::<u32, _, _>(&pats)
             .unwrap();
-        Matcher::AC { ac, lits: pats }
+        Matcher::AC { ac, lits: lits.to_owned() }
     }
 }
 
@@ -257,7 +260,7 @@ impl<'a> Iterator for LiteralIter<'a> {
                 } else {
                     let next = &lits[0];
                     *lits = &lits[1..];
-                    Some(&**next)
+                    Some(next.as_bytes())
                 }
             }
             LiteralIter::Packed(ref mut lits) => {
@@ -266,7 +269,7 @@ impl<'a> Iterator for LiteralIter<'a> {
                 } else {
                     let next = &lits[0];
                     *lits = &lits[1..];
-                    Some(&**next)
+                    Some(next.as_bytes())
                 }
             }
         }
@@ -291,11 +294,15 @@ impl SingleByteSet {
         }
     }
 
-    fn prefixes(lits: &Literals) -> SingleByteSet {
+    fn prefixes(lits: &Seq) -> SingleByteSet {
         let mut sset = SingleByteSet::new();
-        for lit in lits.literals() {
+        let lits = match lits.literals() {
+            None => return sset,
+            Some(lits) => lits,
+        };
+        for lit in lits.iter() {
             sset.complete = sset.complete && lit.len() == 1;
-            if let Some(&b) = lit.get(0) {
+            if let Some(&b) = lit.as_bytes().get(0) {
                 if !sset.sparse[b as usize] {
                     if b > 0x7F {
                         sset.all_ascii = false;
@@ -308,11 +315,15 @@ impl SingleByteSet {
         sset
     }
 
-    fn suffixes(lits: &Literals) -> SingleByteSet {
+    fn suffixes(lits: &Seq) -> SingleByteSet {
         let mut sset = SingleByteSet::new();
-        for lit in lits.literals() {
+        let lits = match lits.literals() {
+            None => return sset,
+            Some(lits) => lits,
+        };
+        for lit in lits.iter() {
             sset.complete = sset.complete && lit.len() == 1;
-            if let Some(&b) = lit.get(lit.len().checked_sub(1).unwrap()) {
+            if let Some(&b) = lit.as_bytes().last() {
                 if !sset.sparse[b as usize] {
                     if b > 0x7F {
                         sset.all_ascii = false;

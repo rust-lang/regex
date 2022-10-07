@@ -82,9 +82,8 @@ in a monospace font.
 # Literal extraction
 
 This crate provides limited support for [literal extraction from `Hir`
-values](hir::literal::Literals). Be warned that literal extraction currently
-uses recursion, and therefore, stack size proportional to the size of the
-`Hir`.
+values](hir::literal). Be warned that literal extraction uses recursion, and
+therefore, stack size proportional to the size of the `Hir`.
 
 The purpose of literal extraction is to speed up searches. That is, if you
 know a regular expression must match a prefix or suffix literal, then it is
