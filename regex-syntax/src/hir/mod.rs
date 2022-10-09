@@ -1813,6 +1813,7 @@ pub struct LookSet {
 
 impl LookSet {
     /// Create an empty set of look-around assertions.
+    #[inline]
     pub fn empty() -> LookSet {
         LookSet { bits: 0 }
     }
@@ -1820,6 +1821,7 @@ impl LookSet {
     /// Create a full set of look-around assertions.
     ///
     /// This set contains all possible look-around assertions.
+    #[inline]
     pub fn full() -> LookSet {
         LookSet { bits: !0 }
     }
@@ -1828,6 +1830,7 @@ impl LookSet {
     ///
     /// This is a convenience routine for creating an empty set and inserting
     /// one look-around assertions.
+    #[inline]
     pub fn singleton(look: Look) -> LookSet {
         let mut set = LookSet::empty();
         set.insert(look);
@@ -1835,6 +1838,7 @@ impl LookSet {
     }
 
     /// Returns the total number of look-around assertions in this set.
+    #[inline]
     pub fn len(&self) -> usize {
         // OK because max value always fits in a u8, which in turn always
         // fits in a usize, regardless of target.
@@ -1842,34 +1846,51 @@ impl LookSet {
     }
 
     /// Returns true if and only if this set is empty.
+    #[inline]
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
     /// Insert the given look-around assertions into this set. If the assertion
     /// is already in the set, then this is a no-op.
+    #[inline]
     pub fn insert(&mut self, look: Look) {
         self.bits |= 1 << look.as_repr();
     }
 
     /// Remove the given look-around assertion from this set. If it wasn't
     /// previously in the set, then this is a no-op.
+    #[inline]
     pub fn remove(&mut self, look: Look) {
         self.bits &= !(1 << look.as_repr());
     }
 
     /// Returns true if and only if the given look-around assertion is in this
     /// set.
+    #[inline]
     pub fn contains(&self, look: Look) -> bool {
         self.bits & (1 << look.as_repr()) != 0
     }
 
+    /// Returns true if and only if this set contains any word boundary or
+    /// negated word boundary assertions. This include both Unicode and ASCII
+    /// word boundaries.
+    #[inline]
+    pub fn contains_word(&self) -> bool {
+        self.contains(Look::WordAscii)
+            || self.contains(Look::WordAsciiNegate)
+            || self.contains(Look::WordUnicode)
+            || self.contains(Look::WordUnicodeNegate)
+    }
+
     /// Modifies this set to be the union of itself and the set given.
+    #[inline]
     pub fn union(&mut self, other: LookSet) {
         self.bits |= other.bits;
     }
 
     /// Modifies this set to be the intersection of itself and the set given.
+    #[inline]
     pub fn intersect(&mut self, other: LookSet) {
         self.bits &= other.bits;
     }
