@@ -1963,6 +1963,45 @@ mod tests {
         );
     }
 
+    // Tests the HIR transformation of things like '[a-z]|[A-Z]' into
+    // '[A-Za-z]'. In other words, an alternation of just classes is always
+    // equivalent to a single class corresponding to the union of the branches
+    // in that class. (Unless some branches match invalid UTF-8 and others
+    // match non-ASCII Unicode.)
+    #[test]
+    fn cat_class_flattened() {
+        assert_eq!(t(r"[a-z]|[A-Z]"), hir_uclass(&[('A', 'Z'), ('a', 'z')]));
+        // Combining all of the letter properties should give us the one giant
+        // letter property.
+        #[cfg(feature = "unicode-gencat")]
+        assert_eq!(
+            t(r"(?x)
+                \p{Lowercase_Letter}
+                |\p{Uppercase_Letter}
+                |\p{Titlecase_Letter}
+                |\p{Modifier_Letter}
+                |\p{Other_Letter}
+            "),
+            hir_uclass_query(ClassQuery::Binary("letter"))
+        );
+        // Byte classes that can truly match invalid UTF-8 cannot be combined
+        // with Unicode classes.
+        assert_eq!(
+            t_bytes(r"[Δδ]|(?-u:[\x90-\xFF])|[Λλ]"),
+            hir_alt(vec![
+                hir_uclass(&[('Δ', 'Δ'), ('δ', 'δ')]),
+                hir_bclass(&[(b'\x90', b'\xFF')]),
+                hir_uclass(&[('Λ', 'Λ'), ('λ', 'λ')]),
+            ])
+        );
+        // Byte classes on their own can be combined, even if some are ASCII
+        // and others are invalid UTF-8.
+        assert_eq!(
+            t_bytes(r"[a-z]|(?-u:[\x90-\xFF])|[A-Z]"),
+            hir_bclass(&[(b'A', b'Z'), (b'a', b'z'), (b'\x90', b'\xFF')]),
+        );
+    }
+
     #[test]
     fn class_ascii() {
         assert_eq!(

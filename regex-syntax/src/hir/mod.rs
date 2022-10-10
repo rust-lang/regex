@@ -447,6 +447,14 @@ impl Hir {
                 .map(|b| ClassBytesRange { start: b, end: b });
             return Hir::class(Class::Bytes(ClassBytes::new(it)));
         }
+        // Similar to singleton chars, we can also look for alternations of
+        // classes. Those can be smushed into a single class.
+        if let Some(cls) = class_chars(&new) {
+            return Hir::class(cls);
+        }
+        if let Some(cls) = class_bytes(&new) {
+            return Hir::class(cls);
+        }
         let props = Properties::alternation(&new);
         Hir { kind: HirKind::Alternation(new), props }
     }
@@ -854,6 +862,23 @@ impl ClassUnicode {
             None
         }
     }
+
+    /// If this class consists of only ASCII ranges, then return its
+    /// corresponding and equivalent byte class.
+    pub fn to_byte_class(&self) -> Option<ClassBytes> {
+        if !self.is_all_ascii() {
+            return None;
+        }
+        Some(ClassBytes::new(self.ranges().iter().map(|r| {
+            // Since we are guaranteed that our codepoint range is ASCII, the
+            // 'u8::try_from' calls below are guaranteed to be correct.
+            ClassBytesRange {
+                // MSRV(1.59): Use 'u8::try_from(c)' instead.
+                start: u8::try_from(u32::from(r.start)).unwrap(),
+                end: u8::try_from(u32::from(r.end)).unwrap(),
+            }
+        })))
+    }
 }
 
 /// An iterator over all ranges in a Unicode character class.
@@ -1119,6 +1144,23 @@ impl ClassBytes {
         } else {
             None
         }
+    }
+
+    /// If this class consists of only ASCII ranges, then return its
+    /// corresponding and equivalent Unicode class.
+    pub fn to_unicode_class(&self) -> Option<ClassUnicode> {
+        if !self.is_all_ascii() {
+            return None;
+        }
+        Some(ClassUnicode::new(self.ranges().iter().map(|r| {
+            // Since we are guaranteed that our byte range is ASCII, the
+            // 'char::from' calls below are correct and will not erroneously
+            // convert a raw byte value into its corresponding codepoint.
+            ClassUnicodeRange {
+                start: char::from(r.start),
+                end: char::from(r.end),
+            }
+        })))
     }
 }
 
@@ -1934,6 +1976,44 @@ impl Iterator for LookSetIter {
         self.set.remove(look);
         Some(look)
     }
+}
+
+/// Given a sequence of HIR values where each value corresponds to a Unicode
+/// class (or an all-ASCII byte class), return a single Unicode class
+/// corresponding to the union of the classes found.
+fn class_chars(hirs: &[Hir]) -> Option<Class> {
+    let mut cls = ClassUnicode::new(vec![]);
+    for hir in hirs.iter() {
+        match *hir.kind() {
+            HirKind::Class(Class::Unicode(ref cls2)) => {
+                cls.union(cls2);
+            }
+            HirKind::Class(Class::Bytes(ref cls2)) => {
+                cls.union(&cls2.to_unicode_class()?);
+            }
+            _ => return None,
+        };
+    }
+    Some(Class::Unicode(cls))
+}
+
+/// Given a sequence of HIR values where each value corresponds to a byte class
+/// (or an all-ASCII Unicode class), return a single byte class corresponding
+/// to the union of the classes found.
+fn class_bytes(hirs: &[Hir]) -> Option<Class> {
+    let mut cls = ClassBytes::new(vec![]);
+    for hir in hirs.iter() {
+        match *hir.kind() {
+            HirKind::Class(Class::Unicode(ref cls2)) => {
+                cls.union(&cls2.to_byte_class()?);
+            }
+            HirKind::Class(Class::Bytes(ref cls2)) => {
+                cls.union(cls2);
+            }
+            _ => return None,
+        };
+    }
+    Some(Class::Bytes(cls))
 }
 
 /// Given a sequence of HIR values where each value corresponds to a literal
