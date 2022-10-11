@@ -161,7 +161,6 @@ The following features are available:
 #![no_std]
 #![forbid(unsafe_code)]
 #![deny(missing_docs, rustdoc::broken_intra_doc_links)]
-#![doc(test(attr(deny(warnings))))]
 #![warn(missing_debug_implementations)]
 #![cfg_attr(docsrs, feature(doc_auto_cfg))]
 
