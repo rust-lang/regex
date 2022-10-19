@@ -3107,6 +3107,23 @@ mod tests {
     }
 
     #[test]
+    fn analysis_captures_len() {
+        assert_eq!(0, props(r"a").captures_len());
+        assert_eq!(0, props(r"(?:a)").captures_len());
+        assert_eq!(0, props(r"(?i:a)").captures_len());
+        assert_eq!(0, props(r"(?i)a").captures_len());
+        assert_eq!(1, props(r"(a)").captures_len());
+        assert_eq!(1, props(r"(?P<foo>a)").captures_len());
+        assert_eq!(1, props(r"()").captures_len());
+        assert_eq!(1, props(r"()a").captures_len());
+        assert_eq!(1, props(r"(a)+").captures_len());
+        assert_eq!(2, props(r"(a)(b)").captures_len());
+        assert_eq!(2, props(r"(a)|(b)").captures_len());
+        assert_eq!(2, props(r"((a))").captures_len());
+        assert_eq!(1, props(r"([a&&b])").captures_len());
+    }
+
+    #[test]
     fn analysis_is_all_assertions() {
         // Positive examples.
         let p = props(r"\b");

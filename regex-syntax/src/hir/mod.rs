@@ -1506,6 +1506,7 @@ struct PropertiesI {
     look_set_prefix: LookSet,
     look_set_suffix: LookSet,
     utf8: bool,
+    captures_len: usize,
     literal: bool,
     alternation_literal: bool,
 }
@@ -1582,6 +1583,17 @@ impl Properties {
         self.0.utf8
     }
 
+    /// Returns the total number of explicit capturing groups in the
+    /// corresponding HIR.
+    ///
+    /// Note that this does not include the implicit capturing group
+    /// corresponding to the entire match that is typically included by regex
+    /// engines. So for example, this method will return `0` for `a` and `1`
+    /// for `(a)`.
+    pub fn captures_len(&self) -> usize {
+        self.0.captures_len
+    }
+
     /// Return true if and only if this HIR is a simple literal. This is only
     /// true when this HIR expression is either itself a `Literal` or a
     /// concatenation of only `Literal`s.
@@ -1602,6 +1614,69 @@ impl Properties {
     /// are not (even though that contain sub-expressions that are literals).
     pub fn is_alternation_literal(&self) -> bool {
         self.0.alternation_literal
+    }
+
+    /// Returns a new set of properties that corresponds to the union of the
+    /// iterator of properties given.
+    ///
+    /// This is useful when one has multiple `Hir` expressions and wants
+    /// to combine them into a single alternation without constructing the
+    /// corresponding `Hir`. This routine provides a way of combining the
+    /// properties of each `Hir` expression into one set of properties
+    /// representing the union of those expressions.
+    pub fn union<I, P>(props: I) -> Properties
+    where
+        I: IntoIterator<Item = P>,
+        P: core::borrow::Borrow<Properties>,
+    {
+        let mut it = props.into_iter().peekable();
+        // While empty alternations aren't possible, we still behave as if they
+        // are. When we have an empty alternate, then clearly the look-around
+        // prefix and suffix is empty. Otherwise, it is the intersection of all
+        // prefixes and suffixes (respectively) of the branches.
+        let fix = if it.peek().is_none() {
+            LookSet::empty()
+        } else {
+            LookSet::full()
+        };
+        // The base case is an empty alternation, which matches nothing.
+        // Note though that empty alternations aren't possible, because the
+        // Hir::alternation smart constructor rewrites those as empty character
+        // classes.
+        let mut props = PropertiesI {
+            minimum_len: None,
+            maximum_len: None,
+            look_set: LookSet::empty(),
+            look_set_prefix: fix,
+            look_set_suffix: fix,
+            utf8: true,
+            captures_len: 0,
+            literal: false,
+            alternation_literal: true,
+        };
+        // Handle properties that need to visit every child hir.
+        for prop in it {
+            let p = prop.borrow();
+            props.look_set.union(p.look_set());
+            props.look_set_prefix.intersect(p.look_set_prefix());
+            props.look_set_suffix.intersect(p.look_set_suffix());
+            props.utf8 = props.utf8 && p.is_utf8();
+            props.captures_len =
+                props.captures_len.saturating_add(p.captures_len());
+            props.alternation_literal =
+                props.alternation_literal && p.is_alternation_literal();
+            if let Some(xmin) = p.minimum_len() {
+                if props.minimum_len.map_or(true, |pmin| xmin < pmin) {
+                    props.minimum_len = Some(xmin);
+                }
+            }
+            if let Some(xmax) = p.maximum_len() {
+                if props.maximum_len.map_or(true, |pmax| xmax > pmax) {
+                    props.maximum_len = Some(xmax);
+                }
+            }
+        }
+        Properties(Box::new(props))
     }
 }
 
@@ -1632,6 +1707,7 @@ impl Properties {
             // were false, for example, then 'a*' would also need to be false
             // since it too can match the empty string.
             utf8: true,
+            captures_len: 0,
             literal: false,
             alternation_literal: false,
         };
@@ -1647,6 +1723,7 @@ impl Properties {
             look_set_prefix: LookSet::empty(),
             look_set_suffix: LookSet::empty(),
             utf8: core::str::from_utf8(&lit.0).is_ok(),
+            captures_len: 0,
             literal: true,
             alternation_literal: true,
         };
@@ -1662,6 +1739,7 @@ impl Properties {
             look_set_prefix: LookSet::empty(),
             look_set_suffix: LookSet::empty(),
             utf8: class.is_utf8(),
+            captures_len: 0,
             literal: false,
             alternation_literal: false,
         };
@@ -1693,6 +1771,7 @@ impl Properties {
             look_set_prefix: LookSet::singleton(look),
             look_set_suffix: LookSet::singleton(look),
             utf8,
+            captures_len: 0,
             literal: false,
             alternation_literal: false,
         };
@@ -1701,31 +1780,31 @@ impl Properties {
 
     /// Create a new set of HIR properties for a repetition.
     fn repetition(rep: &Repetition) -> Properties {
-        let minimum_len =
-            rep.hir.properties().minimum_len().map(|child_min| {
-                let rep_min = usize::try_from(rep.min).unwrap_or(usize::MAX);
-                child_min.saturating_mul(rep_min)
-            });
+        let p = rep.hir.properties();
+        let minimum_len = p.minimum_len().map(|child_min| {
+            let rep_min = usize::try_from(rep.min).unwrap_or(usize::MAX);
+            child_min.saturating_mul(rep_min)
+        });
         let maximum_len = rep.max.and_then(|rep_max| {
             let rep_max = usize::try_from(rep_max).ok()?;
-            let child_max = rep.hir.properties().maximum_len()?;
+            let child_max = p.maximum_len()?;
             child_max.checked_mul(rep_max)
         });
 
         let mut inner = PropertiesI {
             minimum_len,
             maximum_len,
-            look_set: rep.hir.properties().look_set(),
+            look_set: p.look_set(),
             look_set_prefix: LookSet::empty(),
             look_set_suffix: LookSet::empty(),
-            utf8: rep.hir.properties().is_utf8(),
+            utf8: p.is_utf8(),
+            captures_len: p.captures_len(),
             literal: false,
             alternation_literal: false,
         };
         if !rep.is_match_empty() {
-            let child_props = rep.hir.properties();
-            inner.look_set_prefix = child_props.look_set_prefix();
-            inner.look_set_suffix = child_props.look_set_suffix();
+            inner.look_set_prefix = p.look_set_prefix();
+            inner.look_set_suffix = p.look_set_suffix();
         }
         Properties(Box::new(inner))
     }
@@ -1736,10 +1815,12 @@ impl Properties {
         // their child expressions. But the literal properties somewhat
         // over-constrained in what they represent in order to make downstream
         // analyses a bit more straight-forward.
+        let p = group.hir.properties();
         Properties(Box::new(PropertiesI {
+            captures_len: p.captures_len().saturating_add(1),
             literal: false,
             alternation_literal: false,
-            ..*group.hir.properties().0.clone()
+            ..*p.0.clone()
         }))
     }
 
@@ -1756,26 +1837,30 @@ impl Properties {
             look_set_prefix: LookSet::empty(),
             look_set_suffix: LookSet::empty(),
             utf8: true,
+            captures_len: 0,
             literal: true,
             alternation_literal: true,
         };
         // Handle properties that need to visit every child hir.
         for x in concat.iter() {
-            props.look_set.union(x.properties().look_set());
-            props.utf8 = props.utf8 && x.properties().is_utf8();
-            props.literal = props.literal && x.properties().is_literal();
-            props.alternation_literal = props.alternation_literal
-                && x.properties().is_alternation_literal();
+            let p = x.properties();
+            props.look_set.union(p.look_set());
+            props.utf8 = props.utf8 && p.is_utf8();
+            props.captures_len =
+                props.captures_len.saturating_add(p.captures_len());
+            props.literal = props.literal && p.is_literal();
+            props.alternation_literal =
+                props.alternation_literal && p.is_alternation_literal();
             if let Some(ref mut minimum_len) = props.minimum_len {
-                match x.properties().minimum_len() {
+                match p.minimum_len() {
                     None => props.minimum_len = None,
-                    Some(x) => *minimum_len += x,
+                    Some(len) => *minimum_len += len,
                 }
             }
             if let Some(ref mut maximum_len) = props.maximum_len {
-                match x.properties().maximum_len() {
+                match p.maximum_len() {
                     None => props.maximum_len = None,
-                    Some(x) => *maximum_len += x,
+                    Some(len) => *maximum_len += len,
                 }
             }
         }
@@ -1801,46 +1886,7 @@ impl Properties {
 
     /// Create a new set of HIR properties for a concatenation.
     fn alternation(alts: &[Hir]) -> Properties {
-        // While empty alternations aren't possible, we still behave as if they
-        // are. When we have an empty alternate, then clearly the look-around
-        // prefix and suffix is empty. Otherwise, it is the intersection of all
-        // prefixes and suffixes (respectively) of the branches.
-        let fix =
-            if alts.is_empty() { LookSet::empty() } else { LookSet::full() };
-        // The base case is an empty alternation, which matches nothing.
-        // Note though that empty alternations aren't possible, because the
-        // Hir::alternation smart constructor rewrites those as empty character
-        // classes.
-        let mut props = PropertiesI {
-            minimum_len: None,
-            maximum_len: None,
-            look_set: LookSet::empty(),
-            look_set_prefix: fix,
-            look_set_suffix: fix,
-            utf8: true,
-            literal: false,
-            alternation_literal: true,
-        };
-        // Handle properties that need to visit every child hir.
-        for x in alts.iter() {
-            props.look_set.union(x.properties().look_set());
-            props.look_set_prefix.intersect(x.properties().look_set_prefix());
-            props.look_set_suffix.intersect(x.properties().look_set_suffix());
-            props.utf8 = props.utf8 && x.properties().is_utf8();
-            props.alternation_literal = props.alternation_literal
-                && x.properties().is_alternation_literal();
-            if let Some(xmin) = x.properties().minimum_len() {
-                if props.minimum_len.map_or(true, |pmin| xmin < pmin) {
-                    props.minimum_len = Some(xmin);
-                }
-            }
-            if let Some(xmax) = x.properties().maximum_len() {
-                if props.maximum_len.map_or(true, |pmax| xmax > pmax) {
-                    props.maximum_len = Some(xmax);
-                }
-            }
-        }
-        Properties(Box::new(props))
+        Properties::union(alts.iter().map(|hir| hir.properties()))
     }
 }
 
