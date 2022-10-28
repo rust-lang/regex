@@ -379,17 +379,13 @@ impl Regex {
     ///
     /// # Example
     ///
-    /// To split a string delimited by fruit and include the fruit:
-    ///
     /// ```rust
     /// # use regex::Regex;
     /// # fn main() {
-    /// let re = Regex::new(r"(apple|banana|pear)").unwrap();
-    /// let fields: Vec<&str> = re
-    ///     .split_inclusive("apples: 3 bananas: 2 pears: 4")
-    ///     .map(|s| s.trim())
-    ///     .collect();
-    /// assert_eq!(fields, vec!["", "apples: 3", "bananas: 2", "pears: 4"]);
+    /// let re = Regex::new(r"\r?\n").unwrap();
+    /// let text = "Mary had a little lamb\nlittle lamb\r\nlittle lamb.";
+    /// let v: Vec<&str> = re.split_inclusive(text).collect();
+    /// assert_eq!(v, ["Mary had a little lamb\n", "little lamb\r\n", "little lamb."]);
     /// # }
     /// ```
     pub fn split_inclusive<'r, 't>(
@@ -864,8 +860,8 @@ impl<'r, 't> Iterator for SplitInclusive<'r, 't> {
                 }
             }
             Some(m) => {
-                let matched = &text[self.last..m.start()];
-                self.last = m.start();
+                let matched = &text[self.last..m.end()];
+                self.last = m.end();
                 Some(matched)
             }
         }

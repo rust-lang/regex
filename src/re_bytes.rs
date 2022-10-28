@@ -318,22 +318,26 @@ impl Regex {
         Split { finder: self.find_iter(text), last: 0 }
     }
 
-    /// Returns an iterator of substrings of `text` delimited by a match of the
-    /// regular expression. Each element of the iterator will include the
-    /// delimiting match if it appears at the beginning of the element.
+    /// Returns an iterator of substrings of `text` separated by a match of the
+    /// regular expression. Differs from the iterator produced by split in that
+    /// split_inclusive leaves the matched part as the terminator of the
+    /// substring.
     ///
     /// This method will *not* copy the text given.
     ///
     /// # Example
     ///
-    /// To split a string delimited by fruit and include the fruit:
-    ///
     /// ```rust
     /// # use regex::bytes::Regex;
     /// # fn main() {
-    /// let re = Regex::new(r"(apple|banana|pear)").unwrap();
-    /// let fields: Vec<&[u8]> = re.split_inclusive(b"apples: 3 bananas: 2 pears: 4").collect();
-    /// assert_eq!(fields, vec![&b""[..], &b"apples: 3 "[..], &b"bananas: 2 "[..], &b"pears: 4"[..]]);
+    /// let re = Regex::new(r"\r?\n").unwrap();
+    /// let text = b"Mary had a little lamb\nlittle lamb\r\nlittle lamb.";
+    /// let v: Vec<&[u8]> = re.split_inclusive(text).collect();
+    /// assert_eq!(v, [
+    ///     &b"Mary had a little lamb\n"[..],
+    ///     &b"little lamb\r\n"[..],
+    ///     &b"little lamb."[..]
+    /// ]);
     /// # }
     /// ```
     pub fn split_inclusive<'r, 't>(
@@ -819,8 +823,8 @@ impl<'r, 't> Iterator for SplitInclusive<'r, 't> {
                 }
             }
             Some(m) => {
-                let matched = &text[self.last..m.start()];
-                self.last = m.start();
+                let matched = &text[self.last..m.end()];
+                self.last = m.end();
                 Some(matched)
             }
         }
