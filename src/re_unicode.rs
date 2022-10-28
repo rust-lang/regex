@@ -371,6 +371,34 @@ impl Regex {
         Split { finder: self.find_iter(text), last: 0 }
     }
 
+    /// Returns an iterator of substrings of `text` delimited by a match of the
+    /// regular expression. Each element of the iterator will include the
+    /// delimiting match if it appears at the beginning of the element.
+    ///
+    /// This method will *not* copy the text given.
+    ///
+    /// # Example
+    ///
+    /// To split a string delimited by fruit and include the fruit:
+    ///
+    /// ```rust
+    /// # use regex::Regex;
+    /// # fn main() {
+    /// let re = Regex::new(r"(apple|banana|pear)").unwrap();
+    /// let fields: Vec<&str> = re
+    ///     .split_inclusive("apples: 3 bananas: 2 pears: 4")
+    ///     .map(|s| s.trim())
+    ///     .collect();
+    /// assert_eq!(fields, vec!["", "apples: 3", "bananas: 2", "pears: 4"]);
+    /// # }
+    /// ```
+    pub fn split_inclusive<'r, 't>(
+        &'r self,
+        text: &'t str,
+    ) -> SplitInclusive<'r, 't> {
+        SplitInclusive { finder: self.find_iter(text), last: 0 }
+    }
+
     /// Returns an iterator of at most `limit` substrings of `text` delimited
     /// by a match of the regular expression. (A `limit` of `0` will return no
     /// substrings.) Namely, each element of the iterator corresponds to text
@@ -808,6 +836,43 @@ impl<'r, 't> Iterator for Split<'r, 't> {
 }
 
 impl<'r, 't> FusedIterator for Split<'r, 't> {}
+
+/// Yields all substrings delimited by a regular expression match inclusive of
+/// the match.
+///
+/// `'r` is the lifetime of the compiled regular expression and `'t` is the
+/// lifetime of the byte string being split.
+#[derive(Debug)]
+pub struct SplitInclusive<'r, 't> {
+    finder: Matches<'r, 't>,
+    last: usize,
+}
+
+impl<'r, 't> Iterator for SplitInclusive<'r, 't> {
+    type Item = &'t str;
+
+    fn next(&mut self) -> Option<&'t str> {
+        let text = self.finder.0.text();
+        match self.finder.next() {
+            None => {
+                if self.last > text.len() {
+                    None
+                } else {
+                    let s = &text[self.last..];
+                    self.last = text.len() + 1; // Next call will return None
+                    Some(s)
+                }
+            }
+            Some(m) => {
+                let matched = &text[self.last..m.start()];
+                self.last = m.start();
+                Some(matched)
+            }
+        }
+    }
+}
+
+impl<'r, 't> FusedIterator for SplitInclusive<'r, 't> {}
 
 /// Yields at most `N` substrings delimited by a regular expression match.
 ///
