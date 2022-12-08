@@ -6,6 +6,10 @@ on:
     - master
   schedule:
   - cron: '00 01 * * *'
+
+permissions:
+  contents: read #  to fetch code (actions/checkout)
+
 jobs:
   test:
     name: test
