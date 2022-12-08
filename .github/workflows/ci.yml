@@ -7,6 +7,14 @@ on:
   schedule:
   - cron: '00 01 * * *'
 
+# The section is needed to drop write-all permissions that are granted on `schedule` event.
+# By specifying any permission explicitly all others are set to none.
+# By using the principle of least privilege the damage a compromised workflow can do (because of an injection or compromised third party tool or action) is restricted.
+# Currently the worklow doesn't need any additional permission except for pulling the code.
+# Adding labels to issues, commenting on pull-requests, etc. may need additional permissions:
+# https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#permissions
+# https://docs.github.com/en/actions/using-jobs/assigning-permissions-to-jobs
+# https://docs.github.com/en/actions/security-guides/automatic-token-authentication#permissions-for-the-github_token
 permissions:
   contents: read #  to fetch code (actions/checkout)
 
