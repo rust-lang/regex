@@ -65,6 +65,13 @@ impl<'t> Match<'t> {
     }
 }
 
+impl<'t> AsRef<str> for Match<'t>{
+    #[inline]
+    fn as_ref(&self)-> &'t str {
+        self.as_str()
+    }
+}
+
 impl<'t> From<Match<'t>> for &'t str {
     fn from(m: Match<'t>) -> &'t str {
         m.as_str()
