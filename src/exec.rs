@@ -4,10 +4,10 @@ use std::panic::AssertUnwindSafe;
 use std::sync::Arc;
 
 #[cfg(feature = "perf-literal")]
-use aho_corasick::{AhoCorasick, AhoCorasickBuilder, MatchKind};
-use regex_syntax::hir::literal::Literals;
-use regex_syntax::hir::Hir;
-use regex_syntax::ParserBuilder;
+use aho_corasick::{AhoCorasick, MatchKind};
+use regex_syntax_old::hir::literal::Literals;
+use regex_syntax_old::hir::Hir;
+use regex_syntax_old::ParserBuilder;
 
 use crate::backtrack;
 use crate::compile::Compiler;
@@ -98,7 +98,7 @@ struct ExecReadOnly {
     /// if we were to exhaust the ID space, we probably would have long
     /// surpassed the compilation size limit.
     #[cfg(feature = "perf-literal")]
-    ac: Option<AhoCorasick<u32>>,
+    ac: Option<AhoCorasick>,
     /// match_type encodes as much upfront knowledge about how we're going to
     /// execute a search as possible.
     match_type: MatchType,
@@ -356,7 +356,7 @@ impl ExecBuilder {
     }
 
     #[cfg(feature = "perf-literal")]
-    fn build_aho_corasick(&self, parsed: &Parsed) -> Option<AhoCorasick<u32>> {
+    fn build_aho_corasick(&self, parsed: &Parsed) -> Option<AhoCorasick> {
         if parsed.exprs.len() != 1 {
             return None;
         }
@@ -370,10 +370,9 @@ impl ExecBuilder {
             return None;
         }
         Some(
-            AhoCorasickBuilder::new()
+            AhoCorasick::builder()
                 .match_kind(MatchKind::LeftmostFirst)
-                .auto_configure(&lits)
-                .build_with_size::<u32, _, _>(&lits)
+                .build(&lits)
                 // This should never happen because we'd long exceed the
                 // compilation limit for regexes first.
                 .expect("AC automaton too big"),

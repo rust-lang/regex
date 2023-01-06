@@ -106,8 +106,9 @@ pattern = []
 
 # For very fast prefix literal matching.
 [dependencies.aho-corasick]
-version = "0.7.18"
+version = "0.7.20"
 optional = true
+git = "https://github.com/BurntSushi/aho-corasick"
 
 # For skipping along search text quickly when a leading byte is known.
 [dependencies.memchr]

@@ -1,6 +1,6 @@
 use std::mem;
 
-use aho_corasick::{self, packed, AhoCorasick, AhoCorasickBuilder};
+use aho_corasick::{self, packed, AhoCorasick};
 use memchr::{memchr, memchr2, memchr3, memmem};
 use regex_syntax::hir::literal::{Literal, Literals};
 
@@ -26,7 +26,7 @@ enum Matcher {
     /// A single substring, using vector accelerated routines when available.
     Memmem(Memmem),
     /// An Aho-Corasick automaton.
-    AC { ac: AhoCorasick<u32>, lits: Vec<Literal> },
+    AC { ac: AhoCorasick, lits: Vec<Literal> },
     /// A packed multiple substring searcher, using SIMD.
     ///
     /// Note that Aho-Corasick will actually use this packed searcher
@@ -150,7 +150,7 @@ impl LiteralSearcher {
             Empty => 0,
             Bytes(ref sset) => sset.dense.len(),
             Memmem(_) => 1,
-            AC { ref ac, .. } => ac.pattern_count(),
+            AC { ref ac, .. } => ac.patterns_len(),
             Packed { ref lits, .. } => lits.len(),
         }
     }
@@ -162,8 +162,8 @@ impl LiteralSearcher {
             Empty => 0,
             Bytes(ref sset) => sset.approximate_size(),
             Memmem(ref single) => single.approximate_size(),
-            AC { ref ac, .. } => ac.heap_bytes(),
-            Packed { ref s, .. } => s.heap_bytes(),
+            AC { ref ac, .. } => ac.memory_usage(),
+            Packed { ref s, .. } => s.memory_usage(),
         }
     }
 }
@@ -209,10 +209,10 @@ impl Matcher {
                 return Matcher::Packed { s, lits: pats };
             }
         }
-        let ac = AhoCorasickBuilder::new()
+        let ac = AhoCorasick::builder()
             .match_kind(aho_corasick::MatchKind::LeftmostFirst)
-            .dfa(true)
-            .build_with_size::<u32, _, _>(&pats)
+            .kind(aho_corasick::AhoCorasickKind::DFA)
+            .build(&pats)
             .unwrap();
         Matcher::AC { ac, lits: pats }
     }
