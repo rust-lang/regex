@@ -183,6 +183,7 @@ mod either;
 mod error;
 pub mod hir;
 mod parser;
+mod rank;
 mod unicode;
 mod unicode_tables;
 pub mod utf8;

@@ -704,7 +704,7 @@ impl Default for ExtractKind {
 /// ]);
 /// assert_eq!(expected, seq);
 /// ```
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct Seq {
     /// The members of this seq.
     ///
@@ -1437,7 +1437,7 @@ impl Seq {
     #[inline]
     pub fn minimize_by_preference(&mut self) {
         if let Some(ref mut lits) = self.literals {
-            PreferenceTrie::minimize(lits);
+            PreferenceTrie::minimize(lits, false);
         }
     }
 
@@ -1681,6 +1681,274 @@ impl Seq {
         Some(&base[base.len() - len..])
     }
 
+    /// Optimizes this seq while treating its literals as prefixes and
+    /// respecting the preference order of its literals.
+    ///
+    /// The specific way "optimization" works is meant to be an implementation
+    /// detail, as it essentially represents a set of heuristics. The goal
+    /// that optimization tries to accomplish is to make the literals in this
+    /// set reflect inputs that will result in a more effective prefilter.
+    /// Principally by reducing the false positive rate of candidates found by
+    /// the literals in this sequence. That is, when a match of a literal is
+    /// found, we would like it to be a strong predictor of the overall match
+    /// of the regex. If it isn't, then much time will be spent starting and
+    /// stopping the prefilter search and attempting to confirm the match only
+    /// to have it fail.
+    ///
+    /// Some of those heuristics might be:
+    ///
+    /// * Identifying a common prefix from a larger sequence of literals, and
+    /// shrinking the sequence down to that single common prefix.
+    /// * Rejecting the sequence entirely if it is believed to result in very
+    /// high false positive rate. When this happens, the sequence is made
+    /// infinite.
+    /// * Shrinking the sequence to a smaller number of literals representing
+    /// prefixes, but not shrinking it so much as to make literals too short.
+    /// (A sequence with very short literals, of 1 or 2 bytes, will typically
+    /// result in a higher false positive rate.)
+    ///
+    /// Optimization should only be run once extraction is complete. Namely,
+    /// optimization may make assumptions that do not compose with other
+    /// operations in the middle of extraction. For example, optimization will
+    /// reduce `[E(sam), E(samwise)]` to `[E(sam)]`, but such a transformation
+    /// is only valid if no other extraction will occur. If other extraction
+    /// may occur, then the correct transformation would be to `[I(sam)]`.
+    ///
+    /// The [`Seq::optimize_for_suffix_by_preference`] does the same thing, but
+    /// for suffixes.
+    ///
+    /// # Example
+    ///
+    /// This shows how optimization might transform a sequence. Note that
+    /// the specific behavior is not a documented guarantee. The heuristics
+    /// used are an implementation detail and may change over time in semver
+    /// compatible releases.
+    ///
+    /// ```
+    /// use regex_syntax::hir::literal::{Seq, Literal};
+    ///
+    /// let mut seq = Seq::new(&[
+    ///     "samantha",
+    ///     "sam",
+    ///     "samwise",
+    ///     "frodo",
+    /// ]);
+    /// seq.optimize_for_prefix_by_preference();
+    /// assert_eq!(Seq::from_iter([
+    ///     Literal::exact("samantha"),
+    ///     // Kept exact even though 'samwise' got pruned
+    ///     // because optimization assumes literal extraction
+    ///     // has finished.
+    ///     Literal::exact("sam"),
+    ///     Literal::exact("frodo"),
+    /// ]), seq);
+    /// ```
+    ///
+    /// # Example: optimization may make the sequence infinite
+    ///
+    /// If the heuristics deem that the sequence could cause a very high false
+    /// positive rate, then it may make the sequence infinite, effectively
+    /// disabling its use as a prefilter.
+    ///
+    /// ```
+    /// use regex_syntax::hir::literal::{Seq, Literal};
+    ///
+    /// let mut seq = Seq::new(&[
+    ///     "samantha",
+    ///     // An empty string matches at every position,
+    ///     // thus rendering the prefilter completely
+    ///     // ineffective.
+    ///     "",
+    ///     "sam",
+    ///     "samwise",
+    ///     "frodo",
+    /// ]);
+    /// seq.optimize_for_prefix_by_preference();
+    /// assert!(!seq.is_finite());
+    /// ```
+    ///
+    /// Do note that just because there is a `" "` in the sequence, that
+    /// doesn't mean the sequence will always be made infinite after it is
+    /// optimized. Namely, if the sequence is considered exact (any match
+    /// corresponds to an overall match of the original regex), then any match
+    /// is an overall match, and so the false positive rate is always `0`.
+    ///
+    /// To demonstrate this, we remove `samwise` from our sequence. This
+    /// results in no optimization happening and all literals remain exact.
+    /// Thus the entire sequence is exact, and it is kept as-is, even though
+    /// one is an ASCII space:
+    ///
+    /// ```
+    /// use regex_syntax::hir::literal::{Seq, Literal};
+    ///
+    /// let mut seq = Seq::new(&[
+    ///     "samantha",
+    ///     " ",
+    ///     "sam",
+    ///     "frodo",
+    /// ]);
+    /// seq.optimize_for_prefix_by_preference();
+    /// assert!(seq.is_finite());
+    /// ```
+    #[inline]
+    pub fn optimize_for_prefix_by_preference(&mut self) {
+        self.optimize_by_preference(true);
+    }
+
+    /// Optimizes this seq while treating its literals as suffixes and
+    /// respecting the preference order of its literals.
+    ///
+    /// Optimization should only be run once extraction is complete.
+    ///
+    /// The [`Seq::optimize_for_prefix_by_preference`] does the same thing, but
+    /// for prefixes. See its documentation for more explanation.
+    #[inline]
+    pub fn optimize_for_suffix_by_preference(&mut self) {
+        self.optimize_by_preference(false);
+    }
+
+    fn optimize_by_preference(&mut self, prefix: bool) {
+        let origlen = match self.len() {
+            None => return,
+            Some(len) => len,
+        };
+        // Make sure we start with the smallest sequence possible. We use a
+        // special version of preference minimization that retains exactness.
+        // This is legal because optimization is only expected to occur once
+        // extraction is complete.
+        if prefix {
+            if let Some(ref mut lits) = self.literals {
+                PreferenceTrie::minimize(lits, true);
+            }
+        }
+
+        // Look for a common prefix (or suffix). If we found one of those and
+        // it's long enough, then it's a good bet that it will be our fastest
+        // possible prefilter since single-substring search is so fast.
+        let fix = if prefix {
+            self.longest_common_prefix()
+        } else {
+            self.longest_common_suffix()
+        };
+        if let Some(fix) = fix {
+            // As a special case, if we have a common prefix and the leading
+            // byte of that prefix is one that we think probably occurs rarely,
+            // then strip everything down to just that single byte. This should
+            // promote the use of memchr.
+            //
+            // ... we only do this though if our sequence has more than one
+            // literal. Otherwise, we'd rather just stick with a single literal
+            // scan. That is, using memchr is probably better than looking
+            // for 2 or more literals, but probably not as good as a straight
+            // memmem search.
+            //
+            // ... and also only do this when the prefix is short and probably
+            // not too discriminatory anyway. If it's longer, then it's
+            // probably quite discriminatory and thus is likely to have a low
+            // false positive rate.
+            if prefix
+                && origlen > 1
+                && fix.len() >= 1
+                && fix.len() <= 3
+                && rank(fix[0]) < 200
+            {
+                self.keep_first_bytes(1);
+                self.dedup();
+                return;
+            }
+            // We only strip down to the common prefix/suffix if we think
+            // the existing set of literals isn't great, or if the common
+            // prefix/suffix is expected to be particularly discriminatory.
+            let isfast =
+                self.is_exact() && self.len().map_or(false, |len| len <= 16);
+            let usefix = fix.len() > 4 || (fix.len() > 1 && !isfast);
+            if usefix {
+                // If we keep exactly the number of bytes equal to the length
+                // of the prefix (or suffix), then by the definition of a
+                // prefix, every literal in the sequence will be equivalent.
+                // Thus, 'dedup' will leave us with one literal.
+                //
+                // We do it this way to avoid an alloc, but also to make sure
+                // the exactness of literals is kept (or not).
+                if prefix {
+                    self.keep_first_bytes(fix.len());
+                } else {
+                    self.keep_last_bytes(fix.len());
+                }
+                self.dedup();
+                assert_eq!(Some(1), self.len());
+                // We still fall through here. In particular, we want our
+                // longest common prefix to be subject to the poison check.
+            }
+        }
+        // Everything below this check is more-or-less about trying to
+        // heuristically reduce the false positive rate of a prefilter. But
+        // if our sequence is completely exact, then it's possible the regex
+        // engine can be skipped entirely. In this case, the false positive
+        // rate is zero because every literal match corresponds to a regex
+        // match.
+        //
+        // This is OK even if the sequence contains a poison literal. Remember,
+        // a literal is only poisononous because of what we assume about its
+        // impact on the false positive rate. However, we do still check for
+        // an empty string. Empty strings are weird and it's best to let the
+        // regex engine handle those.
+        //
+        // We do currently do this check after the longest common prefix (or
+        // suffix) check, under the theory that single-substring search is so
+        // fast that we want that even if we'd end up turning an exact sequence
+        // into an inexact one. But this might be wrong...
+        if self.is_exact()
+            && self.min_literal_len().map_or(false, |len| len > 0)
+        {
+            return;
+        }
+        // Now we attempt to shorten the sequence. The idea here is that we
+        // don't want to look for too many literals, but we want to shorten
+        // our sequence enough to improve our odds of using better algorithms
+        // downstream (such as Teddy).
+        const ATTEMPTS: [(usize, usize); 5] =
+            [(5, 64), (4, 64), (3, 64), (2, 64), (1, 10)];
+        for (keep, limit) in ATTEMPTS {
+            let len = match self.len() {
+                None => break,
+                Some(len) => len,
+            };
+            if len <= limit {
+                break;
+            }
+            if prefix {
+                self.keep_first_bytes(keep);
+            } else {
+                self.keep_last_bytes(keep);
+            }
+            self.minimize_by_preference();
+        }
+        // Check for a poison literal. A poison literal is one that is short
+        // and is believed to have a very high match count. These poisons
+        // generally lead to a prefilter with a very high false positive rate,
+        // and thus overall worse performance.
+        //
+        // We do this last because we could have gone from a non-poisonous
+        // sequence to a poisonous one. Perhaps we should add some code to
+        // prevent such transitions in the first place, but then again, we
+        // likely only made the transition in the first place if the sequence
+        // was itself huge. And huge sequences are themselves poisonous. So...
+        if let Some(lits) = self.literals() {
+            if lits.iter().any(|lit| lit.is_poisonous()) {
+                self.make_infinite();
+            }
+        }
+    }
+}
+
+impl core::fmt::Debug for Seq {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        write!(f, "Seq")?;
+        if let Some(lits) = self.literals() {
+            f.debug_list().entries(lits.iter()).finish()
+        } else {
+            write!(f, "[∅]")
         }
     }
 }
@@ -1809,6 +2077,12 @@ impl Literal {
         self.make_inexact();
         self.bytes.drain(..self.len() - len);
     }
+
+    /// Returns true if it is believe that this literal is likely to match very
+    /// frequently, and is thus not a good candidate for a prefilter.
+    fn is_poisonous(&self) -> bool {
+        self.is_empty() || (self.len() == 1 && rank(self.as_bytes()[0]) >= 250)
+    }
 }
 
 impl From<u8> for Literal {
@@ -1854,7 +2128,9 @@ impl core::fmt::Debug for Literal {
 /// the "minimal" sequence, we simply only keep literals that were successfully
 /// inserted. (Since we don't need traversal, one wonders whether we can make
 /// some simplifications here, but I haven't given it a ton of thought and I've
-/// never seen this show up on a profile.)
+/// never seen this show up on a profile. Because of the heuristic limits
+/// imposed on literal extractions, the size of the inputs here is usually
+/// very small.)
 #[derive(Debug, Default)]
 struct PreferenceTrie {
     /// The states in this trie. The index of a state in this vector is its ID.
@@ -1879,7 +2155,14 @@ struct State {
 impl PreferenceTrie {
     /// Minimizes the given sequence of literals while preserving preference
     /// order semantics.
-    fn minimize(literals: &mut Vec<Literal>) {
+    ///
+    /// When `keep_exact` is true, the exactness of every literal retained is
+    /// kept. This is useful when dealing with a fully extracted `Seq` that
+    /// only contains exact literals. In that case, we can keep all retained
+    /// literals as exact because we know we'll never need to match anything
+    /// after them and because any removed literals are guaranteed to never
+    /// match.
+    fn minimize(literals: &mut Vec<Literal>, keep_exact: bool) {
         use core::cell::RefCell;
 
         // MSRV(1.61): Use retain_mut here to avoid interior mutability.
@@ -1889,7 +2172,9 @@ impl PreferenceTrie {
             match trie.borrow_mut().insert(lit.as_bytes()) {
                 Ok(_) => true,
                 Err(i) => {
-                    make_inexact.push(i);
+                    if !keep_exact {
+                        make_inexact.push(i);
+                    }
                     false
                 }
             }
@@ -1952,6 +2237,17 @@ impl PreferenceTrie {
     }
 }
 
+/// Returns the "rank" of the given byte.
+///
+/// The minimum rank value is `0` and the maximum rank value is `255`.
+///
+/// The rank of a byte is derived from a heuristic background distribution of
+/// relative frequencies of bytes. The heuristic says that lower the rank of a
+/// byte, the less likely that byte is to appear in any arbitrary haystack.
+pub fn rank(byte: u8) -> u8 {
+    crate::rank::BYTE_FREQUENCIES[usize::from(byte)]
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2006,6 +2302,13 @@ mod tests {
         let s1 = Seq::new(it);
         let s2 = s1.clone();
         (s1, s2)
+    }
+
+    fn opt<B: AsRef<[u8]>, I: IntoIterator<Item = B>>(it: I) -> (Seq, Seq) {
+        let (mut p, mut s) = exact(it);
+        p.optimize_for_prefix_by_preference();
+        s.optimize_for_suffix_by_preference();
+        (p, s)
     }
 
     #[test]
@@ -2122,6 +2425,16 @@ mod tests {
         // in reverse, and then [bc, ac, c] ordering is indeed correct from
         // that perspective. We also test a few more equivalent regexes, and
         // we get the same result, so it is consistent at least I suppose.
+        //
+        // The reason why this isn't an issue is that it only messes up
+        // preference order, and currently, suffixes are never used in a
+        // context where preference order matters. For prefixes it matters
+        // because we sometimes want to use prefilters without confirmation
+        // when all of the literals are exact (and there's no look-around). But
+        // we never do that for suffixes. Any time we use suffixes, we always
+        // include a confirmation step. If that ever changes, then it's likely
+        // this bug will need to be fixed, but last time I looked, it appears
+        // hard to do so.
         assert_eq!(
             inexact([I("a"), I("b"), E("c")], [I("bc"), I("ac"), E("c")]),
             e(r"a*b*c")
@@ -2771,5 +3084,38 @@ mod tests {
         let (prefixes, suffixes) = e(pat);
         assert!(!suffixes.is_finite());
         assert_eq!(Some(247), prefixes.len());
+    }
+
+    #[test]
+    fn optimize() {
+        // This gets a common prefix that isn't too short.
+        let (p, s) =
+            opt(["foobarfoobar", "foobar", "foobarzfoobar", "foobarfoobar"]);
+        assert_eq!(seq([I("foobar")]), p);
+        assert_eq!(seq([I("foobar")]), s);
+
+        // This also finds a common prefix, but since it's only one byte, it
+        // prefers the multiple literals.
+        let (p, s) = opt(["abba", "akka", "abccba"]);
+        assert_eq!(exact(["abba", "akka", "abccba"]), (p, s));
+
+        let (p, s) = opt(["sam", "samwise"]);
+        assert_eq!((seq([E("sam")]), seq([E("sam"), E("samwise")])), (p, s));
+
+        // The empty string is poisonous, so our seq becomes infinite, even
+        // though all literals are exact.
+        let (p, s) = opt(["foobarfoo", "foo", "", "foozfoo", "foofoo"]);
+        assert!(!p.is_finite());
+        assert!(!s.is_finite());
+
+        // A space is also poisonous, so our seq becomes infinite. But this
+        // only gets triggered when we don't have a completely exact sequence.
+        // When the sequence is exact, spaces are okay, since we presume that
+        // any prefilter will match a space more quickly than the regex engine.
+        // (When the sequence is exact, there's a chance of the prefilter being
+        // used without needing the regex engine at all.)
+        let mut p = seq([E("foobarfoo"), I("foo"), E(" "), E("foofoo")]);
+        p.optimize_for_prefix_by_preference();
+        assert!(!p.is_finite());
     }
 }
