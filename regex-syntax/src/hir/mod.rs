@@ -1965,10 +1965,22 @@ impl LookSet {
     /// word boundaries.
     #[inline]
     pub fn contains_word(&self) -> bool {
-        self.contains(Look::WordAscii)
-            || self.contains(Look::WordAsciiNegate)
-            || self.contains(Look::WordUnicode)
+        self.contains_word_unicode() || self.contains_word_ascii()
+    }
+
+    /// Returns true if and only if this set contains any Unicode word boundary
+    /// or negated Unicode word boundary assertions.
+    #[inline]
+    pub fn contains_word_unicode(&self) -> bool {
+        self.contains(Look::WordUnicode)
             || self.contains(Look::WordUnicodeNegate)
+    }
+
+    /// Returns true if and only if this set contains any ASCII word boundary
+    /// or negated ASCII word boundary assertions.
+    #[inline]
+    pub fn contains_word_ascii(&self) -> bool {
+        self.contains(Look::WordAscii) || self.contains(Look::WordAsciiNegate)
     }
 
     /// Modifies this set to be the union of itself and the set given.
