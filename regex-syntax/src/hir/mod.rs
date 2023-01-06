@@ -666,6 +666,36 @@ impl Class {
     /// non-empty Unicode oriented classes, this can return `1`, `2`, `3` or
     /// `4`. For empty classes, `None` is returned. It is impossible for `0` to
     /// be returned.
+    ///
+    /// # Example
+    ///
+    /// This example shows some examples of regexes and their corresponding
+    /// minimum length, if any.
+    ///
+    /// ```
+    /// use regex_syntax::{hir::Properties, Parser};
+    ///
+    /// // The empty string has a min length of 0.
+    /// let hir = Parser::new().parse(r"")?;
+    /// assert_eq!(Some(0), hir.properties().minimum_len());
+    /// // As do other types of regexes that only match the empty string.
+    /// let hir = Parser::new().parse(r"^$\b\B")?;
+    /// assert_eq!(Some(0), hir.properties().minimum_len());
+    /// // A regex that can match the empty string but match more is still 0.
+    /// let hir = Parser::new().parse(r"a*")?;
+    /// assert_eq!(Some(0), hir.properties().minimum_len());
+    /// // A regex that matches nothing has no minimum defined.
+    /// let hir = Parser::new().parse(r"[a&&b]")?;
+    /// assert_eq!(None, hir.properties().minimum_len());
+    /// // Character classes usually have a minimum length of 1.
+    /// let hir = Parser::new().parse(r"\w")?;
+    /// assert_eq!(Some(1), hir.properties().minimum_len());
+    /// // But sometimes Unicode classes might be bigger!
+    /// let hir = Parser::new().parse(r"\p{Cyrillic}")?;
+    /// assert_eq!(Some(2), hir.properties().minimum_len());
+    ///
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
     pub fn minimum_len(&self) -> Option<usize> {
         match *self {
             Class::Unicode(ref x) => x.minimum_len(),
@@ -680,6 +710,39 @@ impl Class {
     /// non-empty Unicode oriented classes, this can return `1`, `2`, `3` or
     /// `4`. For empty classes, `None` is returned. It is impossible for `0` to
     /// be returned.
+    ///
+    /// # Example
+    ///
+    /// This example shows some examples of regexes and their corresponding
+    /// maximum length, if any.
+    ///
+    /// ```
+    /// use regex_syntax::{hir::Properties, Parser};
+    ///
+    /// // The empty string has a max length of 0.
+    /// let hir = Parser::new().parse(r"")?;
+    /// assert_eq!(Some(0), hir.properties().maximum_len());
+    /// // As do other types of regexes that only match the empty string.
+    /// let hir = Parser::new().parse(r"^$\b\B")?;
+    /// assert_eq!(Some(0), hir.properties().maximum_len());
+    /// // A regex that matches nothing has no maximum defined.
+    /// let hir = Parser::new().parse(r"[a&&b]")?;
+    /// assert_eq!(None, hir.properties().maximum_len());
+    /// // Bounded repeats work as you expect.
+    /// let hir = Parser::new().parse(r"x{2,10}")?;
+    /// assert_eq!(Some(10), hir.properties().maximum_len());
+    /// // An unbounded repeat means there is no maximum.
+    /// let hir = Parser::new().parse(r"x{2,}")?;
+    /// assert_eq!(None, hir.properties().maximum_len());
+    /// // With Unicode enabled, \w can match up to 4 bytes!
+    /// let hir = Parser::new().parse(r"\w")?;
+    /// assert_eq!(Some(4), hir.properties().maximum_len());
+    /// // Without Unicode enabled, \w matches at most 1 byte.
+    /// let hir = Parser::new().parse(r"(?-u)\w")?;
+    /// assert_eq!(Some(1), hir.properties().maximum_len());
+    ///
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
     pub fn maximum_len(&self) -> Option<usize> {
         match *self {
             Class::Unicode(ref x) => x.maximum_len(),
@@ -1532,9 +1595,9 @@ impl Properties {
     /// the empty string is in the language described by this HIR.
     ///
     /// `None` is returned when there is no longest matching string. This
-    /// occurs when the HIR matches nothing or when there is no upper bound
-    /// on the length of matching strings. An example of such a regex is
-    /// `\P{any}`.
+    /// occurs when the HIR matches nothing or when there is no upper bound on
+    /// the length of matching strings. Example of such regexes are `\P{any}`
+    /// (matches nothing) and `a+` (has no upper bound).
     pub fn maximum_len(&self) -> Option<usize> {
         self.0.maximum_len
     }
@@ -1624,6 +1687,68 @@ impl Properties {
     /// corresponding `Hir`. This routine provides a way of combining the
     /// properties of each `Hir` expression into one set of properties
     /// representing the union of those expressions.
+    ///
+    /// # Example: union with HIRs that never match
+    ///
+    /// This example shows that unioning properties together with one that
+    /// represents a regex that never matches will "poison" certain attributes,
+    /// like the minimum and maximum lengths.
+    ///
+    /// ```
+    /// use regex_syntax::{hir::Properties, Parser};
+    ///
+    /// let hir1 = Parser::new().parse("ab?c?")?;
+    /// assert_eq!(Some(1), hir1.properties().minimum_len());
+    /// assert_eq!(Some(3), hir1.properties().maximum_len());
+    ///
+    /// let hir2 = Parser::new().parse(r"[a&&b]")?;
+    /// assert_eq!(None, hir2.properties().minimum_len());
+    /// assert_eq!(None, hir2.properties().maximum_len());
+    ///
+    /// let hir3 = Parser::new().parse(r"wxy?z?")?;
+    /// assert_eq!(Some(2), hir3.properties().minimum_len());
+    /// assert_eq!(Some(4), hir3.properties().maximum_len());
+    ///
+    /// let unioned = Properties::union([
+    ///		hir1.properties(),
+    ///		hir2.properties(),
+    ///		hir3.properties(),
+    ///	]);
+    /// assert_eq!(None, unioned.minimum_len());
+    /// assert_eq!(None, unioned.maximum_len());
+    ///
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
+    ///
+    /// The maximum length can also be "poisoned" by a pattern that has no
+    /// upper bound on the length of a match. The minimum length remains
+    /// unaffected:
+    ///
+    /// ```
+    /// use regex_syntax::{hir::Properties, Parser};
+    ///
+    /// let hir1 = Parser::new().parse("ab?c?")?;
+    /// assert_eq!(Some(1), hir1.properties().minimum_len());
+    /// assert_eq!(Some(3), hir1.properties().maximum_len());
+    ///
+    /// let hir2 = Parser::new().parse(r"a+")?;
+    /// assert_eq!(Some(1), hir2.properties().minimum_len());
+    /// assert_eq!(None, hir2.properties().maximum_len());
+    ///
+    /// let hir3 = Parser::new().parse(r"wxy?z?")?;
+    /// assert_eq!(Some(2), hir3.properties().minimum_len());
+    /// assert_eq!(Some(4), hir3.properties().maximum_len());
+    ///
+    /// let unioned = Properties::union([
+    ///		hir1.properties(),
+    ///		hir2.properties(),
+    ///		hir3.properties(),
+    ///	]);
+    /// assert_eq!(Some(1), unioned.minimum_len());
+    /// assert_eq!(None, unioned.maximum_len());
+    ///
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
     pub fn union<I, P>(props: I) -> Properties
     where
         I: IntoIterator<Item = P>,
@@ -1654,6 +1779,7 @@ impl Properties {
             literal: false,
             alternation_literal: true,
         };
+        let (mut min_poisoned, mut max_poisoned) = (false, false);
         // Handle properties that need to visit every child hir.
         for prop in it {
             let p = prop.borrow();
@@ -1665,14 +1791,24 @@ impl Properties {
                 props.captures_len.saturating_add(p.captures_len());
             props.alternation_literal =
                 props.alternation_literal && p.is_alternation_literal();
-            if let Some(xmin) = p.minimum_len() {
-                if props.minimum_len.map_or(true, |pmin| xmin < pmin) {
-                    props.minimum_len = Some(xmin);
+            if !min_poisoned {
+                if let Some(xmin) = p.minimum_len() {
+                    if props.minimum_len.map_or(true, |pmin| xmin < pmin) {
+                        props.minimum_len = Some(xmin);
+                    }
+                } else {
+                    props.minimum_len = None;
+                    min_poisoned = true;
                 }
             }
-            if let Some(xmax) = p.maximum_len() {
-                if props.maximum_len.map_or(true, |pmax| xmax > pmax) {
-                    props.maximum_len = Some(xmax);
+            if !max_poisoned {
+                if let Some(xmax) = p.maximum_len() {
+                    if props.maximum_len.map_or(true, |pmax| xmax > pmax) {
+                        props.maximum_len = Some(xmax);
+                    }
+                } else {
+                    props.maximum_len = None;
+                    max_poisoned = true;
                 }
             }
         }
