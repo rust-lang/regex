@@ -309,7 +309,7 @@ mod tests {
     }
 
     fn roundtrip_bytes(given: &str, expected: &str) {
-        roundtrip_with(|b| b.allow_invalid_utf8(true), given, expected);
+        roundtrip_with(|b| b.utf8(false), given, expected);
     }
 
     fn roundtrip_with<F>(mut f: F, given: &str, expected: &str)

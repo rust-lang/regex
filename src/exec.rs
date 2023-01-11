@@ -246,7 +246,7 @@ impl ExecBuilder {
                 .swap_greed(self.options.swap_greed)
                 .ignore_whitespace(self.options.ignore_whitespace)
                 .unicode(self.options.unicode)
-                .allow_invalid_utf8(!self.only_utf8)
+                .utf8(self.only_utf8)
                 .nest_limit(self.options.nest_limit)
                 .build();
             let expr =

@@ -74,19 +74,23 @@ impl ParserBuilder {
         self
     }
 
-    /// When enabled, the parser will permit the construction of a regular
+    /// When disabled, translation will permit the construction of a regular
     /// expression that may match invalid UTF-8.
     ///
-    /// When disabled (the default), the parser is guaranteed to produce
-    /// an expression that will only ever match valid UTF-8 (otherwise, the
-    /// parser will return an error).
+    /// When enabled (the default), the translator is guaranteed to produce an
+    /// expression that, for non-empty matches, will only ever produce spans
+    /// that are entirely valid UTF-8 (otherwise, the translator will return an
+    /// error).
     ///
-    /// Perhaps surprisingly, when invalid UTF-8 isn't allowed, a negated ASCII
-    /// word boundary (uttered as `(?-u:\B)` in the concrete syntax) will cause
-    /// the parser to return an error. Namely, a negated ASCII word boundary
-    /// can result in matching positions that aren't valid UTF-8 boundaries.
-    pub fn allow_invalid_utf8(&mut self, yes: bool) -> &mut ParserBuilder {
-        self.hir.allow_invalid_utf8(yes);
+    /// Perhaps surprisingly, when UTF-8 is enabled, an empty regex or even
+    /// a negated ASCII word boundary (uttered as `(?-u:\B)` in the concrete
+    /// syntax) will be allowed even though they can produce matches that split
+    /// a UTF-8 encoded codepoint. This only applies to zero-width or "empty"
+    /// matches, and it is expected that the regex engine itself must handle
+    /// these cases if necessary (perhaps by suppressing any zero-width matches
+    /// that split a codepoint).
+    pub fn utf8(&mut self, yes: bool) -> &mut ParserBuilder {
+        self.hir.utf8(yes);
         self
     }
 
@@ -144,9 +148,9 @@ impl ParserBuilder {
     /// By default this is **enabled**. It may alternatively be selectively
     /// disabled in the regular expression itself via the `u` flag.
     ///
-    /// Note that unless `allow_invalid_utf8` is enabled (it's disabled by
-    /// default), a regular expression will fail to parse if Unicode mode is
-    /// disabled and a sub-expression could possibly match invalid UTF-8.
+    /// Note that unless `utf8` is disabled (it's enabled by default), a
+    /// regular expression will fail to parse if Unicode mode is disabled and a
+    /// sub-expression could possibly match invalid UTF-8.
     pub fn unicode(&mut self, yes: bool) -> &mut ParserBuilder {
         self.hir.unicode(yes);
         self
