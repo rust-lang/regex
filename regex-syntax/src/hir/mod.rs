@@ -71,7 +71,7 @@ pub enum ErrorKind {
     /// support is disabled. For example `(?-u:\pL)` would trigger this error.
     UnicodeNotAllowed,
     /// This error occurs when translating a pattern that could match a byte
-    /// sequence that isn't UTF-8 and `allow_invalid_utf8` was disabled.
+    /// sequence that isn't UTF-8 and `utf8` was enabled.
     InvalidUtf8,
     /// This occurs when an unrecognized Unicode property name could not
     /// be found.

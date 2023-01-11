@@ -2253,11 +2253,7 @@ mod tests {
     use super::*;
 
     fn parse(pattern: &str) -> Hir {
-        crate::ParserBuilder::new()
-            .allow_invalid_utf8(true)
-            .build()
-            .parse(pattern)
-            .unwrap()
+        crate::ParserBuilder::new().utf8(false).build().parse(pattern).unwrap()
     }
 
     fn prefixes(pattern: &str) -> Seq {

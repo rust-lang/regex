@@ -18,7 +18,7 @@ type Result<T> = core::result::Result<T, Error>;
 /// A builder for constructing an AST->HIR translator.
 #[derive(Clone, Debug)]
 pub struct TranslatorBuilder {
-    allow_invalid_utf8: bool,
+    utf8: bool,
     flags: Flags,
 }
 
@@ -31,10 +31,7 @@ impl Default for TranslatorBuilder {
 impl TranslatorBuilder {
     /// Create a new translator builder with a default c onfiguration.
     pub fn new() -> TranslatorBuilder {
-        TranslatorBuilder {
-            allow_invalid_utf8: false,
-            flags: Flags::default(),
-        }
+        TranslatorBuilder { utf8: true, flags: Flags::default() }
     }
 
     /// Build a translator using the current configuration.
@@ -42,23 +39,27 @@ impl TranslatorBuilder {
         Translator {
             stack: RefCell::new(vec![]),
             flags: Cell::new(self.flags),
-            allow_invalid_utf8: self.allow_invalid_utf8,
+            utf8: self.utf8,
         }
     }
 
-    /// When enabled, translation will permit the construction of a regular
+    /// When disabled, translation will permit the construction of a regular
     /// expression that may match invalid UTF-8.
     ///
-    /// When disabled (the default), the translator is guaranteed to produce
-    /// an expression that will only ever match valid UTF-8 (otherwise, the
-    /// translator will return an error).
+    /// When enabled (the default), the translator is guaranteed to produce an
+    /// expression that, for non-empty matches, will only ever produce spans
+    /// that are entirely valid UTF-8 (otherwise, the translator will return an
+    /// error).
     ///
-    /// Perhaps surprisingly, when invalid UTF-8 isn't allowed, a negated ASCII
-    /// word boundary (uttered as `(?-u:\B)` in the concrete syntax) will cause
-    /// the parser to return an error. Namely, a negated ASCII word boundary
-    /// can result in matching positions that aren't valid UTF-8 boundaries.
-    pub fn allow_invalid_utf8(&mut self, yes: bool) -> &mut TranslatorBuilder {
-        self.allow_invalid_utf8 = yes;
+    /// Perhaps surprisingly, when UTF-8 is enabled, an empty regex or even
+    /// a negated ASCII word boundary (uttered as `(?-u:\B)` in the concrete
+    /// syntax) will be allowed even though they can produce matches that split
+    /// a UTF-8 encoded codepoint. This only applies to zero-width or "empty"
+    /// matches, and it is expected that the regex engine itself must handle
+    /// these cases if necessary (perhaps by suppressing any zero-width matches
+    /// that split a codepoint).
+    pub fn utf8(&mut self, yes: bool) -> &mut TranslatorBuilder {
+        self.utf8 = yes;
         self
     }
 
@@ -112,7 +113,7 @@ pub struct Translator {
     /// The current flag settings.
     flags: Cell<Flags>,
     /// Whether we're allowed to produce HIR that can match arbitrary bytes.
-    allow_invalid_utf8: bool,
+    utf8: bool,
 }
 
 impl Translator {
@@ -162,8 +163,8 @@ enum HirFrame {
     /// recursive structure).
     ///
     /// Byte character classes are created when Unicode mode (`u`) is disabled.
-    /// If `allow_invalid_utf8` is disabled (the default), then a byte
-    /// character is only permitted to match ASCII text.
+    /// If `utf8` is enabled (the default), then a byte character is only
+    /// permitted to match ASCII text.
     ClassBytes(hir::ClassBytes),
     /// This is pushed whenever a repetition is observed. After visiting every
     /// sub-expression in the repetition, the translator's stack is expected to
@@ -805,7 +806,7 @@ impl<'t, 'p> TranslatorI<'t, 'p> {
         if byte <= 0x7F {
             return Ok(Either::Left(char::try_from(byte).unwrap()));
         }
-        if !self.trans().allow_invalid_utf8 {
+        if self.trans().utf8 {
             return Err(self.error(lit.span, ErrorKind::InvalidUtf8));
         }
         Ok(Either::Right(byte))
@@ -856,7 +857,7 @@ impl<'t, 'p> TranslatorI<'t, 'p> {
     }
 
     fn hir_dot(&self, span: Span) -> Result<Hir> {
-        if !self.flags().unicode() && !self.trans().allow_invalid_utf8 {
+        if !self.flags().unicode() && self.trans().utf8 {
             return Err(self.error(span, ErrorKind::InvalidUtf8));
         }
         Ok(Hir::dot(self.flags().dot()))
@@ -890,7 +891,7 @@ impl<'t, 'p> TranslatorI<'t, 'p> {
                     // It is possible for negated ASCII word boundaries to
                     // match at invalid UTF-8 boundaries, even when searching
                     // valid UTF-8.
-                    if !self.trans().allow_invalid_utf8 {
+                    if self.trans().utf8 {
                         return Err(
                             self.error(asst.span, ErrorKind::InvalidUtf8)
                         );
@@ -1039,7 +1040,7 @@ impl<'t, 'p> TranslatorI<'t, 'p> {
         // Negating a Perl byte class is likely to cause it to match invalid
         // UTF-8. That's only OK if the translator is configured to allow such
         // things.
-        if !self.trans().allow_invalid_utf8 && !class.is_all_ascii() {
+        if self.trans().utf8 && !class.is_all_ascii() {
             return Err(self.error(ast_class.span, ErrorKind::InvalidUtf8));
         }
         Ok(class)
@@ -1107,7 +1108,7 @@ impl<'t, 'p> TranslatorI<'t, 'p> {
         if negated {
             class.negate();
         }
-        if !self.trans().allow_invalid_utf8 && !class.is_all_ascii() {
+        if self.trans().utf8 && !class.is_all_ascii() {
             return Err(self.error(span.clone(), ErrorKind::InvalidUtf8));
         }
         Ok(())
@@ -1313,7 +1314,7 @@ mod tests {
 
     fn t(pattern: &str) -> Hir {
         TranslatorBuilder::new()
-            .allow_invalid_utf8(false)
+            .utf8(true)
             .build()
             .translate(pattern, &parse(pattern))
             .unwrap()
@@ -1321,7 +1322,7 @@ mod tests {
 
     fn t_err(pattern: &str) -> hir::Error {
         TranslatorBuilder::new()
-            .allow_invalid_utf8(false)
+            .utf8(true)
             .build()
             .translate(pattern, &parse(pattern))
             .unwrap_err()
@@ -1329,7 +1330,7 @@ mod tests {
 
     fn t_bytes(pattern: &str) -> Hir {
         TranslatorBuilder::new()
-            .allow_invalid_utf8(true)
+            .utf8(false)
             .build()
             .translate(pattern, &parse(pattern))
             .unwrap()
