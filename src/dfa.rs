@@ -1576,7 +1576,7 @@ impl<'a> Fsm<'a> {
     /// inputs, a new state could be created for every byte of input. (This is
     /// bad for memory use, so we bound it with a cache.)
     fn approximate_size(&self) -> usize {
-        self.cache.size + self.prog.approximate_size()
+        self.cache.size
     }
 }
 
