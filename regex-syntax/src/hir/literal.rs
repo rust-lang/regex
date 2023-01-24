@@ -583,7 +583,38 @@ impl Extractor {
     fn union(&self, mut seq1: Seq, seq2: &mut Seq) -> Seq {
         if seq1.max_union_len(seq2).map_or(false, |len| len > self.limit_total)
         {
-            seq2.make_infinite();
+            // We try to trim our literal sequences to see if we can make
+            // room for more literals. The idea is that we'd rather trim down
+            // literals already in our sequence if it means we can add a few
+            // more and retain a finite sequence. Otherwise, we'll union with
+            // an infinite sequence and that infects everything and effectively
+            // stops literal extraction in its tracks.
+            //
+            // We do we keep 4 bytes here? Well, it's a bit of an abstraction
+            // leakage. Downstream, the literals may wind up getting fed to
+            // the Teddy algorithm, which supports searching literals up to
+            // length 4. So that's why we pick that number here. Arguably this
+            // should be a tuneable parameter, but it seems a little tricky to
+            // describe. And I'm still unsure if this is the right way to go
+            // about culling literal sequences.
+            match self.kind {
+                ExtractKind::Prefix => {
+                    seq1.keep_first_bytes(4);
+                    seq2.keep_first_bytes(4);
+                }
+                ExtractKind::Suffix => {
+                    seq1.keep_last_bytes(4);
+                    seq2.keep_last_bytes(4);
+                }
+            }
+            seq1.dedup();
+            seq2.dedup();
+            if seq1
+                .max_union_len(seq2)
+                .map_or(false, |len| len > self.limit_total)
+            {
+                seq2.make_infinite();
+            }
         }
         seq1.union(seq2);
         assert!(seq1.len().map_or(true, |x| x <= self.limit_total));
@@ -2763,8 +2794,27 @@ mod tests {
         assert_eq!(expected, (prefixes, suffixes));
     }
 
+    // This tests that we get some kind of literals extracted for a beefier
+    // alternation with case insensitive mode enabled. At one point during
+    // development, this returned nothing, and motivated some special case
+    // code in Extractor::union to try and trim down the literal sequences
+    // if the union would blow the limits set.
+    #[test]
+    #[cfg(feature = "unicode-case")]
+    fn holmes_alt() {
+        let mut pre =
+            prefixes(r"(?i)Sherlock|Holmes|Watson|Irene|Adler|John|Baker");
+        assert!(pre.len().unwrap() > 0);
+        pre.optimize_for_prefix_by_preference();
+        assert!(pre.len().unwrap() > 0);
+    }
+
     // See: https://github.com/rust-lang/regex/security/advisories/GHSA-m5pq-gvj9-9vr8
     // See: CVE-2022-24713
+    //
+    // We test this here to ensure literal extraction completes in reasonable
+    // time and isn't materially impacted by these sorts of pathological
+    // repeats.
     #[test]
     fn crazy_repeats() {
         assert_eq!(inexact([I("")], [I("")]), e(r"(?:){4294967295}"));
@@ -3079,7 +3129,7 @@ mod tests {
         // literal optimizations.
         let (prefixes, suffixes) = e(pat);
         assert!(!suffixes.is_finite());
-        assert_eq!(Some(247), prefixes.len());
+        assert_eq!(Some(243), prefixes.len());
     }
 
     #[test]
