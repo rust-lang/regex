@@ -361,6 +361,7 @@ regex matches `abc` at positions `0`, `1`, `2` and `3`.
 <pre class="rust">
 (exp)          numbered capture group (indexed by opening parenthesis)
 (?P&lt;name&gt;exp)  named (also numbered) capture group (allowed chars: [_0-9a-zA-Z.\[\]])
+(?&lt;name&gt;exp)   named (also numbered) capture group (allowed chars: [_0-9a-zA-Z.\[\]])
 (?:exp)        non-capturing group
 (?flags)       set flags within current group
 (?flags:exp)   set flags for exp (non-capturing)
