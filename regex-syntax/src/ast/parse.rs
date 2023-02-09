@@ -1195,7 +1195,7 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
             ));
         }
         let inner_span = self.span();
-        if self.bump_if("?P<") {
+        if self.bump_if("?P<") || self.bump_if("?<") {
             let capture_index = self.next_capture_index(open_span)?;
             let cap = self.parse_capture_name(capture_index)?;
             Ok(Either::Right(ast::Group {
