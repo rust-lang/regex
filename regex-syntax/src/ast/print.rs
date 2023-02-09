@@ -160,9 +160,10 @@ impl<W: fmt::Write> Writer<W> {
         use crate::ast::GroupKind::*;
         match ast.kind {
             CaptureIndex(_) => self.wtr.write_str("("),
-            CaptureName(ref x) => {
-                self.wtr.write_str("(?P<")?;
-                self.wtr.write_str(&x.name)?;
+            CaptureName { ref name, starts_with_p } => {
+                let start = if starts_with_p { "(?P<" } else { "(?<" };
+                self.wtr.write_str(start)?;
+                self.wtr.write_str(&name.name)?;
                 self.wtr.write_str(">")?;
                 Ok(())
             }
@@ -505,6 +506,7 @@ mod tests {
     fn print_group() {
         roundtrip("(?i:a)");
         roundtrip("(?P<foo>a)");
+        roundtrip("(?<foo>a)");
         roundtrip("(a)");
     }
 

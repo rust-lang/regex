@@ -1202,12 +1202,16 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
             ));
         }
         let inner_span = self.span();
-        if self.bump_if("?P<") {
+        let mut starts_with_p = true;
+        if self.bump_if("?P<") || {
+            starts_with_p = false;
+            self.bump_if("?<")
+        } {
             let capture_index = self.next_capture_index(open_span)?;
-            let cap = self.parse_capture_name(capture_index)?;
+            let name = self.parse_capture_name(capture_index)?;
             Ok(Either::Right(ast::Group {
                 span: open_span,
-                kind: ast::GroupKind::CaptureName(cap),
+                kind: ast::GroupKind::CaptureName { starts_with_p, name },
                 ast: Box::new(Ast::Empty(self.span())),
             }))
         } else if self.bump_if("?") {
@@ -2800,11 +2804,14 @@ bar
                     flag_set(pat, 0..4, ast::Flag::IgnoreWhitespace, false),
                     Ast::Group(ast::Group {
                         span: span_range(pat, 4..pat.len()),
-                        kind: ast::GroupKind::CaptureName(ast::CaptureName {
-                            span: span_range(pat, 9..12),
-                            name: s("foo"),
-                            index: 1,
-                        }),
+                        kind: ast::GroupKind::CaptureName {
+                            starts_with_p: true,
+                            name: ast::CaptureName {
+                                span: span_range(pat, 9..12),
+                                name: s("foo"),
+                                index: 1,
+                            }
+                        },
                         ast: Box::new(lit_with('a', span_range(pat, 14..15))),
                     }),
                 ]
@@ -3820,14 +3827,32 @@ bar
     #[test]
     fn parse_capture_name() {
         assert_eq!(
+            parser("(?<a>z)").parse(),
+            Ok(Ast::Group(ast::Group {
+                span: span(0..7),
+                kind: ast::GroupKind::CaptureName {
+                    starts_with_p: false,
+                    name: ast::CaptureName {
+                        span: span(3..4),
+                        name: s("a"),
+                        index: 1,
+                    }
+                },
+                ast: Box::new(lit('z', 5)),
+            }))
+        );
+        assert_eq!(
             parser("(?P<a>z)").parse(),
             Ok(Ast::Group(ast::Group {
                 span: span(0..8),
-                kind: ast::GroupKind::CaptureName(ast::CaptureName {
-                    span: span(4..5),
-                    name: s("a"),
-                    index: 1,
-                }),
+                kind: ast::GroupKind::CaptureName {
+                    starts_with_p: true,
+                    name: ast::CaptureName {
+                        span: span(4..5),
+                        name: s("a"),
+                        index: 1,
+                    }
+                },
                 ast: Box::new(lit('z', 6)),
             }))
         );
@@ -3835,11 +3860,14 @@ bar
             parser("(?P<abc>z)").parse(),
             Ok(Ast::Group(ast::Group {
                 span: span(0..10),
-                kind: ast::GroupKind::CaptureName(ast::CaptureName {
-                    span: span(4..7),
-                    name: s("abc"),
-                    index: 1,
-                }),
+                kind: ast::GroupKind::CaptureName {
+                    starts_with_p: true,
+                    name: ast::CaptureName {
+                        span: span(4..7),
+                        name: s("abc"),
+                        index: 1,
+                    }
+                },
                 ast: Box::new(lit('z', 8)),
             }))
         );
@@ -3848,11 +3876,14 @@ bar
             parser("(?P<a_1>z)").parse(),
             Ok(Ast::Group(ast::Group {
                 span: span(0..10),
-                kind: ast::GroupKind::CaptureName(ast::CaptureName {
-                    span: span(4..7),
-                    name: s("a_1"),
-                    index: 1,
-                }),
+                kind: ast::GroupKind::CaptureName {
+                    starts_with_p: true,
+                    name: ast::CaptureName {
+                        span: span(4..7),
+                        name: s("a_1"),
+                        index: 1,
+                    }
+                },
                 ast: Box::new(lit('z', 8)),
             }))
         );
@@ -3861,11 +3892,14 @@ bar
             parser("(?P<a.1>z)").parse(),
             Ok(Ast::Group(ast::Group {
                 span: span(0..10),
-                kind: ast::GroupKind::CaptureName(ast::CaptureName {
-                    span: span(4..7),
-                    name: s("a.1"),
-                    index: 1,
-                }),
+                kind: ast::GroupKind::CaptureName {
+                    starts_with_p: true,
+                    name: ast::CaptureName {
+                        span: span(4..7),
+                        name: s("a.1"),
+                        index: 1,
+                    }
+                },
                 ast: Box::new(lit('z', 8)),
             }))
         );
@@ -3874,11 +3908,14 @@ bar
             parser("(?P<a[1]>z)").parse(),
             Ok(Ast::Group(ast::Group {
                 span: span(0..11),
-                kind: ast::GroupKind::CaptureName(ast::CaptureName {
-                    span: span(4..8),
-                    name: s("a[1]"),
-                    index: 1,
-                }),
+                kind: ast::GroupKind::CaptureName {
+                    starts_with_p: true,
+                    name: ast::CaptureName {
+                        span: span(4..8),
+                        name: s("a[1]"),
+                        index: 1,
+                    }
+                },
                 ast: Box::new(lit('z', 9)),
             }))
         );
