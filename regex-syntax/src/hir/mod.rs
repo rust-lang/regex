@@ -429,12 +429,14 @@ impl Hir {
             return new.pop().unwrap();
         }
         // Now that it's completely flattened, look for the special case of
-        // 'char1|char2|...|charN' and collapse that into a class. Note that we
-        // look for 'char' first and then bytes. The issue here is that if we
-        // find both non-ASCII codepoints and non-ASCII singleton bytes, then
-        // it isn't actually possible to smush them into a single class. So we
-        // look for all chars and then all bytes, and don't handle anything
-        // else.
+        // 'char1|char2|...|charN' and collapse that into a class. Note that
+        // we look for 'char' first and then bytes. The issue here is that if
+        // we find both non-ASCII codepoints and non-ASCII singleton bytes,
+        // then it isn't actually possible to smush them into a single class.
+        // (Because classes are either "all codepoints" or "all bytes." You
+        // can have a class that both matches non-ASCII but valid UTF-8 and
+        // invalid UTF-8.) So we look for all chars and then all bytes, and
+        // don't handle anything else.
         if let Some(singletons) = singleton_chars(&new) {
             let it = singletons
                 .into_iter()
@@ -455,6 +457,14 @@ impl Hir {
         if let Some(cls) = class_bytes(&new) {
             return Hir::class(cls);
         }
+        // Factor out a common prefix if we can, which might potentially
+        // simplify the expression and unlock other optimizations downstream.
+        // It also might generally make NFA matching and DFA construction
+        // faster by reducing the scope of branching in the regex.
+        new = match lift_common_prefix(new) {
+            Ok(hir) => return hir,
+            Err(unchanged) => unchanged,
+        };
         let props = Properties::alternation(&new);
         Hir { kind: HirKind::Alternation(new), props }
     }
@@ -2249,6 +2259,65 @@ fn singleton_bytes(hirs: &[Hir]) -> Option<Vec<u8>> {
         singletons.push(literal[0]);
     }
     Some(singletons)
+}
+
+/// Looks for a common prefix in the list of alternation branches given. If one
+/// is found, then an equivalent but (hopefully) simplified Hir is returned.
+/// Otherwise, the original given list of branches is returned unmodified.
+///
+/// This is not quite as good as it could be. Right now, it requires that
+/// all branches are 'Concat' expressions. It also doesn't do well with
+/// literals. For example, given 'foofoo|foobar', it will not refactor it to
+/// 'foo(?:foo|bar)' because literals are flattened into their own special
+/// concatenation. (One wonders if perhaps 'Literal' should be a single atom
+/// instead of a string of bytes because of this. Otherwise, handling the
+/// current representation in this routine will be pretty gnarly. Sigh.)
+fn lift_common_prefix(hirs: Vec<Hir>) -> Result<Hir, Vec<Hir>> {
+    if hirs.len() <= 1 {
+        return Err(hirs);
+    }
+    let mut prefix = match hirs[0].kind() {
+        HirKind::Concat(ref xs) => &**xs,
+        _ => return Err(hirs),
+    };
+    if prefix.is_empty() {
+        return Err(hirs);
+    }
+    for h in hirs.iter().skip(1) {
+        let concat = match h.kind() {
+            HirKind::Concat(ref xs) => xs,
+            _ => return Err(hirs),
+        };
+        let common_len = prefix
+            .iter()
+            .zip(concat.iter())
+            .take_while(|(x, y)| x == y)
+            .count();
+        prefix = &prefix[..common_len];
+        if prefix.is_empty() {
+            return Err(hirs);
+        }
+    }
+    let len = prefix.len();
+    assert_ne!(0, len);
+    let mut prefix_concat = vec![];
+    let mut suffix_alts = vec![];
+    for h in hirs {
+        let mut concat = match h.into_kind() {
+            HirKind::Concat(xs) => xs,
+            // We required all sub-expressions to be
+            // concats above, so we're only here if we
+            // have a concat.
+            _ => unreachable!(),
+        };
+        suffix_alts.push(Hir::concat(concat.split_off(len)));
+        if prefix_concat.is_empty() {
+            prefix_concat = concat;
+        }
+    }
+    let mut concat = prefix_concat;
+    concat.push(Hir::alternation(suffix_alts));
+    Ok(Hir::concat(concat))
 }
 
 #[cfg(test)]

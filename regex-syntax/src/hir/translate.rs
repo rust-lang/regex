@@ -3428,5 +3428,35 @@ mod tests {
             t("a|b|c|d|e|f|x|y|z"),
             hir_uclass(&[('a', 'f'), ('x', 'z')]),
         );
+        // Tests that we lift common prefixes out of an alternation.
+        assert_eq!(
+            t("[A-Z]foo|[A-Z]quux"),
+            hir_cat(vec![
+                hir_uclass(&[('A', 'Z')]),
+                hir_alt(vec![hir_lit("foo"), hir_lit("quux")]),
+            ]),
+        );
+        assert_eq!(
+            t("[A-Z][A-Z]|[A-Z]quux"),
+            hir_cat(vec![
+                hir_uclass(&[('A', 'Z')]),
+                hir_alt(vec![hir_uclass(&[('A', 'Z')]), hir_lit("quux")]),
+            ]),
+        );
+        assert_eq!(
+            t("[A-Z][A-Z]|[A-Z][A-Z]quux"),
+            hir_cat(vec![
+                hir_uclass(&[('A', 'Z')]),
+                hir_uclass(&[('A', 'Z')]),
+                hir_alt(vec![Hir::empty(), hir_lit("quux")]),
+            ]),
+        );
+        assert_eq!(
+            t("[A-Z]foo|[A-Z]foobar"),
+            hir_cat(vec![
+                hir_uclass(&[('A', 'Z')]),
+                hir_alt(vec![hir_lit("foo"), hir_lit("foobar")]),
+            ]),
+        );
     }
 }
