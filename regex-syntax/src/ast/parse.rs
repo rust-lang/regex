@@ -3826,6 +3826,21 @@ bar
     #[test]
     fn parse_capture_name() {
         assert_eq!(
+            parser("(?<a>z)").parse(),
+            Ok(Ast::Group(ast::Group {
+                span: span(0..7),
+                kind: ast::GroupKind::CaptureName {
+                    starts_with_p: false,
+                    name: ast::CaptureName {
+                        span: span(3..4),
+                        name: s("a"),
+                        index: 1,
+                    }
+                },
+                ast: Box::new(lit('z', 5)),
+            }))
+        );
+        assert_eq!(
             parser("(?P<a>z)").parse(),
             Ok(Ast::Group(ast::Group {
                 span: span(0..8),
