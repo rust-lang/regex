@@ -1196,10 +1196,17 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
         }
         let inner_span = self.span();
         let mut has_p = false;
-        if self.bump_if("?<") || {has_p = true; self.bump_if("?P<")} {
+        if self.bump_if("?<") || {
+            has_p = true;
+            self.bump_if("?P<")
+        } {
             let capture_index = self.next_capture_index(open_span)?;
             let cap = self.parse_capture_name(capture_index)?;
-            let kind = if has_p { ast::GroupKind::CapturePName } else { ast::GroupKind::CaptureName } ;
+            let kind = if has_p {
+                ast::GroupKind::CapturePName
+            } else {
+                ast::GroupKind::CaptureName
+            };
             Ok(Either::Right(ast::Group {
                 span: open_span,
                 kind: kind(cap),
