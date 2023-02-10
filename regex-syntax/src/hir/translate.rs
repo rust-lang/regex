@@ -771,11 +771,10 @@ impl<'t, 'p> TranslatorI<'t, 'p> {
             ast::GroupKind::CaptureIndex(idx) => {
                 hir::GroupKind::CaptureIndex(idx)
             }
-            ast::GroupKind::CaptureName(ref capname)
-            | ast::GroupKind::CapturePName(ref capname) => {
+            ast::GroupKind::CaptureName { ref name, .. } => {
                 hir::GroupKind::CaptureName {
-                    name: capname.name.clone(),
-                    index: capname.index,
+                    name: name.name.clone(),
+                    index: name.index,
                 }
             }
             ast::GroupKind::NonCapturing(_) => hir::GroupKind::NonCapturing,
