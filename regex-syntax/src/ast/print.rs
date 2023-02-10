@@ -505,6 +505,7 @@ mod tests {
     fn print_group() {
         roundtrip("(?i:a)");
         roundtrip("(?P<foo>a)");
+        roundtrip("(?<foo>a)");
         roundtrip("(a)");
     }
 
