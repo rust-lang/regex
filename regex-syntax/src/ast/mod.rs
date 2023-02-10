@@ -1203,7 +1203,9 @@ impl Group {
     /// Returns true if and only if this group is capturing.
     pub fn is_capturing(&self) -> bool {
         match self.kind {
-            GroupKind::CaptureIndex(_) | GroupKind::CaptureName(_) => true,
+            GroupKind::CaptureIndex(_)
+            | GroupKind::CaptureName(_)
+            | GroupKind::CapturePName(_) => true,
             GroupKind::NonCapturing(_) => false,
         }
     }
@@ -1214,7 +1216,9 @@ impl Group {
     pub fn capture_index(&self) -> Option<u32> {
         match self.kind {
             GroupKind::CaptureIndex(i) => Some(i),
-            GroupKind::CaptureName(ref x) => Some(x.index),
+            GroupKind::CaptureName(ref x) | GroupKind::CapturePName(ref x) => {
+                Some(x.index)
+            }
             GroupKind::NonCapturing(_) => None,
         }
     }
@@ -1225,8 +1229,10 @@ impl Group {
 pub enum GroupKind {
     /// `(a)`
     CaptureIndex(u32),
-    /// `(?P<name>a)`
+    /// `(?<name>a)`
     CaptureName(CaptureName),
+    /// `(?P<name>a)`
+    CapturePName(CaptureName),
     /// `(?:a)` and `(?i:a)`
     NonCapturing(Flags),
 }

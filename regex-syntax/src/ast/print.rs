@@ -158,6 +158,12 @@ impl<W: fmt::Write> Writer<W> {
         match ast.kind {
             CaptureIndex(_) => self.wtr.write_str("("),
             CaptureName(ref x) => {
+                self.wtr.write_str("(?<")?;
+                self.wtr.write_str(&x.name)?;
+                self.wtr.write_str(">")?;
+                Ok(())
+            }
+            CapturePName(ref x) => {
                 self.wtr.write_str("(?P<")?;
                 self.wtr.write_str(&x.name)?;
                 self.wtr.write_str(">")?;

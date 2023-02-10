@@ -771,7 +771,8 @@ impl<'t, 'p> TranslatorI<'t, 'p> {
             ast::GroupKind::CaptureIndex(idx) => {
                 hir::GroupKind::CaptureIndex(idx)
             }
-            ast::GroupKind::CaptureName(ref capname) => {
+            ast::GroupKind::CaptureName(ref capname)
+            | ast::GroupKind::CapturePName(ref capname) => {
                 hir::GroupKind::CaptureName {
                     name: capname.name.clone(),
                     index: capname.index,
