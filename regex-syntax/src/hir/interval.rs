@@ -5,6 +5,8 @@ use std::slice;
 use std::u8;
 
 use crate::unicode;
+#[cfg(feature = "arbitrary")]
+use arbitrary::Arbitrary;
 
 // This module contains an *internal* implementation of interval sets.
 //
@@ -33,6 +35,7 @@ use crate::unicode;
 // Tests on this are relegated to the public API of HIR in src/hir.rs.
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 pub struct IntervalSet<I> {
     ranges: Vec<I>,
 }

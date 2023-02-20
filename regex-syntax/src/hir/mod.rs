@@ -8,6 +8,9 @@ use std::fmt;
 use std::result;
 use std::u8;
 
+#[cfg(feature = "arbitrary")]
+use arbitrary::Arbitrary;
+
 use crate::ast::Span;
 use crate::hir::interval::{Interval, IntervalSet, IntervalSetIter};
 use crate::unicode;
@@ -172,6 +175,7 @@ impl fmt::Display for ErrorKind {
 /// expression pattern string, and uses constant stack space and heap space
 /// proportional to the size of the `Hir`.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 pub struct Hir {
     /// The underlying HIR kind.
     kind: HirKind,
@@ -181,6 +185,7 @@ pub struct Hir {
 
 /// The kind of an arbitrary `Hir` expression.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 pub enum HirKind {
     /// The empty regular expression, which matches everything, including the
     /// empty string.
@@ -744,6 +749,7 @@ impl fmt::Display for Hir {
 /// are preferred whenever possible. In particular, a `Byte` variant is only
 /// ever produced when it could match invalid UTF-8.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 pub enum Literal {
     /// A single character represented by a Unicode scalar value.
     Unicode(char),
@@ -780,6 +786,7 @@ impl Literal {
 /// case insensitive matching. For example, `(?i)k` and `(?i-u)k` will not
 /// match the same set of strings.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 pub enum Class {
     /// A set of characters represented by Unicode scalar values.
     Unicode(ClassUnicode),
@@ -834,6 +841,7 @@ impl Class {
 
 /// A set of characters represented by Unicode scalar values.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 pub struct ClassUnicode {
     set: IntervalSet<ClassUnicodeRange>,
 }
@@ -970,6 +978,7 @@ impl<'a> Iterator for ClassUnicodeIter<'a> {
 /// The range is closed. That is, the start and end of the range are included
 /// in the range.
 #[derive(Clone, Copy, Default, Eq, PartialEq, PartialOrd, Ord)]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 pub struct ClassUnicodeRange {
     start: char,
     end: char,
@@ -1077,6 +1086,7 @@ impl ClassUnicodeRange {
 /// A set of characters represented by arbitrary bytes (where one byte
 /// corresponds to one character).
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 pub struct ClassBytes {
     set: IntervalSet<ClassBytesRange>,
 }
@@ -1187,6 +1197,7 @@ impl<'a> Iterator for ClassBytesIter<'a> {
 /// The range is closed. That is, the start and end of the range are included
 /// in the range.
 #[derive(Clone, Copy, Default, Eq, PartialEq, PartialOrd, Ord)]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 pub struct ClassBytesRange {
     start: u8,
     end: u8,
@@ -1282,6 +1293,7 @@ impl fmt::Debug for ClassBytesRange {
 ///
 /// A matching anchor assertion is always zero-length.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 pub enum Anchor {
     /// Match the beginning of a line or the beginning of text. Specifically,
     /// this matches at the starting position of the input, or at the position
@@ -1303,6 +1315,7 @@ pub enum Anchor {
 ///
 /// A matching word boundary assertion is always zero-length.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 pub enum WordBoundary {
     /// Match a Unicode-aware word boundary. That is, this matches a position
     /// where the left adjacent character and right adjacent character
@@ -1336,6 +1349,7 @@ impl WordBoundary {
 /// 2. A capturing group (e.g., `(expr)`).
 /// 3. A named capturing group (e.g., `(?P<name>expr)`).
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 pub struct Group {
     /// The kind of this group. If it is a capturing group, then the kind
     /// contains the capture group index (and the name, if it is a named
@@ -1347,6 +1361,7 @@ pub struct Group {
 
 /// The kind of group.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 pub enum GroupKind {
     /// A normal unnamed capturing group.
     ///
@@ -1368,6 +1383,7 @@ pub enum GroupKind {
 /// A repetition operator permits the repetition of an arbitrary
 /// sub-expression.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 pub struct Repetition {
     /// The kind of this repetition operator.
     pub kind: RepetitionKind,
@@ -1407,6 +1423,7 @@ impl Repetition {
 
 /// The kind of a repetition operator.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 pub enum RepetitionKind {
     /// Matches a sub-expression zero or one times.
     ZeroOrOne,
@@ -1420,6 +1437,7 @@ pub enum RepetitionKind {
 
 /// The kind of a counted repetition operator.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 pub enum RepetitionRange {
     /// Matches a sub-expression exactly this many times.
     Exactly(u32),
@@ -1477,6 +1495,7 @@ impl Drop for Hir {
 ///
 /// These attributes are typically defined inductively on the HIR.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 struct HirInfo {
     /// Represent yes/no questions by a bitfield to conserve space, since
     /// this is included in every HIR expression.
