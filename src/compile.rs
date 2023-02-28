@@ -368,7 +368,7 @@ impl Compiler {
                     self.c_empty_look(prog::EmptyLook::NotWordBoundary)
                 }
             },
-            Capture(hir::Capture { index, ref name, ref hir }) => {
+            Capture(hir::Capture { index, ref name, ref sub }) => {
                 if index as usize >= self.compiled.captures.len() {
                     let name = match *name {
                         None => None,
@@ -379,7 +379,7 @@ impl Compiler {
                         self.capture_name_idx.insert(name, index as usize);
                     }
                 }
-                self.c_capture(2 * index as usize, hir)
+                self.c_capture(2 * index as usize, sub)
             }
             Concat(ref es) => {
                 if self.compiled.is_reverse {
@@ -434,7 +434,7 @@ impl Compiler {
                 min: 0,
                 max: None,
                 greedy: false,
-                hir: Box::new(hir),
+                sub: Box::new(hir),
             }))?
             .unwrap())
     }
@@ -644,14 +644,14 @@ impl Compiler {
 
     fn c_repeat(&mut self, rep: &hir::Repetition) -> ResultOrEmpty {
         match (rep.min, rep.max) {
-            (0, Some(1)) => self.c_repeat_zero_or_one(&rep.hir, rep.greedy),
-            (0, None) => self.c_repeat_zero_or_more(&rep.hir, rep.greedy),
-            (1, None) => self.c_repeat_one_or_more(&rep.hir, rep.greedy),
+            (0, Some(1)) => self.c_repeat_zero_or_one(&rep.sub, rep.greedy),
+            (0, None) => self.c_repeat_zero_or_more(&rep.sub, rep.greedy),
+            (1, None) => self.c_repeat_one_or_more(&rep.sub, rep.greedy),
             (min, None) => {
-                self.c_repeat_range_min_or_more(&rep.hir, rep.greedy, min)
+                self.c_repeat_range_min_or_more(&rep.sub, rep.greedy, min)
             }
             (min, Some(max)) => {
-                self.c_repeat_range(&rep.hir, rep.greedy, min, max)
+                self.c_repeat_range(&rep.sub, rep.greedy, min, max)
             }
         }
     }

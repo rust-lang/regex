@@ -478,7 +478,7 @@ mod tests {
                 min: 1,
                 max: None,
                 greedy: true,
-                hir: Box::new(Hir::literal("ab".as_bytes())),
+                sub: Box::new(Hir::literal("ab".as_bytes())),
             }),
             Hir::literal("y".as_bytes()),
         ]);
@@ -490,7 +490,7 @@ mod tests {
                 min: 1,
                 max: None,
                 greedy: true,
-                hir: Box::new(Hir::concat(alloc::vec![
+                sub: Box::new(Hir::concat(alloc::vec![
                     Hir::look(hir::Look::Start),
                     Hir::look(hir::Look::End),
                 ])),
@@ -512,7 +512,7 @@ mod tests {
                 min: 1,
                 max: None,
                 greedy: true,
-                hir: Box::new(Hir::alternation(alloc::vec![
+                sub: Box::new(Hir::alternation(alloc::vec![
                     Hir::literal("cd".as_bytes()),
                     Hir::literal("ef".as_bytes()),
                 ])),
@@ -527,7 +527,7 @@ mod tests {
                 min: 1,
                 max: None,
                 greedy: true,
-                hir: Box::new(Hir::alternation(alloc::vec![
+                sub: Box::new(Hir::alternation(alloc::vec![
                     Hir::look(hir::Look::Start),
                     Hir::look(hir::Look::End),
                 ])),

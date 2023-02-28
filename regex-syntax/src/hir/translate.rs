@@ -912,7 +912,7 @@ impl<'t, 'p> TranslatorI<'t, 'p> {
             // in which the data type is defined handles this automatically.
             ast::GroupKind::NonCapturing(_) => return expr,
         };
-        Hir::capture(hir::Capture { index, name, hir: Box::new(expr) })
+        Hir::capture(hir::Capture { index, name, sub: Box::new(expr) })
     }
 
     fn hir_repetition(&self, rep: &ast::Repetition, expr: Hir) -> Hir {
@@ -937,7 +937,7 @@ impl<'t, 'p> TranslatorI<'t, 'p> {
             min,
             max,
             greedy,
-            hir: Box::new(expr),
+            sub: Box::new(expr),
         })
     }
 
@@ -1353,14 +1353,14 @@ mod tests {
     }
 
     fn hir_capture(index: u32, expr: Hir) -> Hir {
-        Hir::capture(hir::Capture { index, name: None, hir: Box::new(expr) })
+        Hir::capture(hir::Capture { index, name: None, sub: Box::new(expr) })
     }
 
     fn hir_capture_name(index: u32, name: &str, expr: Hir) -> Hir {
         Hir::capture(hir::Capture {
             index,
             name: Some(name.into()),
-            hir: Box::new(expr),
+            sub: Box::new(expr),
         })
     }
 
@@ -1369,7 +1369,7 @@ mod tests {
             min: 0,
             max: Some(1),
             greedy,
-            hir: Box::new(expr),
+            sub: Box::new(expr),
         })
     }
 
@@ -1378,7 +1378,7 @@ mod tests {
             min: 0,
             max: None,
             greedy,
-            hir: Box::new(expr),
+            sub: Box::new(expr),
         })
     }
 
@@ -1387,7 +1387,7 @@ mod tests {
             min: 1,
             max: None,
             greedy,
-            hir: Box::new(expr),
+            sub: Box::new(expr),
         })
     }
 
@@ -1396,7 +1396,7 @@ mod tests {
             min,
             max,
             greedy,
-            hir: Box::new(expr),
+            sub: Box::new(expr),
         })
     }
 

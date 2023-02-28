@@ -195,8 +195,8 @@ impl<'a> Frame<'a> {
     /// child HIR node to visit.
     fn child(&self) -> &'a Hir {
         match *self {
-            Frame::Repetition(rep) => &rep.hir,
-            Frame::Capture(capture) => &capture.hir,
+            Frame::Repetition(rep) => &rep.sub,
+            Frame::Capture(capture) => &capture.sub,
             Frame::Concat { head, .. } => head,
             Frame::Alternation { head, .. } => head,
         }
