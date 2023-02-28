@@ -19,7 +19,7 @@ rust-version = "1.60.0"
 
 [workspace]
 members = [
-  "bench", "regex-capi", "regex-debug", "regex-syntax",
+  "bench", "regex-capi", "regex-syntax",
 ]
 
 [lib]
