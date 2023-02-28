@@ -323,7 +323,7 @@ impl Hir {
         if rep.min == 0 && rep.max == Some(0) {
             return Hir::empty();
         } else if rep.min == 1 && rep.max == Some(1) {
-            return *rep.hir;
+            return *rep.sub;
         }
         let props = Properties::repetition(&rep);
         Hir { kind: HirKind::Repetition(rep), props }
@@ -1437,7 +1437,7 @@ pub struct Capture {
     /// The name of the capture, if it exists.
     pub name: Option<Box<str>>,
     /// The expression inside the capturing group, which may be empty.
-    pub hir: Box<Hir>,
+    pub sub: Box<Hir>,
 }
 
 /// The high-level intermediate representation of a repetition operator.
@@ -1467,7 +1467,7 @@ pub struct Repetition {
     /// not. However, this can be inverted via the `U` "ungreedy" flag.
     pub greedy: bool,
     /// The expression being repeated.
-    pub hir: Box<Hir>,
+    pub sub: Box<Hir>,
 }
 
 impl Repetition {
@@ -1523,8 +1523,8 @@ impl Drop for Hir {
             | HirKind::Literal(_)
             | HirKind::Class(_)
             | HirKind::Look(_) => return,
-            HirKind::Capture(ref x) if !x.hir.kind.has_subexprs() => return,
-            HirKind::Repetition(ref x) if !x.hir.kind.has_subexprs() => return,
+            HirKind::Capture(ref x) if !x.sub.kind.has_subexprs() => return,
+            HirKind::Repetition(ref x) if !x.sub.kind.has_subexprs() => return,
             HirKind::Concat(ref x) if x.is_empty() => return,
             HirKind::Alternation(ref x) if x.is_empty() => return,
             _ => {}
@@ -1538,10 +1538,10 @@ impl Drop for Hir {
                 | HirKind::Class(_)
                 | HirKind::Look(_) => {}
                 HirKind::Capture(ref mut x) => {
-                    stack.push(mem::replace(&mut x.hir, Hir::empty()));
+                    stack.push(mem::replace(&mut x.sub, Hir::empty()));
                 }
                 HirKind::Repetition(ref mut x) => {
-                    stack.push(mem::replace(&mut x.hir, Hir::empty()));
+                    stack.push(mem::replace(&mut x.sub, Hir::empty()));
                 }
                 HirKind::Concat(ref mut x) => {
                     stack.extend(x.drain(..));
@@ -1926,7 +1926,7 @@ impl Properties {
 
     /// Create a new set of HIR properties for a repetition.
     fn repetition(rep: &Repetition) -> Properties {
-        let p = rep.hir.properties();
+        let p = rep.sub.properties();
         let minimum_len = p.minimum_len().map(|child_min| {
             let rep_min = usize::try_from(rep.min).unwrap_or(usize::MAX);
             child_min.saturating_mul(rep_min)
@@ -1957,7 +1957,7 @@ impl Properties {
 
     /// Create a new set of HIR properties for a capture.
     fn capture(capture: &Capture) -> Properties {
-        let p = capture.hir.properties();
+        let p = capture.sub.properties();
         Properties(Box::new(PropertiesI {
             captures_len: p.captures_len().saturating_add(1),
             literal: false,
@@ -3054,13 +3054,13 @@ mod tests {
                 expr = Hir::capture(Capture {
                     index: 1,
                     name: None,
-                    hir: Box::new(expr),
+                    sub: Box::new(expr),
                 });
                 expr = Hir::repetition(Repetition {
                     min: 0,
                     max: Some(1),
                     greedy: true,
-                    hir: Box::new(expr),
+                    sub: Box::new(expr),
                 });
 
                 expr = Hir {

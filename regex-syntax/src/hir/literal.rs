@@ -186,7 +186,7 @@ impl Extractor {
             }
             Class(hir::Class::Bytes(ref cls)) => self.extract_class_bytes(cls),
             Repetition(ref rep) => self.extract_repetition(rep),
-            Capture(hir::Capture { ref hir, .. }) => self.extract(hir),
+            Capture(hir::Capture { ref sub, .. }) => self.extract(sub),
             Concat(ref hirs) => match self.kind {
                 ExtractKind::Prefix => self.extract_concat(hirs.iter()),
                 ExtractKind::Suffix => self.extract_concat(hirs.iter().rev()),
@@ -448,7 +448,7 @@ impl Extractor {
     /// literals being extracted, which might actually be a better prefilter
     /// than just 'a'.
     fn extract_repetition(&self, rep: &hir::Repetition) -> Seq {
-        let mut subseq = self.extract(&rep.hir);
+        let mut subseq = self.extract(&rep.sub);
         match *rep {
             hir::Repetition { min: 0, max, greedy, .. } => {
                 // When 'max=1', we can retain exactness, since 'a?' is
