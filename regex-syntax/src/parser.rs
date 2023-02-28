@@ -1,4 +1,18 @@
-use crate::{ast, hir, Result};
+use crate::{ast, hir, Error};
+
+/// A convenience routine for parsing a regex using default options.
+///
+/// This is equivalent to `Parser::new().parse(pattern)`.
+///
+/// If you need to set non-default options, then use a [`ParserBuilder`].
+///
+/// This routine returns an [`Hir`](hir::Hir) value. Namely, it automatically
+/// parses the pattern as an [`Ast`](ast::Ast) and then invokes the translator
+/// to convert the `Ast` into an `Hir`. If you need access to the `Ast`, then
+/// you should use a [`ast::parse::Parser`].
+pub fn parse(pattern: &str) -> Result<hir::Hir, Error> {
+    Parser::new().parse(pattern)
+}
 
 /// A builder for a regular expression parser.
 ///
@@ -207,7 +221,7 @@ impl Parser {
 
     /// Parse the regular expression into a high level intermediate
     /// representation.
-    pub fn parse(&mut self, pattern: &str) -> Result<hir::Hir> {
+    pub fn parse(&mut self, pattern: &str) -> Result<hir::Hir, Error> {
         let ast = self.ast.parse(pattern)?;
         let hir = self.hir.translate(pattern, &ast)?;
         Ok(hir)

@@ -290,7 +290,7 @@ impl Compiler {
                 if self.compiled.uses_bytes() {
                     self.c_class_bytes(cls.ranges())
                 } else {
-                    assert!(cls.is_all_ascii());
+                    assert!(cls.is_ascii());
                     let mut char_ranges = vec![];
                     for r in cls.iter() {
                         let (s, e) = (r.start() as char, r.end() as char);

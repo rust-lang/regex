@@ -1,5 +1,20 @@
 /*!
-Defines a high-level intermediate representation for regular expressions.
+Defines a high-level intermediate (HIR) representation for regular expressions.
+
+The HIR is represented by the [`Hir`] type, and it principally constructed via
+[translation](translate) from an [`Ast`](crate::ast::Ast). Alternatively, users
+may use the smart constructors defined on `Hir` to build their own by hand. The
+smart constructors simultaneously simplify and "optimize" the HIR, and are also
+the same routines used by translation.
+
+Most regex engines only have an HIR like this, and usually construct it
+directly from the concrete syntax. This crate however first parses the
+concrete syntax into an `Ast`, and only then creates the HIR from the `Ast`,
+as mentioned above. It's done this way to facilitate better error reporting,
+and to have a structured representation of a regex that faithfully represents
+its concrete syntax. Namely, while an `Hir` value can be converted back to an
+equivalent regex pattern string, it is unlikely to look like the original due
+to its simplified structure.
 */
 
 use core::{char, cmp};
@@ -122,6 +137,12 @@ impl core::fmt::Display for ErrorKind {
 
 /// A high-level intermediate representation (HIR) for a regular expression.
 ///
+/// An HIR value is a combination of a [`HirKind`] and a set of [`Properties`].
+/// An `HirKind` indicates what kind of regular expression it is (a literal,
+/// a repetition, a look-around assertion, etc.), where as a `Properties`
+/// describes various facts about the regular expression. For example, whether
+/// it matches UTF-8 or if it matches the empty string.
+///
 /// The HIR of a regular expression represents an intermediate step between
 /// its abstract syntax (a structured description of the concrete syntax) and
 /// an actual regex matcher. The purpose of HIR is to make regular expressions
@@ -133,24 +154,39 @@ impl core::fmt::Display for ErrorKind {
 /// it is handled automatically by the translator (e.g., by translating
 /// `(?i:A)` to `[aA]`).
 ///
-/// If the HIR was produced by a translator that disallows invalid UTF-8, then
-/// the HIR is guaranteed to match UTF-8 exclusively.
-///
-/// This type defines its own destructor that uses constant stack space and
-/// heap space proportional to the size of the HIR.
-///
 /// The specific type of an HIR expression can be accessed via its `kind`
 /// or `into_kind` methods. This extra level of indirection exists for two
 /// reasons:
 ///
-/// 1. Construction of an HIR expression *must* use the constructor methods
-///    on this `Hir` type instead of building the `HirKind` values directly.
-///    This permits construction to enforce invariants like "concatenations
-///    always consist of two or more sub-expressions."
+/// 1. Construction of an HIR expression *must* use the constructor methods on
+/// this `Hir` type instead of building the `HirKind` values directly. This
+/// permits construction to enforce invariants like "concatenations always
+/// consist of two or more sub-expressions."
 /// 2. Every HIR expression contains attributes that are defined inductively,
-///    and can be computed cheaply during the construction process. For
-///    example, one such attribute is whether the expression must match at the
-///    beginning of the haystack.
+/// and can be computed cheaply during the construction process. For example,
+/// one such attribute is whether the expression must match at the beginning of
+/// the haystack.
+///
+/// In particular, if you have an `HirKind` value, then there is intentionally
+/// no way to build an `Hir` value from it. You instead need to do case
+/// analysis on the `HirKind` value and build the `Hir` value using its smart
+/// constructors.
+///
+/// # UTF-8
+///
+/// If the HIR was produced by a translator with
+/// [`TranslatorBuilder::utf8`](translate::TranslatorBuilder::utf8) enabled,
+/// then the HIR is guaranteed to match UTF-8 exclusively for all non-empty
+/// matches.
+///
+/// For empty matches, those can occur at any position. It is the
+/// repsonsibility of the regex engine to determine whether empty matches are
+/// permitted between the code units of a single codepoint.
+///
+/// # Stack space
+///
+/// This type defines its own destructor that uses constant stack space and
+/// heap space proportional to the size of the HIR.
 ///
 /// Also, an `Hir`'s `fmt::Display` implementation prints an HIR as a regular
 /// expression pattern string, and uses constant stack space and heap space
@@ -167,38 +203,6 @@ pub struct Hir {
     kind: HirKind,
     /// Analysis info about this HIR, computed during construction.
     props: Properties,
-}
-
-/// The kind of an arbitrary `Hir` expression.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum HirKind {
-    /// The empty regular expression, which matches everything, including the
-    /// empty string.
-    Empty,
-    /// A literalstring that matches exactly these bytes.
-    Literal(Literal),
-    /// A single character class that matches any of the characters in the
-    /// class. A class can either consist of Unicode scalar values as
-    /// characters, or it can use bytes.
-    Class(Class),
-    /// A look-around assertion. A look-around match always has zero length.
-    Look(Look),
-    /// A repetition operation applied to a child expression.
-    Repetition(Repetition),
-    /// A capturing group, which contains a child expression.
-    Capture(Capture),
-    /// A concatenation of expressions. A concatenation always has at least two
-    /// child expressions.
-    ///
-    /// A concatenation matches only if each of its child expression matches
-    /// one after the other.
-    Concat(Vec<Hir>),
-    /// An alternation of expressions. An alternation always has at least two
-    /// child expressions.
-    ///
-    /// An alternation matches only if at least one of its child expression
-    /// matches. If multiple expressions match, then the leftmost is preferred.
-    Alternation(Vec<Hir>),
 }
 
 /// Methods for accessing the underlying `HirKind` and `Properties`.
@@ -233,7 +237,7 @@ impl Hir {
 
 /// Smart constructors for HIR values.
 ///
-/// These constructors are called "smart" because they inductive work or
+/// These constructors are called "smart" because they do inductive work or
 /// simplifications. For example, calling `Hir::repetition` with a repetition
 /// like `a{0}` will actually return a `Hir` with a `HirKind::Empty` kind
 /// since it is equivalent to an empty regex. Another example is calling
@@ -252,8 +256,9 @@ impl Hir {
         Hir { kind: HirKind::Empty, props }
     }
 
-    /// Returns an HIR expression that can never match anything. That is, the
-    /// set of strings in the language described by the HIR returned is `0`.
+    /// Returns an HIR expression that can never match anything. That is,
+    /// the size of the set of strings in the language described by the HIR
+    /// returned is `0`.
     ///
     /// This is distinct from [`Hir::empty`] in that the empty string matches
     /// the HIR returned by `Hir::empty`. That is, the set of strings in the
@@ -278,9 +283,41 @@ impl Hir {
 
     /// Creates a literal HIR expression.
     ///
-    /// If the given literal has a `Byte` variant with an ASCII byte, then this
-    /// method panics. This enforces the invariant that `Byte` variants are
-    /// only used to express matching of invalid UTF-8.
+    /// This accepts anything that can be converted into a `Box<[u8]>`.
+    ///
+    /// Note that there is no mechanism for storing a `char` or a `Box<str>`
+    /// in an HIR. Everything is "just bytes." Whether a `Literal` (or
+    /// any HIR node) matches valid UTF-8 exclusively can be queried via
+    /// [`Properties::is_utf8`].
+    ///
+    /// # Example
+    ///
+    /// This example shows that concatenations of `Literal` HIR values will
+    /// automatically get flattened and combined together. So for example, even
+    /// if you concat multiple `Literal` values that are themselves not valid
+    /// UTF-8, they might add up to valid UTF-8. This also demonstrates just
+    /// how "smart" Hir's smart constructors are.
+    ///
+    /// ```
+    /// use regex_syntax::hir::{Hir, HirKind, Literal};
+    ///
+    /// let literals = vec![
+    ///     Hir::literal([0xE2]),
+    ///     Hir::literal([0x98]),
+    ///     Hir::literal([0x83]),
+    /// ];
+    /// // Each literal, on its own, is invalid UTF-8.
+    /// assert!(literals.iter().all(|hir| !hir.properties().is_utf8()));
+    ///
+    /// let concat = Hir::concat(literals);
+    /// // But the concatenation is valid UTF-8!
+    /// assert!(concat.properties().is_utf8());
+    ///
+    /// // And also notice that the literals have been concatenated into a
+    /// // single `Literal`, to the point where there is no explicit `Concat`!
+    /// let expected = HirKind::Literal(Literal(Box::from("☃".as_bytes())));
+    /// assert_eq!(&expected, concat.kind());
+    /// ```
     #[inline]
     pub fn literal<B: Into<Box<[u8]>>>(lit: B) -> Hir {
         let bytes = lit.into();
@@ -293,7 +330,11 @@ impl Hir {
         Hir { kind: HirKind::Literal(lit), props }
     }
 
-    /// Creates a class HIR expression.
+    /// Creates a class HIR expression. The class may either be defined over
+    /// ranges of Unicode codepoints or ranges of raw byte values.
+    ///
+    /// Note that an empty class is permitted. An empty class is equivalent to
+    /// `Hir::fail()`.
     #[inline]
     pub fn class(class: Class) -> Hir {
         if class.is_empty() {
@@ -330,6 +371,12 @@ impl Hir {
     }
 
     /// Creates a capture HIR expression.
+    ///
+    /// Note that there is no explicit HIR value for a non-capturing group.
+    /// Since a non-capturing group only exists to override precedence in the
+    /// concrete syntax and since an HIR already does its own grouping based on
+    /// what is parsed, there is no need to explicitly represent non-capturing
+    /// groups in the HIR.
     #[inline]
     pub fn capture(capture: Capture) -> Hir {
         let props = Properties::capture(&capture);
@@ -338,8 +385,32 @@ impl Hir {
 
     /// Returns the concatenation of the given expressions.
     ///
-    /// This flattens the concatenation as appropriate.
-    pub fn concat(hirs: Vec<Hir>) -> Hir {
+    /// This attempts to flatten and simplify the concatenation as appropriate.
+    ///
+    /// # Example
+    ///
+    /// This shows a simple example of basic flattening of both concatenations
+    /// and literals.
+    ///
+    /// ```
+    /// use regex_syntax::hir::Hir;
+    ///
+    /// let hir = Hir::concat(vec![
+    ///     Hir::concat(vec![
+    ///         Hir::literal([b'a']),
+    ///         Hir::literal([b'b']),
+    ///         Hir::literal([b'c']),
+    ///     ]),
+    ///     Hir::concat(vec![
+    ///         Hir::literal([b'x']),
+    ///         Hir::literal([b'y']),
+    ///         Hir::literal([b'z']),
+    ///     ]),
+    /// ]);
+    /// let expected = Hir::literal("abcxyz".as_bytes());
+    /// assert_eq!(expected, hir);
+    /// ```
+    pub fn concat(subs: Vec<Hir>) -> Hir {
         // We rebuild the concatenation by simplifying it. Would be nice to do
         // it in place, but that seems a little tricky?
         let mut new = vec![];
@@ -348,8 +419,8 @@ impl Hir {
         // to 'prior_lit', and whenever we see anything else, we first take
         // any bytes in 'prior_lit' and add it to the 'new' concatenation.
         let mut prior_lit: Option<Vec<u8>> = None;
-        for hir in hirs {
-            let (kind, props) = hir.into_parts();
+        for sub in subs {
+            let (kind, props) = sub.into_parts();
             match kind {
                 HirKind::Literal(Literal(bytes)) => {
                     if let Some(ref mut prior_bytes) = prior_lit {
@@ -362,9 +433,9 @@ impl Hir {
                 // concat. We only need to do this one level deep since
                 // Hir::concat is the only way to build concatenations, and so
                 // flattening happens inductively.
-                HirKind::Concat(hirs2) => {
-                    for hir2 in hirs2 {
-                        let (kind2, props2) = hir2.into_parts();
+                HirKind::Concat(subs2) => {
+                    for sub2 in subs2 {
+                        let (kind2, props2) = sub2.into_parts();
                         match kind2 {
                             HirKind::Literal(Literal(bytes)) => {
                                 if let Some(ref mut prior_bytes) = prior_lit {
@@ -406,17 +477,82 @@ impl Hir {
 
     /// Returns the alternation of the given expressions.
     ///
-    /// This flattens the alternation as appropriate.
-    pub fn alternation(hirs: Vec<Hir>) -> Hir {
+    /// This flattens and simplifies the alternation as appropriate. This may
+    /// include factoring out common prefixes or even rewriting the alternation
+    /// as a character class.
+    ///
+    /// Note that an empty alternation is equivalent to `Hir::fail()`. (It
+    /// is not possible for one to write an empty alternation, or even an
+    /// alternation with a single sub-expression, in the concrete syntax of a
+    /// regex.)
+    ///
+    /// # Example
+    ///
+    /// This is a simple example showing how an alternation might get
+    /// simplified.
+    ///
+    /// ```
+    /// use regex_syntax::hir::{Hir, Class, ClassUnicode, ClassUnicodeRange};
+    ///
+    /// let hir = Hir::alternation(vec![
+    ///     Hir::literal([b'a']),
+    ///     Hir::literal([b'b']),
+    ///     Hir::literal([b'c']),
+    ///     Hir::literal([b'd']),
+    ///     Hir::literal([b'e']),
+    ///     Hir::literal([b'f']),
+    /// ]);
+    /// let expected = Hir::class(Class::Unicode(ClassUnicode::new([
+    ///     ClassUnicodeRange::new('a', 'f'),
+    /// ])));
+    /// assert_eq!(expected, hir);
+    /// ```
+    ///
+    /// And another example showing how common prefixes might get factored
+    /// out.
+    ///
+    /// ```
+    /// use regex_syntax::hir::{Hir, Class, ClassUnicode, ClassUnicodeRange};
+    ///
+    /// let hir = Hir::alternation(vec![
+    ///     Hir::concat(vec![
+    ///         Hir::literal("abc".as_bytes()),
+    ///         Hir::class(Class::Unicode(ClassUnicode::new([
+    ///             ClassUnicodeRange::new('A', 'Z'),
+    ///         ]))),
+    ///     ]),
+    ///     Hir::concat(vec![
+    ///         Hir::literal("abc".as_bytes()),
+    ///         Hir::class(Class::Unicode(ClassUnicode::new([
+    ///             ClassUnicodeRange::new('a', 'z'),
+    ///         ]))),
+    ///     ]),
+    /// ]);
+    /// let expected = Hir::concat(vec![
+    ///     Hir::literal("abc".as_bytes()),
+    ///     Hir::alternation(vec![
+    ///         Hir::class(Class::Unicode(ClassUnicode::new([
+    ///             ClassUnicodeRange::new('A', 'Z'),
+    ///         ]))),
+    ///         Hir::class(Class::Unicode(ClassUnicode::new([
+    ///             ClassUnicodeRange::new('a', 'z'),
+    ///         ]))),
+    ///     ]),
+    /// ]);
+    /// assert_eq!(expected, hir);
+    /// ```
+    ///
+    /// Note that these sorts of simplifications are not guaranteed.
+    pub fn alternation(subs: Vec<Hir>) -> Hir {
         // We rebuild the alternation by simplifying it. We proceed similarly
         // as the concatenation case. But in this case, there's no literal
         // simplification happening. We're just flattening alternations.
         let mut new = vec![];
-        for hir in hirs {
-            let (kind, props) = hir.into_parts();
+        for sub in subs {
+            let (kind, props) = sub.into_parts();
             match kind {
-                HirKind::Alternation(hirs2) => {
-                    new.extend(hirs2);
+                HirKind::Alternation(subs2) => {
+                    new.extend(subs2);
                 }
                 kind => {
                     new.push(Hir { kind, props });
@@ -478,9 +614,21 @@ impl Hir {
     /// * [`Dot::AnyByteExceptLF`] maps to `(?-Rsu:.)`.
     /// * [`Dot::AnyByteExceptCRLF`] maps to `(?R-su:.)`.
     ///
+    /// # Example
+    ///
     /// Note that this is a convenience routine for constructing the correct
     /// character class based on the value of `Dot`. There is no explicit "dot"
     /// HIR value. It is just an abbreviation for a common character class.
+    ///
+    /// ```
+    /// use regex_syntax::hir::{Hir, Dot, Class, ClassBytes, ClassBytesRange};
+    ///
+    /// let hir = Hir::dot(Dot::AnyByte);
+    /// let expected = Hir::class(Class::Bytes(ClassBytes::new([
+    ///     ClassBytesRange::new(0x00, 0xFF),
+    /// ])));
+    /// assert_eq!(expected, hir);
+    /// ```
     #[inline]
     pub fn dot(dot: Dot) -> Hir {
         match dot {
@@ -524,31 +672,65 @@ impl Hir {
     }
 }
 
-impl HirKind {
-    /// Return true if and only if this HIR is the empty regular expression.
+/// The underlying kind of an arbitrary [`Hir`] expression.
+///
+/// An `HirKind` is principally useful for doing case analysis on the type
+/// of a regular expression. If you're looking to build new `Hir` values,
+/// then you _must_ use the smart constructors defined on `Hir`, like
+/// [`Hir::repetition`], to build new `Hir` values. The API intentionally does
+/// not expose any way of building an `Hir` directly from an `HirKind`.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum HirKind {
+    /// The empty regular expression, which matches everything, including the
+    /// empty string.
+    Empty,
+    /// A literalstring that matches exactly these bytes.
+    Literal(Literal),
+    /// A single character class that matches any of the characters in the
+    /// class. A class can either consist of Unicode scalar values as
+    /// characters, or it can use bytes.
     ///
-    /// Note that this is not defined inductively. That is, it only tests if
-    /// this kind is the `Empty` variant. To get the inductive definition, use
-    /// the `is_match_empty` method on [`Hir`].
-    pub fn is_empty(&self) -> bool {
-        match *self {
-            HirKind::Empty => true,
-            _ => false,
-        }
-    }
+    /// A class may be empty. In which case, it matches nothing.
+    Class(Class),
+    /// A look-around assertion. A look-around match always has zero length.
+    Look(Look),
+    /// A repetition operation applied to a sub-expression.
+    Repetition(Repetition),
+    /// A capturing group, which contains a sub-expression.
+    Capture(Capture),
+    /// A concatenation of expressions.
+    ///
+    /// A concatenation matches only if each of its sub-expressions match one
+    /// after the other.
+    ///
+    /// Concatenations are guaranteed by `Hir`'s smart constructors to always
+    /// have at least two sub-expressions.
+    Concat(Vec<Hir>),
+    /// An alternation of expressions.
+    ///
+    /// An alternation matches only if at least one of its sub-expressions
+    /// match. If multiple sub-expressions match, then the leftmost is
+    /// preferred.
+    ///
+    /// Alternations are guaranteed by `Hir`'s smart constructors to always
+    /// have at least two sub-expressions.
+    Alternation(Vec<Hir>),
+}
 
-    /// Returns true if and only if this kind has any (including possibly
-    /// empty) subexpressions.
-    pub fn has_subexprs(&self) -> bool {
+impl HirKind {
+    /// Returns a slice of this kind's sub-expressions, if any.
+    pub fn subs(&self) -> &[Hir] {
+        use core::slice::from_ref;
+
         match *self {
             HirKind::Empty
             | HirKind::Literal(_)
             | HirKind::Class(_)
-            | HirKind::Look(_) => false,
-            HirKind::Capture(_)
-            | HirKind::Repetition(_)
-            | HirKind::Concat(_)
-            | HirKind::Alternation(_) => true,
+            | HirKind::Look(_) => &[],
+            HirKind::Repetition(Repetition { ref sub, .. }) => from_ref(sub),
+            HirKind::Capture(Capture { ref sub, .. }) => from_ref(sub),
+            HirKind::Concat(ref subs) => subs,
+            HirKind::Alternation(ref subs) => subs,
         }
     }
 }
@@ -573,10 +755,14 @@ impl core::fmt::Display for Hir {
 
 /// The high-level intermediate representation of a literal.
 ///
-/// A literal corresponds to a single character, where a character is either
-/// defined by a Unicode scalar value or an arbitrary byte. Unicode characters
-/// are preferred whenever possible. In particular, a `Byte` variant is only
-/// ever produced when it could match invalid UTF-8.
+/// A literal corresponds to `0` or more bytes that should be matched
+/// literally. The smart constructors defined on `Hir` will automatically
+/// concatenate adjacent literals into one literal, and will even automatically
+/// replace empty literals with `Hir::empty()`.
+///
+/// Note that despite a literal being represented by a sequence of bytes, its
+/// `Debug` implementation will attempt to print it as a normal string. (That
+/// is, not a sequence of decimal numbers.)
 #[derive(Clone, Eq, PartialEq)]
 pub struct Literal(pub Box<[u8]>);
 
@@ -681,7 +867,7 @@ impl Class {
     pub fn is_utf8(&self) -> bool {
         match *self {
             Class::Unicode(_) => true,
-            Class::Bytes(ref x) => x.is_all_ascii(),
+            Class::Bytes(ref x) => x.is_ascii(),
         }
     }
 
@@ -699,25 +885,25 @@ impl Class {
     /// minimum length, if any.
     ///
     /// ```
-    /// use regex_syntax::{hir::Properties, Parser};
+    /// use regex_syntax::{hir::Properties, parse};
     ///
     /// // The empty string has a min length of 0.
-    /// let hir = Parser::new().parse(r"")?;
+    /// let hir = parse(r"")?;
     /// assert_eq!(Some(0), hir.properties().minimum_len());
     /// // As do other types of regexes that only match the empty string.
-    /// let hir = Parser::new().parse(r"^$\b\B")?;
+    /// let hir = parse(r"^$\b\B")?;
     /// assert_eq!(Some(0), hir.properties().minimum_len());
     /// // A regex that can match the empty string but match more is still 0.
-    /// let hir = Parser::new().parse(r"a*")?;
+    /// let hir = parse(r"a*")?;
     /// assert_eq!(Some(0), hir.properties().minimum_len());
     /// // A regex that matches nothing has no minimum defined.
-    /// let hir = Parser::new().parse(r"[a&&b]")?;
+    /// let hir = parse(r"[a&&b]")?;
     /// assert_eq!(None, hir.properties().minimum_len());
     /// // Character classes usually have a minimum length of 1.
-    /// let hir = Parser::new().parse(r"\w")?;
+    /// let hir = parse(r"\w")?;
     /// assert_eq!(Some(1), hir.properties().minimum_len());
     /// // But sometimes Unicode classes might be bigger!
-    /// let hir = Parser::new().parse(r"\p{Cyrillic}")?;
+    /// let hir = parse(r"\p{Cyrillic}")?;
     /// assert_eq!(Some(2), hir.properties().minimum_len());
     ///
     /// # Ok::<(), Box<dyn std::error::Error>>(())
@@ -743,28 +929,28 @@ impl Class {
     /// maximum length, if any.
     ///
     /// ```
-    /// use regex_syntax::{hir::Properties, Parser};
+    /// use regex_syntax::{hir::Properties, parse};
     ///
     /// // The empty string has a max length of 0.
-    /// let hir = Parser::new().parse(r"")?;
+    /// let hir = parse(r"")?;
     /// assert_eq!(Some(0), hir.properties().maximum_len());
     /// // As do other types of regexes that only match the empty string.
-    /// let hir = Parser::new().parse(r"^$\b\B")?;
+    /// let hir = parse(r"^$\b\B")?;
     /// assert_eq!(Some(0), hir.properties().maximum_len());
     /// // A regex that matches nothing has no maximum defined.
-    /// let hir = Parser::new().parse(r"[a&&b]")?;
+    /// let hir = parse(r"[a&&b]")?;
     /// assert_eq!(None, hir.properties().maximum_len());
     /// // Bounded repeats work as you expect.
-    /// let hir = Parser::new().parse(r"x{2,10}")?;
+    /// let hir = parse(r"x{2,10}")?;
     /// assert_eq!(Some(10), hir.properties().maximum_len());
     /// // An unbounded repeat means there is no maximum.
-    /// let hir = Parser::new().parse(r"x{2,}")?;
+    /// let hir = parse(r"x{2,}")?;
     /// assert_eq!(None, hir.properties().maximum_len());
     /// // With Unicode enabled, \w can match up to 4 bytes!
-    /// let hir = Parser::new().parse(r"\w")?;
+    /// let hir = parse(r"\w")?;
     /// assert_eq!(Some(4), hir.properties().maximum_len());
     /// // Without Unicode enabled, \w matches at most 1 byte.
-    /// let hir = Parser::new().parse(r"(?-u)\w")?;
+    /// let hir = parse(r"(?-u)\w")?;
     /// assert_eq!(Some(1), hir.properties().maximum_len());
     ///
     /// # Ok::<(), Box<dyn std::error::Error>>(())
@@ -810,7 +996,8 @@ impl ClassUnicode {
     /// Create a new class from a sequence of ranges.
     ///
     /// The given ranges do not need to be in any specific order, and ranges
-    /// may overlap.
+    /// may overlap. Ranges will automatically be sorted into a canonical
+    /// non-overlapping order.
     pub fn new<I>(ranges: I) -> ClassUnicode
     where
         I: IntoIterator<Item = ClassUnicodeRange>,
@@ -819,6 +1006,9 @@ impl ClassUnicode {
     }
 
     /// Create a new class with no ranges.
+    ///
+    /// An empty class matches nothing. That is, it is equivalent to
+    /// [`Hir::fail`].
     pub fn empty() -> ClassUnicode {
         ClassUnicode::new(vec![])
     }
@@ -914,7 +1104,7 @@ impl ClassUnicode {
     /// Returns true if and only if this character class will either match
     /// nothing or only ASCII bytes. Stated differently, this returns false
     /// if and only if this class contains a non-ASCII codepoint.
-    pub fn is_all_ascii(&self) -> bool {
+    pub fn is_ascii(&self) -> bool {
         self.set.intervals().last().map_or(true, |r| r.end <= '\x7F')
     }
 
@@ -955,7 +1145,7 @@ impl ClassUnicode {
     /// If this class consists of only ASCII ranges, then return its
     /// corresponding and equivalent byte class.
     pub fn to_byte_class(&self) -> Option<ClassBytes> {
-        if !self.is_all_ascii() {
+        if !self.is_ascii() {
             return None;
         }
         Some(ClassBytes::new(self.ranges().iter().map(|r| {
@@ -1115,7 +1305,8 @@ impl ClassBytes {
     /// Create a new class from a sequence of ranges.
     ///
     /// The given ranges do not need to be in any specific order, and ranges
-    /// may overlap.
+    /// may overlap. Ranges will automatically be sorted into a canonical
+    /// non-overlapping order.
     pub fn new<I>(ranges: I) -> ClassBytes
     where
         I: IntoIterator<Item = ClassBytesRange>,
@@ -1124,6 +1315,9 @@ impl ClassBytes {
     }
 
     /// Create a new class with no ranges.
+    ///
+    /// An empty class matches nothing. That is, it is equivalent to
+    /// [`Hir::fail`].
     pub fn empty() -> ClassBytes {
         ClassBytes::new(vec![])
     }
@@ -1193,7 +1387,7 @@ impl ClassBytes {
     /// Returns true if and only if this character class will either match
     /// nothing or only ASCII bytes. Stated differently, this returns false
     /// if and only if this class contains a non-ASCII byte.
-    pub fn is_all_ascii(&self) -> bool {
+    pub fn is_ascii(&self) -> bool {
         self.set.intervals().last().map_or(true, |r| r.end <= 0x7F)
     }
 
@@ -1238,7 +1432,7 @@ impl ClassBytes {
     /// If this class consists of only ASCII ranges, then return its
     /// corresponding and equivalent Unicode class.
     pub fn to_unicode_class(&self) -> Option<ClassUnicode> {
-        if !self.is_all_ascii() {
+        if !self.is_ascii() {
             return None;
         }
         Some(ClassUnicode::new(self.ranges().iter().map(|r| {
@@ -1369,82 +1563,111 @@ impl core::fmt::Debug for ClassBytesRange {
 pub enum Look {
     /// Match the beginning of text. Specifically, this matches at the starting
     /// position of the input.
-    Start,
+    Start = 1 << 0,
     /// Match the end of text. Specifically, this matches at the ending
     /// position of the input.
-    End,
+    End = 1 << 1,
     /// Match the beginning of a line or the beginning of text. Specifically,
     /// this matches at the starting position of the input, or at the position
     /// immediately following a `\n` character.
-    StartLF,
+    StartLF = 1 << 2,
     /// Match the end of a line or the end of text. Specifically, this matches
     /// at the end position of the input, or at the position immediately
     /// preceding a `\n` character.
-    EndLF,
+    EndLF = 1 << 3,
     /// Match the beginning of a line or the beginning of text. Specifically,
     /// this matches at the starting position of the input, or at the position
     /// immediately following either a `\r` or `\n` character, but never after
     /// a `\r` when a `\n` follows.
-    StartCRLF,
+    StartCRLF = 1 << 4,
     /// Match the end of a line or the end of text. Specifically, this matches
     /// at the end position of the input, or at the position immediately
     /// preceding a `\r` or `\n` character, but never before a `\n` when a `\r`
     /// precedes it.
-    EndCRLF,
+    EndCRLF = 1 << 5,
     /// Match an ASCII-only word boundary. That is, this matches a position
     /// where the left adjacent character and right adjacent character
     /// correspond to a word and non-word or a non-word and word character.
-    WordAscii,
+    WordAscii = 1 << 6,
     /// Match an ASCII-only negation of a word boundary.
-    WordAsciiNegate,
+    WordAsciiNegate = 1 << 7,
     /// Match a Unicode-aware word boundary. That is, this matches a position
     /// where the left adjacent character and right adjacent character
     /// correspond to a word and non-word or a non-word and word character.
-    WordUnicode,
+    WordUnicode = 1 << 8,
     /// Match a Unicode-aware negation of a word boundary.
-    WordUnicodeNegate,
+    WordUnicodeNegate = 1 << 9,
 }
 
 impl Look {
-    fn from_repr(repr: u16) -> Option<Look> {
+    /// Flip the look-around assertion to its equivalent for reverse searches.
+    /// For example, `StartLF` gets translated to `EndLF`.
+    ///
+    /// Some assertions, such as `WordUnicode`, remain the same since they
+    /// match the same positions regardless of the direction of the search.
+    #[inline]
+    pub const fn reversed(self) -> Look {
+        match self {
+            Look::Start => Look::End,
+            Look::End => Look::Start,
+            Look::StartLF => Look::EndLF,
+            Look::EndLF => Look::StartLF,
+            Look::StartCRLF => Look::EndCRLF,
+            Look::EndCRLF => Look::StartCRLF,
+            Look::WordAscii => Look::WordAscii,
+            Look::WordAsciiNegate => Look::WordAsciiNegate,
+            Look::WordUnicode => Look::WordUnicode,
+            Look::WordUnicodeNegate => Look::WordUnicodeNegate,
+        }
+    }
+
+    /// Return the underlying representation of this look-around enumeration
+    /// as an integer. Giving the return value to the [`Look::from_repr`]
+    /// constructor is guaranteed to return the same look-around variant that
+    /// one started with within a semver compatible release of this crate.
+    #[inline]
+    pub const fn as_repr(self) -> u16 {
+        // AFAIK, 'as' is the only way to zero-cost convert an int enum to an
+        // actual int.
+        self as u16
+    }
+
+    /// Given the underlying representation of a `Look` value, return the
+    /// corresponding `Look` value if the representation is valid. Otherwise
+    /// `None` is returned.
+    #[inline]
+    pub const fn from_repr(repr: u16) -> Option<Look> {
         match repr {
-            0 => Some(Look::Start),
-            1 => Some(Look::End),
-            2 => Some(Look::StartLF),
-            3 => Some(Look::EndLF),
-            4 => Some(Look::StartCRLF),
-            5 => Some(Look::EndCRLF),
-            6 => Some(Look::WordAscii),
-            7 => Some(Look::WordAsciiNegate),
-            8 => Some(Look::WordUnicode),
-            9 => Some(Look::WordUnicodeNegate),
+            0b00_0000_0001 => Some(Look::Start),
+            0b00_0000_0010 => Some(Look::End),
+            0b00_0000_0100 => Some(Look::StartLF),
+            0b00_0000_1000 => Some(Look::EndLF),
+            0b00_0001_0000 => Some(Look::StartCRLF),
+            0b00_0010_0000 => Some(Look::EndCRLF),
+            0b00_0100_0000 => Some(Look::WordAscii),
+            0b00_1000_0000 => Some(Look::WordAsciiNegate),
+            0b01_0000_0000 => Some(Look::WordUnicode),
+            0b10_0000_0000 => Some(Look::WordUnicodeNegate),
             _ => None,
         }
     }
 
-    fn as_repr(&self) -> u16 {
-        match *self {
-            Look::Start => 0,
-            Look::End => 1,
-            Look::StartLF => 2,
-            Look::EndLF => 3,
-            Look::StartCRLF => 5,
-            Look::EndCRLF => 5,
-            Look::WordAscii => 6,
-            Look::WordAsciiNegate => 7,
-            Look::WordUnicode => 8,
-            Look::WordUnicodeNegate => 9,
-        }
-    }
-
-    fn as_char(self) -> char {
+    /// Returns a convenient single codepoint representation of this
+    /// look-around assertion. Each assertion is guaranteed to be represented
+    /// by a distinct character.
+    ///
+    /// This is useful for succinctly representing a look-around assertion in
+    /// human friendly but succinct output intended for a programmer working on
+    /// regex internals.
+    #[inline]
+    pub const fn as_char(self) -> char {
         match self {
             Look::Start => 'A',
             Look::End => 'z',
             Look::StartLF => '^',
             Look::EndLF => '$',
-            Look::StartCRLF => '^',
-            Look::EndCRLF => '$',
+            Look::StartCRLF => 'r',
+            Look::EndCRLF => 'R',
             Look::WordAscii => 'b',
             Look::WordAsciiNegate => 'B',
             Look::WordUnicode => '𝛃',
@@ -1482,6 +1705,9 @@ pub struct Repetition {
     ///
     /// Note that special cases like `?`, `+` and `*` all get translated into
     /// the ranges `{0,1}`, `{1,}` and `{0,}`, respectively.
+    ///
+    /// When `min` is zero, this expression can match the empty string
+    /// regardless of what its sub-expression is.
     pub min: u32,
     /// The maximum range of the repetition.
     ///
@@ -1500,23 +1726,6 @@ pub struct Repetition {
     pub greedy: bool,
     /// The expression being repeated.
     pub sub: Box<Hir>,
-}
-
-impl Repetition {
-    /// Returns true if and only if this repetition operator makes it possible
-    /// to match the empty string.
-    ///
-    /// Note that this is not defined inductively. For example, while `a*`
-    /// will report `true`, `()+` will not, even though `()` matches the empty
-    /// string and one or more occurrences of something that matches the
-    /// empty string will always match the empty string. In order to get the
-    /// inductive definition, see the corresponding method on [`Hir`].
-    ///
-    /// This returns true in precisely the cases that [`Repetition::min`]
-    /// is equal to `0`.
-    pub fn is_match_empty(&self) -> bool {
-        self.min == 0
-    }
 }
 
 /// A type describing the different flavors of `.`.
@@ -1564,8 +1773,10 @@ impl Drop for Hir {
             | HirKind::Literal(_)
             | HirKind::Class(_)
             | HirKind::Look(_) => return,
-            HirKind::Capture(ref x) if !x.sub.kind.has_subexprs() => return,
-            HirKind::Repetition(ref x) if !x.sub.kind.has_subexprs() => return,
+            HirKind::Capture(ref x) if x.sub.kind.subs().is_empty() => return,
+            HirKind::Repetition(ref x) if x.sub.kind.subs().is_empty() => {
+                return
+            }
             HirKind::Concat(ref x) if x.is_empty() => return,
             HirKind::Alternation(ref x) if x.is_empty() => return,
             _ => {}
@@ -1601,7 +1812,8 @@ impl Drop for Hir {
 /// computed inductively on an HIR value. Properties are defined for all
 /// HIR values.
 ///
-/// All methods on a `Properties` value take constant time.
+/// All methods on a `Properties` value take constant time and are meant to
+/// be cheap to call.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Properties(Box<PropertiesI>);
 
@@ -1635,6 +1847,7 @@ impl Properties {
     /// `None` is returned when there is no minimum length. This occurs in
     /// precisely the cases where the HIR matches nothing. i.e., The language
     /// the regex matches is empty. An example of such a regex is `\P{any}`.
+    #[inline]
     pub fn minimum_len(&self) -> Option<usize> {
         self.0.minimum_len
     }
@@ -1649,12 +1862,14 @@ impl Properties {
     /// occurs when the HIR matches nothing or when there is no upper bound on
     /// the length of matching strings. Example of such regexes are `\P{any}`
     /// (matches nothing) and `a+` (has no upper bound).
+    #[inline]
     pub fn maximum_len(&self) -> Option<usize> {
         self.0.maximum_len
     }
 
     /// Returns a set of all look-around assertions that appear at least once
     /// in this HIR value.
+    #[inline]
     pub fn look_set(&self) -> LookSet {
         self.0.look_set
     }
@@ -1665,6 +1880,7 @@ impl Properties {
     ///
     /// For example, `hir.look_set_prefix().contains(Look::Start)` returns true
     /// if and only if the HIR is fully anchored at the start.
+    #[inline]
     pub fn look_set_prefix(&self) -> LookSet {
         self.0.look_set_prefix
     }
@@ -1676,6 +1892,7 @@ impl Properties {
     ///
     /// For example, `hir.look_set_suffix().contains(Look::End)` returns true
     /// if and only if the HIR is fully anchored at the end.
+    #[inline]
     pub fn look_set_suffix(&self) -> LookSet {
         self.0.look_set_suffix
     }
@@ -1684,7 +1901,8 @@ impl Properties {
     /// valid UTF-8.
     ///
     /// When this returns false, then it is possible for this HIR expression to
-    /// match invalid UTF-8.
+    /// match invalid UTF-8, including by matching between the code units of
+    /// a single UTF-8 encoded codepoint.
     ///
     /// Note that this returns true even when the corresponding HIR can match
     /// the empty string. Since an empty string can technically appear between
@@ -1693,6 +1911,57 @@ impl Properties {
     /// However, it is generally assumed that such empty matches are handled
     /// specially by the search routine if it is absolutely required that
     /// matches not split a codepoint.
+    ///
+    /// # Example
+    ///
+    /// This code example shows the UTF-8 property of a variety of patterns.
+    ///
+    /// ```
+    /// use regex_syntax::{ParserBuilder, parse};
+    ///
+    /// // Examples of 'is_utf8() == true'.
+    /// assert!(parse(r"a")?.properties().is_utf8());
+    /// assert!(parse(r"[^a]")?.properties().is_utf8());
+    /// assert!(parse(r".")?.properties().is_utf8());
+    /// assert!(parse(r"\W")?.properties().is_utf8());
+    /// assert!(parse(r"\b")?.properties().is_utf8());
+    /// assert!(parse(r"\B")?.properties().is_utf8());
+    /// assert!(parse(r"(?-u)\b")?.properties().is_utf8());
+    /// assert!(parse(r"(?-u)\B")?.properties().is_utf8());
+    /// // Unicode mode is enabled by default, and in
+    /// // that mode, all \x hex escapes are treated as
+    /// // codepoints. So this actually matches the UTF-8
+    /// // encoding of U+00FF.
+    /// assert!(parse(r"\xFF")?.properties().is_utf8());
+    ///
+    /// // Now we show examples of 'is_utf8() == false'.
+    /// // The only way to do this is to force the parser
+    /// // to permit invalid UTF-8, otherwise all of these
+    /// // would fail to parse!
+    /// let parse = |pattern| {
+    ///     ParserBuilder::new().utf8(false).build().parse(pattern)
+    /// };
+    /// assert!(!parse(r"(?-u)[^a]")?.properties().is_utf8());
+    /// assert!(!parse(r"(?-u).")?.properties().is_utf8());
+    /// assert!(!parse(r"(?-u)\W")?.properties().is_utf8());
+    /// // Conversely to the equivalent example above,
+    /// // when Unicode mode is disabled, \x hex escapes
+    /// // are treated as their raw byte values.
+    /// assert!(!parse(r"(?-u)\xFF")?.properties().is_utf8());
+    /// // Note that just because we disabled UTF-8 in the
+    /// // parser doesn't mean we still can't use Unicode.
+    /// // It is enabled by default, so \xFF is still
+    /// // equivalent to matching the UTF-8 encoding of
+    /// // U+00FF by default.
+    /// assert!(parse(r"\xFF")?.properties().is_utf8());
+    /// // Even though we use raw bytes that individually
+    /// // are not valid UTF-8, when combined together, the
+    /// // overall expression *does* match valid UTF-8!
+    /// assert!(parse(r"(?-u)\xE2\x98\x83")?.properties().is_utf8());
+    ///
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
+    #[inline]
     pub fn is_utf8(&self) -> bool {
         self.0.utf8
     }
@@ -1702,18 +1971,33 @@ impl Properties {
     ///
     /// Note that this does not include the implicit capturing group
     /// corresponding to the entire match that is typically included by regex
-    /// engines. So for example, this method will return `0` for `a` and `1`
-    /// for `(a)`.
+    /// engines.
+    ///
+    /// # Example
+    ///
+    /// This method will return `0` for `a` and `1` for `(a)`:
+    ///
+    /// ```
+    /// use regex_syntax::parse;
+    ///
+    /// assert_eq!(0, parse("a")?.properties().captures_len());
+    /// assert_eq!(1, parse("(a)")?.properties().captures_len());
+    ///
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
+    #[inline]
     pub fn captures_len(&self) -> usize {
         self.0.captures_len
     }
 
-    /// Return true if and only if this HIR is a simple literal. This is only
-    /// true when this HIR expression is either itself a `Literal` or a
+    /// Return true if and only if this HIR is a simple literal. This is
+    /// only true when this HIR expression is either itself a `Literal` or a
     /// concatenation of only `Literal`s.
     ///
-    /// For example, `f` and `foo` are literals, but `f+`, `(foo)`, `foo()`,
-    /// `` are not (even though that contain sub-expressions that are literals).
+    /// For example, `f` and `foo` are literals, but `f+`, `(foo)`, `foo()` and
+    /// the empty string are not (even though they contain sub-expressions that
+    /// are literals).
+    #[inline]
     pub fn is_literal(&self) -> bool {
         self.0.literal
     }
@@ -1726,6 +2010,7 @@ impl Properties {
     /// For example, `f`, `foo`, `a|b|c`, and `foo|bar|baz` are alternation
     /// literals, but `f+`, `(foo)`, `foo()`, ``
     /// are not (even though that contain sub-expressions that are literals).
+    #[inline]
     pub fn is_alternation_literal(&self) -> bool {
         self.0.alternation_literal
     }
@@ -1746,17 +2031,17 @@ impl Properties {
     /// like the minimum and maximum lengths.
     ///
     /// ```
-    /// use regex_syntax::{hir::Properties, Parser};
+    /// use regex_syntax::{hir::Properties, parse};
     ///
-    /// let hir1 = Parser::new().parse("ab?c?")?;
+    /// let hir1 = parse("ab?c?")?;
     /// assert_eq!(Some(1), hir1.properties().minimum_len());
     /// assert_eq!(Some(3), hir1.properties().maximum_len());
     ///
-    /// let hir2 = Parser::new().parse(r"[a&&b]")?;
+    /// let hir2 = parse(r"[a&&b]")?;
     /// assert_eq!(None, hir2.properties().minimum_len());
     /// assert_eq!(None, hir2.properties().maximum_len());
     ///
-    /// let hir3 = Parser::new().parse(r"wxy?z?")?;
+    /// let hir3 = parse(r"wxy?z?")?;
     /// assert_eq!(Some(2), hir3.properties().minimum_len());
     /// assert_eq!(Some(4), hir3.properties().maximum_len());
     ///
@@ -1776,17 +2061,17 @@ impl Properties {
     /// unaffected:
     ///
     /// ```
-    /// use regex_syntax::{hir::Properties, Parser};
+    /// use regex_syntax::{hir::Properties, parse};
     ///
-    /// let hir1 = Parser::new().parse("ab?c?")?;
+    /// let hir1 = parse("ab?c?")?;
     /// assert_eq!(Some(1), hir1.properties().minimum_len());
     /// assert_eq!(Some(3), hir1.properties().maximum_len());
     ///
-    /// let hir2 = Parser::new().parse(r"a+")?;
+    /// let hir2 = parse(r"a+")?;
     /// assert_eq!(Some(1), hir2.properties().minimum_len());
     /// assert_eq!(None, hir2.properties().maximum_len());
     ///
-    /// let hir3 = Parser::new().parse(r"wxy?z?")?;
+    /// let hir3 = parse(r"wxy?z?")?;
     /// assert_eq!(Some(2), hir3.properties().minimum_len());
     /// assert_eq!(Some(4), hir3.properties().maximum_len());
     ///
@@ -1834,9 +2119,9 @@ impl Properties {
         // Handle properties that need to visit every child hir.
         for prop in it {
             let p = prop.borrow();
-            props.look_set.union(p.look_set());
-            props.look_set_prefix.intersect(p.look_set_prefix());
-            props.look_set_suffix.intersect(p.look_set_suffix());
+            props.look_set.set_union(p.look_set());
+            props.look_set_prefix.set_intersect(p.look_set_prefix());
+            props.look_set_suffix.set_intersect(p.look_set_suffix());
             props.utf8 = props.utf8 && p.is_utf8();
             props.captures_len =
                 props.captures_len.saturating_add(p.captures_len());
@@ -1935,29 +2220,26 @@ impl Properties {
 
     /// Create a new set of HIR properties for a look-around assertion.
     fn look(look: Look) -> Properties {
-        use self::Look::*;
-
-        let utf8 = match look {
-            Start | End | StartLF | EndLF | WordAscii | WordUnicode
-            | WordUnicodeNegate => true,
-            // FIXME: Negated ASCII word boundaries can match invalid UTF-8.
-            // But why is this 'false' when 'HirKind::Empty' is true? After
-            // all, isn't WordAsciiNegate just a subset of HirKind::Empty? It
-            // seems to me that if we handle HirKind::Empty correctly even when
-            // it splits a codepoint, then we should be able to automatically
-            // handle WordAsciiNegate correctly too...
-            //
-            // For now, this returns 'false' because that's what it did before.
-            // But we should revisit this before the next release.
-            WordAsciiNegate => false,
-        };
         let inner = PropertiesI {
             minimum_len: Some(0),
             maximum_len: Some(0),
             look_set: LookSet::singleton(look),
             look_set_prefix: LookSet::singleton(look),
             look_set_suffix: LookSet::singleton(look),
-            utf8,
+            // This requires a little explanation. Basically, we don't consider
+            // matching an empty string to be equivalent to matching invalid
+            // UTF-8, even though technically matching every empty string will
+            // split the UTF-8 encoding of a single codepoint when treating a
+            // UTF-8 encoded string as a sequence of bytes. Our defense here is
+            // that in such a case, a codepoint should logically be treated as
+            // the fundamental atom for matching, and thus the only valid match
+            // points are between codepoints and not bytes.
+            //
+            // More practically, this is true here because it's also true
+            // for 'Hir::empty()', otherwise something like 'a*' would be
+            // considered to match invalid UTF-8. That in turn makes this
+            // property borderline useless.
+            utf8: true,
             captures_len: 0,
             literal: false,
             alternation_literal: false,
@@ -1989,7 +2271,10 @@ impl Properties {
             literal: false,
             alternation_literal: false,
         };
-        if !rep.is_match_empty() {
+        // The repetition operator can match the empty string, then its lookset
+        // prefix and suffixes themselves remain empty since they are no longer
+        // required to match.
+        if rep.min > 0 {
             inner.look_set_prefix = p.look_set_prefix();
             inner.look_set_suffix = p.look_set_suffix();
         }
@@ -2027,7 +2312,7 @@ impl Properties {
         // Handle properties that need to visit every child hir.
         for x in concat.iter() {
             let p = x.properties();
-            props.look_set.union(p.look_set());
+            props.look_set.set_union(p.look_set());
             props.utf8 = props.utf8 && p.is_utf8();
             props.captures_len =
                 props.captures_len.saturating_add(p.captures_len());
@@ -2051,7 +2336,7 @@ impl Properties {
         // child exprs until one matches more than the empty string.
         let mut it = concat.iter();
         while let Some(x) = it.next() {
-            props.look_set_prefix.union(x.properties().look_set_prefix());
+            props.look_set_prefix.set_union(x.properties().look_set_prefix());
             if x.properties().maximum_len().map_or(true, |x| x > 0) {
                 break;
             }
@@ -2059,7 +2344,7 @@ impl Properties {
         // Same thing for the suffix properties, but in reverse.
         let mut it = concat.iter().rev();
         while let Some(x) = it.next() {
-            props.look_set_suffix.union(x.properties().look_set_suffix());
+            props.look_set_suffix.set_union(x.properties().look_set_suffix());
             if x.properties().maximum_len().map_or(true, |x| x > 0) {
                 break;
             }
@@ -2079,7 +2364,16 @@ impl Properties {
 /// example, an [`Hir`] provides properties that return `LookSet`s.
 #[derive(Clone, Copy, Default, Eq, PartialEq)]
 pub struct LookSet {
-    bits: u16,
+    /// The underlying representation this set is exposed to make it possible
+    /// to store it somewhere efficiently. The representation is that
+    /// of a bitset, where each assertion occupies bit `i` where `i =
+    /// Look::as_repr()`.
+    ///
+    /// Note that users of this internal representation must permit the full
+    /// range of `u16` values to be represented. For example, even if the
+    /// current implementation only makes use of the 10 least significant bits,
+    /// it may use more bits in a future semver compatible release.
+    pub bits: u16,
 }
 
 impl LookSet {
@@ -2103,14 +2397,12 @@ impl LookSet {
     /// one look-around assertions.
     #[inline]
     pub fn singleton(look: Look) -> LookSet {
-        let mut set = LookSet::empty();
-        set.insert(look);
-        set
+        LookSet::empty().insert(look)
     }
 
     /// Returns the total number of look-around assertions in this set.
     #[inline]
-    pub fn len(&self) -> usize {
+    pub fn len(self) -> usize {
         // OK because max value always fits in a u8, which in turn always
         // fits in a usize, regardless of target.
         usize::try_from(self.bits.count_ones()).unwrap()
@@ -2118,43 +2410,70 @@ impl LookSet {
 
     /// Returns true if and only if this set is empty.
     #[inline]
-    pub fn is_empty(&self) -> bool {
+    pub fn is_empty(self) -> bool {
         self.len() == 0
-    }
-
-    /// Insert the given look-around assertions into this set. If the assertion
-    /// is already in the set, then this is a no-op.
-    #[inline]
-    pub fn insert(&mut self, look: Look) {
-        self.bits |= 1 << look.as_repr();
-    }
-
-    /// Remove the given look-around assertion from this set. If it wasn't
-    /// previously in the set, then this is a no-op.
-    #[inline]
-    pub fn remove(&mut self, look: Look) {
-        self.bits &= !(1 << look.as_repr());
     }
 
     /// Returns true if and only if the given look-around assertion is in this
     /// set.
     #[inline]
-    pub fn contains(&self, look: Look) -> bool {
-        self.bits & (1 << look.as_repr()) != 0
+    pub fn contains(self, look: Look) -> bool {
+        self.bits & look.as_repr() != 0
+    }
+
+    /// Returns true if and only if this set contains any anchor assertions.
+    /// This includes both "start/end of haystack" and "start/end of line."
+    #[inline]
+    pub fn contains_anchor(&self) -> bool {
+        self.contains_anchor_haystack() || self.contains_anchor_line()
+    }
+
+    /// Returns true if and only if this set contains any "start/end of
+    /// haystack" anchors. This doesn't include "start/end of line" anchors.
+    #[inline]
+    pub fn contains_anchor_haystack(&self) -> bool {
+        self.contains(Look::Start) || self.contains(Look::End)
+    }
+
+    /// Returns true if and only if this set contains any "start/end of line"
+    /// anchors. This doesn't include "start/end of haystack" anchors. This
+    /// includes both `\n` line anchors and CRLF (`\r\n`) aware line anchors.
+    #[inline]
+    pub fn contains_anchor_line(&self) -> bool {
+        self.contains(Look::StartLF)
+            || self.contains(Look::EndLF)
+            || self.contains(Look::StartCRLF)
+            || self.contains(Look::EndCRLF)
+    }
+
+    /// Returns true if and only if this set contains any "start/end of line"
+    /// anchors that only treat `\n` as line terminators. This does not include
+    /// haystack anchors or CRLF aware line anchors.
+    #[inline]
+    pub fn contains_anchor_lf(&self) -> bool {
+        self.contains(Look::StartLF) || self.contains(Look::EndLF)
+    }
+
+    /// Returns true if and only if this set contains any "start/end of line"
+    /// anchors that are CRLF-aware. This doesn't include "start/end of
+    /// haystack" or "start/end of line-feed" anchors.
+    #[inline]
+    pub fn contains_anchor_crlf(&self) -> bool {
+        self.contains(Look::StartCRLF) || self.contains(Look::EndCRLF)
     }
 
     /// Returns true if and only if this set contains any word boundary or
     /// negated word boundary assertions. This include both Unicode and ASCII
     /// word boundaries.
     #[inline]
-    pub fn contains_word(&self) -> bool {
+    pub fn contains_word(self) -> bool {
         self.contains_word_unicode() || self.contains_word_ascii()
     }
 
     /// Returns true if and only if this set contains any Unicode word boundary
     /// or negated Unicode word boundary assertions.
     #[inline]
-    pub fn contains_word_unicode(&self) -> bool {
+    pub fn contains_word_unicode(self) -> bool {
         self.contains(Look::WordUnicode)
             || self.contains(Look::WordUnicodeNegate)
     }
@@ -2162,26 +2481,109 @@ impl LookSet {
     /// Returns true if and only if this set contains any ASCII word boundary
     /// or negated ASCII word boundary assertions.
     #[inline]
-    pub fn contains_word_ascii(&self) -> bool {
+    pub fn contains_word_ascii(self) -> bool {
         self.contains(Look::WordAscii) || self.contains(Look::WordAsciiNegate)
-    }
-
-    /// Modifies this set to be the union of itself and the set given.
-    #[inline]
-    pub fn union(&mut self, other: LookSet) {
-        self.bits |= other.bits;
-    }
-
-    /// Modifies this set to be the intersection of itself and the set given.
-    #[inline]
-    pub fn intersect(&mut self, other: LookSet) {
-        self.bits &= other.bits;
     }
 
     /// Returns an iterator over all of the look-around assertions in this set.
     #[inline]
     pub fn iter(self) -> LookSetIter {
         LookSetIter { set: self }
+    }
+
+    /// Return a new set that is equivalent to the original, but with the given
+    /// assertion added to it. If the assertion is already in the set, then the
+    /// returned set is equivalent to the original.
+    #[inline]
+    pub fn insert(self, look: Look) -> LookSet {
+        LookSet { bits: self.bits | look.as_repr() }
+    }
+
+    /// Updates this set in place with the result of inserting the given
+    /// assertion into this set.
+    #[inline]
+    pub fn set_insert(&mut self, look: Look) {
+        *self = self.insert(look);
+    }
+
+    /// Return a new set that is equivalent to the original, but with the given
+    /// assertion removed from it. If the assertion is not in the set, then the
+    /// returned set is equivalent to the original.
+    #[inline]
+    pub fn remove(self, look: Look) -> LookSet {
+        LookSet { bits: self.bits & !look.as_repr() }
+    }
+
+    /// Updates this set in place with the result of removing the given
+    /// assertion from this set.
+    #[inline]
+    pub fn set_remove(&mut self, look: Look) {
+        *self = self.remove(look);
+    }
+
+    /// Returns a new set that is the result of subtracting the given set from
+    /// this set.
+    #[inline]
+    pub fn subtract(self, other: LookSet) -> LookSet {
+        LookSet { bits: self.bits & !other.bits }
+    }
+
+    /// Updates this set in place with the result of subtracting the given set
+    /// from this set.
+    #[inline]
+    pub fn set_subtract(&mut self, other: LookSet) {
+        *self = self.subtract(other);
+    }
+
+    /// Returns a new set that is the union of this and the one given.
+    #[inline]
+    pub fn union(self, other: LookSet) -> LookSet {
+        LookSet { bits: self.bits | other.bits }
+    }
+
+    /// Updates this set in place with the result of unioning it with the one
+    /// given.
+    #[inline]
+    pub fn set_union(&mut self, other: LookSet) {
+        *self = self.union(other);
+    }
+
+    /// Returns a new set that is the intersection of this and the one given.
+    #[inline]
+    pub fn intersect(self, other: LookSet) -> LookSet {
+        LookSet { bits: self.bits & other.bits }
+    }
+
+    /// Updates this set in place with the result of intersecting it with the
+    /// one given.
+    #[inline]
+    pub fn set_intersect(&mut self, other: LookSet) {
+        *self = self.intersect(other);
+    }
+
+    /// Return a `LookSet` from the slice given as a native endian 16-bit
+    /// integer.
+    ///
+    /// # Panics
+    ///
+    /// This panics if `slice.len() < 2`.
+    #[inline]
+    pub fn read_repr(slice: &[u8]) -> LookSet {
+        let bits = u16::from_ne_bytes(slice[..2].try_into().unwrap());
+        LookSet { bits }
+    }
+
+    /// Write a `LookSet` as a native endian 16-bit integer to the beginning
+    /// of the slice given.
+    ///
+    /// # Panics
+    ///
+    /// This panics if `slice.len() < 2`.
+    #[inline]
+    pub fn write_repr(self, slice: &mut [u8]) {
+        let raw = self.bits.to_ne_bytes();
+        slice[0] = raw[0];
+        slice[1] = raw[1];
     }
 }
 
@@ -2210,11 +2612,14 @@ impl Iterator for LookSetIter {
 
     #[inline]
     fn next(&mut self) -> Option<Look> {
+        if self.set.is_empty() {
+            return None;
+        }
         // We'll never have more than u8::MAX distinct look-around assertions,
         // so 'repr' will always fit into a u16.
         let repr = u16::try_from(self.set.bits.trailing_zeros()).unwrap();
-        let look = Look::from_repr(repr)?;
-        self.set.remove(look);
+        let look = Look::from_repr(1 << repr)?;
+        self.set = self.set.remove(look);
         Some(look)
     }
 }
@@ -3113,7 +3518,7 @@ mod tests {
                     props: Properties::empty(),
                 };
             }
-            assert!(!expr.kind.is_empty());
+            assert!(!matches!(*expr.kind(), HirKind::Empty));
         };
 
         // We run our test on a thread with a small stack size so we can
@@ -3127,5 +3532,32 @@ mod tests {
             .unwrap()
             .join()
             .unwrap();
+    }
+
+    #[test]
+    fn look_set_iter() {
+        let set = LookSet::empty();
+        assert_eq!(0, set.iter().count());
+
+        let set = LookSet::full();
+        assert_eq!(10, set.iter().count());
+
+        let set =
+            LookSet::empty().insert(Look::StartLF).insert(Look::WordUnicode);
+        assert_eq!(2, set.iter().count());
+
+        let set = LookSet::empty().insert(Look::StartLF);
+        assert_eq!(1, set.iter().count());
+
+        let set = LookSet::empty().insert(Look::WordAsciiNegate);
+        assert_eq!(1, set.iter().count());
+    }
+
+    #[test]
+    fn look_set_debug() {
+        let res = format!("{:?}", LookSet::empty());
+        assert_eq!("∅", res);
+        let res = format!("{:?}", LookSet::full());
+        assert_eq!("Az^$rRbB𝛃𝚩", res);
     }
 }

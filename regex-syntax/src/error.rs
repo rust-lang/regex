@@ -1,5 +1,3 @@
-use core::{cmp, fmt, result};
-
 use alloc::{
     format,
     string::{String, ToString},
@@ -8,9 +6,6 @@ use alloc::{
 };
 
 use crate::{ast, hir};
-
-/// A type alias for dealing with errors returned by this crate.
-pub type Result<T> = result::Result<T, Error>;
 
 /// This error type encompasses any error that can be returned by this crate.
 ///
@@ -42,8 +37,8 @@ impl From<hir::Error> for Error {
 #[cfg(feature = "std")]
 impl std::error::Error for Error {}
 
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match *self {
             Error::Parse(ref x) => x.fmt(f),
             Error::Translate(ref x) => x.fmt(f),
@@ -91,8 +86,8 @@ impl<'e> From<&'e hir::Error> for Formatter<'e, hir::ErrorKind> {
     }
 }
 
-impl<'e, E: fmt::Display> fmt::Display for Formatter<'e, E> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl<'e, E: core::fmt::Display> core::fmt::Display for Formatter<'e, E> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let spans = Spans::from_formatter(self);
         if self.pattern.contains('\n') {
             let divider = repeat_char('~', 79);
@@ -158,7 +153,7 @@ struct Spans<'p> {
 
 impl<'p> Spans<'p> {
     /// Build a sequence of spans from a formatter.
-    fn from_formatter<'e, E: fmt::Display>(
+    fn from_formatter<'e, E: core::fmt::Display>(
         fmter: &'p Formatter<'e, E>,
     ) -> Spans<'p> {
         let mut line_count = fmter.pattern.lines().count();
@@ -238,7 +233,7 @@ impl<'p> Spans<'p> {
                 pos += 1;
             }
             let note_len = span.end.column.saturating_sub(span.start.column);
-            for _ in 0..cmp::max(1, note_len) {
+            for _ in 0..core::cmp::max(1, note_len) {
                 notes.push('^');
                 pos += 1;
             }
