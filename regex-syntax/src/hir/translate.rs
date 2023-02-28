@@ -173,7 +173,7 @@ enum HirFrame {
     /// This sentinel only exists to stop other things (like flattening
     /// literals) from reaching across repetition operators.
     Repetition,
-    /// This is pushed on to the stack upon first seeing any kind of group,
+    /// This is pushed on to the stack upon first seeing any kind of capture,
     /// indicated by parentheses (including non-capturing groups). It is popped
     /// upon leaving a group.
     Group {
@@ -414,7 +414,7 @@ impl<'t, 'p> Visitor for TranslatorI<'t, 'p> {
                 let expr = self.pop().unwrap().unwrap_expr();
                 let old_flags = self.pop().unwrap().unwrap_group();
                 self.trans().flags.set(old_flags);
-                self.push(HirFrame::Expr(self.hir_group(x, expr)));
+                self.push(HirFrame::Expr(self.hir_capture(x, expr)));
             }
             Ast::Concat(_) => {
                 let mut exprs = vec![];
@@ -902,7 +902,7 @@ impl<'t, 'p> TranslatorI<'t, 'p> {
         })
     }
 
-    fn hir_group(&self, group: &ast::Group, expr: Hir) -> Hir {
+    fn hir_capture(&self, group: &ast::Group, expr: Hir) -> Hir {
         let (index, name) = match group.kind {
             ast::GroupKind::CaptureIndex(index) => (index, None),
             ast::GroupKind::CaptureName { ref name, .. } => {
@@ -912,7 +912,7 @@ impl<'t, 'p> TranslatorI<'t, 'p> {
             // in which the data type is defined handles this automatically.
             ast::GroupKind::NonCapturing(_) => return expr,
         };
-        Hir::group(hir::Group { index, name, hir: Box::new(expr) })
+        Hir::capture(hir::Capture { index, name, hir: Box::new(expr) })
     }
 
     fn hir_repetition(&self, rep: &ast::Repetition, expr: Hir) -> Hir {
@@ -1352,12 +1352,12 @@ mod tests {
         Hir::literal(s)
     }
 
-    fn hir_group(index: u32, expr: Hir) -> Hir {
-        Hir::group(hir::Group { index, name: None, hir: Box::new(expr) })
+    fn hir_capture(index: u32, expr: Hir) -> Hir {
+        Hir::capture(hir::Capture { index, name: None, hir: Box::new(expr) })
     }
 
-    fn hir_group_name(index: u32, name: &str, expr: Hir) -> Hir {
-        Hir::group(hir::Group {
+    fn hir_capture_name(index: u32, name: &str, expr: Hir) -> Hir {
+        Hir::capture(hir::Capture {
             index,
             name: Some(name.into()),
             hir: Box::new(expr),
@@ -1528,35 +1528,35 @@ mod tests {
     fn empty() {
         assert_eq!(t(""), Hir::empty());
         assert_eq!(t("(?i)"), Hir::empty());
-        assert_eq!(t("()"), hir_group(1, Hir::empty()));
+        assert_eq!(t("()"), hir_capture(1, Hir::empty()));
         assert_eq!(t("(?:)"), Hir::empty());
-        assert_eq!(t("(?P<wat>)"), hir_group_name(1, "wat", Hir::empty()));
+        assert_eq!(t("(?P<wat>)"), hir_capture_name(1, "wat", Hir::empty()));
         assert_eq!(t("|"), hir_alt(vec![Hir::empty(), Hir::empty()]));
         assert_eq!(
             t("()|()"),
             hir_alt(vec![
-                hir_group(1, Hir::empty()),
-                hir_group(2, Hir::empty()),
+                hir_capture(1, Hir::empty()),
+                hir_capture(2, Hir::empty()),
             ])
         );
         assert_eq!(
             t("(|b)"),
-            hir_group(1, hir_alt(vec![Hir::empty(), hir_lit("b"),]))
+            hir_capture(1, hir_alt(vec![Hir::empty(), hir_lit("b"),]))
         );
         assert_eq!(
             t("(a|)"),
-            hir_group(1, hir_alt(vec![hir_lit("a"), Hir::empty(),]))
+            hir_capture(1, hir_alt(vec![hir_lit("a"), Hir::empty(),]))
         );
         assert_eq!(
             t("(a||c)"),
-            hir_group(
+            hir_capture(
                 1,
                 hir_alt(vec![hir_lit("a"), Hir::empty(), hir_lit("c"),])
             )
         );
         assert_eq!(
             t("(||)"),
-            hir_group(
+            hir_capture(
                 1,
                 hir_alt(vec![Hir::empty(), Hir::empty(), Hir::empty(),])
             )
@@ -1740,56 +1740,59 @@ mod tests {
 
     #[test]
     fn group() {
-        assert_eq!(t("(a)"), hir_group(1, hir_lit("a")));
+        assert_eq!(t("(a)"), hir_capture(1, hir_lit("a")));
         assert_eq!(
             t("(a)(b)"),
             hir_cat(vec![
-                hir_group(1, hir_lit("a")),
-                hir_group(2, hir_lit("b")),
+                hir_capture(1, hir_lit("a")),
+                hir_capture(2, hir_lit("b")),
             ])
         );
         assert_eq!(
             t("(a)|(b)"),
             hir_alt(vec![
-                hir_group(1, hir_lit("a")),
-                hir_group(2, hir_lit("b")),
+                hir_capture(1, hir_lit("a")),
+                hir_capture(2, hir_lit("b")),
             ])
         );
-        assert_eq!(t("(?P<foo>)"), hir_group_name(1, "foo", Hir::empty()));
-        assert_eq!(t("(?P<foo>a)"), hir_group_name(1, "foo", hir_lit("a")));
+        assert_eq!(t("(?P<foo>)"), hir_capture_name(1, "foo", Hir::empty()));
+        assert_eq!(t("(?P<foo>a)"), hir_capture_name(1, "foo", hir_lit("a")));
         assert_eq!(
             t("(?P<foo>a)(?P<bar>b)"),
             hir_cat(vec![
-                hir_group_name(1, "foo", hir_lit("a")),
-                hir_group_name(2, "bar", hir_lit("b")),
+                hir_capture_name(1, "foo", hir_lit("a")),
+                hir_capture_name(2, "bar", hir_lit("b")),
             ])
         );
         assert_eq!(t("(?:)"), Hir::empty());
         assert_eq!(t("(?:a)"), hir_lit("a"));
         assert_eq!(
             t("(?:a)(b)"),
-            hir_cat(vec![hir_lit("a"), hir_group(1, hir_lit("b")),])
+            hir_cat(vec![hir_lit("a"), hir_capture(1, hir_lit("b")),])
         );
         assert_eq!(
             t("(a)(?:b)(c)"),
             hir_cat(vec![
-                hir_group(1, hir_lit("a")),
+                hir_capture(1, hir_lit("a")),
                 hir_lit("b"),
-                hir_group(2, hir_lit("c")),
+                hir_capture(2, hir_lit("c")),
             ])
         );
         assert_eq!(
             t("(a)(?P<foo>b)(c)"),
             hir_cat(vec![
-                hir_group(1, hir_lit("a")),
-                hir_group_name(2, "foo", hir_lit("b")),
-                hir_group(3, hir_lit("c")),
+                hir_capture(1, hir_lit("a")),
+                hir_capture_name(2, "foo", hir_lit("b")),
+                hir_capture(3, hir_lit("c")),
             ])
         );
-        assert_eq!(t("()"), hir_group(1, Hir::empty()));
-        assert_eq!(t("((?i))"), hir_group(1, Hir::empty()));
-        assert_eq!(t("((?x))"), hir_group(1, Hir::empty()));
-        assert_eq!(t("(((?x)))"), hir_group(1, hir_group(2, Hir::empty())));
+        assert_eq!(t("()"), hir_capture(1, Hir::empty()));
+        assert_eq!(t("((?i))"), hir_capture(1, Hir::empty()));
+        assert_eq!(t("((?x))"), hir_capture(1, Hir::empty()));
+        assert_eq!(
+            t("(((?x)))"),
+            hir_capture(1, hir_capture(2, Hir::empty()))
+        );
     }
 
     #[test]
@@ -1818,7 +1821,7 @@ mod tests {
         assert_eq!(
             t("((?i-u)a)b"),
             hir_cat(vec![
-                hir_group(1, hir_bclass(&[(b'A', b'A'), (b'a', b'a')])),
+                hir_capture(1, hir_bclass(&[(b'A', b'A'), (b'a', b'a')])),
                 hir_lit("b"),
             ])
         );
@@ -1908,7 +1911,7 @@ mod tests {
             t("ab?"),
             hir_cat(vec![hir_lit("a"), hir_quest(true, hir_lit("b")),])
         );
-        assert_eq!(t("(ab)?"), hir_quest(true, hir_group(1, hir_lit("ab"))));
+        assert_eq!(t("(ab)?"), hir_quest(true, hir_capture(1, hir_lit("ab"))));
         assert_eq!(
             t("a|b?"),
             hir_alt(vec![hir_lit("a"), hir_quest(true, hir_lit("b")),])
@@ -1922,7 +1925,7 @@ mod tests {
         let c = || hir_look(hir::Look::WordUnicode);
         let d = || hir_look(hir::Look::WordUnicodeNegate);
 
-        assert_eq!(t("(^$)"), hir_group(1, hir_cat(vec![a(), b()])));
+        assert_eq!(t("(^$)"), hir_capture(1, hir_cat(vec![a(), b()])));
         assert_eq!(t("^|$"), hir_alt(vec![a(), b()]));
         assert_eq!(t(r"^|$|\b"), hir_alt(vec![a(), b(), c()]));
         assert_eq!(
@@ -1933,11 +1936,14 @@ mod tests {
                 hir_cat(vec![c(), d()]),
             ])
         );
-        assert_eq!(t("(^|$)"), hir_group(1, hir_alt(vec![a(), b()])));
-        assert_eq!(t(r"(^|$|\b)"), hir_group(1, hir_alt(vec![a(), b(), c()])));
+        assert_eq!(t("(^|$)"), hir_capture(1, hir_alt(vec![a(), b()])));
+        assert_eq!(
+            t(r"(^|$|\b)"),
+            hir_capture(1, hir_alt(vec![a(), b(), c()]))
+        );
         assert_eq!(
             t(r"(^$|$\b|\b\B)"),
-            hir_group(
+            hir_capture(
                 1,
                 hir_alt(vec![
                     hir_cat(vec![a(), b()]),
@@ -1948,15 +1954,15 @@ mod tests {
         );
         assert_eq!(
             t(r"(^$|($\b|(\b\B)))"),
-            hir_group(
+            hir_capture(
                 1,
                 hir_alt(vec![
                     hir_cat(vec![a(), b()]),
-                    hir_group(
+                    hir_capture(
                         2,
                         hir_alt(vec![
                             hir_cat(vec![b(), c()]),
-                            hir_group(3, hir_cat(vec![c(), d()])),
+                            hir_capture(3, hir_cat(vec![c(), d()])),
                         ])
                     ),
                 ])

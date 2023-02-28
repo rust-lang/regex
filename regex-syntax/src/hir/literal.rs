@@ -186,7 +186,7 @@ impl Extractor {
             }
             Class(hir::Class::Bytes(ref cls)) => self.extract_class_bytes(cls),
             Repetition(ref rep) => self.extract_repetition(rep),
-            Group(hir::Group { ref hir, .. }) => self.extract(hir),
+            Capture(hir::Capture { ref hir, .. }) => self.extract(hir),
             Concat(ref hirs) => match self.kind {
                 ExtractKind::Prefix => self.extract_concat(hirs.iter()),
                 ExtractKind::Suffix => self.extract_concat(hirs.iter().rev()),

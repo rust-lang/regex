@@ -185,8 +185,8 @@ pub enum HirKind {
     Look(Look),
     /// A repetition operation applied to a child expression.
     Repetition(Repetition),
-    /// A possibly capturing group, which contains a child expression.
-    Group(Group),
+    /// A capturing group, which contains a child expression.
+    Capture(Capture),
     /// A concatenation of expressions. A concatenation always has at least two
     /// child expressions.
     ///
@@ -329,11 +329,11 @@ impl Hir {
         Hir { kind: HirKind::Repetition(rep), props }
     }
 
-    /// Creates a group HIR expression.
+    /// Creates a capture HIR expression.
     #[inline]
-    pub fn group(group: Group) -> Hir {
-        let props = Properties::group(&group);
-        Hir { kind: HirKind::Group(group), props }
+    pub fn capture(capture: Capture) -> Hir {
+        let props = Properties::capture(&capture);
+        Hir { kind: HirKind::Capture(capture), props }
     }
 
     /// Returns the concatenation of the given expressions.
@@ -529,7 +529,7 @@ impl HirKind {
             | HirKind::Literal(_)
             | HirKind::Class(_)
             | HirKind::Look(_) => false,
-            HirKind::Group(_)
+            HirKind::Capture(_)
             | HirKind::Repetition(_)
             | HirKind::Concat(_)
             | HirKind::Alternation(_) => true,
@@ -1431,10 +1431,10 @@ impl Look {
 /// in a `Hir`. Instead, non-capturing grouping is handled automatically by
 /// the recursive structure of the `Hir` itself.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct Group {
-    /// The capture index of the group.
+pub struct Capture {
+    /// The capture index of the capture.
     pub index: u32,
-    /// The name of the group, if it exists.
+    /// The name of the capture, if it exists.
     pub name: Option<Box<str>>,
     /// The expression inside the capturing group, which may be empty.
     pub hir: Box<Hir>,
@@ -1523,7 +1523,7 @@ impl Drop for Hir {
             | HirKind::Literal(_)
             | HirKind::Class(_)
             | HirKind::Look(_) => return,
-            HirKind::Group(ref x) if !x.hir.kind.has_subexprs() => return,
+            HirKind::Capture(ref x) if !x.hir.kind.has_subexprs() => return,
             HirKind::Repetition(ref x) if !x.hir.kind.has_subexprs() => return,
             HirKind::Concat(ref x) if x.is_empty() => return,
             HirKind::Alternation(ref x) if x.is_empty() => return,
@@ -1537,7 +1537,7 @@ impl Drop for Hir {
                 | HirKind::Literal(_)
                 | HirKind::Class(_)
                 | HirKind::Look(_) => {}
-                HirKind::Group(ref mut x) => {
+                HirKind::Capture(ref mut x) => {
                     stack.push(mem::replace(&mut x.hir, Hir::empty()));
                 }
                 HirKind::Repetition(ref mut x) => {
@@ -1955,13 +1955,9 @@ impl Properties {
         Properties(Box::new(inner))
     }
 
-    /// Create a new set of HIR properties for a group.
-    fn group(group: &Group) -> Properties {
-        // FIXME: Groups really should always have the same properties as
-        // their child expressions. But the literal properties somewhat
-        // over-constrained in what they represent in order to make downstream
-        // analyses a bit more straight-forward.
-        let p = group.hir.properties();
+    /// Create a new set of HIR properties for a capture.
+    fn capture(capture: &Capture) -> Properties {
+        let p = capture.hir.properties();
         Properties(Box::new(PropertiesI {
             captures_len: p.captures_len().saturating_add(1),
             literal: false,
@@ -3055,7 +3051,7 @@ mod tests {
         let run = || {
             let mut expr = Hir::empty();
             for _ in 0..100 {
-                expr = Hir::group(Group {
+                expr = Hir::capture(Capture {
                     index: 1,
                     name: None,
                     hir: Box::new(expr),

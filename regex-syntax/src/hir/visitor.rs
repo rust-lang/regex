@@ -75,9 +75,9 @@ enum Frame<'a> {
     /// A stack frame allocated just before descending into a repetition
     /// operator's child node.
     Repetition(&'a hir::Repetition),
-    /// A stack frame allocated just before descending into a group's child
+    /// A stack frame allocated just before descending into a capture's child
     /// node.
-    Group(&'a hir::Group),
+    Capture(&'a hir::Capture),
     /// The stack frame used while visiting every child node of a concatenation
     /// of expressions.
     Concat {
@@ -150,7 +150,7 @@ impl<'a> HeapVisitor<'a> {
     fn induct(&mut self, hir: &'a Hir) -> Option<Frame<'a>> {
         match *hir.kind() {
             HirKind::Repetition(ref x) => Some(Frame::Repetition(x)),
-            HirKind::Group(ref x) => Some(Frame::Group(x)),
+            HirKind::Capture(ref x) => Some(Frame::Capture(x)),
             HirKind::Concat(ref x) if x.is_empty() => None,
             HirKind::Concat(ref x) => {
                 Some(Frame::Concat { head: &x[0], tail: &x[1..] })
@@ -168,7 +168,7 @@ impl<'a> HeapVisitor<'a> {
     fn pop(&self, induct: Frame<'a>) -> Option<Frame<'a>> {
         match induct {
             Frame::Repetition(_) => None,
-            Frame::Group(_) => None,
+            Frame::Capture(_) => None,
             Frame::Concat { tail, .. } => {
                 if tail.is_empty() {
                     None
@@ -196,7 +196,7 @@ impl<'a> Frame<'a> {
     fn child(&self) -> &'a Hir {
         match *self {
             Frame::Repetition(rep) => &rep.hir,
-            Frame::Group(group) => &group.hir,
+            Frame::Capture(capture) => &capture.hir,
             Frame::Concat { head, .. } => head,
             Frame::Alternation { head, .. } => head,
         }

@@ -190,7 +190,7 @@ impl<W: fmt::Write> Visitor for Writer<W> {
                     self.wtr.write_str(r"\B")?;
                 }
             },
-            HirKind::Group(hir::Group { ref name, .. }) => {
+            HirKind::Capture(hir::Capture { ref name, .. }) => {
                 self.wtr.write_str("(")?;
                 if let Some(ref name) = *name {
                     write!(self.wtr, "?P<{}>", name)?;
@@ -254,7 +254,7 @@ impl<W: fmt::Write> Visitor for Writer<W> {
                     self.wtr.write_str("?")?;
                 }
             }
-            HirKind::Group(_)
+            HirKind::Capture(_)
             | HirKind::Concat(_)
             | HirKind::Alternation(_) => {
                 self.wtr.write_str(r")")?;
