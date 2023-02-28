@@ -160,11 +160,6 @@ jobs:
         ./test
 
     - if: matrix.build == 'nightly'
-      name: Compile regex-debug
-      run: |
-        ${{ env.CARGO }} build --verbose --manifest-path regex-debug/Cargo.toml $TARGET
-
-    - if: matrix.build == 'nightly'
       name: Run benchmarks as tests
       run: |
         cd bench
