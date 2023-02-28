@@ -29,7 +29,8 @@ These two types come with conversion routines:
 
 As a convenience, the above two conversion routines are combined into one via
 the top-level [`Parser`] type. This `Parser` will first convert your pattern to
-an `Ast` and then convert the `Ast` to an `Hir`.
+an `Ast` and then convert the `Ast` to an `Hir`. It's also exposed as top-level
+[`parse`] free function.
 
 
 # Example
@@ -37,14 +38,14 @@ an `Ast` and then convert the `Ast` to an `Hir`.
 This example shows how to parse a pattern string into its HIR:
 
 ```
-use regex_syntax::Parser;
-use regex_syntax::hir::Hir;
+use regex_syntax::{hir::Hir, parse};
 
-let hir = Parser::new().parse("a|b").unwrap();
+let hir = parse("a|b")?;
 assert_eq!(hir, Hir::alternation(vec![
     Hir::literal("a".as_bytes()),
     Hir::literal("b".as_bytes()),
 ]));
+# Ok::<(), Box<dyn std::error::Error>>(())
 ```
 
 
@@ -170,8 +171,8 @@ extern crate std;
 extern crate alloc;
 
 pub use crate::{
-    error::{Error, Result},
-    parser::{Parser, ParserBuilder},
+    error::Error,
+    parser::{parse, Parser, ParserBuilder},
     unicode::UnicodeWordError,
 };
 

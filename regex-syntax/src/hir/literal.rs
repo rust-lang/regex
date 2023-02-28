@@ -101,10 +101,9 @@ use crate::hir::{self, Hir};
 /// This shows how to extract prefixes:
 ///
 /// ```
-/// use regex_syntax::{hir::literal::{Extractor, Literal, Seq}, Parser};
+/// use regex_syntax::{hir::literal::{Extractor, Literal, Seq}, parse};
 ///
-/// let hir = Parser::new().parse(r"(a|b|c)(x|y|z)[A-Z]+foo")?;
-///
+/// let hir = parse(r"(a|b|c)(x|y|z)[A-Z]+foo")?;
 /// let got = Extractor::new().extract(&hir);
 /// // All literals returned are "inexact" because none of them reach the
 /// // match state.
@@ -129,11 +128,10 @@ use crate::hir::{self, Hir};
 /// ```
 /// use regex_syntax::{
 ///     hir::literal::{Extractor, ExtractKind, Literal, Seq},
-///     Parser,
+///     parse,
 /// };
 ///
-/// let hir = Parser::new().parse(r"foo|[A-Z]+bar")?;
-///
+/// let hir = parse(r"foo|[A-Z]+bar")?;
 /// let got = Extractor::new().kind(ExtractKind::Suffix).extract(&hir);
 /// // Since 'foo' gets to a match state, it is considered exact. But 'bar'
 /// // does not because of the '[A-Z]+', and thus is marked inexact.
@@ -237,9 +235,9 @@ impl Extractor {
     /// for character classes being turned into literal sequences.
     ///
     /// ```
-    /// use regex_syntax::{hir::literal::{Extractor, Seq}, Parser};
+    /// use regex_syntax::{hir::literal::{Extractor, Seq}, parse};
     ///
-    /// let hir = Parser::new().parse(r"[0-9]")?;
+    /// let hir = parse(r"[0-9]")?;
     ///
     /// let got = Extractor::new().extract(&hir);
     /// let expected = Seq::new([
@@ -274,9 +272,9 @@ impl Extractor {
     /// This shows how to decrease the limit and compares it with the default.
     ///
     /// ```
-    /// use regex_syntax::{hir::literal::{Extractor, Literal, Seq}, Parser};
+    /// use regex_syntax::{hir::literal::{Extractor, Literal, Seq}, parse};
     ///
-    /// let hir = Parser::new().parse(r"(abc){8}")?;
+    /// let hir = parse(r"(abc){8}")?;
     ///
     /// let got = Extractor::new().extract(&hir);
     /// let expected = Seq::new(["abcabcabcabcabcabcabcabc"]);
@@ -311,9 +309,9 @@ impl Extractor {
     /// This shows how to decrease the limit and compares it with the default.
     ///
     /// ```
-    /// use regex_syntax::{hir::literal::{Extractor, Literal, Seq}, Parser};
+    /// use regex_syntax::{hir::literal::{Extractor, Literal, Seq}, parse};
     ///
-    /// let hir = Parser::new().parse(r"(abc){2}{2}{2}")?;
+    /// let hir = parse(r"(abc){2}{2}{2}")?;
     ///
     /// let got = Extractor::new().extract(&hir);
     /// let expected = Seq::new(["abcabcabcabcabcabcabcabc"]);
@@ -353,9 +351,9 @@ impl Extractor {
     /// sequence returned.
     ///
     /// ```
-    /// use regex_syntax::{hir::literal::{Extractor, Literal, Seq}, Parser};
+    /// use regex_syntax::{hir::literal::{Extractor, Literal, Seq}, parse};
     ///
-    /// let hir = Parser::new().parse(r"[ab]{2}{2}")?;
+    /// let hir = parse(r"[ab]{2}{2}")?;
     ///
     /// let got = Extractor::new().extract(&hir);
     /// let expected = Seq::new([

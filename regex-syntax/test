@@ -18,7 +18,7 @@ features=(
     unicode-segment
 )
 for f in "${features[@]}"; do
-    echo "===== FEATURE: $f ==="
+    echo "=== FEATURE: $f ==="
     # We only run library tests because I couldn't figure out how to easily
     # make doc tests run in 'no_std' mode. In particular, without the Error
     # trait, using '?' in doc tests seems tricky.

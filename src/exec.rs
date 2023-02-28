@@ -252,7 +252,19 @@ impl ExecBuilder {
             let expr =
                 parser.parse(pat).map_err(|e| Error::Syntax(e.to_string()))?;
             let props = expr.properties();
-            bytes = bytes || !props.is_utf8();
+            // This used to just check whether the HIR matched valid UTF-8
+            // or not, but in regex-syntax 0.7, we changed our definition of
+            // "matches valid UTF-8" to exclude zero-width matches. And in
+            // particular, previously, we considered WordAsciiNegate (that
+            // is '(?-u:\B)') to be capable of matching invalid UTF-8. Our
+            // matcher engines were built under this assumption and fixing
+            // them is not worth it with the imminent plan to switch over to
+            // regex-automata. So for now, we retain the previous behavior by
+            // just explicitly treating the presence of a negated ASCII word
+            // boundary as forcing use to use a byte oriented automaton.
+            bytes = bytes
+                || !props.is_utf8()
+                || props.look_set().contains(Look::WordAsciiNegate);
 
             if cfg!(feature = "perf-literal") {
                 if !props.look_set_prefix().contains(Look::Start)

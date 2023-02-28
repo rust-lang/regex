@@ -30,13 +30,12 @@ concrete syntax that produced the `Hir`.
 This example shows how to parse a pattern string into its HIR:
 
 ```rust
-use regex_syntax::Parser;
-use regex_syntax::hir::{self, Hir};
+use regex_syntax::{hir::Hir, parse};
 
-let hir = Parser::new().parse("a|b").unwrap();
+let hir = parse("a|b").unwrap();
 assert_eq!(hir, Hir::alternation(vec![
-    Hir::literal(hir::Literal::Unicode('a')),
-    Hir::literal(hir::Literal::Unicode('b')),
+    Hir::literal("a".as_bytes()),
+    Hir::literal("b".as_bytes()),
 ]));
 ```
 

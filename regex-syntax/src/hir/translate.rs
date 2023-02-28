@@ -9,7 +9,7 @@ use alloc::{boxed::Box, string::ToString, vec, vec::Vec};
 use crate::{
     ast::{self, Ast, Span, Visitor},
     either::Either,
-    hir::{self, Error, ErrorKind, Hir},
+    hir::{self, Error, ErrorKind, Hir, HirKind},
     unicode::{self, ClassQuery},
 };
 
@@ -425,7 +425,7 @@ impl<'t, 'p> Visitor for TranslatorI<'t, 'p> {
             Ast::Concat(_) => {
                 let mut exprs = vec![];
                 while let Some(expr) = self.pop_concat_expr() {
-                    if !expr.kind().is_empty() {
+                    if !matches!(*expr.kind(), HirKind::Empty) {
                         exprs.push(expr);
                     }
                 }
@@ -899,21 +899,11 @@ impl<'t, 'p> TranslatorI<'t, 'p> {
             } else {
                 hir::Look::WordAscii
             }),
-            ast::AssertionKind::NotWordBoundary => {
-                Hir::look(if unicode {
-                    hir::Look::WordUnicodeNegate
-                } else {
-                    // It is possible for negated ASCII word boundaries to
-                    // match at invalid UTF-8 boundaries, even when searching
-                    // valid UTF-8.
-                    if self.trans().utf8 {
-                        return Err(
-                            self.error(asst.span, ErrorKind::InvalidUtf8)
-                        );
-                    }
-                    hir::Look::WordAsciiNegate
-                })
-            }
+            ast::AssertionKind::NotWordBoundary => Hir::look(if unicode {
+                hir::Look::WordUnicodeNegate
+            } else {
+                hir::Look::WordAsciiNegate
+            }),
         })
     }
 
@@ -1055,7 +1045,7 @@ impl<'t, 'p> TranslatorI<'t, 'p> {
         // Negating a Perl byte class is likely to cause it to match invalid
         // UTF-8. That's only OK if the translator is configured to allow such
         // things.
-        if self.trans().utf8 && !class.is_all_ascii() {
+        if self.trans().utf8 && !class.is_ascii() {
             return Err(self.error(ast_class.span, ErrorKind::InvalidUtf8));
         }
         Ok(class)
@@ -1123,7 +1113,7 @@ impl<'t, 'p> TranslatorI<'t, 'p> {
         if negated {
             class.negate();
         }
-        if self.trans().utf8 && !class.is_all_ascii() {
+        if self.trans().utf8 && !class.is_ascii() {
             return Err(self.error(span.clone(), ErrorKind::InvalidUtf8));
         }
         Ok(())
@@ -1796,18 +1786,7 @@ mod tests {
         assert_eq!(t(r"\b"), hir_look(hir::Look::WordUnicode));
         assert_eq!(t(r"\B"), hir_look(hir::Look::WordUnicodeNegate));
         assert_eq!(t(r"(?-u)\b"), hir_look(hir::Look::WordAscii));
-        assert_eq!(t_bytes(r"(?-u)\B"), hir_look(hir::Look::WordAsciiNegate));
-
-        assert_eq!(
-            t_err(r"(?-u)\B"),
-            TestError {
-                kind: hir::ErrorKind::InvalidUtf8,
-                span: Span::new(
-                    Position::new(5, 1, 6),
-                    Position::new(7, 1, 8)
-                ),
-            }
-        );
+        assert_eq!(t(r"(?-u)\B"), hir_look(hir::Look::WordAsciiNegate));
     }
 
     #[test]
@@ -3199,21 +3178,21 @@ mod tests {
         assert!(props_bytes(r"\b").is_utf8());
         assert!(props_bytes(r"\B").is_utf8());
         assert!(props_bytes(r"(?-u)\b").is_utf8());
+        assert!(props_bytes(r"(?-u)\B").is_utf8());
 
         // Negative examples.
         assert!(!props_bytes(r"(?-u)\xFF").is_utf8());
         assert!(!props_bytes(r"(?-u)\xFF\xFF").is_utf8());
         assert!(!props_bytes(r"(?-u)[^a]").is_utf8());
         assert!(!props_bytes(r"(?-u)[^a][^a]").is_utf8());
-        assert!(!props_bytes(r"(?-u)\B").is_utf8());
     }
 
     #[test]
     fn analysis_captures_len() {
         assert_eq!(0, props(r"a").captures_len());
         assert_eq!(0, props(r"(?:a)").captures_len());
-        assert_eq!(0, props(r"(?i:a)").captures_len());
-        assert_eq!(0, props(r"(?i)a").captures_len());
+        assert_eq!(0, props(r"(?i-u:a)").captures_len());
+        assert_eq!(0, props(r"(?i-u)a").captures_len());
         assert_eq!(1, props(r"(a)").captures_len());
         assert_eq!(1, props(r"(?P<foo>a)").captures_len());
         assert_eq!(1, props(r"()").captures_len());
