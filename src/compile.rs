@@ -368,7 +368,7 @@ impl Compiler {
                     self.c_empty_look(prog::EmptyLook::NotWordBoundary)
                 }
             },
-            Group(hir::Group { index, ref name, ref hir }) => {
+            Capture(hir::Capture { index, ref name, ref hir }) => {
                 if index as usize >= self.compiled.captures.len() {
                     let name = match *name {
                         None => None,
