@@ -134,6 +134,23 @@ impl ParserBuilder {
         self
     }
 
+    /// Enable or disable the CRLF mode flag by default.
+    ///
+    /// By default this is disabled. It may alternatively be selectively
+    /// enabled in the regular expression itself via the `R` flag.
+    ///
+    /// When CRLF mode is enabled, the following happens:
+    ///
+    /// * Unless `dot_matches_new_line` is enabled, `.` will match any character
+    /// except for `\r` and `\n`.
+    /// * When `multi_line` mode is enabled, `^` and `$` will treat `\r\n`,
+    /// `\r` and `\n` as line terminators. And in particular, neither will
+    /// match between a `\r` and a `\n`.
+    pub fn crlf(&mut self, yes: bool) -> &mut ParserBuilder {
+        self.hir.crlf(yes);
+        self
+    }
+
     /// Enable or disable the "swap greed" flag by default.
     ///
     /// By default this is disabled. It may alternatively be selectively

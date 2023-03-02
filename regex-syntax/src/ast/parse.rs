@@ -1381,6 +1381,7 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
             's' => Ok(ast::Flag::DotMatchesNewLine),
             'U' => Ok(ast::Flag::SwapGreed),
             'u' => Ok(ast::Flag::Unicode),
+            'R' => Ok(ast::Flag::CRLF),
             'x' => Ok(ast::Flag::IgnoreWhitespace),
             _ => {
                 Err(self
@@ -4084,6 +4085,34 @@ bar
                 ],
             })
         );
+        assert_eq!(
+            parser("i-sR:").parse_flags(),
+            Ok(ast::Flags {
+                span: span(0..4),
+                items: vec![
+                    ast::FlagsItem {
+                        span: span(0..1),
+                        kind: ast::FlagsItemKind::Flag(
+                            ast::Flag::CaseInsensitive
+                        ),
+                    },
+                    ast::FlagsItem {
+                        span: span(1..2),
+                        kind: ast::FlagsItemKind::Negation,
+                    },
+                    ast::FlagsItem {
+                        span: span(2..3),
+                        kind: ast::FlagsItemKind::Flag(
+                            ast::Flag::DotMatchesNewLine
+                        ),
+                    },
+                    ast::FlagsItem {
+                        span: span(3..4),
+                        kind: ast::FlagsItemKind::Flag(ast::Flag::CRLF),
+                    },
+                ],
+            })
+        );
 
         assert_eq!(
             parser("isU").parse_flags().unwrap_err(),
@@ -4145,6 +4174,7 @@ bar
         assert_eq!(parser("s").parse_flag(), Ok(ast::Flag::DotMatchesNewLine));
         assert_eq!(parser("U").parse_flag(), Ok(ast::Flag::SwapGreed));
         assert_eq!(parser("u").parse_flag(), Ok(ast::Flag::Unicode));
+        assert_eq!(parser("R").parse_flag(), Ok(ast::Flag::CRLF));
         assert_eq!(parser("x").parse_flag(), Ok(ast::Flag::IgnoreWhitespace));
 
         assert_eq!(

@@ -326,6 +326,12 @@ impl Compiler {
                     self.byte_classes.set_range(b'\n', b'\n');
                     self.c_empty_look(prog::EmptyLook::EndLine)
                 }
+                hir::Look::StartCRLF | hir::Look::EndCRLF => {
+                    return Err(Error::Syntax(
+                        "CRLF-aware line anchors are not supported yet"
+                            .to_string(),
+                    ));
+                }
                 hir::Look::WordAscii => {
                     self.byte_classes.set_word_boundary();
                     self.c_empty_look(prog::EmptyLook::WordBoundaryAscii)
