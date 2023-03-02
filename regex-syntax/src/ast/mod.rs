@@ -1314,6 +1314,8 @@ pub enum Flag {
     SwapGreed,
     /// `u`
     Unicode,
+    /// `R`
+    CRLF,
     /// `x`
     IgnoreWhitespace,
 }

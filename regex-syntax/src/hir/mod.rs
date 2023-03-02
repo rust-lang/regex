@@ -471,10 +471,12 @@ impl Hir {
 
     /// Returns an HIR expression for `.`.
     ///
-    /// * [`Dot::AnyChar`] maps to `(?su:.)`.
-    /// * [`Dot::AnyByte`] maps to `(?s-u:.)`.
-    /// * [`Dot::AnyCharExceptNL`] maps to `(?u-s:.)`.
-    /// * [`Dot::AnyByteExceptNL`] maps to `(?-su:.)`.
+    /// * [`Dot::AnyChar`] maps to `(?su-R:.)`.
+    /// * [`Dot::AnyByte`] maps to `(?s-Ru:.)`.
+    /// * [`Dot::AnyCharExceptLF`] maps to `(?u-Rs:.)`.
+    /// * [`Dot::AnyCharExceptCRLF`] maps to `(?Ru-s:.)`.
+    /// * [`Dot::AnyByteExceptLF`] maps to `(?-Rsu:.)`.
+    /// * [`Dot::AnyByteExceptCRLF`] maps to `(?R-su:.)`.
     ///
     /// Note that this is a convenience routine for constructing the correct
     /// character class based on the value of `Dot`. There is no explicit "dot"
@@ -492,16 +494,30 @@ impl Hir {
                 cls.push(ClassBytesRange::new(b'\0', b'\xFF'));
                 Hir::class(Class::Bytes(cls))
             }
-            Dot::AnyCharExceptNL => {
+            Dot::AnyCharExceptLF => {
                 let mut cls = ClassUnicode::empty();
                 cls.push(ClassUnicodeRange::new('\0', '\x09'));
                 cls.push(ClassUnicodeRange::new('\x0B', '\u{10FFFF}'));
                 Hir::class(Class::Unicode(cls))
             }
-            Dot::AnyByteExceptNL => {
+            Dot::AnyCharExceptCRLF => {
+                let mut cls = ClassUnicode::empty();
+                cls.push(ClassUnicodeRange::new('\0', '\x09'));
+                cls.push(ClassUnicodeRange::new('\x0B', '\x0C'));
+                cls.push(ClassUnicodeRange::new('\x0E', '\u{10FFFF}'));
+                Hir::class(Class::Unicode(cls))
+            }
+            Dot::AnyByteExceptLF => {
                 let mut cls = ClassBytes::empty();
                 cls.push(ClassBytesRange::new(b'\0', b'\x09'));
                 cls.push(ClassBytesRange::new(b'\x0B', b'\xFF'));
+                Hir::class(Class::Bytes(cls))
+            }
+            Dot::AnyByteExceptCRLF => {
+                let mut cls = ClassBytes::empty();
+                cls.push(ClassBytesRange::new(b'\0', b'\x09'));
+                cls.push(ClassBytesRange::new(b'\x0B', b'\x0C'));
+                cls.push(ClassBytesRange::new(b'\x0E', b'\xFF'));
                 Hir::class(Class::Bytes(cls))
             }
         }
@@ -1365,6 +1381,16 @@ pub enum Look {
     /// at the end position of the input, or at the position immediately
     /// preceding a `\n` character.
     EndLF,
+    /// Match the beginning of a line or the beginning of text. Specifically,
+    /// this matches at the starting position of the input, or at the position
+    /// immediately following either a `\r` or `\n` character, but never after
+    /// a `\r` when a `\n` follows.
+    StartCRLF,
+    /// Match the end of a line or the end of text. Specifically, this matches
+    /// at the end position of the input, or at the position immediately
+    /// preceding a `\r` or `\n` character, but never before a `\n` when a `\r`
+    /// precedes it.
+    EndCRLF,
     /// Match an ASCII-only word boundary. That is, this matches a position
     /// where the left adjacent character and right adjacent character
     /// correspond to a word and non-word or a non-word and word character.
@@ -1380,30 +1406,34 @@ pub enum Look {
 }
 
 impl Look {
-    fn from_repr(repr: u8) -> Option<Look> {
+    fn from_repr(repr: u16) -> Option<Look> {
         match repr {
             0 => Some(Look::Start),
             1 => Some(Look::End),
             2 => Some(Look::StartLF),
             3 => Some(Look::EndLF),
-            4 => Some(Look::WordAscii),
-            5 => Some(Look::WordAsciiNegate),
-            6 => Some(Look::WordUnicode),
-            7 => Some(Look::WordUnicodeNegate),
+            4 => Some(Look::StartCRLF),
+            5 => Some(Look::EndCRLF),
+            6 => Some(Look::WordAscii),
+            7 => Some(Look::WordAsciiNegate),
+            8 => Some(Look::WordUnicode),
+            9 => Some(Look::WordUnicodeNegate),
             _ => None,
         }
     }
 
-    fn as_repr(&self) -> u8 {
+    fn as_repr(&self) -> u16 {
         match *self {
             Look::Start => 0,
             Look::End => 1,
             Look::StartLF => 2,
             Look::EndLF => 3,
-            Look::WordAscii => 4,
-            Look::WordAsciiNegate => 5,
-            Look::WordUnicode => 6,
-            Look::WordUnicodeNegate => 7,
+            Look::StartCRLF => 5,
+            Look::EndCRLF => 5,
+            Look::WordAscii => 6,
+            Look::WordAsciiNegate => 7,
+            Look::WordUnicode => 8,
+            Look::WordUnicodeNegate => 9,
         }
     }
 
@@ -1413,6 +1443,8 @@ impl Look {
             Look::End => 'z',
             Look::StartLF => '^',
             Look::EndLF => '$',
+            Look::StartCRLF => '^',
+            Look::EndCRLF => '$',
             Look::WordAscii => 'b',
             Look::WordAsciiNegate => 'B',
             Look::WordUnicode => '𝛃',
@@ -1505,11 +1537,20 @@ pub enum Dot {
     /// Matches the UTF-8 encoding of any Unicode scalar value except for `\n`.
     ///
     /// This is equivalent to `(?u-s:.)` and also `[\p{any}--\n]`.
-    AnyCharExceptNL,
+    AnyCharExceptLF,
+    /// Matches the UTF-8 encoding of any Unicode scalar value except for `\r`
+    /// and `\n`.
+    ///
+    /// This is equivalent to `(?uR-s:.)` and also `[\p{any}--\r\n]`.
+    AnyCharExceptCRLF,
     /// Matches any byte value except for `\n`.
     ///
     /// This is equivalent to `(?-su:.)` and also `(?-u:[[\x00-\xFF]--\n])`.
-    AnyByteExceptNL,
+    AnyByteExceptLF,
+    /// Matches any byte value except for `\r` and `\n`.
+    ///
+    /// This is equivalent to `(?R-su:.)` and also `(?-u:[[\x00-\xFF]--\r\n])`.
+    AnyByteExceptCRLF,
 }
 
 /// A custom `Drop` impl is used for `HirKind` such that it uses constant stack
@@ -2038,7 +2079,7 @@ impl Properties {
 /// example, an [`Hir`] provides properties that return `LookSet`s.
 #[derive(Clone, Copy, Default, Eq, PartialEq)]
 pub struct LookSet {
-    bits: u8,
+    bits: u16,
 }
 
 impl LookSet {
@@ -2170,8 +2211,8 @@ impl Iterator for LookSetIter {
     #[inline]
     fn next(&mut self) -> Option<Look> {
         // We'll never have more than u8::MAX distinct look-around assertions,
-        // so 'repr' will always fit into a usize.
-        let repr = u8::try_from(self.set.bits.trailing_zeros()).unwrap();
+        // so 'repr' will always fit into a u16.
+        let repr = u16::try_from(self.set.bits.trailing_zeros()).unwrap();
         let look = Look::from_repr(repr)?;
         self.set.remove(look);
         Some(look)

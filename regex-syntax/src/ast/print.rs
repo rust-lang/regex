@@ -289,6 +289,7 @@ impl<W: fmt::Write> Writer<W> {
                     Flag::DotMatchesNewLine => self.wtr.write_str("s"),
                     Flag::SwapGreed => self.wtr.write_str("U"),
                     Flag::Unicode => self.wtr.write_str("u"),
+                    Flag::CRLF => self.wtr.write_str("R"),
                     Flag::IgnoreWhitespace => self.wtr.write_str("x"),
                 },
             }?;

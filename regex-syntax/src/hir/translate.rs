@@ -85,6 +85,12 @@ impl TranslatorBuilder {
         self
     }
 
+    /// Enable or disable the CRLF mode flag (`R`) by default.
+    pub fn crlf(&mut self, yes: bool) -> &mut TranslatorBuilder {
+        self.flags.crlf = if yes { Some(true) } else { None };
+        self
+    }
+
     /// Enable or disable the "swap greed" flag (`U`) by default.
     pub fn swap_greed(&mut self, yes: bool) -> &mut TranslatorBuilder {
         self.flags.swap_greed = if yes { Some(true) } else { None };
@@ -866,14 +872,23 @@ impl<'t, 'p> TranslatorI<'t, 'p> {
     fn hir_assertion(&self, asst: &ast::Assertion) -> Result<Hir> {
         let unicode = self.flags().unicode();
         let multi_line = self.flags().multi_line();
+        let crlf = self.flags().crlf();
         Ok(match asst.kind {
             ast::AssertionKind::StartLine => Hir::look(if multi_line {
-                hir::Look::StartLF
+                if crlf {
+                    hir::Look::StartCRLF
+                } else {
+                    hir::Look::StartLF
+                }
             } else {
                 hir::Look::Start
             }),
             ast::AssertionKind::EndLine => Hir::look(if multi_line {
-                hir::Look::EndLF
+                if crlf {
+                    hir::Look::EndCRLF
+                } else {
+                    hir::Look::EndLF
+                }
             } else {
                 hir::Look::End
             }),
@@ -1146,6 +1161,7 @@ struct Flags {
     dot_matches_new_line: Option<bool>,
     swap_greed: Option<bool>,
     unicode: Option<bool>,
+    crlf: Option<bool>,
     // Note that `ignore_whitespace` is omitted here because it is handled
     // entirely in the parser.
 }
@@ -1174,6 +1190,9 @@ impl Flags {
                 ast::FlagsItemKind::Flag(ast::Flag::Unicode) => {
                     flags.unicode = Some(enable);
                 }
+                ast::FlagsItemKind::Flag(ast::Flag::CRLF) => {
+                    flags.crlf = Some(enable);
+                }
                 ast::FlagsItemKind::Flag(ast::Flag::IgnoreWhitespace) => {}
             }
         }
@@ -1196,6 +1215,9 @@ impl Flags {
         if self.unicode.is_none() {
             self.unicode = previous.unicode;
         }
+        if self.crlf.is_none() {
+            self.crlf = previous.crlf;
+        }
     }
 
     fn dot(&self) -> hir::Dot {
@@ -1207,9 +1229,17 @@ impl Flags {
             }
         } else {
             if self.unicode() {
-                hir::Dot::AnyCharExceptNL
+                if self.crlf() {
+                    hir::Dot::AnyCharExceptCRLF
+                } else {
+                    hir::Dot::AnyCharExceptLF
+                }
             } else {
-                hir::Dot::AnyByteExceptNL
+                if self.crlf() {
+                    hir::Dot::AnyByteExceptCRLF
+                } else {
+                    hir::Dot::AnyByteExceptLF
+                }
             }
         }
     }
@@ -1232,6 +1262,10 @@ impl Flags {
 
     fn unicode(&self) -> bool {
         self.unicode.unwrap_or(true)
+    }
+
+    fn crlf(&self) -> bool {
+        self.crlf.unwrap_or(false)
     }
 }
 
@@ -1678,14 +1712,32 @@ mod tests {
     fn dot() {
         assert_eq!(
             t("."),
-            hir_uclass(&[('\0', '\t'), ('\x0B', '\u{10FFFF}'),])
+            hir_uclass(&[('\0', '\t'), ('\x0B', '\u{10FFFF}')])
         );
-        assert_eq!(t("(?s)."), hir_uclass(&[('\0', '\u{10FFFF}'),]));
+        assert_eq!(
+            t("(?R)."),
+            hir_uclass(&[
+                ('\0', '\t'),
+                ('\x0B', '\x0C'),
+                ('\x0E', '\u{10FFFF}'),
+            ])
+        );
+        assert_eq!(t("(?s)."), hir_uclass(&[('\0', '\u{10FFFF}')]));
+        assert_eq!(t("(?Rs)."), hir_uclass(&[('\0', '\u{10FFFF}')]));
         assert_eq!(
             t_bytes("(?-u)."),
-            hir_bclass(&[(b'\0', b'\t'), (b'\x0B', b'\xFF'),])
+            hir_bclass(&[(b'\0', b'\t'), (b'\x0B', b'\xFF')])
+        );
+        assert_eq!(
+            t_bytes("(?R-u)."),
+            hir_bclass(&[
+                (b'\0', b'\t'),
+                (b'\x0B', b'\x0C'),
+                (b'\x0E', b'\xFF'),
+            ])
         );
         assert_eq!(t_bytes("(?s-u)."), hir_bclass(&[(b'\0', b'\xFF'),]));
+        assert_eq!(t_bytes("(?Rs-u)."), hir_bclass(&[(b'\0', b'\xFF'),]));
 
         // If invalid UTF-8 isn't allowed, then non-Unicode `.` isn't allowed.
         assert_eq!(
@@ -1699,12 +1751,32 @@ mod tests {
             }
         );
         assert_eq!(
+            t_err("(?R-u)."),
+            TestError {
+                kind: hir::ErrorKind::InvalidUtf8,
+                span: Span::new(
+                    Position::new(6, 1, 7),
+                    Position::new(7, 1, 8)
+                ),
+            }
+        );
+        assert_eq!(
             t_err("(?s-u)."),
             TestError {
                 kind: hir::ErrorKind::InvalidUtf8,
                 span: Span::new(
                     Position::new(6, 1, 7),
                     Position::new(7, 1, 8)
+                ),
+            }
+        );
+        assert_eq!(
+            t_err("(?Rs-u)."),
+            TestError {
+                kind: hir::ErrorKind::InvalidUtf8,
+                span: Span::new(
+                    Position::new(7, 1, 8),
+                    Position::new(8, 1, 9)
                 ),
             }
         );
@@ -1793,6 +1865,29 @@ mod tests {
             t("(((?x)))"),
             hir_capture(1, hir_capture(2, Hir::empty()))
         );
+    }
+
+    #[test]
+    fn line_anchors() {
+        assert_eq!(t("^"), hir_look(hir::Look::Start));
+        assert_eq!(t("$"), hir_look(hir::Look::End));
+        assert_eq!(t(r"\A"), hir_look(hir::Look::Start));
+        assert_eq!(t(r"\z"), hir_look(hir::Look::End));
+
+        assert_eq!(t(r"(?m)\A"), hir_look(hir::Look::Start));
+        assert_eq!(t(r"(?m)\z"), hir_look(hir::Look::End));
+        assert_eq!(t("(?m)^"), hir_look(hir::Look::StartLF));
+        assert_eq!(t("(?m)$"), hir_look(hir::Look::EndLF));
+
+        assert_eq!(t(r"(?R)\A"), hir_look(hir::Look::Start));
+        assert_eq!(t(r"(?R)\z"), hir_look(hir::Look::End));
+        assert_eq!(t("(?R)^"), hir_look(hir::Look::Start));
+        assert_eq!(t("(?R)$"), hir_look(hir::Look::End));
+
+        assert_eq!(t(r"(?Rm)\A"), hir_look(hir::Look::Start));
+        assert_eq!(t(r"(?Rm)\z"), hir_look(hir::Look::End));
+        assert_eq!(t("(?Rm)^"), hir_look(hir::Look::StartCRLF));
+        assert_eq!(t("(?Rm)$"), hir_look(hir::Look::EndCRLF));
     }
 
     #[test]

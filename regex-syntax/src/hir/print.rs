@@ -177,6 +177,12 @@ impl<W: fmt::Write> Visitor for Writer<W> {
                 hir::Look::EndLF => {
                     self.wtr.write_str("(?m:$)")?;
                 }
+                hir::Look::StartCRLF => {
+                    self.wtr.write_str("(?mR:^)")?;
+                }
+                hir::Look::EndCRLF => {
+                    self.wtr.write_str("(?mR:$)")?;
+                }
                 hir::Look::WordAscii => {
                     self.wtr.write_str(r"(?-u:\b)")?;
                 }
