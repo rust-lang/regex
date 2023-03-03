@@ -588,9 +588,12 @@ impl Literal {
 pub enum LiteralKind {
     /// The literal is written verbatim, e.g., `a` or `☃`.
     Verbatim,
-    /// The literal is written as an escape because it is punctuation, e.g.,
-    /// `\*` or `\[`.
-    Punctuation,
+    /// The literal is written as an escape because it is otherwise a special
+    /// regex meta character, e.g., `\*` or `\[`.
+    Meta,
+    /// The literal is written as an escape despite the fact that the escape is
+    /// unnecessary, e.g., `\%` or `\/`.
+    Superfluous,
     /// The literal is written as an octal escape, e.g., `\141`.
     Octal,
     /// The literal is written as a hex code with a fixed number of digits

@@ -18,7 +18,7 @@ use alloc::{
 use crate::{
     ast::{self, Ast, Position, Span},
     either::Either,
-    is_meta_character,
+    is_escapeable_character, is_meta_character,
 };
 
 type Result<T> = core::result::Result<T, ast::Error>;
@@ -1495,7 +1495,14 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
         if is_meta_character(c) {
             return Ok(Primitive::Literal(ast::Literal {
                 span,
-                kind: ast::LiteralKind::Punctuation,
+                kind: ast::LiteralKind::Meta,
+                c,
+            }));
+        }
+        if is_escapeable_character(c) {
+            return Ok(Primitive::Literal(ast::Literal {
+                span,
+                kind: ast::LiteralKind::Superfluous,
                 c,
             }));
         }
@@ -1513,9 +1520,6 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
             'n' => special(ast::SpecialLiteralKind::LineFeed, '\n'),
             'r' => special(ast::SpecialLiteralKind::CarriageReturn, '\r'),
             'v' => special(ast::SpecialLiteralKind::VerticalTab, '\x0B'),
-            ' ' if self.ignore_whitespace() => {
-                special(ast::SpecialLiteralKind::Space, ' ')
-            }
             'A' => Ok(Primitive::Assertion(ast::Assertion {
                 span,
                 kind: ast::AssertionKind::StartText,
@@ -2420,13 +2424,9 @@ mod tests {
         lit_with(c, span(start..start + c.len_utf8()))
     }
 
-    /// Create a punctuation literal starting at the given position.
-    fn punct_lit(c: char, span: Span) -> Ast {
-        Ast::Literal(ast::Literal {
-            span,
-            kind: ast::LiteralKind::Punctuation,
-            c,
-        })
+    /// Create a meta literal starting at the given position.
+    fn meta_lit(c: char, span: Span) -> Ast {
+        Ast::Literal(ast::Literal { span, kind: ast::LiteralKind::Meta, c })
     }
 
     /// Create a verbatim literal with the given span.
@@ -2710,24 +2710,24 @@ bar
             Ok(concat(
                 0..36,
                 vec![
-                    punct_lit('\\', span(0..2)),
-                    punct_lit('.', span(2..4)),
-                    punct_lit('+', span(4..6)),
-                    punct_lit('*', span(6..8)),
-                    punct_lit('?', span(8..10)),
-                    punct_lit('(', span(10..12)),
-                    punct_lit(')', span(12..14)),
-                    punct_lit('|', span(14..16)),
-                    punct_lit('[', span(16..18)),
-                    punct_lit(']', span(18..20)),
-                    punct_lit('{', span(20..22)),
-                    punct_lit('}', span(22..24)),
-                    punct_lit('^', span(24..26)),
-                    punct_lit('$', span(26..28)),
-                    punct_lit('#', span(28..30)),
-                    punct_lit('&', span(30..32)),
-                    punct_lit('-', span(32..34)),
-                    punct_lit('~', span(34..36)),
+                    meta_lit('\\', span(0..2)),
+                    meta_lit('.', span(2..4)),
+                    meta_lit('+', span(4..6)),
+                    meta_lit('*', span(6..8)),
+                    meta_lit('?', span(8..10)),
+                    meta_lit('(', span(10..12)),
+                    meta_lit(')', span(12..14)),
+                    meta_lit('|', span(14..16)),
+                    meta_lit('[', span(16..18)),
+                    meta_lit(']', span(18..20)),
+                    meta_lit('{', span(20..22)),
+                    meta_lit('}', span(22..24)),
+                    meta_lit('^', span(24..26)),
+                    meta_lit('$', span(26..28)),
+                    meta_lit('#', span(28..30)),
+                    meta_lit('&', span(30..32)),
+                    meta_lit('-', span(32..34)),
+                    meta_lit('~', span(34..36)),
                 ]
             ))
         );
@@ -2879,22 +2879,11 @@ bar
                     flag_set(pat, 0..4, ast::Flag::IgnoreWhitespace, false),
                     Ast::Literal(ast::Literal {
                         span: span_range(pat, 4..6),
-                        kind: ast::LiteralKind::Special(
-                            ast::SpecialLiteralKind::Space
-                        ),
+                        kind: ast::LiteralKind::Superfluous,
                         c: ' ',
                     }),
                 ]
             ))
-        );
-        // ... but only when `x` mode is enabled.
-        let pat = r"\ ";
-        assert_eq!(
-            parser(pat).parse().unwrap_err(),
-            TestError {
-                span: span_range(pat, 0..2),
-                kind: ast::ErrorKind::EscapeUnrecognized,
-            }
         );
     }
 
@@ -4246,7 +4235,7 @@ bar
             parser(r"\|").parse_primitive(),
             Ok(Primitive::Literal(ast::Literal {
                 span: span(0..2),
-                kind: ast::LiteralKind::Punctuation,
+                kind: ast::LiteralKind::Meta,
                 c: '|',
             }))
         );
@@ -4297,11 +4286,26 @@ bar
             }))
         );
 
+        // We also support superfluous escapes in most cases now too.
+        for c in ['!', '@', '%', '"', '\'', '/', ' '] {
+            let pat = format!(r"\{}", c);
+            assert_eq!(
+                parser(&pat).parse_primitive(),
+                Ok(Primitive::Literal(ast::Literal {
+                    span: span(0..2),
+                    kind: ast::LiteralKind::Superfluous,
+                    c,
+                }))
+            );
+        }
+
+        // Some superfluous escapes, namely [0-9A-Za-z], are still banned. This
+        // gives flexibility for future evolution.
         assert_eq!(
-            parser(r"\").parse_escape().unwrap_err(),
+            parser(r"\e").parse_escape().unwrap_err(),
             TestError {
-                span: span(0..1),
-                kind: ast::ErrorKind::EscapeUnexpectedEof,
+                span: span(0..2),
+                kind: ast::ErrorKind::EscapeUnrecognized,
             }
         );
         assert_eq!(
@@ -4309,6 +4313,31 @@ bar
             TestError {
                 span: span(0..2),
                 kind: ast::ErrorKind::EscapeUnrecognized,
+            }
+        );
+        // But also, < and > are banned, so that we may evolve them into
+        // start/end word boundary assertions. (Not sure if we will...)
+        assert_eq!(
+            parser(r"\<").parse_escape().unwrap_err(),
+            TestError {
+                span: span(0..2),
+                kind: ast::ErrorKind::EscapeUnrecognized,
+            }
+        );
+        assert_eq!(
+            parser(r"\>").parse_escape().unwrap_err(),
+            TestError {
+                span: span(0..2),
+                kind: ast::ErrorKind::EscapeUnrecognized,
+            }
+        );
+
+        // An unfinished escape is illegal.
+        assert_eq!(
+            parser(r"\").parse_escape().unwrap_err(),
+            TestError {
+                span: span(0..1),
+                kind: ast::ErrorKind::EscapeUnexpectedEof,
             }
         );
     }
@@ -4907,7 +4936,7 @@ bar
                         lit(span(1..2), 'a'),
                         ast::ClassSetItem::Literal(ast::Literal {
                             span: span(2..4),
-                            kind: ast::LiteralKind::Punctuation,
+                            kind: ast::LiteralKind::Meta,
                             c: ']',
                         }),
                     ]
@@ -4925,7 +4954,7 @@ bar
                         lit(span(1..2), 'a'),
                         ast::ClassSetItem::Literal(ast::Literal {
                             span: span(2..4),
-                            kind: ast::LiteralKind::Punctuation,
+                            kind: ast::LiteralKind::Meta,
                             c: '-',
                         }),
                         lit(span(4..5), 'z'),
@@ -5117,7 +5146,7 @@ bar
                     span(1..6),
                     itemset(ast::ClassSetItem::Literal(ast::Literal {
                         span: span(1..3),
-                        kind: ast::LiteralKind::Punctuation,
+                        kind: ast::LiteralKind::Meta,
                         c: '^',
                     })),
                     itemset(lit(span(5..6), '^')),
@@ -5133,7 +5162,7 @@ bar
                     span(1..6),
                     itemset(ast::ClassSetItem::Literal(ast::Literal {
                         span: span(1..3),
-                        kind: ast::LiteralKind::Punctuation,
+                        kind: ast::LiteralKind::Meta,
                         c: '&',
                     })),
                     itemset(lit(span(5..6), '&')),
@@ -5198,7 +5227,7 @@ bar
                         lit(span(1..2), ']'),
                         ast::ClassSetItem::Literal(ast::Literal {
                             span: span(2..4),
-                            kind: ast::LiteralKind::Punctuation,
+                            kind: ast::LiteralKind::Meta,
                             c: '[',
                         }),
                     ]
@@ -5216,7 +5245,7 @@ bar
                         kind: itemset(ast::ClassSetItem::Literal(
                             ast::Literal {
                                 span: span(1..3),
-                                kind: ast::LiteralKind::Punctuation,
+                                kind: ast::LiteralKind::Meta,
                                 c: '[',
                             }
                         )),

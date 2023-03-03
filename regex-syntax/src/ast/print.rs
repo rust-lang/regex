@@ -216,7 +216,7 @@ impl<W: fmt::Write> Writer<W> {
 
         match ast.kind {
             Verbatim => self.wtr.write_char(ast.c),
-            Punctuation => write!(self.wtr, r"\{}", ast.c),
+            Meta | Superfluous => write!(self.wtr, r"\{}", ast.c),
             Octal => write!(self.wtr, r"\{:o}", u32::from(ast.c)),
             HexFixed(ast::HexLiteralKind::X) => {
                 write!(self.wtr, r"\x{:02X}", u32::from(ast.c))
