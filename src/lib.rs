@@ -360,12 +360,18 @@ regex matches `abc` at positions `0`, `1`, `2` and `3`.
 
 <pre class="rust">
 (exp)          numbered capture group (indexed by opening parenthesis)
-(?P&lt;name&gt;exp)  named (also numbered) capture group (allowed chars: [_0-9a-zA-Z.\[\]])
-(?&lt;name&gt;exp)   named (also numbered) capture group (allowed chars: [_0-9a-zA-Z.\[\]])
+(?P&lt;name&gt;exp)  named (also numbered) capture group (names must be alpha-numeric)
+(?&lt;name&gt;exp)   named (also numbered) capture group (names must be alpha-numeric)
 (?:exp)        non-capturing group
 (?flags)       set flags within current group
 (?flags:exp)   set flags for exp (non-capturing)
 </pre>
+
+Capture group names must be any sequence of alpha-numeric Unicode codepoints,
+in addition to `.`, `_`, `[` and `]`. Names must start with either an `_` or
+an alphabetic codepoint. Alphabetic codepoints correspond to the `Alphabetic`
+Unicode property, while numeric codepoints correspond to the union of the
+`Decimal_Number`, `Letter_Number` and `Other_Number` general categories.
 
 Flags are each a single character. For example, `(?x)` sets the flag `x`
 and `(?-x)` clears the flag `x`. Multiple flags can be set or cleared at
