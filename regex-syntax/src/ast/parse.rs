@@ -109,11 +109,11 @@ fn is_hex(c: char) -> bool {
 /// If `first` is true, then `c` is treated as the first character in the
 /// group name (which must be alphabetic or underscore).
 fn is_capture_char(c: char, first: bool) -> bool {
-    c == '_'
-        || (!first
-            && (('0' <= c && c <= '9') || c == '.' || c == '[' || c == ']'))
-        || ('A' <= c && c <= 'Z')
-        || ('a' <= c && c <= 'z')
+    if first {
+        c == '_' || c.is_alphabetic()
+    } else {
+        c == '_' || c == '.' || c == '[' || c == ']' || c.is_alphanumeric()
+    }
 }
 
 /// A builder for a regular expression parser.
@@ -3911,6 +3911,55 @@ bar
         );
 
         assert_eq!(
+            parser("(?P<a¾>)").parse(),
+            Ok(Ast::Group(ast::Group {
+                span: Span::new(
+                    Position::new(0, 1, 1),
+                    Position::new(9, 1, 9),
+                ),
+                kind: ast::GroupKind::CaptureName {
+                    starts_with_p: true,
+                    name: ast::CaptureName {
+                        span: Span::new(
+                            Position::new(4, 1, 5),
+                            Position::new(7, 1, 7),
+                        ),
+                        name: s("a¾"),
+                        index: 1,
+                    }
+                },
+                ast: Box::new(Ast::Empty(Span::new(
+                    Position::new(8, 1, 8),
+                    Position::new(8, 1, 8),
+                ))),
+            }))
+        );
+        assert_eq!(
+            parser("(?P<名字>)").parse(),
+            Ok(Ast::Group(ast::Group {
+                span: Span::new(
+                    Position::new(0, 1, 1),
+                    Position::new(12, 1, 9),
+                ),
+                kind: ast::GroupKind::CaptureName {
+                    starts_with_p: true,
+                    name: ast::CaptureName {
+                        span: Span::new(
+                            Position::new(4, 1, 5),
+                            Position::new(10, 1, 7),
+                        ),
+                        name: s("名字"),
+                        index: 1,
+                    }
+                },
+                ast: Box::new(Ast::Empty(Span::new(
+                    Position::new(11, 1, 8),
+                    Position::new(11, 1, 8),
+                ))),
+            }))
+        );
+
+        assert_eq!(
             parser("(?P<").parse().unwrap_err(),
             TestError {
                 span: span(4..4),
@@ -3966,6 +4015,60 @@ bar
                 kind: ast::ErrorKind::GroupNameDuplicate {
                     original: span(4..5),
                 },
+            }
+        );
+        assert_eq!(
+            parser("(?P<5>)").parse().unwrap_err(),
+            TestError {
+                span: span(4..5),
+                kind: ast::ErrorKind::GroupNameInvalid,
+            }
+        );
+        assert_eq!(
+            parser("(?P<5a>)").parse().unwrap_err(),
+            TestError {
+                span: span(4..5),
+                kind: ast::ErrorKind::GroupNameInvalid,
+            }
+        );
+        assert_eq!(
+            parser("(?P<¾>)").parse().unwrap_err(),
+            TestError {
+                span: Span::new(
+                    Position::new(4, 1, 5),
+                    Position::new(6, 1, 6),
+                ),
+                kind: ast::ErrorKind::GroupNameInvalid,
+            }
+        );
+        assert_eq!(
+            parser("(?P<¾a>)").parse().unwrap_err(),
+            TestError {
+                span: Span::new(
+                    Position::new(4, 1, 5),
+                    Position::new(6, 1, 6),
+                ),
+                kind: ast::ErrorKind::GroupNameInvalid,
+            }
+        );
+        assert_eq!(
+            parser("(?P<☃>)").parse().unwrap_err(),
+            TestError {
+                span: Span::new(
+                    Position::new(4, 1, 5),
+                    Position::new(7, 1, 6),
+                ),
+                kind: ast::ErrorKind::GroupNameInvalid,
+            }
+        );
+        assert_eq!(
+            parser("(?P<a☃>)").parse().unwrap_err(),
+            TestError {
+                span: Span::new(
+                    Position::new(5, 1, 6),
+                    Position::new(8, 1, 7),
+                ),
+                kind: ast::ErrorKind::GroupNameInvalid,
             }
         );
     }
