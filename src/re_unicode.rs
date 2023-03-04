@@ -725,6 +725,46 @@ impl Regex {
         self.0.capture_names().len()
     }
 
+    /// Returns the total number of capturing groups that appear in every
+    /// possible match.
+    ///
+    /// If the number of capture groups can vary depending on the match, then
+    /// this returns `None`. That is, a value is only returned when the number
+    /// of matching groups is invariant or "static."
+    ///
+    /// Note that like [`Regex::captures_len`], this **does** include the
+    /// implicit capturing group corresponding to the entire match. Therefore,
+    /// when a non-None value is returned, it is guaranteed to be at least `1`.
+    /// Stated differently, a return value of `Some(0)` is impossible.
+    ///
+    /// # Example
+    ///
+    /// This shows a few cases where a static number of capture groups is
+    /// available and a few cases where it is not.
+    ///
+    /// ```
+    /// use regex::Regex;
+    ///
+    /// let len = |pattern| {
+    ///     Regex::new(pattern).map(|re| re.static_captures_len())
+    /// };
+    ///
+    /// assert_eq!(Some(1), len("a")?);
+    /// assert_eq!(Some(2), len("(a)")?);
+    /// assert_eq!(Some(2), len("(a)|(b)")?);
+    /// assert_eq!(Some(3), len("(a)(b)|(c)(d)")?);
+    /// assert_eq!(None, len("(a)|b")?);
+    /// assert_eq!(None, len("a|(b)")?);
+    /// assert_eq!(None, len("(b)*")?);
+    /// assert_eq!(Some(2), len("(b)+")?);
+    ///
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
+    #[inline]
+    pub fn static_captures_len(&self) -> Option<usize> {
+        self.0.static_captures_len().map(|len| len.saturating_add(1))
+    }
+
     /// Returns an empty set of capture locations that can be reused in
     /// multiple calls to `captures_read` or `captures_read_at`.
     pub fn capture_locations(&self) -> CaptureLocations {

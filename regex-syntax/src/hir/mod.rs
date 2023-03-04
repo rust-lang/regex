@@ -1833,6 +1833,7 @@ struct PropertiesI {
     look_set_suffix: LookSet,
     utf8: bool,
     captures_len: usize,
+    static_captures_len: Option<usize>,
     literal: bool,
     alternation_literal: bool,
 }
@@ -1990,6 +1991,44 @@ impl Properties {
         self.0.captures_len
     }
 
+    /// Returns the total number of explicit capturing groups that appear in
+    /// every possible match.
+    ///
+    /// If the number of capture groups can vary depending on the match, then
+    /// this returns `None`. That is, a value is only returned when the number
+    /// of matching groups is invariant or "static."
+    ///
+    /// Note that this does not include the implicit capturing group
+    /// corresponding to the entire match.
+    ///
+    /// # Example
+    ///
+    /// This shows a few cases where a static number of capture groups is
+    /// available and a few cases where it is not.
+    ///
+    /// ```
+    /// use regex_syntax::parse;
+    ///
+    /// let len = |pattern| {
+    ///     parse(pattern).map(|h| h.properties().static_captures_len())
+    /// };
+    ///
+    /// assert_eq!(Some(0), len("a")?);
+    /// assert_eq!(Some(1), len("(a)")?);
+    /// assert_eq!(Some(1), len("(a)|(b)")?);
+    /// assert_eq!(Some(2), len("(a)(b)|(c)(d)")?);
+    /// assert_eq!(None, len("(a)|b")?);
+    /// assert_eq!(None, len("a|(b)")?);
+    /// assert_eq!(None, len("(b)*")?);
+    /// assert_eq!(Some(1), len("(b)+")?);
+    ///
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
+    #[inline]
+    pub fn static_captures_len(&self) -> Option<usize> {
+        self.0.static_captures_len
+    }
+
     /// Return true if and only if this HIR is a simple literal. This is
     /// only true when this HIR expression is either itself a `Literal` or a
     /// concatenation of only `Literal`s.
@@ -2100,6 +2139,13 @@ impl Properties {
         } else {
             LookSet::full()
         };
+        // And also, an empty alternate means we have 0 static capture groups,
+        // but we otherwise start with the number corresponding to the first
+        // alternate. If any subsequent alternate has a different number of
+        // static capture groups, then we overall have a variation and not a
+        // static number of groups.
+        let static_captures_len =
+            it.peek().and_then(|p| p.borrow().static_captures_len());
         // The base case is an empty alternation, which matches nothing.
         // Note though that empty alternations aren't possible, because the
         // Hir::alternation smart constructor rewrites those as empty character
@@ -2112,6 +2158,7 @@ impl Properties {
             look_set_suffix: fix,
             utf8: true,
             captures_len: 0,
+            static_captures_len,
             literal: false,
             alternation_literal: true,
         };
@@ -2125,6 +2172,9 @@ impl Properties {
             props.utf8 = props.utf8 && p.is_utf8();
             props.captures_len =
                 props.captures_len.saturating_add(p.captures_len());
+            if props.static_captures_len != p.static_captures_len() {
+                props.static_captures_len = None;
+            }
             props.alternation_literal =
                 props.alternation_literal && p.is_alternation_literal();
             if !min_poisoned {
@@ -2180,6 +2230,7 @@ impl Properties {
             // since it too can match the empty string.
             utf8: true,
             captures_len: 0,
+            static_captures_len: Some(0),
             literal: false,
             alternation_literal: false,
         };
@@ -2196,6 +2247,7 @@ impl Properties {
             look_set_suffix: LookSet::empty(),
             utf8: core::str::from_utf8(&lit.0).is_ok(),
             captures_len: 0,
+            static_captures_len: Some(0),
             literal: true,
             alternation_literal: true,
         };
@@ -2212,6 +2264,7 @@ impl Properties {
             look_set_suffix: LookSet::empty(),
             utf8: class.is_utf8(),
             captures_len: 0,
+            static_captures_len: Some(0),
             literal: false,
             alternation_literal: false,
         };
@@ -2241,6 +2294,7 @@ impl Properties {
             // property borderline useless.
             utf8: true,
             captures_len: 0,
+            static_captures_len: Some(0),
             literal: false,
             alternation_literal: false,
         };
@@ -2268,6 +2322,7 @@ impl Properties {
             look_set_suffix: LookSet::empty(),
             utf8: p.is_utf8(),
             captures_len: p.captures_len(),
+            static_captures_len: p.static_captures_len(),
             literal: false,
             alternation_literal: false,
         };
@@ -2278,6 +2333,23 @@ impl Properties {
             inner.look_set_prefix = p.look_set_prefix();
             inner.look_set_suffix = p.look_set_suffix();
         }
+        // If the static captures len of the sub-expression is not known or is
+        // zero, then it automatically propagates to the repetition, regardless
+        // of the repetition. Otherwise, it might change, but only when the
+        // repetition can match 0 times.
+        if rep.min == 0
+            && inner.static_captures_len.map_or(false, |len| len > 0)
+        {
+            // If we require a match 0 times, then our captures len is
+            // guaranteed to be zero. Otherwise, if we *can* match the empty
+            // string, then it's impossible to know how many captures will be
+            // in the resulting match.
+            if rep.max == Some(0) {
+                inner.static_captures_len = Some(0);
+            } else {
+                inner.static_captures_len = None;
+            }
+        }
         Properties(Box::new(inner))
     }
 
@@ -2286,6 +2358,9 @@ impl Properties {
         let p = capture.sub.properties();
         Properties(Box::new(PropertiesI {
             captures_len: p.captures_len().saturating_add(1),
+            static_captures_len: p
+                .static_captures_len()
+                .map(|len| len.saturating_add(1)),
             literal: false,
             alternation_literal: false,
             ..*p.0.clone()
@@ -2306,6 +2381,7 @@ impl Properties {
             look_set_suffix: LookSet::empty(),
             utf8: true,
             captures_len: 0,
+            static_captures_len: Some(0),
             literal: true,
             alternation_literal: true,
         };
@@ -2316,6 +2392,10 @@ impl Properties {
             props.utf8 = props.utf8 && p.is_utf8();
             props.captures_len =
                 props.captures_len.saturating_add(p.captures_len());
+            props.static_captures_len = p
+                .static_captures_len()
+                .and_then(|len1| Some((len1, props.static_captures_len?)))
+                .and_then(|(len1, len2)| Some(len1.saturating_add(len2)));
             props.literal = props.literal && p.is_literal();
             props.alternation_literal =
                 props.alternation_literal && p.is_alternation_literal();

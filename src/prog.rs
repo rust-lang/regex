@@ -27,6 +27,9 @@ pub struct Program {
     pub captures: Vec<Option<String>>,
     /// Pointers to all named capture groups into `captures`.
     pub capture_name_idx: Arc<HashMap<String, usize>>,
+    /// If the number of capture groups is the same for all possible matches,
+    /// then this is that number.
+    pub static_captures_len: Option<usize>,
     /// A pointer to the start instruction. This can vary depending on how
     /// the program was compiled. For example, programs for use with the DFA
     /// engine have a `.*?` inserted at the beginning of unanchored regular
@@ -83,6 +86,7 @@ impl Program {
             matches: vec![],
             captures: vec![],
             capture_name_idx: Arc::new(HashMap::new()),
+            static_captures_len: None,
             start: 0,
             byte_classes: vec![0; 256],
             only_utf8: true,
