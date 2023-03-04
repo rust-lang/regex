@@ -3205,6 +3205,41 @@ mod tests {
     }
 
     #[test]
+    fn analysis_static_captures_len() {
+        let len = |pattern| props(pattern).static_captures_len();
+        assert_eq!(Some(0), len(r""));
+        assert_eq!(Some(0), len(r"foo|bar"));
+        assert_eq!(None, len(r"(foo)|bar"));
+        assert_eq!(None, len(r"foo|(bar)"));
+        assert_eq!(Some(1), len(r"(foo|bar)"));
+        assert_eq!(Some(1), len(r"(a|b|c|d|e|f)"));
+        assert_eq!(Some(1), len(r"(a)|(b)|(c)|(d)|(e)|(f)"));
+        assert_eq!(Some(2), len(r"(a)(b)|(c)(d)|(e)(f)"));
+        assert_eq!(Some(6), len(r"(a)(b)(c)(d)(e)(f)"));
+        assert_eq!(Some(3), len(r"(a)(b)(extra)|(a)(b)()"));
+        assert_eq!(Some(3), len(r"(a)(b)((?:extra)?)"));
+        assert_eq!(None, len(r"(a)(b)(extra)?"));
+        assert_eq!(Some(1), len(r"(foo)|(bar)"));
+        assert_eq!(Some(2), len(r"(foo)(bar)"));
+        assert_eq!(Some(2), len(r"(foo)+(bar)"));
+        assert_eq!(None, len(r"(foo)*(bar)"));
+        assert_eq!(Some(0), len(r"(foo)?{0}"));
+        assert_eq!(None, len(r"(foo)?{1}"));
+        assert_eq!(Some(1), len(r"(foo){1}"));
+        assert_eq!(Some(1), len(r"(foo){1,}"));
+        assert_eq!(Some(1), len(r"(foo){1,}?"));
+        assert_eq!(None, len(r"(foo){1,}??"));
+        assert_eq!(None, len(r"(foo){0,}"));
+        assert_eq!(Some(1), len(r"(foo)(?:bar)"));
+        assert_eq!(Some(2), len(r"(foo(?:bar)+)(?:baz(boo))"));
+        assert_eq!(Some(2), len(r"(?P<bar>foo)(?:bar)(bal|loon)"));
+        assert_eq!(
+            Some(2),
+            len(r#"<(a)[^>]+href="([^"]+)"|<(img)[^>]+src="([^"]+)""#)
+        );
+    }
+
+    #[test]
     fn analysis_is_all_assertions() {
         // Positive examples.
         let p = props(r"\b");

@@ -1361,6 +1361,12 @@ impl Exec {
     pub fn capture_name_idx(&self) -> &Arc<HashMap<String, usize>> {
         &self.ro.nfa.capture_name_idx
     }
+
+    /// If the number of capture groups in every match is always the same, then
+    /// return that number. Otherwise return `None`.
+    pub fn static_captures_len(&self) -> Option<usize> {
+        self.ro.nfa.static_captures_len
+    }
 }
 
 impl Clone for Exec {
