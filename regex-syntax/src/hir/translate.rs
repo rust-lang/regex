@@ -824,8 +824,9 @@ impl<'t, 'p> TranslatorI<'t, 'p> {
         }
         if self.flags().unicode() {
             // If case folding won't do anything, then don't bother trying.
-            let map =
-                unicode::contains_simple_case_mapping(c, c).map_err(|_| {
+            let map = unicode::SimpleCaseFolder::new()
+                .map(|f| f.overlaps(c, c))
+                .map_err(|_| {
                     self.error(span, ErrorKind::UnicodeCaseUnavailable)
                 })?;
             if !map {

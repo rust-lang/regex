@@ -1232,23 +1232,13 @@ impl Interval for ClassUnicodeRange {
         &self,
         ranges: &mut Vec<ClassUnicodeRange>,
     ) -> Result<(), unicode::CaseFoldError> {
-        if !unicode::contains_simple_case_mapping(self.start, self.end)? {
+        let mut folder = unicode::SimpleCaseFolder::new()?;
+        if !folder.overlaps(self.start, self.end) {
             return Ok(());
         }
         let (start, end) = (u32::from(self.start), u32::from(self.end));
-        let mut next_simple_cp = None;
         for cp in (start..=end).filter_map(char::from_u32) {
-            if next_simple_cp.map_or(false, |next| cp < next) {
-                continue;
-            }
-            let it = match unicode::simple_fold(cp)? {
-                Ok(it) => it,
-                Err(next) => {
-                    next_simple_cp = next;
-                    continue;
-                }
-            };
-            for cp_folded in it {
+            for &cp_folded in folder.mapping(cp) {
                 ranges.push(ClassUnicodeRange::new(cp_folded, cp_folded));
             }
         }
