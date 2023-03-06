@@ -327,6 +327,25 @@ xy    concatenation (x followed by y)
 x|y   alternation (x or y, prefer x)
 </pre>
 
+This example shows how an alternation works, and what it means to prefer a
+branch in the alternation over subsequent branches.
+
+```
+use regex::Regex;
+
+let haystack = "samwise";
+// If 'samwise' comes first in our alternation, then it is
+// preferred as a match, even if the regex engine could
+// technically detect that 'sam' led to a match earlier.
+let re = Regex::new(r"samwise|sam").unwrap();
+assert_eq!("samwise", re.find(haystack).unwrap().as_str());
+// But if 'sam' comes first, then it will match instead.
+// In this case, it is impossible for 'samwise' to match
+// because 'sam' is a prefix of it.
+let re = Regex::new(r"sam|samwise").unwrap();
+assert_eq!("sam", re.find(haystack).unwrap().as_str());
+```
+
 ## Repetitions
 
 <pre class="rust">
