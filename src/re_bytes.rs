@@ -549,7 +549,14 @@ impl Regex {
     /// This method may have the same performance characteristics as
     /// `is_match`, except it provides an end location for a match. In
     /// particular, the location returned *may be shorter* than the proper end
-    /// of the leftmost-first match.
+    /// of the leftmost-first match that you would find via `Regex::find`.
+    ///
+    /// Note that it is not guaranteed that this routine finds the shortest or
+    /// "earliest" possible match. Instead, the main idea of this API is that
+    /// it returns the offset at the point at which the internal regex engine
+    /// has determined that a match has occurred. This may vary depending on
+    /// which internal regex engine is used, and thus, the offset itself may
+    /// change.
     ///
     /// # Example
     ///
