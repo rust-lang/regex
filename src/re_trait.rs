@@ -20,7 +20,7 @@ impl Locations {
     /// not match anything. The positions returned are *always* byte indices
     /// with respect to the original string matched.
     pub fn pos(&self, i: usize) -> Option<(usize, usize)> {
-        let (s, e) = (i * 2, i * 2 + 1);
+        let (s, e) = (i.checked_mul(2)?, i.checked_mul(2)?.checked_add(1)?);
         match (self.0.get(s), self.0.get(e)) {
             (Some(&Some(s)), Some(&Some(e))) => Some((s, e)),
             _ => None,

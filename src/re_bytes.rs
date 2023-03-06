@@ -896,6 +896,27 @@ impl<'r> FusedIterator for CaptureNames<'r> {}
 /// In order to build a value of this type, you'll need to call the
 /// `capture_locations` method on the `Regex` being used to execute the search.
 /// The value returned can then be reused in subsequent searches.
+///
+/// # Example
+///
+/// This example shows how to create and use `CaptureLocations` in a search.
+///
+/// ```
+/// use regex::bytes::Regex;
+///
+/// let re = Regex::new(r"(?<first>\w+)\s+(?<last>\w+)").unwrap();
+/// let mut locs = re.capture_locations();
+/// let m = re.captures_read(&mut locs, b"Bruce Springsteen").unwrap();
+/// assert_eq!(0..17, m.range());
+/// assert_eq!(Some((0, 17)), locs.get(0));
+/// assert_eq!(Some((0, 5)), locs.get(1));
+/// assert_eq!(Some((6, 17)), locs.get(2));
+///
+/// // Asking for an invalid capture group always returns None.
+/// assert_eq!(None, locs.get(3));
+/// assert_eq!(None, locs.get(34973498648));
+/// assert_eq!(None, locs.get(9944060567225171988));
+/// ```
 #[derive(Clone, Debug)]
 pub struct CaptureLocations(re_trait::Locations);
 
