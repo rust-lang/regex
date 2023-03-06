@@ -1083,7 +1083,7 @@ impl<'t, 'p> TranslatorI<'t, 'p> {
         class: &mut hir::ClassUnicode,
     ) -> Result<()> {
         // Note that we must apply case folding before negation!
-        // Consider `(?i)[^x]`. If we applied negation field, then
+        // Consider `(?i)[^x]`. If we applied negation first, then
         // the result would be the character class that matched any
         // Unicode scalar value.
         if self.flags().case_insensitive() {
