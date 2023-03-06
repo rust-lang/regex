@@ -388,8 +388,12 @@ m     multi-line mode: ^ and $ match begin/end of line
 s     allow . to match \n
 U     swap the meaning of x* and x*?
 u     Unicode support (enabled by default)
-x     ignore whitespace and allow line comments (starting with `#`)
+x     verbose mode, ignores whitespace and allow line comments (starting with `#`)
 </pre>
+
+Note that in verbose mode, whitespace is ignored everywhere, including within
+character classes. To insert whitespace, use its escaped form or a hex literal.
+For example, `\ ` or `\x20` for an ASCII space.
 
 Flags can be toggled within a pattern. Here's an example that matches
 case-insensitively for the first part but case-sensitively for the second part:
