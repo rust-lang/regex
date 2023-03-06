@@ -1832,8 +1832,8 @@ struct PropertiesI {
     look_set_prefix: LookSet,
     look_set_suffix: LookSet,
     utf8: bool,
-    captures_len: usize,
-    static_captures_len: Option<usize>,
+    explicit_captures_len: usize,
+    static_explicit_captures_len: Option<usize>,
     literal: bool,
     alternation_literal: bool,
 }
@@ -1981,14 +1981,14 @@ impl Properties {
     /// ```
     /// use regex_syntax::parse;
     ///
-    /// assert_eq!(0, parse("a")?.properties().captures_len());
-    /// assert_eq!(1, parse("(a)")?.properties().captures_len());
+    /// assert_eq!(0, parse("a")?.properties().explicit_captures_len());
+    /// assert_eq!(1, parse("(a)")?.properties().explicit_captures_len());
     ///
     /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// ```
     #[inline]
-    pub fn captures_len(&self) -> usize {
-        self.0.captures_len
+    pub fn explicit_captures_len(&self) -> usize {
+        self.0.explicit_captures_len
     }
 
     /// Returns the total number of explicit capturing groups that appear in
@@ -2010,7 +2010,9 @@ impl Properties {
     /// use regex_syntax::parse;
     ///
     /// let len = |pattern| {
-    ///     parse(pattern).map(|h| h.properties().static_captures_len())
+    ///     parse(pattern).map(|h| {
+    ///         h.properties().static_explicit_captures_len()
+    ///     })
     /// };
     ///
     /// assert_eq!(Some(0), len("a")?);
@@ -2025,8 +2027,8 @@ impl Properties {
     /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// ```
     #[inline]
-    pub fn static_captures_len(&self) -> Option<usize> {
-        self.0.static_captures_len
+    pub fn static_explicit_captures_len(&self) -> Option<usize> {
+        self.0.static_explicit_captures_len
     }
 
     /// Return true if and only if this HIR is a simple literal. This is
@@ -2144,8 +2146,8 @@ impl Properties {
         // alternate. If any subsequent alternate has a different number of
         // static capture groups, then we overall have a variation and not a
         // static number of groups.
-        let static_captures_len =
-            it.peek().and_then(|p| p.borrow().static_captures_len());
+        let static_explicit_captures_len =
+            it.peek().and_then(|p| p.borrow().static_explicit_captures_len());
         // The base case is an empty alternation, which matches nothing.
         // Note though that empty alternations aren't possible, because the
         // Hir::alternation smart constructor rewrites those as empty character
@@ -2157,8 +2159,8 @@ impl Properties {
             look_set_prefix: fix,
             look_set_suffix: fix,
             utf8: true,
-            captures_len: 0,
-            static_captures_len,
+            explicit_captures_len: 0,
+            static_explicit_captures_len,
             literal: false,
             alternation_literal: true,
         };
@@ -2170,10 +2172,13 @@ impl Properties {
             props.look_set_prefix.set_intersect(p.look_set_prefix());
             props.look_set_suffix.set_intersect(p.look_set_suffix());
             props.utf8 = props.utf8 && p.is_utf8();
-            props.captures_len =
-                props.captures_len.saturating_add(p.captures_len());
-            if props.static_captures_len != p.static_captures_len() {
-                props.static_captures_len = None;
+            props.explicit_captures_len = props
+                .explicit_captures_len
+                .saturating_add(p.explicit_captures_len());
+            if props.static_explicit_captures_len
+                != p.static_explicit_captures_len()
+            {
+                props.static_explicit_captures_len = None;
             }
             props.alternation_literal =
                 props.alternation_literal && p.is_alternation_literal();
@@ -2229,8 +2234,8 @@ impl Properties {
             // were false, for example, then 'a*' would also need to be false
             // since it too can match the empty string.
             utf8: true,
-            captures_len: 0,
-            static_captures_len: Some(0),
+            explicit_captures_len: 0,
+            static_explicit_captures_len: Some(0),
             literal: false,
             alternation_literal: false,
         };
@@ -2246,8 +2251,8 @@ impl Properties {
             look_set_prefix: LookSet::empty(),
             look_set_suffix: LookSet::empty(),
             utf8: core::str::from_utf8(&lit.0).is_ok(),
-            captures_len: 0,
-            static_captures_len: Some(0),
+            explicit_captures_len: 0,
+            static_explicit_captures_len: Some(0),
             literal: true,
             alternation_literal: true,
         };
@@ -2263,8 +2268,8 @@ impl Properties {
             look_set_prefix: LookSet::empty(),
             look_set_suffix: LookSet::empty(),
             utf8: class.is_utf8(),
-            captures_len: 0,
-            static_captures_len: Some(0),
+            explicit_captures_len: 0,
+            static_explicit_captures_len: Some(0),
             literal: false,
             alternation_literal: false,
         };
@@ -2293,8 +2298,8 @@ impl Properties {
             // considered to match invalid UTF-8. That in turn makes this
             // property borderline useless.
             utf8: true,
-            captures_len: 0,
-            static_captures_len: Some(0),
+            explicit_captures_len: 0,
+            static_explicit_captures_len: Some(0),
             literal: false,
             alternation_literal: false,
         };
@@ -2321,8 +2326,8 @@ impl Properties {
             look_set_prefix: LookSet::empty(),
             look_set_suffix: LookSet::empty(),
             utf8: p.is_utf8(),
-            captures_len: p.captures_len(),
-            static_captures_len: p.static_captures_len(),
+            explicit_captures_len: p.explicit_captures_len(),
+            static_explicit_captures_len: p.static_explicit_captures_len(),
             literal: false,
             alternation_literal: false,
         };
@@ -2338,16 +2343,16 @@ impl Properties {
         // of the repetition. Otherwise, it might change, but only when the
         // repetition can match 0 times.
         if rep.min == 0
-            && inner.static_captures_len.map_or(false, |len| len > 0)
+            && inner.static_explicit_captures_len.map_or(false, |len| len > 0)
         {
             // If we require a match 0 times, then our captures len is
             // guaranteed to be zero. Otherwise, if we *can* match the empty
             // string, then it's impossible to know how many captures will be
             // in the resulting match.
             if rep.max == Some(0) {
-                inner.static_captures_len = Some(0);
+                inner.static_explicit_captures_len = Some(0);
             } else {
-                inner.static_captures_len = None;
+                inner.static_explicit_captures_len = None;
             }
         }
         Properties(Box::new(inner))
@@ -2357,9 +2362,9 @@ impl Properties {
     fn capture(capture: &Capture) -> Properties {
         let p = capture.sub.properties();
         Properties(Box::new(PropertiesI {
-            captures_len: p.captures_len().saturating_add(1),
-            static_captures_len: p
-                .static_captures_len()
+            explicit_captures_len: p.explicit_captures_len().saturating_add(1),
+            static_explicit_captures_len: p
+                .static_explicit_captures_len()
                 .map(|len| len.saturating_add(1)),
             literal: false,
             alternation_literal: false,
@@ -2380,8 +2385,8 @@ impl Properties {
             look_set_prefix: LookSet::empty(),
             look_set_suffix: LookSet::empty(),
             utf8: true,
-            captures_len: 0,
-            static_captures_len: Some(0),
+            explicit_captures_len: 0,
+            static_explicit_captures_len: Some(0),
             literal: true,
             alternation_literal: true,
         };
@@ -2390,11 +2395,14 @@ impl Properties {
             let p = x.properties();
             props.look_set.set_union(p.look_set());
             props.utf8 = props.utf8 && p.is_utf8();
-            props.captures_len =
-                props.captures_len.saturating_add(p.captures_len());
-            props.static_captures_len = p
-                .static_captures_len()
-                .and_then(|len1| Some((len1, props.static_captures_len?)))
+            props.explicit_captures_len = props
+                .explicit_captures_len
+                .saturating_add(p.explicit_captures_len());
+            props.static_explicit_captures_len = p
+                .static_explicit_captures_len()
+                .and_then(|len1| {
+                    Some((len1, props.static_explicit_captures_len?))
+                })
                 .and_then(|(len1, len2)| Some(len1.saturating_add(len2)));
             props.literal = props.literal && p.is_literal();
             props.alternation_literal =
