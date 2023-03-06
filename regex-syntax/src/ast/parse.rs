@@ -171,7 +171,7 @@ impl ParserBuilder {
     /// constant stack space and moving the call stack to the heap), other
     /// crates may.
     ///
-    /// This limit is not checked until the entire Ast is parsed. Therefore,
+    /// This limit is not checked until the entire AST is parsed. Therefore,
     /// if callers want to put a limit on the amount of heap space used, then
     /// they should impose a limit on the length, in bytes, of the concrete
     /// pattern string. In particular, this is viable since this parser

@@ -1058,7 +1058,7 @@ impl<'t, 'p> TranslatorI<'t, 'p> {
     fn convert_unicode_class_error(
         &self,
         span: &Span,
-        result: unicode::Result<hir::ClassUnicode>,
+        result: core::result::Result<hir::ClassUnicode, unicode::Error>,
     ) -> Result<hir::ClassUnicode> {
         result.map_err(|err| {
             let sp = span.clone();
