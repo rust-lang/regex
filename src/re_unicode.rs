@@ -25,7 +25,7 @@ pub fn escape(text: &str) -> String {
 /// Match represents a single match of a regex in a haystack.
 ///
 /// The lifetime parameter `'t` refers to the lifetime of the matched text.
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Eq, PartialEq)]
 pub struct Match<'t> {
     text: &'t str,
     start: usize,
@@ -74,6 +74,16 @@ impl<'t> Match<'t> {
     #[inline]
     fn new(haystack: &'t str, start: usize, end: usize) -> Match<'t> {
         Match { text: haystack, start, end }
+    }
+}
+
+impl<'t> std::fmt::Debug for Match<'t> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        f.debug_struct("Match")
+            .field("start", &self.start)
+            .field("end", &self.end)
+            .field("string", &self.as_str())
+            .finish()
     }
 }
 
