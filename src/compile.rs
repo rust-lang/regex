@@ -162,7 +162,7 @@ impl Compiler {
         self.compiled.matches = vec![self.insts.len()];
         self.push_compiled(Inst::Match(0));
         self.compiled.static_captures_len =
-            expr.properties().static_captures_len();
+            expr.properties().static_explicit_captures_len();
         self.compile_finish()
     }
 

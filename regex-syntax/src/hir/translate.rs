@@ -3189,24 +3189,24 @@ mod tests {
 
     #[test]
     fn analysis_captures_len() {
-        assert_eq!(0, props(r"a").captures_len());
-        assert_eq!(0, props(r"(?:a)").captures_len());
-        assert_eq!(0, props(r"(?i-u:a)").captures_len());
-        assert_eq!(0, props(r"(?i-u)a").captures_len());
-        assert_eq!(1, props(r"(a)").captures_len());
-        assert_eq!(1, props(r"(?P<foo>a)").captures_len());
-        assert_eq!(1, props(r"()").captures_len());
-        assert_eq!(1, props(r"()a").captures_len());
-        assert_eq!(1, props(r"(a)+").captures_len());
-        assert_eq!(2, props(r"(a)(b)").captures_len());
-        assert_eq!(2, props(r"(a)|(b)").captures_len());
-        assert_eq!(2, props(r"((a))").captures_len());
-        assert_eq!(1, props(r"([a&&b])").captures_len());
+        assert_eq!(0, props(r"a").explicit_captures_len());
+        assert_eq!(0, props(r"(?:a)").explicit_captures_len());
+        assert_eq!(0, props(r"(?i-u:a)").explicit_captures_len());
+        assert_eq!(0, props(r"(?i-u)a").explicit_captures_len());
+        assert_eq!(1, props(r"(a)").explicit_captures_len());
+        assert_eq!(1, props(r"(?P<foo>a)").explicit_captures_len());
+        assert_eq!(1, props(r"()").explicit_captures_len());
+        assert_eq!(1, props(r"()a").explicit_captures_len());
+        assert_eq!(1, props(r"(a)+").explicit_captures_len());
+        assert_eq!(2, props(r"(a)(b)").explicit_captures_len());
+        assert_eq!(2, props(r"(a)|(b)").explicit_captures_len());
+        assert_eq!(2, props(r"((a))").explicit_captures_len());
+        assert_eq!(1, props(r"([a&&b])").explicit_captures_len());
     }
 
     #[test]
     fn analysis_static_captures_len() {
-        let len = |pattern| props(pattern).static_captures_len();
+        let len = |pattern| props(pattern).static_explicit_captures_len();
         assert_eq!(Some(0), len(r""));
         assert_eq!(Some(0), len(r"foo|bar"));
         assert_eq!(None, len(r"(foo)|bar"));
