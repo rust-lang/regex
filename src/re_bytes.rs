@@ -265,12 +265,7 @@ impl Regex {
     /// The `0`th capture group is always unnamed, so it must always be
     /// accessed with `get(0)` or `[0]`.
     pub fn captures<'t>(&self, text: &'t [u8]) -> Option<Captures<'t>> {
-        let mut locs = self.capture_locations();
-        self.captures_read_at(&mut locs, text, 0).map(move |_| Captures {
-            text,
-            locs: locs.0,
-            named_groups: self.0.capture_name_idx().clone(),
-        })
+        self.captures_at(text, 0)
     }
 
     /// Returns an iterator over all the non-overlapping capture groups matched
@@ -615,6 +610,25 @@ impl Regex {
             .searcher()
             .find_at(text, start)
             .map(|(s, e)| Match::new(text, s, e))
+    }
+
+    /// Returns the same as [`Regex::captures`], but starts the search at the
+    /// given offset.
+    ///
+    /// The significance of the starting point is that it takes the surrounding
+    /// context into consideration. For example, the `\A` anchor can only
+    /// match when `start == 0`.
+    pub fn captures_at<'t>(
+        &self,
+        text: &'t [u8],
+        start: usize,
+    ) -> Option<Captures<'t>> {
+        let mut locs = self.capture_locations();
+        self.captures_read_at(&mut locs, text, start).map(move |_| Captures {
+            text,
+            locs: locs.0,
+            named_groups: self.0.capture_name_idx().clone(),
+        })
     }
 
     /// This is like `captures`, but uses
