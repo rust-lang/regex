@@ -199,6 +199,8 @@ instead.)
 This implementation executes regular expressions **only** on valid UTF-8
 while exposing match locations as byte indices into the search string. (To
 relax this restriction, use the [`bytes`](bytes/index.html) sub-module.)
+Conceptually, the regex engine works by matching a haystack as if it were a
+sequence of Unicode scalar values.
 
 Only simple case folding is supported. Namely, when matching
 case-insensitively, the characters are first mapped using the "simple" case
