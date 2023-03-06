@@ -131,7 +131,7 @@ impl<I: Interval> IntervalSet<I> {
 
     /// Union this set with the given set, in place.
     pub fn union(&mut self, other: &IntervalSet<I>) {
-        if other.ranges.is_empty() {
+        if other.ranges.is_empty() || self.ranges == other.ranges {
             return;
         }
         // This could almost certainly be done more efficiently.
