@@ -37,6 +37,18 @@ impl<'t> Match<'t> {
         self.end
     }
 
+    /// Returns true if and only if this match has a length of zero.
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.start == self.end
+    }
+
+    /// Returns the length, in bytes, of this match.
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.end - self.start
+    }
+
     /// Returns the range over the starting and ending byte offsets of the
     /// match in the haystack.
     #[inline]
