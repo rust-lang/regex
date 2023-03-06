@@ -321,6 +321,11 @@ impl SetMatches {
     }
 
     /// The total number of regexes in the set that created these matches.
+    ///
+    /// **WARNING:** This always returns the same value as [`RegexSet::len`].
+    /// In particular, it does *not* return the number of elements yielded by
+    /// [`SetMatches::iter`]. The only way to determine the total number of
+    /// matched regexes is to iterate over them.
     pub fn len(&self) -> usize {
         self.matches.len()
     }
