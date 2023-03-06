@@ -17,7 +17,7 @@ use crate::re_trait::{self, RegularExpression, SubCapturesPosIter};
 /// Match represents a single match of a regex in a haystack.
 ///
 /// The lifetime parameter `'t` refers to the lifetime of the matched text.
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Eq, PartialEq)]
 pub struct Match<'t> {
     text: &'t [u8],
     start: usize,
@@ -66,6 +66,24 @@ impl<'t> Match<'t> {
     #[inline]
     fn new(haystack: &'t [u8], start: usize, end: usize) -> Match<'t> {
         Match { text: haystack, start, end }
+    }
+}
+
+impl<'t> std::fmt::Debug for Match<'t> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let mut fmt = f.debug_struct("Match");
+        fmt.field("start", &self.start).field("end", &self.end);
+        if let Ok(s) = std::str::from_utf8(self.as_bytes()) {
+            fmt.field("bytes", &s);
+        } else {
+            // FIXME: It would be nice if this could be printed as a string
+            // with invalid UTF-8 replaced with hex escapes. A alloc would
+            // probably okay if that makes it easier, but regex-automata does
+            // (at time of writing) have internal routines that do this. So
+            // maybe we should expose them.
+            fmt.field("bytes", &self.as_bytes());
+        }
+        fmt.finish()
     }
 }
 
