@@ -787,7 +787,7 @@ impl core::fmt::Debug for Literal {
 /// the author of the regular expression to disable Unicode mode, which in turn
 /// impacts the semantics of case insensitive matching. For example, `(?i)k`
 /// and `(?i-u)k` will not match the same set of strings.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 pub enum Class {
     /// A set of characters represented by Unicode scalar values.
     Unicode(ClassUnicode),
@@ -983,6 +983,27 @@ impl Class {
             Class::Unicode(ref x) => x.literal(),
             Class::Bytes(ref x) => x.literal(),
         }
+    }
+}
+
+impl core::fmt::Debug for Class {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        use crate::debug::Byte;
+
+        let mut fmter = f.debug_set();
+        match *self {
+            Class::Unicode(ref cls) => {
+                for r in cls.ranges().iter() {
+                    fmter.entry(&(r.start..=r.end));
+                }
+            }
+            Class::Bytes(ref cls) => {
+                for r in cls.ranges().iter() {
+                    fmter.entry(&(Byte(r.start)..=Byte(r.end)));
+                }
+            }
+        }
+        fmter.finish()
     }
 }
 
