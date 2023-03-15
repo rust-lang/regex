@@ -35,6 +35,8 @@ mat!(uni_not_boundary_ogham, r"\d\B", "6 ", None);
 // We should test more, but there's a lot. Write a script to generate more of
 // these tests.
 mat!(uni_class_gencat_cased_letter, r"\p{Cased_Letter}", "Ａ", Some((0, 3)));
+mat!(uni_class_gencat_cased_letter2, r"\p{gc=LC}", "Ａ", Some((0, 3)));
+mat!(uni_class_gencat_cased_letter3, r"\p{LC}", "Ａ", Some((0, 3)));
 mat!(
     uni_class_gencat_close_punctuation,
     r"\p{Close_Punctuation}",
