@@ -248,7 +248,12 @@ impl<'a> ClassQuery<'a> {
         // also the abbreviation for the 'Script' property. So we avoid calling
         // 'canonical_prop' for it too, which would erroneously normalize it
         // to 'Script'.
-        if norm != "cf" && norm != "sc" {
+        //
+        // Another case: 'lc' is an abbreviation for the 'Cased_Letter'
+        // general category, but is also an abbreviation for the 'Lowercase_Mapping'
+        // property. We don't currently support the latter, so as with 'cf'
+        // above, we treat 'lc' as 'Cased_Letter'.
+        if norm != "cf" && norm != "sc" && norm != "lc" {
             if let Some(canon) = canonical_prop(&norm)? {
                 return Ok(CanonicalClassQuery::Binary(canon));
             }
