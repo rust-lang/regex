@@ -2286,8 +2286,11 @@ mod tests {
 
         // We run our test on a thread with a small stack size so we can
         // force the issue more easily.
+        //
+        // NOTE(2023-03-21): See the corresponding test in 'crate::ast::tests'
+        // for context on the specific stack size chosen here.
         thread::Builder::new()
-            .stack_size(1 << 10)
+            .stack_size(16 << 10)
             .spawn(run)
             .unwrap()
             .join()
