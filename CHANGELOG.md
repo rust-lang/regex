@@ -1,3 +1,13 @@
+1.7.2 (2023-03-21)
+==================
+This is a small release that fixes a failing test on FreeBSD.
+
+Bug fixes:
+
+* [BUG #967](https://github.com/rust-lang/regex/issues/967):
+  Fix "no stack overflow" test which can fail due to the small stack size.
+
+
 1.7.1 (2023-01-09)
 ==================
 This release was done principally to try and fix the doc.rs rendering for the
