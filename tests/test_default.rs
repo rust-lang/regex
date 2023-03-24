@@ -220,3 +220,13 @@ fn empty_alt_regex_fails() {
     let result = Regex::new(r"(?:|){4294967295}");
     assert!(result.is_err());
 }
+
+// Regression test for: https://github.com/rust-lang/regex/issues/969
+#[test]
+fn regression_i969() {
+    use regex::Regex;
+
+    let re = Regex::new(r"c.*d\z").unwrap();
+    assert_eq!(Some(6), re.shortest_match_at("ababcd", 4));
+    assert_eq!(Some(6), re.find_at("ababcd", 4).map(|m| m.end()));
+}
