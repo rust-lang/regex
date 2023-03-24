@@ -459,7 +459,7 @@ impl<'c> RegularExpression for ExecNoSync<'c> {
                     self.cache.value(),
                     true,
                     &text[start..],
-                    text.len(),
+                    text.len() - start,
                 ) {
                     dfa::Result::Match(_) => Some(text.len()),
                     dfa::Result::NoMatch(_) => None,
@@ -511,7 +511,7 @@ impl<'c> RegularExpression for ExecNoSync<'c> {
                     self.cache.value(),
                     true,
                     &text[start..],
-                    text.len(),
+                    text.len() - start,
                 ) {
                     dfa::Result::Match(_) => true,
                     dfa::Result::NoMatch(_) => false,
