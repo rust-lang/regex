@@ -2080,6 +2080,13 @@ impl Properties {
         self.0.alternation_literal
     }
 
+    /// Returns the total amount of heap memory usage, in bytes, used by this
+    /// `Properties` value.
+    #[inline]
+    pub fn memory_usage(&self) -> usize {
+        core::mem::size_of::<PropertiesI>()
+    }
+
     /// Returns a new set of properties that corresponds to the union of the
     /// iterator of properties given.
     ///
