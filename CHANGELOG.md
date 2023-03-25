@@ -1,3 +1,14 @@
+1.7.3 (2023-03-24)
+==================
+This is a small release that fixes a bug in `Regex::shortest_match_at` that
+could cause it to panic, even when the offset given is valid.
+
+Bug fixes:
+
+* [BUG #969](https://github.com/rust-lang/regex/issues/969):
+  Fix a bug in how the reverse DFA was called for `Regex::shortest_match_at`.
+
+
 1.7.2 (2023-03-21)
 ==================
 This is a small release that fixes a failing test on FreeBSD.
