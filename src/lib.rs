@@ -287,9 +287,9 @@ a separate crate, [`regex-syntax`](https://docs.rs/regex-syntax).
 .             any character except new line (includes new line with s flag)
 \d            digit (\p{Nd})
 \D            not digit
-\pN           One-letter name Unicode character class
+\pX           Unicode character class identified by a one-letter name
 \p{Greek}     Unicode character class (general category or script)
-\PN           Negated one-letter name Unicode character class
+\PX           Negated Unicode character class identified by a one-letter name
 \P{Greek}     negated Unicode character class (general category or script)
 </pre>
 
