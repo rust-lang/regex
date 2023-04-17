@@ -9,6 +9,7 @@ homepage = "https://github.com/rust-lang/regex"
 description = "A regular expression parser."
 workspace = ".."
 edition = "2018"
+rust-version = "1.60.0"
 
 # Features are documented in the "Crate features" section of the crate docs:
 # https://docs.rs/regex-syntax/*/#crate-features
