@@ -1,3 +1,120 @@
+1.8.0 (TBD)
+===========
+This is a sizeable release that will be soon followed by another sizeable
+release. Both of them will combined close over 40 existing issues and PRs.
+
+This first release, despite its size, essentially represent preparatory work
+for the second release, which will be even bigger. Namely, this release:
+
+* Increases the MSRV to Rust 1.60.0, which was released about 1 year ago.
+* Upgrades its dependency on `aho-corasick` to the recently release 1.0
+version.
+* Upgrades its dependency on `regex-syntax` to the simultaneously released
+`0.7` version. The changes to `regex-syntax` principally revolve around a
+rewrite of its literal extraction code and a number of simplifications and
+optimizations to its high-level intermediate representation (HIR).
+
+The second release, which will follow ~shortly after the release above, will
+contain a soup-to-nuts rewrite of every regex engine. This will be done by
+bringing [`regex-automata`](https://github.com/BurntSushi/regex-automata) into
+this repository, and then changing the `regex` crate to be nothing but an API
+shim layer on top of `regex-automata`'s API.
+
+These tandem releases are the culmination of about 3
+years of on-and-off work that [began in earnest in March
+2020](https://github.com/rust-lang/regex/issues/656).
+
+Because of the scale of changes involved in these releases, I would love to
+hear about your experience. Especially if you notice undocumented changes in
+behavior or performance changes (positive *or* negative).
+
+Most changes in the first release are listed below. For more details, please
+see the commit log, which reflects a linear and decently documented history
+of all changes.
+
+New features:
+
+* [FEATURE #501](https://github.com/rust-lang/regex/issues/501):
+Permit many more characters to be escaped, even if they have no significance.
+More specifically, any character except for `[0-9A-Za-z<>]` can now be
+escaped. Also, a new routine, `is_escapeable_character`, has been added to
+`regex-syntax` to query whether a character is escapeable or not.
+* [FEATURE #547](https://github.com/rust-lang/regex/issues/547):
+Add `Regex::captures_at`. This filles a hole in the API, but doesn't otherwise
+introduce any new expressive power.
+* [FEATURE #595](https://github.com/rust-lang/regex/issues/595):
+Capture group names are now Unicode-aware. They can now begin with either a `_`
+or any "alphabetic" codepoint. After the first codepoint, subsequent codepoints
+can be any sequence of alpha-numeric codepoints, along with `_`, `.`, `[` and
+`]`. Note that replacement syntax has not changed.
+* [FEATURE #810](https://github.com/rust-lang/regex/issues/810):
+Add `Match::is_empty` and `Match::len` APIs.
+* [FEATURE #905](https://github.com/rust-lang/regex/issues/905):
+Add an `impl Default for RegexSet`, with the default being the empty set.
+* [FEATURE #908](https://github.com/rust-lang/regex/issues/908):
+A new method, `Regex::static_captures_len`, has been added which returns the
+number of capture groups in the pattern if and only if every possible match
+always contains the same number of matching groups.
+* [FEATURE #955](https://github.com/rust-lang/regex/issues/955):
+Named captures can now be written as `(?<name>re)` in addition to
+`(?P<name>re)`.
+* FEATURE: `regex-syntax` now supports empty character classes.
+* FEATURE: `regex-syntax` now has an optional `std` feature. (This will come
+to `regex` in the second release.)
+* FEATURE: The `Hir` type in `regex-syntax` has had a number of simplifications
+made to it.
+* FEATURE: `regex-syntax` has support for a new `R` flag for enabling CRLF
+mode. This will be supported in `regex` proper in the second release.
+* FEATURE: `regex-syntax` now has proper support for "regex that never
+matches" via `Hir::fail()`.
+* FEATURE: The `hir::literal` module of `regex-syntax` has been completely
+re-worked. It now has more documentation, examples and advice.
+* FEATURE: The `allow_invalid_utf8` option in `regex-syntax` has been renamed
+to `utf8`, and the meaning of the boolean has been flipped.
+
+Performance improvements:
+
+Bug fixes:
+
+* [BUG #514](https://github.com/rust-lang/regex/issues/514):
+Improve `Debug` impl for `Match` so that it doesn't show the entire haystack.
+* BUGS [#516](https://github.com/rust-lang/regex/issues/516),
+[#731](https://github.com/rust-lang/regex/issues/731):
+Fix a number of issues with printing `Hir` values as regex patterns.
+* [BUG #610](https://github.com/rust-lang/regex/issues/610):
+Add explicit example of `foo|bar` in the regex syntax docs.
+* [BUG #625](https://github.com/rust-lang/regex/issues/625):
+Clarify that `SetMatches::len` does not (regretably) refer to the number of
+matches in the set.
+* [BUG #660](https://github.com/rust-lang/regex/issues/660):
+Clarify "verbose mode" in regex syntax documentation.
+* BUG [#738](https://github.com/rust-lang/regex/issues/738),
+[#950](https://github.com/rust-lang/regex/issues/950):
+Fix `CaptureLocations::get` so that it never panics.
+* [BUG #747](https://github.com/rust-lang/regex/issues/747):
+Clarify documentation for `Regex::shortest_match`.
+* [BUG #835](https://github.com/rust-lang/regex/issues/835):
+Fix `\p{Sc}` so that it is equivalent to `\p{Currency_Symbol}`.
+* [BUG #846](https://github.com/rust-lang/regex/issues/846):
+Add more clarifying documentation to the `CompiledTooBig` error variant.
+* [BUG #854](https://github.com/rust-lang/regex/issues/854):
+Clarify that `regex::Regex` searches as if the haystack is a sequence of
+Unicode scalar values.
+* [BUG #884](https://github.com/rust-lang/regex/issues/884):
+Replace `__Nonexhaustive` variants with `#[non_exhaustive]` attribute.
+* [BUG #893](https://github.com/rust-lang/regex/pull/893):
+Optimize case folding since it can get quite slow in some pathological cases.
+* [BUG #895](https://github.com/rust-lang/regex/issues/895):
+Reject `(?-u:\W)` in `regex::Regex` APIs.
+* [BUG #942](https://github.com/rust-lang/regex/issues/942):
+Add a missing `void` keyword to indicate "no parameters" in C API.
+* [BUG #965](https://github.com/rust-lang/regex/issues/965):
+Fix `\p{Lc}` so that it is equivalent to `\p{Cased_Letter}`.
+* [BUG #975](https://github.com/rust-lang/regex/issues/975):
+Clarify documentation for `\pX` syntax.
+
+
+
 1.7.3 (2023-03-24)
 ==================
 This is a small release that fixes a bug in `Regex::shortest_match_at` that
@@ -743,7 +860,7 @@ Bug gixes:
 ==================
 This release includes a ground-up rewrite of the regex-syntax crate, which has
 been in development for over a year.
-
+731
 New features:
 
 * Error messages for invalid regexes have been greatly improved. You get these
