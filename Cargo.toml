@@ -15,6 +15,7 @@ categories = ["text-processing"]
 autotests = false
 exclude = ["/scripts/*", "/.github/*"]
 edition = "2018"
+rust-version = "1.60.0"
 
 [workspace]
 members = [
