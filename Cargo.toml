@@ -1,7 +1,7 @@
 [package]
 name = "regex"
 version = "1.8.4"  #:version
-authors = ["The Rust Project Developers"]
+authors = ["The Rust Project Developers", "Andrew Gallant <jamslam@gmail.com>"]
 license = "MIT OR Apache-2.0"
 readme = "README.md"
 repository = "https://github.com/rust-lang/regex"
@@ -19,7 +19,12 @@ rust-version = "1.60.0"
 
 [workspace]
 members = [
-  "bench", "regex-capi", "regex-syntax",
+  "bench",
+  "regex-automata",
+  "regex-capi",
+  "regex-cli",
+  "regex-syntax",
+  "regex-test",
 ]
 
 [lib]
@@ -42,7 +47,12 @@ default = ["std", "perf", "unicode", "regex-syntax/default"]
 # to compile without std, and instead just rely on 'core' and 'alloc' (for
 # example). Currently, this isn't supported, and removing the 'std' feature
 # will prevent regex from compiling.
-std = []
+std = [
+  "aho-corasick?/std",
+  "memchr?/std",
+  "regex-automata/std",
+  "regex-syntax/std",
+]
 # The 'use_std' feature is DEPRECATED. It will be removed in regex 2. Until
 # then, it is an alias for the 'std' feature.
 use_std = ["std"]
@@ -50,19 +60,40 @@ use_std = ["std"]
 
 # PERFORMANCE FEATURES
 
-# Enables all performance features.
-perf = ["perf-cache", "perf-dfa", "perf-inline", "perf-literal"]
+# Enables all default performance features. Note that this specifically does
+# not include perf-dfa-full, because it leads to higher compile times and
+# bigger binaries, and the runtime performance improvement is not obviously
+# worth it.
+perf = [
+  "perf-cache",
+  "perf-dfa",
+  "perf-onepass",
+  "perf-backtrack",
+  "perf-inline",
+  "perf-literal",
+]
 # Enables fast caching. (If disabled, caching is still used, but is slower.)
 # Currently, this feature has no effect. It used to remove the thread_local
 # dependency and use a slower internal cache, but now the default cache has
 # been improved and thread_local is no longer a dependency at all.
 perf-cache = []
 # Enables use of a lazy DFA when possible.
-perf-dfa = []
+perf-dfa = ["regex-automata/hybrid"]
+# Enables use of a fully compiled DFA when possible.
+perf-dfa-full = ["regex-automata/dfa-build", "regex-automata/dfa-search"]
+# Enables use of the one-pass regex matcher, which speeds up capture searches
+# even beyond the backtracker.
+perf-onepass = ["regex-automata/dfa-onepass"]
+# Enables use of a bounded backtracker, which speeds up capture searches.
+perf-backtrack = ["regex-automata/nfa-backtrack"]
 # Enables aggressive use of inlining.
-perf-inline = []
+perf-inline = ["regex-automata/perf-inline"]
 # Enables literal optimizations.
-perf-literal = ["aho-corasick", "memchr"]
+perf-literal = [
+  "dep:aho-corasick",
+  "dep:memchr",
+  "regex-automata/perf-literal",
+]
 
 
 # UNICODE DATA FEATURES
@@ -76,22 +107,45 @@ unicode = [
   "unicode-perl",
   "unicode-script",
   "unicode-segment",
+  "regex-automata/unicode",
   "regex-syntax/unicode",
 ]
 # Enables use of the `Age` property, e.g., `\p{Age:3.0}`.
-unicode-age = ["regex-syntax/unicode-age"]
+unicode-age = [
+  "regex-automata/unicode-age",
+  "regex-syntax/unicode-age",
+]
 # Enables use of a smattering of boolean properties, e.g., `\p{Emoji}`.
-unicode-bool = ["regex-syntax/unicode-bool"]
+unicode-bool = [
+  "regex-automata/unicode-bool",
+  "regex-syntax/unicode-bool",
+]
 # Enables Unicode-aware case insensitive matching, e.g., `(?i)β`.
-unicode-case = ["regex-syntax/unicode-case"]
+unicode-case = [
+  "regex-automata/unicode-case",
+  "regex-syntax/unicode-case",
+]
 # Enables Unicode general categories, e.g., `\p{Letter}` or `\pL`.
-unicode-gencat = ["regex-syntax/unicode-gencat"]
+unicode-gencat = [
+  "regex-automata/unicode-gencat",
+  "regex-syntax/unicode-gencat",
+]
 # Enables Unicode-aware Perl classes corresponding to `\w`, `\s` and `\d`.
-unicode-perl = ["regex-syntax/unicode-perl"]
+unicode-perl = [
+  "regex-automata/unicode-perl",
+  "regex-automata/unicode-word-boundary",
+  "regex-syntax/unicode-perl",
+]
 # Enables Unicode scripts and script extensions, e.g., `\p{Greek}`.
-unicode-script = ["regex-syntax/unicode-script"]
+unicode-script = [
+  "regex-automata/unicode-script",
+  "regex-syntax/unicode-script",
+]
 # Enables Unicode segmentation properties, e.g., `\p{gcb=Extend}`.
-unicode-segment = ["regex-syntax/unicode-segment"]
+unicode-segment = [
+  "regex-automata/unicode-segment",
+  "regex-syntax/unicode-segment",
+]
 
 
 # UNSTABLE FEATURES (requires Rust nightly)
@@ -121,6 +175,13 @@ path = "regex-syntax"
 version = "0.7.2"
 default-features = false
 
+# For the actual regex engines.
+[dependencies.regex-automata]
+path = "regex-automata"
+version = "0.3.0"
+default-features = false
+features = ["alloc", "syntax", "meta", "nfa-pikevm"]
+
 [dev-dependencies]
 # For examples.
 lazy_static = "1"
@@ -129,10 +190,39 @@ quickcheck = { version = "1.0.3", default-features = false }
 # For generating random test data.
 rand = { version = "0.8.3", default-features = false, features = ["getrandom", "small_rng"] }
 # To check README's example
-# TODO: Re-enable this once the MSRV is 1.43 or greater.
-# See: https://github.com/rust-lang/regex/issues/684
-# See: https://github.com/rust-lang/regex/issues/685
-# doc-comment = "0.3"
+doc-comment = "0.3"
+# For easy error handling in integration tests.
+anyhow = "1.0.69"
+# A library for testing regex engines.
+regex-test = { path = "regex-test", version = "0.1.0" }
+
+[dev-dependencies.env_logger]
+# Note that this is currently using an older version because of the dependency
+# tree explosion that happened in 0.10.
+version = "0.9.3"
+default-features = false
+features = ["atty", "humantime", "termcolor"]
+
+# This test suite reads a whole boatload of tests from the top-level testdata
+# directory, and then runs them against the regex crate API.
+#
+# regex-automata has its own version of them, and runs them against each
+# internal regex engine individually.
+#
+# This means that if you're seeing a failure in this test suite, you should
+# try running regex-automata's tests:
+#
+#     cargo test --manifest-path regex-automata/Cargo.toml --test integration
+#
+# That *might* give you a more targeted test failure. i.e., "only the
+# PikeVM fails this test." Which gives you a narrower place to search. If
+# regex-automata's test suite passes, then the bug might be in the integration
+# of the regex crate and regex-automata. But generally speaking, a failure
+# in this test suite *should* mean there is a corresponding failure in
+# regex-automata's test suite.
+[[test]]
+path = "newtests/tests.rs"
+name = "integration"
 
 # Run the test suite on the default behavior of Regex::new.
 # This includes a mish mash of NFAs and DFAs, which are chosen automatically
@@ -185,11 +275,36 @@ name = "backtrack-bytes"
 path = "tests/test_crates_regex.rs"
 name = "crates-regex"
 
+[package.metadata.docs.rs]
+# We want to document all features.
+all-features = true
+# Since this crate's feature setup is pretty complicated, it is worth opting
+# into a nightly unstable option to show the features that need to be enabled
+# for public API items. To do that, we set 'docsrs', and when that's enabled,
+# we enable the 'doc_auto_cfg' feature.
+#
+# To test this locally, run:
+#
+#     RUSTDOCFLAGS="--cfg docsrs" cargo +nightly doc --all-features
+rustdoc-args = ["--cfg", "docsrs"]
+
 [profile.release]
 debug = true
 
 [profile.bench]
 debug = true
 
+[profile.dev]
+# Running tests takes too long in debug mode, so we forcefully always build
+# with optimizations. Unfortunate, but, ¯\_(ツ)_/¯.
+#
+# It's counter-intuitive that this needs to be set on dev *and* test, but
+# it's because the tests that take a long time to run are run as integration
+# tests in a separate crate. The test.opt-level setting won't apply there, so
+# we need to set the opt-level across the entire build.
+opt-level = 3
+debug = true
+
 [profile.test]
+opt-level = 3
 debug = true

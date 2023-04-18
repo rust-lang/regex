@@ -937,10 +937,9 @@ impl<'r, 't> FusedIterator for SplitN<'r, 't> {}
 /// CaptureLocations is a low level representation of the raw offsets of each
 /// submatch.
 ///
-/// You can think of this as a lower level
-/// [`Captures`](struct.Captures.html), where this type does not support
-/// named capturing groups directly and it does not borrow the text that these
-/// offsets were matched on.
+/// You can think of this as a lower level [`Captures`], where this type does
+/// not support named capturing groups directly and it does not borrow the text
+/// that these offsets were matched on.
 ///
 /// Primarily, this type is useful when using the lower level `Regex` APIs
 /// such as `read_captures`, which permits amortizing the allocation in which
