@@ -149,26 +149,35 @@ jobs:
       if: matrix.build == 'stable'
       run: |
         # 'stable' is Linux only, so we have bash.
-        cd regex-syntax
-        ./test
+        ./regex-syntax/test
+
+    - name: Build regex-automata docs
+      if: matrix.build != 'pinned'
+      run: |
+        ${{ env.CARGO }} doc --verbose --manifest-path regex-automata/Cargo.toml $TARGET
+
+    - name: Run subset of regex-automata tests
+      if: matrix.build != 'pinned' && matrix.build != 'stable'
+      run: |
+        ${{ env.CARGO }} test --verbose --manifest-path regex-automata/Cargo.toml $TARGET
+
+    - name: Run full regex-automata test suite
+      if: matrix.build == 'stable'
+      run: |
+        # 'stable' is Linux only, so we have bash.
+        ./regex-automata/test
 
     - name: Run regex-capi tests
       if: matrix.build == 'stable'
       run: |
         # 'stable' is Linux only, so we have bash.
-        cd regex-capi
-        ./test
+        ./regex-capi/test
 
     - if: matrix.build == 'nightly'
       name: Run benchmarks as tests
       run: |
         cd bench
         ./run rust --no-run --verbose
-
-    - if: matrix.build == 'nightly'
-      name: Run tests with pattern feature
-      run: |
-        cargo test --test default --no-default-features --features 'std pattern unicode-perl'
 
   rustfmt:
     name: rustfmt

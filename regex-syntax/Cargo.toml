@@ -1,11 +1,10 @@
 [package]
 name = "regex-syntax"
 version = "0.7.2"  #:version
-authors = ["The Rust Project Developers"]
+authors = ["The Rust Project Developers", "Andrew Gallant <jamslam@gmail.com>"]
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/rust-lang/regex"
+repository = "https://github.com/rust-lang/regex/tree/master/regex-syntax"
 documentation = "https://docs.rs/regex-syntax"
-homepage = "https://github.com/rust-lang/regex"
 description = "A regular expression parser."
 workspace = ".."
 edition = "2021"

@@ -647,12 +647,9 @@ another matching engine with fixed memory requirements.
 #[cfg(not(feature = "std"))]
 compile_error!("`std` feature is currently required to build this crate");
 
-// To check README's example
-// TODO: Re-enable this once the MSRV is 1.43 or greater.
-// See: https://github.com/rust-lang/regex/issues/684
-// See: https://github.com/rust-lang/regex/issues/685
-// #[cfg(doctest)]
-// doc_comment::doctest!("../README.md");
+// To check README's examples.
+#[cfg(doctest)]
+doc_comment::doctest!("../README.md");
 
 #[cfg(feature = "std")]
 pub use crate::error::Error;
