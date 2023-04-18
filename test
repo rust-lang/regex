@@ -2,6 +2,10 @@
 
 set -e
 
+# cd to the directory containing this crate's Cargo.toml so that we don't need
+# to pass --manifest-path to every `cargo` command.
+cd "$(dirname "$0")"
+
 # This is a convenience script for running a broad swath of tests across
 # features. We don't test the complete space, since the complete space is quite
 # large. Hopefully once we migrate the test suite to better infrastructure
@@ -28,3 +32,9 @@ for f in "${features[@]}"; do
     echo "===== FEATURE: $f (default-bytes) ==="
     cargo test --test default-bytes --no-default-features --features "$f"
 done
+
+# And test the probably-forever-nightly-only 'pattern' feature...
+if rustc --version | grep -q nightly; then
+    echo "===== FEATURE: std,pattern,unicode-perl ====="
+    cargo test --test default --no-default-features --features std,pattern,unicode-perl
+fi

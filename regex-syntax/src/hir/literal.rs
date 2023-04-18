@@ -1841,6 +1841,14 @@ impl Seq {
             None => return,
             Some(len) => len,
         };
+        // Just give up now if our sequence contains an empty string.
+        if self.min_literal_len().map_or(false, |len| len == 0) {
+            // We squash the sequence so that nobody else gets any bright
+            // ideas to try and use it. An empty string implies a match at
+            // every position. A prefilter cannot help you here.
+            self.make_infinite();
+            return;
+        }
         // Make sure we start with the smallest sequence possible. We use a
         // special version of preference minimization that retains exactness.
         // This is legal because optimization is only expected to occur once
@@ -1910,34 +1918,41 @@ impl Seq {
                 // longest common prefix to be subject to the poison check.
             }
         }
-        // Everything below this check is more-or-less about trying to
-        // heuristically reduce the false positive rate of a prefilter. But
-        // if our sequence is completely exact, then it's possible the regex
-        // engine can be skipped entirely. In this case, the false positive
-        // rate is zero because every literal match corresponds to a regex
-        // match.
+        // If we have an exact sequence, we *probably* just want to keep it
+        // as-is. But there are some cases where we don't. So we save a copy of
+        // the exact sequence now, and then try to do some more optimizations
+        // below. If those don't work out, we go back to this exact sequence.
         //
-        // This is OK even if the sequence contains a poison literal. Remember,
-        // a literal is only poisononous because of what we assume about its
-        // impact on the false positive rate. However, we do still check for
-        // an empty string. Empty strings are weird and it's best to let the
-        // regex engine handle those.
+        // The specific motivation for this is that we sometimes wind up with
+        // an exact sequence with a hefty number of literals. Say, 100. If we
+        // stuck with that, it would be too big for Teddy and would result in
+        // using Aho-Corasick. Which is fine... but the lazy DFA is plenty
+        // suitable in such cases. The real issue is that we will wind up not
+        // using a fast prefilter at all. So in cases like this, even though
+        // we have an exact sequence, it would be better to try and shrink the
+        // sequence (which we do below) and use it as a prefilter that can
+        // produce false positive matches.
         //
-        // We do currently do this check after the longest common prefix (or
-        // suffix) check, under the theory that single-substring search is so
-        // fast that we want that even if we'd end up turning an exact sequence
-        // into an inexact one. But this might be wrong...
-        if self.is_exact()
-            && self.min_literal_len().map_or(false, |len| len > 0)
-        {
-            return;
-        }
+        // But if the shrinking below results in a sequence that "sucks," then
+        // we don't want to use that because we already have an exact sequence
+        // in hand.
+        let exact: Option<Seq> =
+            if self.is_exact() { Some(self.clone()) } else { None };
         // Now we attempt to shorten the sequence. The idea here is that we
         // don't want to look for too many literals, but we want to shorten
         // our sequence enough to improve our odds of using better algorithms
         // downstream (such as Teddy).
+        //
+        // The pair of numbers in this list corresponds to the maximal prefix
+        // (in bytes) to keep for all literals and the length of the sequence
+        // at which to do it.
+        //
+        // So for example, the pair (3, 500) would mean, "if we have more than
+        // 500 literals in our sequence, then truncate all of our literals
+        // such that they are at most 3 bytes in length and the minimize the
+        // sequence."
         const ATTEMPTS: [(usize, usize); 5] =
-            [(5, 64), (4, 64), (3, 64), (2, 64), (1, 10)];
+            [(5, 10), (4, 10), (3, 64), (2, 64), (1, 10)];
         for (keep, limit) in ATTEMPTS {
             let len = match self.len() {
                 None => break,
@@ -1966,6 +1981,30 @@ impl Seq {
         if let Some(lits) = self.literals() {
             if lits.iter().any(|lit| lit.is_poisonous()) {
                 self.make_infinite();
+            }
+        }
+        // OK, if we had an exact sequence before attempting more optimizations
+        // above and our post-optimized sequence sucks for some reason or
+        // another, then we go back to the exact sequence.
+        if let Some(exact) = exact {
+            // If optimizing resulted in dropping our literals, then certainly
+            // backup and use the exact sequence that we had.
+            if !self.is_finite() {
+                *self = exact;
+                return;
+            }
+            // If our optimized sequence contains a short literal, then it's
+            // *probably* not so great. So throw it away and revert to the
+            // exact sequence.
+            if self.min_literal_len().map_or(true, |len| len <= 2) {
+                *self = exact;
+                return;
+            }
+            // Finally, if our optimized sequence is "big" (i.e., can't use
+            // Teddy), then also don't use it and rely on the exact sequence.
+            if self.len().map_or(true, |len| len > 64) {
+                *self = exact;
+                return;
             }
         }
     }
