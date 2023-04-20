@@ -93,8 +93,3 @@ for f in "${features[@]}"; do
   cargo build --no-default-features --lib --features "$f"
   cargo test --no-default-features --test integration --features "$f"
 done
-
-# There are a lot of 'cfg(not(miri))' configs spread out through the code and
-# the tests to make this Just Work.
-echo "===== MIRI ==="
-cargo miri test

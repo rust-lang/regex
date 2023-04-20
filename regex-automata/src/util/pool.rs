@@ -151,13 +151,13 @@ being quite expensive.
 /// let expected = Some(Match::must(0, 3..14));
 /// assert_eq!(expected, RE.find(&mut CACHE.get(), b"zzzfoo12345barzzz"));
 /// ```
-pub struct Pool<T, F = fn() -> T>(inner::Pool<T, F>);
+pub struct Pool<T, F = fn() -> T>(alloc::boxed::Box<inner::Pool<T, F>>);
 
 impl<T, F> Pool<T, F> {
     /// Create a new pool. The given closure is used to create values in
     /// the pool when necessary.
     pub fn new(create: F) -> Pool<T, F> {
-        Pool(inner::Pool::new(create))
+        Pool(alloc::boxed::Box::new(inner::Pool::new(create)))
     }
 }
 

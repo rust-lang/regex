@@ -10,10 +10,10 @@ cd "$(dirname "$0")"
 # features. We don't test the complete space, since the complete space is quite
 # large. Hopefully once we migrate the test suite to better infrastructure
 # (like regex-automata), we'll be able to test more of the space.
-echo "===== DEFAULT FEATURES ==="
+echo "===== DEFAULT FEATURES ====="
 cargo test
 
-echo "===== DOC TESTS ==="
+echo "===== DOC TESTS ====="
 cargo test --doc
 
 features=(
@@ -27,10 +27,8 @@ features=(
     "std perf-literal"
 )
 for f in "${features[@]}"; do
-    echo "===== FEATURE: $f (default) ==="
-    cargo test --test default --no-default-features --features "$f"
-    echo "===== FEATURE: $f (default-bytes) ==="
-    cargo test --test default-bytes --no-default-features --features "$f"
+    echo "===== FEATURE: $f ====="
+    cargo test --test integration --no-default-features --features "$f"
 done
 
 # And test the probably-forever-nightly-only 'pattern' feature...

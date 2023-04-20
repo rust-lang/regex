@@ -97,6 +97,20 @@ fn starts_for_each_pattern() -> Result<()> {
     Ok(())
 }
 
+/// Tests the hybrid NFA/DFA when 'specialize_start_states' is enabled.
+#[test]
+fn specialize_start_states() -> Result<()> {
+    let mut builder = Regex::builder();
+    builder.dfa(DFA::config().specialize_start_states(true));
+    TestRunner::new()?
+        .expand(EXPANSIONS, |t| t.compiles())
+        // Without NFA shrinking, this test blows the default cache capacity.
+        .blacklist("expensive/regression-many-repeat-no-stack-overflow")
+        .test_iter(suite()?.iter(), compiler(builder))
+        .assert();
+    Ok(())
+}
+
 /// Tests the hybrid NFA/DFA when byte classes are disabled.
 ///
 /// N.B. Disabling byte classes doesn't avoid any indirection at search time.

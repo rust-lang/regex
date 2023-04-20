@@ -221,7 +221,7 @@ features = ["atty", "humantime", "termcolor"]
 # in this test suite *should* mean there is a corresponding failure in
 # regex-automata's test suite.
 [[test]]
-path = "newtests/tests.rs"
+path = "newtests/lib.rs"
 name = "integration"
 
 # Run the test suite on the default behavior of Regex::new.
@@ -237,43 +237,6 @@ name = "default"
 [[test]]
 path = "tests/test_default_bytes.rs"
 name = "default-bytes"
-
-# Run the test suite on the NFA algorithm over Unicode codepoints.
-[[test]]
-path = "tests/test_nfa.rs"
-name = "nfa"
-
-# Run the test suite on the NFA algorithm over bytes that match UTF-8 only.
-[[test]]
-path = "tests/test_nfa_utf8bytes.rs"
-name = "nfa-utf8bytes"
-
-# Run the test suite on the NFA algorithm over arbitrary bytes.
-[[test]]
-path = "tests/test_nfa_bytes.rs"
-name = "nfa-bytes"
-
-# Run the test suite on the backtracking engine over Unicode codepoints.
-[[test]]
-path = "tests/test_backtrack.rs"
-name = "backtrack"
-
-# Run the test suite on the backtracking engine over bytes that match UTF-8
-# only.
-[[test]]
-path = "tests/test_backtrack_utf8bytes.rs"
-name = "backtrack-utf8bytes"
-
-# Run the test suite on the backtracking engine over arbitrary bytes.
-[[test]]
-path = "tests/test_backtrack_bytes.rs"
-name = "backtrack-bytes"
-
-# Run all backends against each regex found on crates.io and make sure
-# that they all do the same thing.
-[[test]]
-path = "tests/test_crates_regex.rs"
-name = "crates-regex"
 
 [package.metadata.docs.rs]
 # We want to document all features.

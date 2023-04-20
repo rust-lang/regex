@@ -15,12 +15,12 @@ use crate::{nfa, util::search::MatchError, PatternID};
 /// * Ask for the [`PatternID`] of the pattern that caused an error, if one
 /// is available. This is available for things like syntax errors, but not for
 /// cases where build limits are exceeded.
+/// * Ask for the underlying syntax error, but only if the error is a syntax
+/// error.
 /// * Ask for a human readable message corresponding to the underlying error.
 /// * The `BuildError::source` method (from the `std::error::Error`
-/// trait implementation) may be used to query for
-/// [`regex-syntax::ast::Error`](regex_syntax::ast::Error) or
-/// [`regex-syntax::hir::Error`](regex_syntax::hir::Error). (This requires the
-/// `std` feature.)
+/// trait implementation) may be used to query for an underlying error if one
+/// exists. There are no API guarantees about which error is returned.
 ///
 /// When the `std` feature is enabled, this implements `std::error::Error`.
 #[derive(Clone, Debug)]
@@ -30,8 +30,7 @@ pub struct BuildError {
 
 #[derive(Clone, Debug)]
 enum BuildErrorKind {
-    Ast { pid: PatternID, err: ast::Error },
-    Hir { pid: PatternID, err: hir::Error },
+    Syntax { pid: PatternID, err: regex_syntax::Error },
     NFA(nfa::thompson::BuildError),
 }
 
@@ -53,18 +52,40 @@ impl BuildError {
     /// ```
     pub fn pattern(&self) -> Option<PatternID> {
         match self.kind {
-            BuildErrorKind::Ast { pid, .. } => Some(pid),
-            BuildErrorKind::Hir { pid, .. } => Some(pid),
+            BuildErrorKind::Syntax { pid, .. } => Some(pid),
+            _ => None,
+        }
+    }
+
+    /// If this error occurred because the regex exceeded the configured size
+    /// limit before being built, then this returns the configured size limit.
+    ///
+    /// The limit returned is what was configured, and corresponds to the
+    /// maximum amount of heap usage in bytes.
+    pub fn size_limit(&self) -> Option<usize> {
+        match self.kind {
+            BuildErrorKind::NFA(ref err) => err.size_limit(),
+            _ => None,
+        }
+    }
+
+    /// If this error corresponds to a syntax error, then a reference to it is
+    /// returned by this method.
+    pub fn syntax_error(&self) -> Option<&regex_syntax::Error> {
+        match self.kind {
+            BuildErrorKind::Syntax { ref err, .. } => Some(err),
             _ => None,
         }
     }
 
     pub(crate) fn ast(pid: PatternID, err: ast::Error) -> BuildError {
-        BuildError { kind: BuildErrorKind::Ast { pid, err } }
+        let err = regex_syntax::Error::from(err);
+        BuildError { kind: BuildErrorKind::Syntax { pid, err } }
     }
 
     pub(crate) fn hir(pid: PatternID, err: hir::Error) -> BuildError {
-        BuildError { kind: BuildErrorKind::Hir { pid, err } }
+        let err = regex_syntax::Error::from(err);
+        BuildError { kind: BuildErrorKind::Syntax { pid, err } }
     }
 
     pub(crate) fn nfa(err: nfa::thompson::BuildError) -> BuildError {
@@ -76,8 +97,7 @@ impl BuildError {
 impl std::error::Error for BuildError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self.kind {
-            BuildErrorKind::Ast { ref err, .. } => Some(err),
-            BuildErrorKind::Hir { ref err, .. } => Some(err),
+            BuildErrorKind::Syntax { ref err, .. } => Some(err),
             BuildErrorKind::NFA(ref err) => Some(err),
         }
     }
@@ -86,15 +106,8 @@ impl std::error::Error for BuildError {
 impl core::fmt::Display for BuildError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self.kind {
-            BuildErrorKind::Ast { pid, .. } => {
-                write!(f, "error parsing pattern {} into AST", pid.as_usize())
-            }
-            BuildErrorKind::Hir { pid, .. } => {
-                write!(
-                    f,
-                    "error translating pattern {} to HIR",
-                    pid.as_usize()
-                )
+            BuildErrorKind::Syntax { pid, .. } => {
+                write!(f, "error parsing pattern {}", pid.as_usize())
             }
             BuildErrorKind::NFA(_) => write!(f, "error building NFA"),
         }

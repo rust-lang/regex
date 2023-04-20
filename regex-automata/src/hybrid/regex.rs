@@ -794,7 +794,10 @@ impl Builder {
             .dfa
             .clone()
             .configure(
-                DFA::config().prefilter(None).match_kind(MatchKind::All),
+                DFA::config()
+                    .prefilter(None)
+                    .specialize_start_states(false)
+                    .match_kind(MatchKind::All),
             )
             .thompson(thompson::Config::new().reverse(true))
             .build_many(patterns)?;
