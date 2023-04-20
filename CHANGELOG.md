@@ -1,5 +1,5 @@
-1.8.0 (TBD)
-===========
+1.8.0 (2023-04-20)
+==================
 This is a sizeable release that will be soon followed by another sizeable
 release. Both of them will combined close over 40 existing issues and PRs.
 
