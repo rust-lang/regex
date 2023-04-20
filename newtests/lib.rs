@@ -1,7 +1,16 @@
-mod bytes;
-mod bytes_set;
-mod string;
-mod string_set;
+#![cfg_attr(feature = "pattern", feature(pattern))]
+
+mod fuzz;
+mod misc;
+mod regression;
+mod regression_fuzz;
+mod replace;
+#[cfg(feature = "pattern")]
+mod searcher;
+mod suite_bytes;
+mod suite_bytes_set;
+mod suite_string;
+mod suite_string_set;
 
 const BLACKLIST: &[&str] = &[
     // CRLF-aware line anchors aren't supported in regex API yet.

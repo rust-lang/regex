@@ -1355,7 +1355,7 @@ impl core::fmt::Display for PatternSetInsertError {
 ///
 /// This iterator is created by the [`PatternSet::iter`] method.
 #[cfg(feature = "alloc")]
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct PatternSetIter<'a> {
     it: core::iter::Enumerate<core::slice::Iter<'a, bool>>,
 }
@@ -1366,6 +1366,26 @@ impl<'a> Iterator for PatternSetIter<'a> {
 
     fn next(&mut self) -> Option<PatternID> {
         while let Some((index, &yes)) = self.it.next() {
+            if yes {
+                // Only valid 'PatternID' values can be inserted into the set
+                // and construction of the set panics if the capacity would
+                // permit storing invalid pattern IDs. Thus, 'yes' is only true
+                // precisely when 'index' corresponds to a valid 'PatternID'.
+                return Some(PatternID::new_unchecked(index));
+            }
+        }
+        None
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.it.size_hint()
+    }
+}
+
+#[cfg(feature = "alloc")]
+impl<'a> DoubleEndedIterator for PatternSetIter<'a> {
+    fn next_back(&mut self) -> Option<PatternID> {
+        while let Some((index, &yes)) = self.it.next_back() {
             if yes {
                 // Only valid 'PatternID' values can be inserted into the set
                 // and construction of the set panics if the capacity would
@@ -1422,6 +1442,7 @@ impl<'a> Iterator for PatternSetIter<'a> {
 /// searches.
 ///
 /// ```
+/// # if cfg!(miri) { return Ok(()); } // miri takes too long
 /// use regex_automata::{
 ///     nfa::thompson::pikevm::PikeVM,
 ///     Anchored, Input, Match, PatternID,
@@ -1930,9 +1951,17 @@ mod tests {
     }
 
     // Same as above, but for the underlying match error kind.
+    #[cfg(target_pointer_width = "64")]
     #[test]
     fn match_error_kind_size() {
         let expected_size = 2 * core::mem::size_of::<usize>();
+        assert_eq!(expected_size, core::mem::size_of::<MatchErrorKind>());
+    }
+
+    #[cfg(target_pointer_width = "32")]
+    #[test]
+    fn match_error_kind_size() {
+        let expected_size = 3 * core::mem::size_of::<usize>();
         assert_eq!(expected_size, core::mem::size_of::<MatchErrorKind>());
     }
 }

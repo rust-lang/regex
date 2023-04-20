@@ -416,7 +416,7 @@ fn find_rev_imp(
         }
         if sid.is_tagged() {
             if sid.is_start() {
-                continue;
+                // do nothing
             } else if sid.is_match() {
                 let pattern = dfa.match_pattern(cache, sid, 0);
                 // Since reverse searches report the beginning of a match
@@ -639,7 +639,7 @@ pub(crate) fn find_overlapping_rev(
         if sid.is_tagged() {
             state.id = Some(sid);
             if sid.is_start() {
-                continue;
+                // do nothing
             } else if sid.is_match() {
                 state.next_match_index = Some(1);
                 let pattern = dfa.match_pattern(cache, sid, 0);

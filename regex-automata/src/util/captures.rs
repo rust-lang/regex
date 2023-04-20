@@ -1245,7 +1245,7 @@ impl<'a> core::fmt::Debug for CapturesDebugMap<'a> {
 ///
 /// The lifetime parameter `'a` refers to the lifetime of the underlying
 /// `Captures` value.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct CapturesPatternIter<'a> {
     caps: &'a Captures,
     names: core::iter::Enumerate<GroupInfoPatternNames<'a>>,
@@ -2464,7 +2464,7 @@ impl core::fmt::Display for GroupInfoError {
 ///
 /// The lifetime parameter `'a` refers to the lifetime of the `GroupInfo`
 /// from which this iterator was created.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct GroupInfoPatternNames<'a> {
     it: core::slice::Iter<'a, Option<Arc<str>>>,
 }

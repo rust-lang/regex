@@ -738,6 +738,7 @@ impl Builder {
             .configure(
                 dense::Config::new()
                     .prefilter(None)
+                    .specialize_start_states(false)
                     .start_kind(StartKind::Anchored)
                     .match_kind(MatchKind::All),
             )

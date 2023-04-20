@@ -37,7 +37,10 @@ use alloc::{vec, vec::Vec};
 
 use crate::{
     nfa::thompson::Transition,
-    util::{int::U64, primitives::StateID},
+    util::{
+        int::{Usize, U64},
+        primitives::StateID,
+    },
 };
 
 // Basic FNV-1a hash constants as described in:
@@ -144,7 +147,7 @@ impl Utf8BoundedMap {
             h = (h ^ u64::from(t.end)).wrapping_mul(PRIME);
             h = (h ^ t.next.as_u64()).wrapping_mul(PRIME);
         }
-        h.as_usize() % self.map.len()
+        (h % self.map.len().as_u64()).as_usize()
     }
 
     /// Retrieve the cached state ID corresponding to the given key. The hash
@@ -258,7 +261,7 @@ impl Utf8SuffixMap {
         h = (h ^ key.from.as_u64()).wrapping_mul(PRIME);
         h = (h ^ u64::from(key.start)).wrapping_mul(PRIME);
         h = (h ^ u64::from(key.end)).wrapping_mul(PRIME);
-        h.as_usize() % self.map.len()
+        (h % self.map.len().as_u64()).as_usize()
     }
 
     /// Retrieve the cached state ID corresponding to the given key. The hash

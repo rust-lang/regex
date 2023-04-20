@@ -1386,7 +1386,14 @@ impl<T: AsRef<[u8]>> Transitions<T> {
         dst = &mut dst[size_of::<u32>()..];
 
         // write actual transitions
-        dst.copy_from_slice(self.sparse());
+        let mut id = DEAD;
+        while id.as_usize() < self.sparse().len() {
+            let state = self.state(id);
+            let n = state.write_to::<E>(&mut dst)?;
+            dst = &mut dst[n..];
+            // The next ID is the offset immediately following `state`.
+            id = StateID::new(id.as_usize() + state.write_to_len()).unwrap();
+        }
         Ok(nwrite)
     }
 
@@ -1491,7 +1498,7 @@ impl<T: AsRef<[u8]>> Transitions<T> {
             // The next ID should be the offset immediately following `state`.
             id = StateID::new(wire::add(
                 id.as_usize(),
-                state.bytes_len(),
+                state.write_to_len(),
                 "next state ID offset",
             )?)
             .map_err(|err| {
@@ -1606,7 +1613,9 @@ impl<T: AsRef<[u8]>> Transitions<T> {
         id: StateID,
     ) -> Result<State<'_>, DeserializeError> {
         if id.as_usize() > self.sparse().len() {
-            return Err(DeserializeError::generic("invalid sparse state ID"));
+            return Err(DeserializeError::generic(
+                "invalid caller provided sparse state ID",
+            ));
         }
         let mut state = &self.sparse()[id.as_usize()..];
         // Encoding format starts with a u16 that stores the total number of
@@ -2049,7 +2058,10 @@ impl<T: AsRef<[u8]>> StartTable<T> {
         );
         dst = &mut dst[size_of::<u32>()..];
         // write start IDs
-        dst.copy_from_slice(self.table());
+        for (sid, _, _) in self.iter() {
+            E::write_u32(sid.as_u32(), dst);
+            dst = &mut dst[StateID::SIZE..];
+        }
         Ok(nwrite)
     }
 
@@ -2289,7 +2301,7 @@ impl<'a, T: AsRef<[u8]>> Iterator for StateIter<'a, T> {
             return None;
         }
         let state = self.trans.state(StateID::new_unchecked(self.id));
-        self.id = self.id + state.bytes_len();
+        self.id = self.id + state.write_to_len();
         Some(state)
     }
 }
@@ -2395,9 +2407,56 @@ impl<'a> State<'a> {
         self.pattern_ids.len() / 4
     }
 
+    /// Return an accelerator for this state.
+    fn accelerator(&self) -> &'a [u8] {
+        self.accel
+    }
+
+    /// Write the raw representation of this state to the given buffer using
+    /// the given endianness.
+    fn write_to<E: Endian>(
+        &self,
+        mut dst: &mut [u8],
+    ) -> Result<usize, SerializeError> {
+        let nwrite = self.write_to_len();
+        if dst.len() < nwrite {
+            return Err(SerializeError::buffer_too_small(
+                "sparse state transitions",
+            ));
+        }
+
+        let ntrans =
+            if self.is_match { self.ntrans | (1 << 15) } else { self.ntrans };
+        E::write_u16(u16::try_from(ntrans).unwrap(), dst);
+        dst = &mut dst[size_of::<u16>()..];
+
+        dst[..self.input_ranges.len()].copy_from_slice(self.input_ranges);
+        dst = &mut dst[self.input_ranges.len()..];
+
+        for i in 0..self.ntrans {
+            E::write_u32(self.next_at(i).as_u32(), dst);
+            dst = &mut dst[StateID::SIZE..];
+        }
+
+        if self.is_match {
+            E::write_u32(u32::try_from(self.pattern_len()).unwrap(), dst);
+            dst = &mut dst[size_of::<u32>()..];
+            for i in 0..self.pattern_len() {
+                let pid = self.pattern_id(i);
+                E::write_u32(pid.as_u32(), dst);
+                dst = &mut dst[PatternID::SIZE..];
+            }
+        }
+
+        dst[0] = u8::try_from(self.accel.len()).unwrap();
+        dst[1..][..self.accel.len()].copy_from_slice(self.accel);
+
+        Ok(nwrite)
+    }
+
     /// Return the total number of bytes that this state consumes in its
     /// encoded form.
-    fn bytes_len(&self) -> usize {
+    fn write_to_len(&self) -> usize {
         let mut len = 2
             + (self.ntrans * 2)
             + (self.ntrans * StateID::SIZE)
@@ -2406,11 +2465,6 @@ impl<'a> State<'a> {
             len += size_of::<u32>() + self.pattern_ids.len();
         }
         len
-    }
-
-    /// Return an accelerator for this state.
-    fn accelerator(&self) -> &'a [u8] {
-        self.accel
     }
 }
 
