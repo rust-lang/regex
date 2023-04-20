@@ -36,7 +36,7 @@ New features:
 
 * [FEATURE #501](https://github.com/rust-lang/regex/issues/501):
 Permit many more characters to be escaped, even if they have no significance.
-More specifically, any character except for `[0-9A-Za-z<>]` can now be
+More specifically, any ASCII character except for `[0-9A-Za-z<>]` can now be
 escaped. Also, a new routine, `is_escapeable_character`, has been added to
 `regex-syntax` to query whether a character is escapeable or not.
 * [FEATURE #547](https://github.com/rust-lang/regex/issues/547):
@@ -73,6 +73,11 @@ re-worked. It now has more documentation, examples and advice.
 to `utf8`, and the meaning of the boolean has been flipped.
 
 Performance improvements:
+
+* PERF: The upgrade to `aho-corasick 1.0` may improve performance in some
+cases. It's difficult to characterize exactly which patterns this might impact,
+but if there are a small number of longish (>= 4 bytes) prefix literals, then
+it might be faster than before.
 
 Bug fixes:
 
