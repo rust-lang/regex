@@ -853,10 +853,8 @@ impl<'t, 'p> TranslatorI<'t, 'p> {
                 hir::ClassBytes::new(vec![hir::ClassBytesRange::new(
                     // OK because 'c.len_utf8() == 1' which in turn implies
                     // that 'c' is ASCII.
-                    //
-                    // MSRV(1.59): Use 'u8::try_from(c)' instead.
-                    u8::try_from(u32::from(c)).unwrap(),
-                    u8::try_from(u32::from(c)).unwrap(),
+                    u8::try_from(c).unwrap(),
+                    u8::try_from(c).unwrap(),
                 )]);
             cls.case_fold_simple();
             Ok(Some(Hir::class(hir::Class::Bytes(cls))))

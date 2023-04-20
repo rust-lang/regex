@@ -1173,9 +1173,8 @@ impl ClassUnicode {
             // Since we are guaranteed that our codepoint range is ASCII, the
             // 'u8::try_from' calls below are guaranteed to be correct.
             ClassBytesRange {
-                // MSRV(1.59): Use 'u8::try_from(c)' instead.
-                start: u8::try_from(u32::from(r.start)).unwrap(),
-                end: u8::try_from(u32::from(r.end)).unwrap(),
+                start: u8::try_from(r.start).unwrap(),
+                end: u8::try_from(r.end).unwrap(),
             }
         })))
     }

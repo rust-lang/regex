@@ -575,8 +575,7 @@ impl Literal {
     pub fn byte(&self) -> Option<u8> {
         match self.kind {
             LiteralKind::HexFixed(HexLiteralKind::X) => {
-                // MSRV(1.59): Use 'u8::try_from(self.c)' instead.
-                u8::try_from(u32::from(self.c)).ok()
+                u8::try_from(self.c).ok()
             }
             _ => None,
         }

@@ -470,8 +470,7 @@ pub fn is_word_character(c: char) -> Result<bool, UnicodeWordError> {
     fn imp(c: char) -> Result<bool, UnicodeWordError> {
         use crate::{is_word_byte, unicode_tables::perl_word::PERL_WORD};
 
-        // MSRV(1.59): Use 'u8::try_from(c)' instead.
-        if u8::try_from(u32::from(c)).map_or(false, is_word_byte) {
+        if u8::try_from(c).map_or(false, is_word_byte) {
             return Ok(true);
         }
         Ok(PERL_WORD
