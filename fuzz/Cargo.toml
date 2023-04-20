@@ -1,5 +1,3 @@
-cargo-features = ['named-profiles']
-
 [package]
 name = "regex-fuzz"
 version = "0.0.0"
