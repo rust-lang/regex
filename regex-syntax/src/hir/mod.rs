@@ -2072,8 +2072,8 @@ impl Properties {
     /// concatenation of only `Literal`s or an alternation of only `Literal`s.
     ///
     /// For example, `f`, `foo`, `a|b|c`, and `foo|bar|baz` are alternation
-    /// literals, but `f+`, `(foo)`, `foo()`, ``
-    /// are not (even though that contain sub-expressions that are literals).
+    /// literals, but `f+`, `(foo)`, `foo()`, and the empty pattern are not
+    /// (even though that contain sub-expressions that are literals).
     #[inline]
     pub fn is_alternation_literal(&self) -> bool {
         self.0.alternation_literal
@@ -2211,7 +2211,7 @@ impl Properties {
                 props.static_explicit_captures_len = None;
             }
             props.alternation_literal =
-                props.alternation_literal && p.is_alternation_literal();
+                props.alternation_literal && p.is_literal();
             if !min_poisoned {
                 if let Some(xmin) = p.minimum_len() {
                     if props.minimum_len.map_or(true, |pmin| xmin < pmin) {

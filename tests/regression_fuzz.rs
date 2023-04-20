@@ -29,3 +29,12 @@ fn big_regex_fails_to_compile() {
     let pat = "[\u{0}\u{e}\u{2}\\w~~>[l\t\u{0}]p?<]{971158}";
     assert!(regex_new!(pat).is_err());
 }
+
+// This was caught while on master but before a release went out(!).
+//
+// See: https://bugs.chromium.org/p/oss-fuzz/issues/detail?id=58173
+#[test]
+fn todo() {
+    let pat = "(?:z|xx)@|xx";
+    assert!(regex_new!(pat).is_ok());
+}

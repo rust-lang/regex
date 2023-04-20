@@ -3480,6 +3480,7 @@ mod tests {
         assert!(!props(r"a|[b]").is_alternation_literal());
         assert!(!props(r"(?:a)|b").is_alternation_literal());
         assert!(!props(r"a|(?:b)").is_alternation_literal());
+        assert!(!props(r"(?:z|xx)@|xx").is_alternation_literal());
     }
 
     // This tests that the smart Hir::concat constructor simplifies the given
