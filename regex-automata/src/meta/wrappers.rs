@@ -580,7 +580,8 @@ impl HybridEngine {
                     dfa_config
                         .clone()
                         .match_kind(MatchKind::All)
-                        .prefilter(None),
+                        .prefilter(None)
+                        .specialize_start_states(false),
                 )
                 .build_from_nfa(nfarev.clone());
             let rev = match result {
@@ -881,7 +882,8 @@ impl DFAEngine {
                         // don't.)
                         .start_kind(dfa::StartKind::Anchored)
                         .match_kind(MatchKind::All)
-                        .prefilter(None),
+                        .prefilter(None)
+                        .specialize_start_states(false),
                 )
                 .build_from_nfa(&nfarev);
             let rev = match result {

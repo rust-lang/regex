@@ -761,38 +761,11 @@ pub mod bytes {
     pub use crate::re_set::bytes::*;
 }
 
-mod backtrack;
-mod compile;
-#[cfg(feature = "perf-dfa")]
-mod dfa;
 mod error;
-mod exec;
-mod expand;
 mod find_byte;
-mod input;
-mod literal;
 #[cfg(feature = "pattern")]
 mod pattern;
-mod pikevm;
-mod pool;
-mod prog;
 mod re_builder;
 mod re_bytes;
 mod re_set;
-mod re_trait;
 mod re_unicode;
-mod sparse;
-mod utf8;
-
-/// The `internal` module exists to support suspicious activity, such as
-/// testing different matching engines and supporting the `regex-debug` CLI
-/// utility.
-#[doc(hidden)]
-#[cfg(feature = "std")]
-pub mod internal {
-    pub use crate::compile::Compiler;
-    pub use crate::exec::{Exec, ExecBuilder};
-    pub use crate::input::{Char, CharInput, Input, InputAt};
-    pub use crate::literal::LiteralSearcher;
-    pub use crate::prog::{EmptyLook, Inst, InstRanges, Program};
-}

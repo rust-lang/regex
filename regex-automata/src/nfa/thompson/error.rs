@@ -79,6 +79,18 @@ enum BuildErrorKind {
 }
 
 impl BuildError {
+    /// If this error occurred because the NFA exceeded the configured size
+    /// limit before being built, then this returns the configured size limit.
+    ///
+    /// The limit returned is what was configured, and corresponds to the
+    /// maximum amount of heap usage in bytes.
+    pub fn size_limit(&self) -> Option<usize> {
+        match self.kind {
+            BuildErrorKind::ExceededSizeLimit { limit } => Some(limit),
+            _ => None,
+        }
+    }
+
     fn kind(&self) -> &BuildErrorKind {
         &self.kind
     }

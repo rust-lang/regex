@@ -1,18 +1,14 @@
+use regex_automata::util::syntax;
+
 /// The set of user configurable options for compiling zero or more regexes.
+/// This is shared among all top-level regex APIs.
 #[derive(Clone, Debug)]
 #[allow(missing_docs)]
-pub struct RegexOptions {
-    pub pats: Vec<String>,
-    pub size_limit: usize,
-    pub dfa_size_limit: usize,
-    pub nest_limit: u32,
-    pub case_insensitive: bool,
-    pub multi_line: bool,
-    pub dot_matches_new_line: bool,
-    pub swap_greed: bool,
-    pub ignore_whitespace: bool,
-    pub unicode: bool,
-    pub octal: bool,
+struct RegexOptions {
+    pats: Vec<String>,
+    size_limit: usize,
+    dfa_size_limit: usize,
+    syntax: syntax::Config,
 }
 
 impl Default for RegexOptions {
@@ -21,26 +17,21 @@ impl Default for RegexOptions {
             pats: vec![],
             size_limit: 10 * (1 << 20),
             dfa_size_limit: 2 * (1 << 20),
-            nest_limit: 250,
-            case_insensitive: false,
-            multi_line: false,
-            dot_matches_new_line: false,
-            swap_greed: false,
-            ignore_whitespace: false,
-            unicode: true,
-            octal: false,
+            syntax: syntax::Config::default(),
         }
     }
 }
 
 macro_rules! define_builder {
-    ($name:ident, $regex_mod:ident, $only_utf8:expr) => {
+    ($name:ident, $regex_mod:ident, $utf8:expr) => {
         pub mod $name {
-            use super::RegexOptions;
-            use crate::error::Error;
-            use crate::exec::ExecBuilder;
+            use std::sync::Arc;
 
-            use crate::$regex_mod::Regex;
+            use regex_automata::meta;
+
+            use crate::{error::Error, $regex_mod::Regex};
+
+            use super::RegexOptions;
 
             /// A configurable builder for a regular expression.
             ///
@@ -67,10 +58,20 @@ macro_rules! define_builder {
                 /// pattern given to `new` verbatim. Notably, it will not incorporate any
                 /// of the flags set on this builder.
                 pub fn build(&self) -> Result<Regex, Error> {
-                    ExecBuilder::new_options(self.0.clone())
-                        .only_utf8($only_utf8)
-                        .build()
-                        .map(Regex::from)
+                    let config = meta::Config::new()
+                        .match_kind(regex_automata::MatchKind::LeftmostFirst)
+                        .utf8_empty($utf8)
+                        .nfa_size_limit(Some(self.0.size_limit))
+                        .hybrid_cache_capacity(self.0.dfa_size_limit);
+                    meta::Builder::new()
+                        .configure(config)
+                        .syntax(self.0.syntax.clone().utf8($utf8))
+                        .build(&self.0.pats[0])
+                        .map(|meta| Regex {
+                            meta,
+                            pattern: Arc::from(self.0.pats[0].as_str()),
+                        })
+                        .map_err(Error::from_meta_build_error)
                 }
 
                 /// Set the value for the case insensitive (`i`) flag.
@@ -81,7 +82,7 @@ macro_rules! define_builder {
                     &mut self,
                     yes: bool,
                 ) -> &mut RegexBuilder {
-                    self.0.case_insensitive = yes;
+                    self.0.syntax = self.0.syntax.case_insensitive(yes);
                     self
                 }
 
@@ -92,7 +93,7 @@ macro_rules! define_builder {
                 ///
                 /// By default, they match beginning/end of the input.
                 pub fn multi_line(&mut self, yes: bool) -> &mut RegexBuilder {
-                    self.0.multi_line = yes;
+                    self.0.syntax = self.0.syntax.multi_line(yes);
                     self
                 }
 
@@ -107,7 +108,7 @@ macro_rules! define_builder {
                     &mut self,
                     yes: bool,
                 ) -> &mut RegexBuilder {
-                    self.0.dot_matches_new_line = yes;
+                    self.0.syntax = self.0.syntax.dot_matches_new_line(yes);
                     self
                 }
 
@@ -118,7 +119,7 @@ macro_rules! define_builder {
                 ///
                 /// By default, `a*` is greedy and `a*?` is lazy.
                 pub fn swap_greed(&mut self, yes: bool) -> &mut RegexBuilder {
-                    self.0.swap_greed = yes;
+                    self.0.syntax = self.0.syntax.swap_greed(yes);
                     self
                 }
 
@@ -131,7 +132,7 @@ macro_rules! define_builder {
                     &mut self,
                     yes: bool,
                 ) -> &mut RegexBuilder {
-                    self.0.ignore_whitespace = yes;
+                    self.0.syntax = self.0.syntax.ignore_whitespace(yes);
                     self
                 }
 
@@ -140,7 +141,7 @@ macro_rules! define_builder {
                 /// Enabled by default. When disabled, character classes such as `\w` only
                 /// match ASCII word characters instead of all Unicode word characters.
                 pub fn unicode(&mut self, yes: bool) -> &mut RegexBuilder {
-                    self.0.unicode = yes;
+                    self.0.syntax = self.0.syntax.unicode(yes);
                     self
                 }
 
@@ -160,7 +161,7 @@ macro_rules! define_builder {
                 ///
                 /// Octal syntax is disabled by default.
                 pub fn octal(&mut self, yes: bool) -> &mut RegexBuilder {
-                    self.0.octal = yes;
+                    self.0.syntax = self.0.syntax.octal(yes);
                     self
                 }
 
@@ -220,7 +221,7 @@ macro_rules! define_builder {
                 /// in an obvious way in the concrete syntax, therefore, it should not be
                 /// used in a granular way.
                 pub fn nest_limit(&mut self, limit: u32) -> &mut RegexBuilder {
-                    self.0.nest_limit = limit;
+                    self.0.syntax.nest_limit(limit);
                     self
                 }
             }
@@ -232,13 +233,15 @@ define_builder!(bytes, re_bytes, false);
 define_builder!(unicode, re_unicode, true);
 
 macro_rules! define_set_builder {
-    ($name:ident, $regex_mod:ident, $only_utf8:expr) => {
+    ($name:ident, $regex_mod:ident, $utf8:expr) => {
         pub mod $name {
-            use super::RegexOptions;
-            use crate::error::Error;
-            use crate::exec::ExecBuilder;
+            use std::sync::Arc;
 
-            use crate::re_set::$regex_mod::RegexSet;
+            use regex_automata::meta;
+
+            use crate::{error::Error, re_set::$regex_mod::RegexSet};
+
+            use super::RegexOptions;
 
             /// A configurable builder for a set of regular expressions.
             ///
@@ -267,10 +270,20 @@ macro_rules! define_set_builder {
 
                 /// Consume the builder and compile the regular expressions into a set.
                 pub fn build(&self) -> Result<RegexSet, Error> {
-                    ExecBuilder::new_options(self.0.clone())
-                        .only_utf8($only_utf8)
-                        .build()
-                        .map(RegexSet::from)
+                    let config = meta::Config::new()
+                        .match_kind(regex_automata::MatchKind::All)
+                        .utf8_empty($utf8)
+                        .nfa_size_limit(Some(self.0.size_limit))
+                        .hybrid_cache_capacity(self.0.dfa_size_limit);
+                    meta::Builder::new()
+                        .configure(config)
+                        .syntax(self.0.syntax.clone().utf8($utf8))
+                        .build_many(&self.0.pats)
+                        .map(|meta| RegexSet {
+                            meta,
+                            patterns: Arc::from(&*self.0.pats),
+                        })
+                        .map_err(Error::from_meta_build_error)
                 }
 
                 /// Set the value for the case insensitive (`i`) flag.
@@ -278,7 +291,7 @@ macro_rules! define_set_builder {
                     &mut self,
                     yes: bool,
                 ) -> &mut RegexSetBuilder {
-                    self.0.case_insensitive = yes;
+                    self.0.syntax = self.0.syntax.case_insensitive(yes);
                     self
                 }
 
@@ -287,7 +300,7 @@ macro_rules! define_set_builder {
                     &mut self,
                     yes: bool,
                 ) -> &mut RegexSetBuilder {
-                    self.0.multi_line = yes;
+                    self.0.syntax = self.0.syntax.multi_line(yes);
                     self
                 }
 
@@ -302,7 +315,7 @@ macro_rules! define_set_builder {
                     &mut self,
                     yes: bool,
                 ) -> &mut RegexSetBuilder {
-                    self.0.dot_matches_new_line = yes;
+                    self.0.syntax = self.0.syntax.dot_matches_new_line(yes);
                     self
                 }
 
@@ -311,7 +324,7 @@ macro_rules! define_set_builder {
                     &mut self,
                     yes: bool,
                 ) -> &mut RegexSetBuilder {
-                    self.0.swap_greed = yes;
+                    self.0.syntax = self.0.syntax.swap_greed(yes);
                     self
                 }
 
@@ -320,13 +333,13 @@ macro_rules! define_set_builder {
                     &mut self,
                     yes: bool,
                 ) -> &mut RegexSetBuilder {
-                    self.0.ignore_whitespace = yes;
+                    self.0.syntax = self.0.syntax.ignore_whitespace(yes);
                     self
                 }
 
                 /// Set the value for the Unicode (`u`) flag.
                 pub fn unicode(&mut self, yes: bool) -> &mut RegexSetBuilder {
-                    self.0.unicode = yes;
+                    self.0.syntax = self.0.syntax.unicode(yes);
                     self
                 }
 
@@ -346,7 +359,7 @@ macro_rules! define_set_builder {
                 ///
                 /// Octal syntax is disabled by default.
                 pub fn octal(&mut self, yes: bool) -> &mut RegexSetBuilder {
-                    self.0.octal = yes;
+                    self.0.syntax = self.0.syntax.octal(yes);
                     self
                 }
 
@@ -409,7 +422,7 @@ macro_rules! define_set_builder {
                     &mut self,
                     limit: u32,
                 ) -> &mut RegexSetBuilder {
-                    self.0.nest_limit = limit;
+                    self.0.syntax.nest_limit(limit);
                     self
                 }
             }

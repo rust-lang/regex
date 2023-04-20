@@ -1995,6 +1995,23 @@ pub struct FindMatches<'r, 'h> {
     it: iter::Searcher<'h>,
 }
 
+impl<'r, 'h> FindMatches<'r, 'h> {
+    /// Returns the `Regex` value that created this iterator.
+    #[inline]
+    pub fn regex(&self) -> &'r Regex {
+        self.re
+    }
+
+    /// Returns the current `Input` associated with this iterator.
+    ///
+    /// The `start` position on the given `Input` may change during iteration,
+    /// but all other values are guaranteed to remain invariant.
+    #[inline]
+    pub fn input<'s>(&'s self) -> &'s Input<'h> {
+        self.it.input()
+    }
+}
+
 impl<'r, 'h> Iterator for FindMatches<'r, 'h> {
     type Item = Match;
 
@@ -2040,6 +2057,23 @@ pub struct CapturesMatches<'r, 'h> {
     cache: CachePoolGuard<'r>,
     caps: Captures,
     it: iter::Searcher<'h>,
+}
+
+impl<'r, 'h> CapturesMatches<'r, 'h> {
+    /// Returns the `Regex` value that created this iterator.
+    #[inline]
+    pub fn regex(&self) -> &'r Regex {
+        self.re
+    }
+
+    /// Returns the current `Input` associated with this iterator.
+    ///
+    /// The `start` position on the given `Input` may change during iteration,
+    /// but all other values are guaranteed to remain invariant.
+    #[inline]
+    pub fn input<'s>(&'s self) -> &'s Input<'h> {
+        self.it.input()
+    }
 }
 
 impl<'r, 'h> Iterator for CapturesMatches<'r, 'h> {
@@ -2091,6 +2125,17 @@ pub struct Split<'r, 'h> {
     last: usize,
 }
 
+impl<'r, 'h> Split<'r, 'h> {
+    /// Returns the current `Input` associated with this iterator.
+    ///
+    /// The `start` position on the given `Input` may change during iteration,
+    /// but all other values are guaranteed to remain invariant.
+    #[inline]
+    pub fn input<'s>(&'s self) -> &'s Input<'h> {
+        self.finder.input()
+    }
+}
+
 impl<'r, 'h> Iterator for Split<'r, 'h> {
     type Item = Span;
 
@@ -2132,6 +2177,17 @@ impl<'r, 'h> core::iter::FusedIterator for Split<'r, 'h> {}
 pub struct SplitN<'r, 'h> {
     splits: Split<'r, 'h>,
     limit: usize,
+}
+
+impl<'r, 'h> SplitN<'r, 'h> {
+    /// Returns the current `Input` associated with this iterator.
+    ///
+    /// The `start` position on the given `Input` may change during iteration,
+    /// but all other values are guaranteed to remain invariant.
+    #[inline]
+    pub fn input<'s>(&'s self) -> &'s Input<'h> {
+        self.splits.input()
+    }
 }
 
 impl<'r, 'h> Iterator for SplitN<'r, 'h> {

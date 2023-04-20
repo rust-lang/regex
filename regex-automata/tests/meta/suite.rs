@@ -23,16 +23,77 @@ const BLACKLIST: &[&str] = &[
     // the literal searchers also don't have the ability to quit fully or it's
     // otherwise not worth doing. (A literal searcher not quitting as early as
     // possible usually means looking at a few more bytes. That's no biggie.)
-    //
-    // Other 'earliest' tests can be added here if the need arises.
-    "earliest/no-leftmost-first-100/",
-    "earliest/no-leftmost-first-200/",
+    "earliest/",
 ];
 
-/// Tests the default configuration of the hybrid NFA/DFA.
+/// Tests the default configuration of the meta regex engine.
 #[test]
 fn default() -> Result<()> {
     let builder = Regex::builder();
+    let mut runner = TestRunner::new()?;
+    runner
+        .expand(&["is_match", "find", "captures"], |test| test.compiles())
+        .blacklist_iter(BLACKLIST)
+        .test_iter(suite()?.iter(), compiler(builder))
+        .assert();
+    Ok(())
+}
+
+/// Tests the default configuration minus the full DFA.
+#[test]
+fn no_dfa() -> Result<()> {
+    let mut builder = Regex::builder();
+    builder.configure(Regex::config().dfa(false));
+    let mut runner = TestRunner::new()?;
+    runner
+        .expand(&["is_match", "find", "captures"], |test| test.compiles())
+        .blacklist_iter(BLACKLIST)
+        .test_iter(suite()?.iter(), compiler(builder))
+        .assert();
+    Ok(())
+}
+
+/// Tests the default configuration minus the full DFA and lazy DFA.
+#[test]
+fn no_dfa_hybrid() -> Result<()> {
+    let mut builder = Regex::builder();
+    builder.configure(Regex::config().dfa(false).hybrid(false));
+    let mut runner = TestRunner::new()?;
+    runner
+        .expand(&["is_match", "find", "captures"], |test| test.compiles())
+        .blacklist_iter(BLACKLIST)
+        .test_iter(suite()?.iter(), compiler(builder))
+        .assert();
+    Ok(())
+}
+
+/// Tests the default configuration minus the full DFA, lazy DFA and one-pass
+/// DFA.
+#[test]
+fn no_dfa_hybrid_onepass() -> Result<()> {
+    let mut builder = Regex::builder();
+    builder.configure(Regex::config().dfa(false).hybrid(false).onepass(false));
+    let mut runner = TestRunner::new()?;
+    runner
+        .expand(&["is_match", "find", "captures"], |test| test.compiles())
+        .blacklist_iter(BLACKLIST)
+        .test_iter(suite()?.iter(), compiler(builder))
+        .assert();
+    Ok(())
+}
+
+/// Tests the default configuration minus the full DFA, lazy DFA, one-pass
+/// DFA and backtracker.
+#[test]
+fn no_dfa_hybrid_onepass_backtrack() -> Result<()> {
+    let mut builder = Regex::builder();
+    builder.configure(
+        Regex::config()
+            .dfa(false)
+            .hybrid(false)
+            .onepass(false)
+            .backtrack(false),
+    );
     let mut runner = TestRunner::new()?;
     runner
         .expand(&["is_match", "find", "captures"], |test| test.compiles())

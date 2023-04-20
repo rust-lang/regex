@@ -88,6 +88,12 @@ fn compiler(
     if !test.utf8() {
         return skip;
     }
+    // If the test requires Unicode but the Unicode feature isn't enabled,
+    // skip it. This is a little aggressive, but the test suite doesn't
+    // have any easy way of communicating which Unicode features are needed.
+    if test.unicode() && !cfg!(feature = "unicode") {
+        return skip;
+    }
     let re = RegexBuilder::new(pattern)
         .case_insensitive(test.case_insensitive())
         .unicode(test.unicode())

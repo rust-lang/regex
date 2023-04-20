@@ -782,7 +782,9 @@ impl Strategy for Core {
                 input,
                 patset,
             ) {
-                Ok(()) => return,
+                Ok(()) => {
+                    return;
+                }
                 Err(err) => err,
             };
             trace!("fast overlapping search failed: {}", _err);

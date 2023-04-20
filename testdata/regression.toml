@@ -635,3 +635,48 @@ haystack = "ababcd"
 bounds = [4, 6]
 search-kind = "earliest"
 matches = [[4, 6]]
+
+# I found this during the regex-automata migration. This is the fowler basic
+# 154 test, but without anchored = true and without a match limit.
+#
+# This test caught a subtle bug in the hybrid reverse DFA search, where it
+# would skip over the termination condition if it entered a start state. This
+# was a double bug. Firstly, the reverse DFA shouldn't have had start states
+# specialized in the first place, and thus it shouldn't have possible to detect
+# that the DFA had entered a start state. The second bug was that the start
+# state handling was incorrect by jumping over the termination condition.
+[[test]]
+name = "fowler-basic154-unanchored"
+regex = '''a([bc]*)c*'''
+haystack = '''abc'''
+matches = [[[0, 3], [1, 3]]]
+
+# From: https://github.com/rust-lang/regex/issues/981
+#
+# This was never really a problem in the new architecture because the
+# regex-automata engines are far more principled about how they deal with
+# look-around. (This was one of the many reasons I wanted to re-work the
+# original regex crate engines.)
+[[test]]
+name = "word-boundary-interact-poorly-with-literal-optimizations"
+regex = '(?i:(?:\b|_)win(?:32|64|dows)?(?:\b|_))'
+haystack = 'ubi-Darwin-x86_64.tar.gz'
+matches = []
+
+# This was found during fuzz testing of regex. It provoked a panic in the meta
+# engine as a result of the reverse suffix optimization. Namely, it hit a case
+# where a suffix match was found, a corresponding reverse match was found, but
+# the forward search turned up no match. The forward search should always match
+# if the suffix and reverse search match.
+#
+# This in turn uncovered an inconsistency between the PikeVM and the DFA (lazy
+# and fully compiled) engines. It was caused by a mishandling of the collection
+# of NFA state IDs in the generic determinization code (which is why both types
+# of DFA were impacted). Namely, when a fail state was encountered (that's the
+# `[^\s\S]` in the pattern below), then it would just stop collecting states.
+# But that's not correct since a later state could lead to a match.
+[[test]]
+name = "impossible-branch"
+regex = '.*[^\s\S]A|B'
+haystack = "B"
+matches = [[0, 1]]

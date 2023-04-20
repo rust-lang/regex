@@ -2,15 +2,17 @@ macro_rules! define_set {
     ($name:ident, $builder_mod:ident, $text_ty:ty, $as_bytes:expr,
      $(#[$doc_regexset_example:meta])* ) => {
         pub mod $name {
-            use std::fmt;
-            use std::iter;
-            use std::slice;
-            use std::vec;
+            use std::{fmt, iter, sync::Arc};
 
-            use crate::error::Error;
-            use crate::exec::Exec;
-            use crate::re_builder::$builder_mod::RegexSetBuilder;
-            use crate::re_trait::RegularExpression;
+            use regex_automata::{
+                meta,
+                Input, PatternID, PatternSet, PatternSetIter,
+            };
+
+            use crate::{
+                error::Error,
+                re_builder::$builder_mod::RegexSetBuilder,
+            };
 
 /// Match multiple (possibly overlapping) regular expressions in a single scan.
 ///
@@ -105,7 +107,10 @@ $(#[$doc_regexset_example])*
 /// search takes `O(mn)` time, where `m` is proportional to the size of the
 /// regex set and `n` is proportional to the length of the search text.
 #[derive(Clone)]
-pub struct RegexSet(Exec);
+pub struct RegexSet {
+    pub(crate) meta: meta::Regex,
+    pub(crate) patterns: Arc<[String]>,
+}
 
 impl RegexSet {
     /// Create a new regex set with the given regular expressions.
@@ -138,7 +143,8 @@ impl RegexSet {
     /// assert!(set.is_empty());
     /// ```
     pub fn empty() -> RegexSet {
-        RegexSetBuilder::new(&[""; 0]).build().unwrap()
+        let empty: [&str; 0] = [];
+        RegexSetBuilder::new(empty).build().unwrap()
     }
 
     /// Returns true if and only if one of the regexes in this set matches
@@ -165,6 +171,7 @@ impl RegexSet {
     /// assert!(set.is_match("foo"));
     /// assert!(!set.is_match("☃"));
     /// ```
+    #[inline]
     pub fn is_match(&self, text: $text_ty) -> bool {
         self.is_match_at(text, 0)
     }
@@ -176,8 +183,11 @@ impl RegexSet {
     /// context into consideration. For example, the `\A` anchor can only
     /// match when `start == 0`.
     #[doc(hidden)]
+    #[inline]
     pub fn is_match_at(&self, text: $text_ty, start: usize) -> bool {
-        self.0.searcher().is_match_at($as_bytes(text), start)
+        let mut input = Input::new(text);
+        input.set_start(start);
+        self.meta.is_match(input)
     }
 
     /// Returns the set of regular expressions that match in the given text.
@@ -217,12 +227,10 @@ impl RegexSet {
     /// assert!(matches.matched(6));
     /// ```
     pub fn matches(&self, text: $text_ty) -> SetMatches {
-        let mut matches = vec![false; self.0.regex_strings().len()];
-        let any = self.read_matches_at(&mut matches, text, 0);
-        SetMatches {
-            matched_any: any,
-            matches: matches,
-        }
+        let mut patset = PatternSet::new(self.meta.pattern_len());
+        let input = Input::new(text);
+        self.meta.which_overlapping_matches(&input, &mut patset);
+        SetMatches(patset)
     }
 
     /// Returns the same as matches, but starts the search at the given
@@ -244,17 +252,31 @@ impl RegexSet {
         text: $text_ty,
         start: usize,
     ) -> bool {
-        self.0.searcher().many_matches_at(matches, $as_bytes(text), start)
+        // This is pretty dumb. We should try to fix this, but the
+        // regex-automata API doesn't provide a way to store matches in an
+        // arbitrary &mut [bool]. Thankfully, this API is is doc(hidden) and
+        // thus not public... But regex-capi currently uses it. We should
+        // fix regex-capi to use a PatternSet, maybe? Not sure... PatternSet
+        // is in regex-automata, not regex. So maybe we should just accept a
+        // 'SetMatches', which is basically just a newtype around PatternSet.
+        let mut patset = PatternSet::new(self.meta.pattern_len());
+        let mut input = Input::new(text);
+        input.set_start(start);
+        self.meta.which_overlapping_matches(&input, &mut patset);
+        for pid in patset.iter() {
+            matches[pid] = true;
+        }
+        !patset.is_empty()
     }
 
     /// Returns the total number of regular expressions in this set.
     pub fn len(&self) -> usize {
-        self.0.regex_strings().len()
+        self.meta.pattern_len()
     }
 
     /// Returns `true` if this set contains no regular expressions.
     pub fn is_empty(&self) -> bool {
-        self.0.regex_strings().is_empty()
+        self.meta.pattern_len() == 0
     }
 
     /// Returns the patterns that this set will match on.
@@ -285,7 +307,7 @@ impl RegexSet {
     /// assert_eq!(matches, vec![r"\w+", r"\pL+", r"foo", r"bar", r"foobar"]);
     /// ```
     pub fn patterns(&self) -> &[String] {
-        self.0.regex_strings()
+        &self.patterns
     }
 }
 
@@ -297,15 +319,12 @@ impl Default for RegexSet {
 
 /// A set of matches returned by a regex set.
 #[derive(Clone, Debug)]
-pub struct SetMatches {
-    matched_any: bool,
-    matches: Vec<bool>,
-}
+pub struct SetMatches(PatternSet);
 
 impl SetMatches {
     /// Whether this set contains any matches.
     pub fn matched_any(&self) -> bool {
-        self.matched_any
+        !self.0.is_empty()
     }
 
     /// Whether the regex at the given index matched.
@@ -317,7 +336,7 @@ impl SetMatches {
     ///
     /// If `regex_index` is greater than or equal to `self.len()`.
     pub fn matched(&self, regex_index: usize) -> bool {
-        self.matches[regex_index]
+        self.0.contains(PatternID::new_unchecked(regex_index))
     }
 
     /// The total number of regexes in the set that created these matches.
@@ -327,7 +346,7 @@ impl SetMatches {
     /// [`SetMatches::iter`]. The only way to determine the total number of
     /// matched regexes is to iterate over them.
     pub fn len(&self) -> usize {
-        self.matches.len()
+        self.0.capacity()
     }
 
     /// Returns an iterator over indexes in the regex that matched.
@@ -336,7 +355,7 @@ impl SetMatches {
     /// the index corresponds to the index of the regex that matched with
     /// respect to its position when initially building the set.
     pub fn iter(&self) -> SetMatchesIter<'_> {
-        SetMatchesIter((&*self.matches).into_iter().enumerate())
+        SetMatchesIter(self.0.iter())
     }
 }
 
@@ -345,7 +364,10 @@ impl IntoIterator for SetMatches {
     type Item = usize;
 
     fn into_iter(self) -> Self::IntoIter {
-        SetMatchesIntoIter(self.matches.into_iter().enumerate())
+        let it = 0..self.0.capacity();
+        SetMatchesIntoIter {
+            patset: self.0, it
+        }
     }
 }
 
@@ -364,33 +386,34 @@ impl<'a> IntoIterator for &'a SetMatches {
 /// index corresponds to the index of the regex that matched with respect to
 /// its position when initially building the set.
 #[derive(Debug)]
-pub struct SetMatchesIntoIter(iter::Enumerate<vec::IntoIter<bool>>);
+pub struct SetMatchesIntoIter {
+    patset: PatternSet,
+    it: std::ops::Range<usize>,
+}
 
 impl Iterator for SetMatchesIntoIter {
     type Item = usize;
 
     fn next(&mut self) -> Option<usize> {
         loop {
-            match self.0.next() {
-                None => return None,
-                Some((_, false)) => {}
-                Some((i, true)) => return Some(i),
+            let id = self.it.next()?;
+            if self.patset.contains(PatternID::new_unchecked(id)) {
+                return Some(id);
             }
         }
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        self.0.size_hint()
+        self.it.size_hint()
     }
 }
 
 impl DoubleEndedIterator for SetMatchesIntoIter {
     fn next_back(&mut self) -> Option<usize> {
         loop {
-            match self.0.next_back() {
-                None => return None,
-                Some((_, false)) => {}
-                Some((i, true)) => return Some(i),
+            let id = self.it.next_back()?;
+            if self.patset.contains(PatternID::new_unchecked(id)) {
+                return Some(id);
             }
         }
     }
@@ -406,19 +429,13 @@ impl iter::FusedIterator for SetMatchesIntoIter {}
 /// index corresponds to the index of the regex that matched with respect to
 /// its position when initially building the set.
 #[derive(Clone, Debug)]
-pub struct SetMatchesIter<'a>(iter::Enumerate<slice::Iter<'a, bool>>);
+pub struct SetMatchesIter<'a>(PatternSetIter<'a>);
 
 impl<'a> Iterator for SetMatchesIter<'a> {
     type Item = usize;
 
     fn next(&mut self) -> Option<usize> {
-        loop {
-            match self.0.next() {
-                None => return None,
-                Some((_, &false)) => {}
-                Some((i, &true)) => return Some(i),
-            }
-        }
+        self.0.next().map(|pid| pid.as_usize())
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
@@ -428,33 +445,17 @@ impl<'a> Iterator for SetMatchesIter<'a> {
 
 impl<'a> DoubleEndedIterator for SetMatchesIter<'a> {
     fn next_back(&mut self) -> Option<usize> {
-        loop {
-            match self.0.next_back() {
-                None => return None,
-                Some((_, &false)) => {}
-                Some((i, &true)) => return Some(i),
-            }
-        }
+        self.0.next_back().map(|pid| pid.as_usize())
     }
 }
 
 impl<'a> iter::FusedIterator for SetMatchesIter<'a> {}
 
-#[doc(hidden)]
-impl From<Exec> for RegexSet {
-    fn from(exec: Exec) -> Self {
-        RegexSet(exec)
-    }
-}
-
 impl fmt::Debug for RegexSet {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "RegexSet({:?})", self.0.regex_strings())
+        write!(f, "RegexSet({:?})", self.patterns())
     }
 }
-
-#[allow(dead_code)] fn as_bytes_str(text: &str) -> &[u8] { text.as_bytes() }
-#[allow(dead_code)] fn as_bytes_bytes(text: &[u8]) -> &[u8] { text }
         }
     }
 }

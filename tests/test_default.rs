@@ -145,10 +145,10 @@ fn regex_is_reasonably_small() {
     use regex::bytes;
     use regex::{Regex, RegexSet};
 
-    assert_eq!(16, size_of::<Regex>());
-    assert_eq!(16, size_of::<RegexSet>());
-    assert_eq!(16, size_of::<bytes::Regex>());
-    assert_eq!(16, size_of::<bytes::RegexSet>());
+    assert_eq!(32, size_of::<Regex>());
+    assert_eq!(32, size_of::<RegexSet>());
+    assert_eq!(32, size_of::<bytes::Regex>());
+    assert_eq!(32, size_of::<bytes::RegexSet>());
 }
 
 // See: https://github.com/rust-lang/regex/security/advisories/GHSA-m5pq-gvj9-9vr8

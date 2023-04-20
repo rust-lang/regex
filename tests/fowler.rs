@@ -305,20 +305,27 @@ mat!(
 );
 mat!(match_basic_125, r"a+b+c", r"aabbabc", Some((4, 7)));
 mat!(match_basic_126, r"a*", r"aaa", Some((0, 3)));
-mat!(match_basic_128, r"(a*)*", r"-", Some((0, 0)), None);
+mat!(match_basic_128, r"(a*)*", r"-", Some((0, 0)), Some((0, 0)));
 mat!(match_basic_129, r"(a*)+", r"-", Some((0, 0)), Some((0, 0)));
-mat!(match_basic_131, r"(a*|b)*", r"-", Some((0, 0)), None);
+mat!(match_basic_131, r"(a*|b)*", r"-", Some((0, 0)), Some((0, 0)));
 mat!(match_basic_132, r"(a+|b)*", r"ab", Some((0, 2)), Some((1, 2)));
 mat!(match_basic_133, r"(a+|b)+", r"ab", Some((0, 2)), Some((1, 2)));
 mat!(match_basic_134, r"(a+|b)?", r"ab", Some((0, 1)), Some((0, 1)));
 mat!(match_basic_135, r"[^ab]*", r"cde", Some((0, 3)));
-mat!(match_basic_137, r"(^)*", r"-", Some((0, 0)), None);
+mat!(match_basic_137, r"(^)*", r"-", Some((0, 0)), Some((0, 0)));
 mat!(match_basic_138, r"a*", r"", Some((0, 0)));
 mat!(match_basic_139, r"([abc])*d", r"abbbcd", Some((0, 6)), Some((4, 5)));
 mat!(match_basic_140, r"([abc])*bcd", r"abcd", Some((0, 4)), Some((0, 1)));
 mat!(match_basic_141, r"a|b|c|d|e", r"e", Some((0, 1)));
 mat!(match_basic_142, r"(a|b|c|d|e)f", r"ef", Some((0, 2)), Some((0, 1)));
-mat!(match_basic_144, r"((a*|b))*", r"-", Some((0, 0)), None, None);
+mat!(
+    match_basic_144,
+    r"((a*|b))*",
+    r"-",
+    Some((0, 0)),
+    Some((0, 0)),
+    Some((0, 0))
+);
 mat!(match_basic_145, r"abcd*efg", r"abcdefg", Some((0, 7)));
 mat!(match_basic_146, r"ab*", r"xabyabbbz", Some((1, 3)));
 mat!(match_basic_147, r"ab*", r"xayabbbz", Some((1, 2)));
@@ -782,7 +789,7 @@ mat!(match_basic_221, r"\\000", r"\000", Some((0, 4)));
 
 // Tests from nullsubexpr.dat
 mat!(match_nullsubexpr_3, r"(a*)*", r"a", Some((0, 1)), Some((0, 1)));
-mat!(match_nullsubexpr_5, r"(a*)*", r"x", Some((0, 0)), None);
+mat!(match_nullsubexpr_5, r"(a*)*", r"x", Some((0, 0)), Some((0, 0)));
 mat!(match_nullsubexpr_6, r"(a*)*", r"aaaaaa", Some((0, 6)), Some((0, 6)));
 mat!(match_nullsubexpr_7, r"(a*)*", r"aaaaaax", Some((0, 6)), Some((0, 6)));
 mat!(match_nullsubexpr_8, r"(a*)+", r"a", Some((0, 1)), Some((0, 1)));
@@ -798,7 +805,7 @@ mat!(match_nullsubexpr_17, r"(a+)+", r"x", None);
 mat!(match_nullsubexpr_18, r"(a+)+", r"aaaaaa", Some((0, 6)), Some((0, 6)));
 mat!(match_nullsubexpr_19, r"(a+)+", r"aaaaaax", Some((0, 6)), Some((0, 6)));
 mat!(match_nullsubexpr_21, r"([a]*)*", r"a", Some((0, 1)), Some((0, 1)));
-mat!(match_nullsubexpr_23, r"([a]*)*", r"x", Some((0, 0)), None);
+mat!(match_nullsubexpr_23, r"([a]*)*", r"x", Some((0, 0)), Some((0, 0)));
 mat!(match_nullsubexpr_24, r"([a]*)*", r"aaaaaa", Some((0, 6)), Some((0, 6)));
 mat!(match_nullsubexpr_25, r"([a]*)*", r"aaaaaax", Some((0, 6)), Some((0, 6)));
 mat!(match_nullsubexpr_26, r"([a]*)+", r"a", Some((0, 1)), Some((0, 1)));
@@ -806,7 +813,7 @@ mat!(match_nullsubexpr_27, r"([a]*)+", r"x", Some((0, 0)), Some((0, 0)));
 mat!(match_nullsubexpr_28, r"([a]*)+", r"aaaaaa", Some((0, 6)), Some((0, 6)));
 mat!(match_nullsubexpr_29, r"([a]*)+", r"aaaaaax", Some((0, 6)), Some((0, 6)));
 mat!(match_nullsubexpr_30, r"([^b]*)*", r"a", Some((0, 1)), Some((0, 1)));
-mat!(match_nullsubexpr_32, r"([^b]*)*", r"b", Some((0, 0)), None);
+mat!(match_nullsubexpr_32, r"([^b]*)*", r"b", Some((0, 0)), Some((0, 0)));
 mat!(match_nullsubexpr_33, r"([^b]*)*", r"aaaaaa", Some((0, 6)), Some((0, 6)));
 mat!(
     match_nullsubexpr_34,
@@ -830,7 +837,7 @@ mat!(
 );
 mat!(match_nullsubexpr_42, r"([^a]*)*", r"b", Some((0, 1)), Some((0, 1)));
 mat!(match_nullsubexpr_43, r"([^a]*)*", r"bbbbbb", Some((0, 6)), Some((0, 6)));
-mat!(match_nullsubexpr_45, r"([^a]*)*", r"aaaaaa", Some((0, 0)), None);
+mat!(match_nullsubexpr_45, r"([^a]*)*", r"aaaaaa", Some((0, 0)), Some((0, 0)));
 mat!(
     match_nullsubexpr_46,
     r"([^ab]*)*",
@@ -838,7 +845,13 @@ mat!(
     Some((0, 6)),
     Some((0, 6))
 );
-mat!(match_nullsubexpr_48, r"([^ab]*)*", r"ababab", Some((0, 0)), None);
+mat!(
+    match_nullsubexpr_48,
+    r"([^ab]*)*",
+    r"ababab",
+    Some((0, 0)),
+    Some((0, 0))
+);
 mat!(
     match_nullsubexpr_50,
     r"((z)+|a)*",
@@ -851,7 +864,7 @@ mat!(
     r"(a*)*(x)",
     r"x",
     Some((0, 1)),
-    None,
+    Some((0, 0)),
     Some((0, 1))
 );
 mat!(

@@ -1329,6 +1329,9 @@ mod tests {
     // is built.
     #[test]
     fn state_has_small_size() {
+        #[cfg(target_pointer_width = "64")]
         assert_eq!(32, core::mem::size_of::<State>());
+        #[cfg(target_pointer_width = "32")]
+        assert_eq!(16, core::mem::size_of::<State>());
     }
 }
