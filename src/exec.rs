@@ -274,18 +274,18 @@ impl ExecBuilder {
                     // prefixes, so disable them.
                     prefixes = None;
                 } else if is_set
-                    && props.look_set_prefix().contains(Look::Start)
+                    && props.look_set_prefix_any().contains(Look::Start)
                 {
                     // Regex sets with anchors do not go well with literal
                     // optimizations.
                     prefixes = None;
-                } else if props.look_set_prefix().contains_word() {
+                } else if props.look_set_prefix_any().contains_word() {
                     // The new literal extractor ignores look-around while
                     // the old one refused to extract prefixes from regexes
                     // that began with a \b. These old creaky regex internals
                     // can't deal with it, so we drop it.
                     prefixes = None;
-                } else if props.look_set().contains(Look::StartLF) {
+                } else if props.look_set_prefix_any().contains(Look::StartLF) {
                     // Similar to the reasoning for word boundaries, this old
                     // regex engine can't handle literal prefixes with '(?m:^)'
                     // at the beginning of a regex.
@@ -298,15 +298,16 @@ impl ExecBuilder {
                     // Partial anchors unfortunately make it hard to use
                     // suffixes, so disable them.
                     suffixes = None;
-                } else if is_set && props.look_set_suffix().contains(Look::End)
+                } else if is_set
+                    && props.look_set_suffix_any().contains(Look::End)
                 {
                     // Regex sets with anchors do not go well with literal
                     // optimizations.
                     suffixes = None;
-                } else if props.look_set_suffix().contains_word() {
+                } else if props.look_set_suffix_any().contains_word() {
                     // See the prefix case for reasoning here.
                     suffixes = None;
-                } else if props.look_set().contains(Look::EndLF) {
+                } else if props.look_set_suffix_any().contains(Look::EndLF) {
                     // See the prefix case for reasoning here.
                     suffixes = None;
                 }

@@ -220,3 +220,23 @@ matiter!(empty_group_find, r"()Ј01", "zЈ01", (1, 5));
 
 // See: https://github.com/rust-lang/regex/issues/862
 mat!(non_greedy_question_literal, r"ab??", "ab", Some((0, 1)));
+
+// See: https://github.com/rust-lang/regex/issues/981
+#[cfg(feature = "unicode")]
+#[test]
+fn regression_bad_word_boundary() {
+    let re = regex_new!(r#"(?i:(?:\b|_)win(?:32|64|dows)?(?:\b|_))"#).unwrap();
+    let hay = "ubi-Darwin-x86_64.tar.gz";
+    assert!(!re.is_match(text!(hay)));
+    let hay = "ubi-Windows-x86_64.zip";
+    assert!(re.is_match(text!(hay)));
+}
+
+// See: https://github.com/rust-lang/regex/issues/982
+#[cfg(feature = "unicode-perl")]
+#[test]
+fn regression_unicode_perl_not_enabled() {
+    let pat = r"(\d+\s?(years|year|y))?\s?(\d+\s?(months|month|m))?\s?(\d+\s?(weeks|week|w))?\s?(\d+\s?(days|day|d))?\s?(\d+\s?(hours|hour|h))?";
+    let re = regex_new!(pat);
+    assert!(re.is_ok());
+}

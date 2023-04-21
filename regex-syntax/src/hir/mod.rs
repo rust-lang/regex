@@ -1854,6 +1854,8 @@ struct PropertiesI {
     look_set: LookSet,
     look_set_prefix: LookSet,
     look_set_suffix: LookSet,
+    look_set_prefix_any: LookSet,
+    look_set_suffix_any: LookSet,
     utf8: bool,
     explicit_captures_len: usize,
     static_explicit_captures_len: Option<usize>,
@@ -1909,6 +1911,19 @@ impl Properties {
         self.0.look_set_prefix
     }
 
+    /// Returns a set of all look-around assertions that appear as a _possible_
+    /// prefix for this HIR value. That is, the set returned corresponds to the
+    /// set of assertions that _may_ be passed before matching any bytes in a
+    /// haystack.
+    ///
+    /// For example, `hir.look_set_prefix_any().contains(Look::Start)` returns
+    /// true if and only if it's possible for the regex to match through a
+    /// anchored assertion before consuming any input.
+    #[inline]
+    pub fn look_set_prefix_any(&self) -> LookSet {
+        self.0.look_set_prefix_any
+    }
+
     /// Returns a set of all look-around assertions that appear as a suffix for
     /// this HIR value. That is, the set returned corresponds to the set of
     /// assertions that must be passed in order to be considered a match after
@@ -1919,6 +1934,19 @@ impl Properties {
     #[inline]
     pub fn look_set_suffix(&self) -> LookSet {
         self.0.look_set_suffix
+    }
+
+    /// Returns a set of all look-around assertions that appear as a _possible_
+    /// suffix for this HIR value. That is, the set returned corresponds to the
+    /// set of assertions that _may_ be passed before matching any bytes in a
+    /// haystack.
+    ///
+    /// For example, `hir.look_set_suffix_any().contains(Look::End)` returns
+    /// true if and only if it's possible for the regex to match through a
+    /// anchored assertion at the end of a match without consuming any input.
+    #[inline]
+    pub fn look_set_suffix_any(&self) -> LookSet {
+        self.0.look_set_suffix_any
     }
 
     /// Return true if and only if the corresponding HIR will always match
@@ -2188,6 +2216,8 @@ impl Properties {
             look_set: LookSet::empty(),
             look_set_prefix: fix,
             look_set_suffix: fix,
+            look_set_prefix_any: LookSet::empty(),
+            look_set_suffix_any: LookSet::empty(),
             utf8: true,
             explicit_captures_len: 0,
             static_explicit_captures_len,
@@ -2201,6 +2231,8 @@ impl Properties {
             props.look_set.set_union(p.look_set());
             props.look_set_prefix.set_intersect(p.look_set_prefix());
             props.look_set_suffix.set_intersect(p.look_set_suffix());
+            props.look_set_prefix_any.set_union(p.look_set_prefix_any());
+            props.look_set_suffix_any.set_union(p.look_set_suffix_any());
             props.utf8 = props.utf8 && p.is_utf8();
             props.explicit_captures_len = props
                 .explicit_captures_len
@@ -2246,6 +2278,8 @@ impl Properties {
             look_set: LookSet::empty(),
             look_set_prefix: LookSet::empty(),
             look_set_suffix: LookSet::empty(),
+            look_set_prefix_any: LookSet::empty(),
+            look_set_suffix_any: LookSet::empty(),
             // It is debatable whether an empty regex always matches at valid
             // UTF-8 boundaries. Strictly speaking, at a byte oriented view,
             // it is clearly false. There are, for example, many empty strings
@@ -2280,6 +2314,8 @@ impl Properties {
             look_set: LookSet::empty(),
             look_set_prefix: LookSet::empty(),
             look_set_suffix: LookSet::empty(),
+            look_set_prefix_any: LookSet::empty(),
+            look_set_suffix_any: LookSet::empty(),
             utf8: core::str::from_utf8(&lit.0).is_ok(),
             explicit_captures_len: 0,
             static_explicit_captures_len: Some(0),
@@ -2297,6 +2333,8 @@ impl Properties {
             look_set: LookSet::empty(),
             look_set_prefix: LookSet::empty(),
             look_set_suffix: LookSet::empty(),
+            look_set_prefix_any: LookSet::empty(),
+            look_set_suffix_any: LookSet::empty(),
             utf8: class.is_utf8(),
             explicit_captures_len: 0,
             static_explicit_captures_len: Some(0),
@@ -2314,6 +2352,8 @@ impl Properties {
             look_set: LookSet::singleton(look),
             look_set_prefix: LookSet::singleton(look),
             look_set_suffix: LookSet::singleton(look),
+            look_set_prefix_any: LookSet::singleton(look),
+            look_set_suffix_any: LookSet::singleton(look),
             // This requires a little explanation. Basically, we don't consider
             // matching an empty string to be equivalent to matching invalid
             // UTF-8, even though technically matching every empty string will
@@ -2355,15 +2395,17 @@ impl Properties {
             look_set: p.look_set(),
             look_set_prefix: LookSet::empty(),
             look_set_suffix: LookSet::empty(),
+            look_set_prefix_any: p.look_set_prefix_any(),
+            look_set_suffix_any: p.look_set_suffix_any(),
             utf8: p.is_utf8(),
             explicit_captures_len: p.explicit_captures_len(),
             static_explicit_captures_len: p.static_explicit_captures_len(),
             literal: false,
             alternation_literal: false,
         };
-        // The repetition operator can match the empty string, then its lookset
-        // prefix and suffixes themselves remain empty since they are no longer
-        // required to match.
+        // If the repetition operator can match the empty string, then its
+        // lookset prefix and suffixes themselves remain empty since they are
+        // no longer required to match.
         if rep.min > 0 {
             inner.look_set_prefix = p.look_set_prefix();
             inner.look_set_suffix = p.look_set_suffix();
@@ -2414,6 +2456,8 @@ impl Properties {
             look_set: LookSet::empty(),
             look_set_prefix: LookSet::empty(),
             look_set_suffix: LookSet::empty(),
+            look_set_prefix_any: LookSet::empty(),
+            look_set_suffix_any: LookSet::empty(),
             utf8: true,
             explicit_captures_len: 0,
             static_explicit_captures_len: Some(0),
@@ -2455,6 +2499,9 @@ impl Properties {
         let mut it = concat.iter();
         while let Some(x) = it.next() {
             props.look_set_prefix.set_union(x.properties().look_set_prefix());
+            props
+                .look_set_prefix_any
+                .set_union(x.properties().look_set_prefix_any());
             if x.properties().maximum_len().map_or(true, |x| x > 0) {
                 break;
             }
@@ -2463,6 +2510,9 @@ impl Properties {
         let mut it = concat.iter().rev();
         while let Some(x) = it.next() {
             props.look_set_suffix.set_union(x.properties().look_set_suffix());
+            props
+                .look_set_suffix_any
+                .set_union(x.properties().look_set_suffix_any());
             if x.properties().maximum_len().map_or(true, |x| x > 0) {
                 break;
             }
