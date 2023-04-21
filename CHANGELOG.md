@@ -1,3 +1,17 @@
+1.8.1 (2023-04-21)
+==================
+This is a patch release that fixes a bug where a regex match could be reported
+where none was found. Specifically, the bug occurs when a pattern contains some
+literal prefixes that could be extracted _and_ an optional word boundary in the
+prefix.
+
+Bug fixes:
+
+* [BUG #981](https://github.com/rust-lang/regex/issues/981):
+Fix a bug where a word boundary could interact with prefix literal
+optimizations and lead to a false positive match.
+
+
 1.8.0 (2023-04-20)
 ==================
 This is a sizeable release that will be soon followed by another sizeable
@@ -117,7 +131,6 @@ Add a missing `void` keyword to indicate "no parameters" in C API.
 Fix `\p{Lc}` so that it is equivalent to `\p{Cased_Letter}`.
 * [BUG #975](https://github.com/rust-lang/regex/issues/975):
 Clarify documentation for `\pX` syntax.
-
 
 
 1.7.3 (2023-03-24)
