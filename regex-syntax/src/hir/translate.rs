@@ -3288,6 +3288,12 @@ mod tests {
     }
 
     #[test]
+    fn analysis_look_set_prefix_any() {
+        let p = props(r"(?-u)(?i:(?:\b|_)win(?:32|64|dows)?(?:\b|_))");
+        assert!(p.look_set_prefix_any().contains(Look::WordAscii));
+    }
+
+    #[test]
     fn analysis_is_anchored() {
         let is_start = |p| props(p).look_set_prefix().contains(Look::Start);
         let is_end = |p| props(p).look_set_suffix().contains(Look::End);
