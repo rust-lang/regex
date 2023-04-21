@@ -9,7 +9,7 @@ by [RE2](https://github.com/google/re2).
 
 [![Build status](https://github.com/rust-lang/regex/workflows/ci/badge.svg)](https://github.com/rust-lang/regex/actions)
 [![Crates.io](https://img.shields.io/crates/v/regex.svg)](https://crates.io/crates/regex)
-[![Rust](https://img.shields.io/badge/rust-1.41.1%2B-blue.svg?maxAge=3600)](https://github.com/rust-lang/regex)
+[![Rust](https://img.shields.io/badge/rust-1.60.0%2B-blue.svg?maxAge=3600)](https://github.com/rust-lang/regex)
 
 ### Documentation
 
@@ -218,7 +218,7 @@ The full set of features one can disable are
 
 ### Minimum Rust version policy
 
-This crate's minimum supported `rustc` version is `1.41.1`.
+This crate's minimum supported `rustc` version is `1.60.0`.
 
 The current **tentative** policy is that the minimum Rust version required
 to use this crate can be increased in minor version updates. For example, if
