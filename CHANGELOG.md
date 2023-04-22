@@ -17,11 +17,11 @@ optimizations and lead to a false positive match.
 This is a sizeable release that will be soon followed by another sizeable
 release. Both of them will combined close over 40 existing issues and PRs.
 
-This first release, despite its size, essentially represent preparatory work
+This first release, despite its size, essentially represents preparatory work
 for the second release, which will be even bigger. Namely, this release:
 
 * Increases the MSRV to Rust 1.60.0, which was released about 1 year ago.
-* Upgrades its dependency on `aho-corasick` to the recently release 1.0
+* Upgrades its dependency on `aho-corasick` to the recently released 1.0
 version.
 * Upgrades its dependency on `regex-syntax` to the simultaneously released
 `0.7` version. The changes to `regex-syntax` principally revolve around a
@@ -39,7 +39,7 @@ years of on-and-off work that [began in earnest in March
 2020](https://github.com/rust-lang/regex/issues/656).
 
 Because of the scale of changes involved in these releases, I would love to
-hear about your experience. Especially if you notice undocumented changes in
+hear about your experience, especially if you notice undocumented changes in
 behavior or performance changes (positive *or* negative).
 
 Most changes in the first release are listed below. For more details, please
