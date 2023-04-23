@@ -39,7 +39,7 @@ years of on-and-off work that [began in earnest in March
 2020](https://github.com/rust-lang/regex/issues/656).
 
 Because of the scale of changes involved in these releases, I would love to
-hear about your experience, especially if you notice undocumented changes in
+hear about your experience. Especially if you notice undocumented changes in
 behavior or performance changes (positive *or* negative).
 
 Most changes in the first release are listed below. For more details, please
