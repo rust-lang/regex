@@ -26,6 +26,7 @@ ENGINES:
     backtrack  Search with the bounded backtracker regex engine.
     dense      Search with the dense DFA regex engine.
     hybrid     Search with the lazy DFA regex engine.
+    lite       Search with the regex-lite engine.
     meta       Search with the meta regex engine.
     onepass    Search with the one-pass DFA regex engine.
     pikevm     Search with the PikeVM regex engine.
@@ -37,6 +38,7 @@ ENGINES:
         "backtrack" => nfa::run_backtrack(p),
         "dense" => dfa::run_dense(p),
         "hybrid" => dfa::run_hybrid(p),
+        "lite" => run_lite(p),
         "meta" => run_meta(p),
         "onepass" => dfa::run_onepass(p),
         "pikevm" => nfa::run_pikevm(p),
@@ -158,6 +160,71 @@ OPTIONS:
             re.pattern_len(),
             search,
         )?;
+    } else {
+        run_search(&mut table, &common, &find, &input, &haystack, search)?;
+    }
+    Ok(())
+}
+
+fn run_lite(p: &mut lexopt::Parser) -> anyhow::Result<()> {
+    const USAGE: &'static str = "\
+Executes a search for full matches using the top-level regex-lite engine.
+
+Note that since the regex-lite crate doesn't have an API for search arbitrary
+byte slices, the haystack must be valid UTF-8. If it isn't, this command will
+report an error.
+
+USAGE:
+    regex-cli find match lite [-p <pattern> ...] <haystack-path>
+    regex-cli find match lite [-p <pattern> ...] -y <haystack>
+
+TIP:
+    use -h for short docs and --help for long docs
+
+OPTIONS:
+%options%
+";
+
+    let mut common = args::common::Config::default();
+    let mut patterns = args::patterns::Config::only_flags();
+    let mut haystack = args::haystack::Config::default();
+    let mut syntax = args::syntax::Config::default();
+    let mut lite = args::lite::Config::default();
+    let mut find = super::Config::default();
+    args::configure(
+        p,
+        USAGE,
+        &mut [
+            &mut common,
+            &mut patterns,
+            &mut haystack,
+            &mut syntax,
+            &mut lite,
+            &mut find,
+        ],
+    )?;
+
+    let pats = patterns.get()?;
+    let syn = syntax.syntax()?;
+    let mut table = Table::empty();
+    let (re, time) = util::timeitr(|| lite.from_patterns(&syn, &pats))?;
+    table.add("build regex time", time);
+
+    // Check that the haystack is valid UTF-8 since regex-lite doesn't support
+    // searching arbitrary byte sequences. (At time of writing.)
+    haystack.get()?.to_str()?;
+
+    // The top-level regex-lite API doesn't support regex-automata's more
+    // granular Input abstraction.
+    let input = args::input::Config::default();
+    let search = |input: &Input<'_>| {
+        let haystack = input.haystack().to_str().unwrap();
+        Ok(re
+            .find_at(haystack, input.start())
+            .map(|m| Match::new(PatternID::ZERO, m.start()..m.end())))
+    };
+    if find.count {
+        run_counts(&mut table, &common, &find, &input, &haystack, 1, search)?;
     } else {
         run_search(&mut table, &common, &find, &input, &haystack, search)?;
     }

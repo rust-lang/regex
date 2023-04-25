@@ -30,6 +30,7 @@ log = { version = "0.4.17", features = ["std"] }
 memmap2 = "0.5.10"
 regex = { path = ".." }
 regex-automata = { path = "../regex-automata", features = ["logging"] }
+regex-lite = { path = "../regex-lite" }
 regex-syntax = { path = "../regex-syntax" }
 tabwriter = { version = "1.2.1", features = ["ansi_formatting"] }
 textwrap = { version = "0.16.0", default-features = false }

@@ -16,6 +16,7 @@ pub mod flags;
 pub mod haystack;
 pub mod hybrid;
 pub mod input;
+pub mod lite;
 pub mod meta;
 pub mod onepass;
 pub mod overlapping;
