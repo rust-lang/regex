@@ -22,6 +22,7 @@ members = [
   "regex-automata",
   "regex-capi",
   "regex-cli",
+  "regex-lite",
   "regex-syntax",
   "regex-test",
 ]

@@ -32,6 +32,7 @@ USAGE:
 
 ENGINES:
     backtrack  Search with the bounded backtracker regex engine.
+    lite       Search with the regex-lite engine.
     meta       Search with the meta regex engine.
     onepass    Search with the one-pass DFA regex engine.
     pikevm     Search with the PikeVM regex engine.
@@ -40,6 +41,7 @@ ENGINES:
     let cmd = args::next_as_command(USAGE, p)?;
     match &*cmd {
         "backtrack" => nfa::run_backtrack(p),
+        "lite" => run_lite(p),
         "meta" => run_meta(p),
         "onepass" => dfa::run_onepass(p),
         "pikevm" => nfa::run_pikevm(p),
@@ -213,6 +215,107 @@ OPTIONS:
             &input,
             &haystack,
             re.group_info(),
+            search,
+        )?;
+    }
+    Ok(())
+}
+
+fn run_lite(p: &mut lexopt::Parser) -> anyhow::Result<()> {
+    const USAGE: &'static str = "\
+Executes a search for full matches using the top-level regex-lite engine.
+
+USAGE:
+    regex-cli find capture lite [-p <pattern> ...] <haystack-path>
+    regex-cli find capture lite [-p <pattern> ...] -y <haystack>
+
+TIP:
+    use -h for short docs and --help for long docs
+
+OPTIONS:
+%options%
+";
+
+    let mut common = args::common::Config::default();
+    let mut patterns = args::patterns::Config::only_flags();
+    let mut haystack = args::haystack::Config::default();
+    let mut syntax = args::syntax::Config::default();
+    let mut lite = args::lite::Config::default();
+    let mut find = super::Config::default();
+    args::configure(
+        p,
+        USAGE,
+        &mut [
+            &mut common,
+            &mut patterns,
+            &mut haystack,
+            &mut syntax,
+            &mut lite,
+            &mut find,
+        ],
+    )?;
+
+    let pats = patterns.get()?;
+    let syn = syntax.syntax()?;
+    let mut table = Table::empty();
+    let (re, time) = util::timeitr(|| lite.from_patterns(&syn, &pats))?;
+    table.add("build regex time", time);
+
+    // Check that the haystack is valid UTF-8 since regex-lite doesn't support
+    // searching arbitrary byte sequences. (At time of writing.)
+    haystack.get()?.to_str()?;
+
+    // The top-level API doesn't support regex-automata's more granular Input
+    // abstraction.
+    let input = args::input::Config::default();
+    // The top-level API also doesn't use 'Captures' from regex-automata
+    // directly, but we can map between them with some annoyance.
+    let group_info = GroupInfo::new([re.capture_names()])
+        .context("could not build capture group info")?;
+    let mut locs = re.capture_locations();
+    let search = |input: &Input<'_>, caps: &mut Captures| {
+        let haystack = input.haystack().to_str().unwrap();
+        caps.set_pattern(None);
+        if !re.captures_read_at(&mut locs, haystack, input.start()).is_some() {
+            return Ok(());
+        }
+        caps.set_pattern(Some(PatternID::ZERO));
+        for i in 0..locs.len() {
+            use regex_automata::util::primitives::NonMaxUsize;
+
+            let slot_start = i * 2;
+            let slot_end = slot_start + 1;
+            match locs.get(i) {
+                None => {
+                    caps.slots_mut()[slot_start] = None;
+                    caps.slots_mut()[slot_end] = None;
+                }
+                Some((start, end)) => {
+                    caps.slots_mut()[slot_start] = NonMaxUsize::new(start);
+                    caps.slots_mut()[slot_end] = NonMaxUsize::new(end);
+                }
+            }
+        }
+        Ok(())
+    };
+    if find.count {
+        run_counts(
+            &mut table,
+            &common,
+            &find,
+            &input,
+            &haystack,
+            &group_info,
+            search,
+        )?;
+    } else {
+        run_search(
+            &mut table,
+            &common,
+            &find,
+            &input,
+            &haystack,
+            &group_info,
             search,
         )?;
     }
