@@ -680,3 +680,12 @@ name = "impossible-branch"
 regex = '.*[^\s\S]A|B'
 haystack = "B"
 matches = [[0, 1]]
+
+# This was found during fuzz testing in regex-lite. The regex crate never
+# suffered from this bug, but it causes regex-lite to incorrectly compile
+# captures.
+[[test]]
+name = "captures-wrong-order"
+regex = '(a){0}(a)'
+haystack = 'a'
+matches = [[[0, 1], [], [0, 1]]]
