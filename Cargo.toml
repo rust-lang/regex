@@ -19,7 +19,6 @@ rust-version = "1.60.0"
 
 [workspace]
 members = [
-  "bench",
   "regex-automata",
   "regex-capi",
   "regex-cli",
