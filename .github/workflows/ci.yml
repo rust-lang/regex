@@ -112,7 +112,7 @@ jobs:
     - name: Build docs
       run: ${{ env.CARGO }} doc --verbose $TARGET
     - name: Run subset of tests
-      run: ${{ env.CARGO }} test --verbose --test default $TARGET
+      run: ${{ env.CARGO }} test --verbose --test integration $TARGET
     - name: Build regex-syntax docs
       run: ${{ env.CARGO }} doc --verbose --manifest-path regex-syntax/Cargo.toml $TARGET
     - name: Run subset of regex-syntax tests
