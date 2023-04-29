@@ -122,11 +122,6 @@ jobs:
     - name: Run subset of regex-automata tests
       if: matrix.build != 'win-gnu'  # Just horrifically slow.
       run: ${{ env.CARGO }} test --verbose --manifest-path regex-automata/Cargo.toml $TARGET
-    - if: matrix.build == 'nightly'
-      name: Run benchmarks as tests
-      run: |
-        cd bench
-        ./run rust --no-run --verbose
 
   # This job runs a stripped down version of CI to test the MSRV. The specific
   # reason for doing this is that the regex crate's dev-dependencies tend to
