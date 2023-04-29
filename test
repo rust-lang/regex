@@ -34,5 +34,5 @@ done
 # And test the probably-forever-nightly-only 'pattern' feature...
 if rustc --version | grep -q nightly; then
     echo "===== FEATURE: std,pattern,unicode-perl ====="
-    cargo test --test default --no-default-features --features std,pattern,unicode-perl
+    cargo test --test integration --no-default-features --features std,pattern,unicode-perl
 fi

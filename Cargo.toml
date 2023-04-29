@@ -27,14 +27,6 @@ members = [
   "regex-test",
 ]
 
-[lib]
-# There are no benchmarks in the library code itself
-bench = false
-# Doc tests fail when some features aren't present. The easiest way to work
-# around this is to disable automatic doc testing, but explicitly test them
-# with `cargo test --doc`.
-doctest = false
-
 # Features are documented in the "Crate features" section of the crate docs:
 # https://docs.rs/regex/*/#crate-features
 [features]
@@ -187,8 +179,6 @@ features = ["alloc", "syntax", "meta", "nfa-pikevm"]
 lazy_static = "1"
 # For property based tests.
 quickcheck = { version = "1.0.3", default-features = false }
-# For generating random test data.
-rand = { version = "0.8.3", default-features = false, features = ["getrandom", "small_rng"] }
 # To check README's example
 doc-comment = "0.3"
 # For easy error handling in integration tests.
@@ -221,22 +211,8 @@ features = ["atty", "humantime", "termcolor"]
 # in this test suite *should* mean there is a corresponding failure in
 # regex-automata's test suite.
 [[test]]
-path = "newtests/lib.rs"
+path = "tests/lib.rs"
 name = "integration"
-
-# Run the test suite on the default behavior of Regex::new.
-# This includes a mish mash of NFAs and DFAs, which are chosen automatically
-# based on the regex. We test both of the NFA implementations by forcing their
-# usage with the test definitions below. (We can't test the DFA implementations
-# in the same way since they can't be used for every regex tested.)
-[[test]]
-path = "tests/test_default.rs"
-name = "default"
-
-# The same as the default tests, but run on bytes::Regex.
-[[test]]
-path = "tests/test_default_bytes.rs"
-name = "default-bytes"
 
 [package.metadata.docs.rs]
 # We want to document all features.
