@@ -1,6 +1,0 @@
-#!/bin/sh
-
-exec cargo build \
-  --release \
-  --features 're-re2 re-onig re-pcre1 re-pcre2 re-rust re-rust-bytes re-tcl' \
-  "$@"
