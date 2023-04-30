@@ -17,7 +17,7 @@ fn run(data: &[u8]) -> Option<()> {
     split_at = std::cmp::max(split_at, 1) % len;
     let char_index = data.char_indices().nth(split_at)?.0;
     let (pattern, input) = data.split_at(char_index);
-    let re = regex::Regex::new(pattern).ok()?;
+    let re = regex_lite::Regex::new(pattern).ok()?;
     re.is_match(input);
     Some(())
 }
