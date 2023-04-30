@@ -3,16 +3,16 @@ name = "regex-fuzz"
 version = "0.0.0"
 authors = ["David Korczynski <david@adalogics.com>"]
 publish = false
-edition = "2018"
+edition = "2021"
 
 [package.metadata]
 cargo-fuzz = true
 
 [dependencies]
 libfuzzer-sys = "0.4.1"
-
-[dependencies.regex]
-path = ".."
+regex = { path = ".." }
+regex-automata = { path = "../regex-automata" }
+regex-lite = { path = "../regex-lite" }
 
 # Prevent this from interfering with workspaces
 [workspace]
@@ -21,6 +21,18 @@ members = ["."]
 [[bin]]
 name = "fuzz_regex_match"
 path = "fuzz_targets/fuzz_regex_match.rs"
+
+[[bin]]
+name = "fuzz_regex_lite_match"
+path = "fuzz_targets/fuzz_regex_lite_match.rs"
+
+[[bin]]
+name = "fuzz_regex_automata_deserialize_dense_dfa"
+path = "fuzz_targets/fuzz_regex_automata_deserialize_dense_dfa.rs"
+
+[[bin]]
+name = "fuzz_regex_automata_deserialize_sparse_dfa"
+path = "fuzz_targets/fuzz_regex_automata_deserialize_sparse_dfa.rs"
 
 [profile.release]
 opt-level = 3
