@@ -71,13 +71,10 @@
 ///     // initial bytes of the haystack. Note that start states can never
 ///     // be match states (since DFAs in this crate delay matches by 1
 ///     // byte), so we don't need to check if the start state is a match.
-///     //
-///     // The unwrap is OK because we aren't requesting a start state for a
-///     // specific pattern.
 ///     let mut sid = dfa.start_state_forward(
 ///         cache,
 ///         &Input::new(haystack),
-///     ).map_err(|_| MatchError::gave_up(0))?.unwrap();
+///     )?;
 ///     let mut last_match = None;
 ///     // Walk all the bytes in the haystack. We can quit early if we see
 ///     // a dead or a quit state. The former means the automaton will

@@ -32,7 +32,7 @@ directly, but for example, if you've compiled an Thompson NFA, then you can use
 underlying `GroupInfo`.
 */
 
-use alloc::{format, string::String, sync::Arc, vec, vec::Vec};
+use alloc::{string::String, sync::Arc, vec, vec::Vec};
 
 use crate::util::{
     interpolate,
@@ -1219,19 +1219,26 @@ struct CapturesDebugMap<'a> {
 
 impl<'a> core::fmt::Debug for CapturesDebugMap<'a> {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        struct Key<'a>(usize, Option<&'a str>);
+
+        impl<'a> core::fmt::Debug for Key<'a> {
+            fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+                write!(f, "{}", self.0)?;
+                if let Some(name) = self.1 {
+                    write!(f, "/{:?}", name)?;
+                }
+                Ok(())
+            }
+        }
+
         let mut map = f.debug_map();
         let names = self.caps.group_info().pattern_names(self.pid);
         for (group_index, maybe_name) in names.enumerate() {
-            let span = self.caps.get_group(group_index);
-            let debug_span: &dyn core::fmt::Debug = match span {
-                None => &None::<()>,
-                Some(ref span) => span,
+            let key = Key(group_index, maybe_name);
+            match self.caps.get_group(group_index) {
+                None => map.entry(&key, &None::<()>),
+                Some(span) => map.entry(&key, &span),
             };
-            if let Some(name) = maybe_name {
-                map.entry(&format!("{}/{}", group_index, name), debug_span);
-            } else {
-                map.entry(&group_index, debug_span);
-            }
         }
         map.finish()
     }

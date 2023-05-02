@@ -88,6 +88,9 @@ pub enum ErrorKind {
     /// This error occurs when translating a pattern that could match a byte
     /// sequence that isn't UTF-8 and `utf8` was enabled.
     InvalidUtf8,
+    /// This error occurs when one uses a non-ASCII byte for a line terminator,
+    /// but where Unicode mode is enabled and UTF-8 mode is disabled.
+    InvalidLineTerminator,
     /// This occurs when an unrecognized Unicode property name could not
     /// be found.
     UnicodePropertyNotFound,
@@ -120,6 +123,7 @@ impl core::fmt::Display for ErrorKind {
         let msg = match *self {
             UnicodeNotAllowed => "Unicode not allowed here",
             InvalidUtf8 => "pattern can match invalid UTF-8",
+            InvalidLineTerminator => "invalid line terminator, must be ASCII",
             UnicodePropertyNotFound => "Unicode property not found",
             UnicodePropertyValueNotFound => "Unicode property value not found",
             UnicodePerlClassNotFound => {
@@ -553,7 +557,7 @@ impl Hir {
         // We rebuild the alternation by simplifying it. We proceed similarly
         // as the concatenation case. But in this case, there's no literal
         // simplification happening. We're just flattening alternations.
-        let mut new = vec![];
+        let mut new = Vec::with_capacity(subs.len());
         for sub in subs {
             let (kind, props) = sub.into_parts();
             match kind {
@@ -648,6 +652,12 @@ impl Hir {
                 cls.push(ClassBytesRange::new(b'\0', b'\xFF'));
                 Hir::class(Class::Bytes(cls))
             }
+            Dot::AnyCharExcept(ch) => {
+                let mut cls =
+                    ClassUnicode::new([ClassUnicodeRange::new(ch, ch)]);
+                cls.negate();
+                Hir::class(Class::Unicode(cls))
+            }
             Dot::AnyCharExceptLF => {
                 let mut cls = ClassUnicode::empty();
                 cls.push(ClassUnicodeRange::new('\0', '\x09'));
@@ -660,6 +670,12 @@ impl Hir {
                 cls.push(ClassUnicodeRange::new('\x0B', '\x0C'));
                 cls.push(ClassUnicodeRange::new('\x0E', '\u{10FFFF}'));
                 Hir::class(Class::Unicode(cls))
+            }
+            Dot::AnyByteExcept(byte) => {
+                let mut cls =
+                    ClassBytes::new([ClassBytesRange::new(byte, byte)]);
+                cls.negate();
+                Hir::class(Class::Bytes(cls))
             }
             Dot::AnyByteExceptLF => {
                 let mut cls = ClassBytes::empty();
@@ -1772,6 +1788,18 @@ pub enum Dot {
     ///
     /// This is equivalent to `(?s-u:.)` and also `(?-u:[\x00-\xFF])`.
     AnyByte,
+    /// Matches the UTF-8 encoding of any Unicode scalar value except for the
+    /// `char` given.
+    ///
+    /// This is equivalent to using `(?u-s:.)` with the line terminator set
+    /// to a particular ASCII byte. (Because of peculiarities in the regex
+    /// engines, a line terminator must be a single byte. It follows that when
+    /// UTF-8 mode is enabled, this single byte must also be a Unicode scalar
+    /// value. That is, ti must be ASCII.)
+    ///
+    /// (This and `AnyCharExceptLF` both exist because of legacy reasons.
+    /// `AnyCharExceptLF` will be dropped in the next breaking change release.)
+    AnyCharExcept(char),
     /// Matches the UTF-8 encoding of any Unicode scalar value except for `\n`.
     ///
     /// This is equivalent to `(?u-s:.)` and also `[\p{any}--\n]`.
@@ -1781,6 +1809,17 @@ pub enum Dot {
     ///
     /// This is equivalent to `(?uR-s:.)` and also `[\p{any}--\r\n]`.
     AnyCharExceptCRLF,
+    /// Matches any byte value except for the `u8` given.
+    ///
+    /// This is equivalent to using `(?-us:.)` with the line terminator set
+    /// to a particular ASCII byte. (Because of peculiarities in the regex
+    /// engines, a line terminator must be a single byte. It follows that when
+    /// UTF-8 mode is enabled, this single byte must also be a Unicode scalar
+    /// value. That is, ti must be ASCII.)
+    ///
+    /// (This and `AnyByteExceptLF` both exist because of legacy reasons.
+    /// `AnyByteExceptLF` will be dropped in the next breaking change release.)
+    AnyByteExcept(u8),
     /// Matches any byte value except for `\n`.
     ///
     /// This is equivalent to `(?-su:.)` and also `(?-u:[[\x00-\xFF]--\n])`.
@@ -2416,10 +2455,10 @@ impl Properties {
             inner.look_set_prefix = p.look_set_prefix();
             inner.look_set_suffix = p.look_set_suffix();
         }
-        // If the static captures len of the sub-expression is not known or is
-        // zero, then it automatically propagates to the repetition, regardless
-        // of the repetition. Otherwise, it might change, but only when the
-        // repetition can match 0 times.
+        // If the static captures len of the sub-expression is not known or
+        // is greater than zero, then it automatically propagates to the
+        // repetition, regardless of the repetition. Otherwise, it might
+        // change, but only when the repetition can match 0 times.
         if rep.min == 0
             && inner.static_explicit_captures_len.map_or(false, |len| len > 0)
         {

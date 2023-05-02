@@ -1,3 +1,5 @@
+use alloc::string::{String, ToString};
+
 use regex_automata::meta;
 
 /// An error that occurred during parsing or compiling a regular expression.
@@ -51,6 +53,7 @@ impl Error {
     }
 }
 
+#[cfg(feature = "std")]
 impl std::error::Error for Error {
     // TODO: Remove this method entirely on the next breaking semver release.
     #[allow(deprecated)]
@@ -62,8 +65,8 @@ impl std::error::Error for Error {
     }
 }
 
-impl std::fmt::Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match *self {
             Error::Syntax(ref err) => err.fmt(f),
             Error::CompiledTooBig(limit) => write!(
@@ -79,8 +82,8 @@ impl std::fmt::Display for Error {
 // errors when people use `Regex::new(...).unwrap()`. It's a little weird,
 // but the `Syntax` variant is already storing a `String` anyway, so we might
 // as well format it nicely.
-impl std::fmt::Debug for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Debug for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match *self {
             Error::Syntax(ref err) => {
                 let hr: String = core::iter::repeat('~').take(79).collect();

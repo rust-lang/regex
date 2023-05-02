@@ -35,6 +35,9 @@ pub(crate) struct NFA {
     is_start_anchored: bool,
     /// Whether this NFA can match the empty string.
     is_match_empty: bool,
+    /// If every match has the same number of matching capture groups, then
+    /// this corresponds to the number of groups.
+    static_explicit_captures_len: Option<usize>,
     /// A map from capture group name to its corresponding index.
     cap_name_to_index: CaptureNameMap,
     /// A map from capture group index to the corresponding name, if one
@@ -87,6 +90,14 @@ impl NFA {
         self.cap_name_to_index.get(name).cloned().map(|i| i.as_usize())
     }
 
+    /*
+    /// Returns the capture group name for the corresponding index.
+    /// If no such group with the given index, then `None` is returned.
+    pub(crate) fn to_name(&self, index: usize) -> Option<&str> {
+        self.cap_index_to_name.get(index)?.as_deref()
+    }
+    */
+
     /// Returns an iterator over all of the capture groups, along with their
     /// names if they exist, in this NFA.
     pub(crate) fn capture_names(&self) -> CaptureNames<'_> {
@@ -103,6 +114,13 @@ impl NFA {
     /// a haystack.
     pub(crate) fn is_start_anchored(&self) -> bool {
         self.is_start_anchored
+    }
+
+    /// If the pattern always reports the same number of matching capture groups
+    /// for every match, then this returns the number of those groups. This
+    /// doesn't include the implicit group found in every pattern.
+    pub(crate) fn static_explicit_captures_len(&self) -> Option<usize> {
+        self.static_explicit_captures_len
     }
 
     /// Returns the heap memory usage, in bytes, used by this NFA.
@@ -252,6 +270,7 @@ impl Compiler {
             start: 0,
             is_start_anchored: false,
             is_match_empty: false,
+            static_explicit_captures_len: None,
             cap_name_to_index: CaptureNameMap::default(),
             cap_index_to_name: vec![],
             memory_extra: 0,
@@ -262,6 +281,8 @@ impl Compiler {
     fn compile(self, hir: &Hir) -> Result<NFA, Error> {
         self.nfa.borrow_mut().is_start_anchored = hir.is_start_anchored();
         self.nfa.borrow_mut().is_match_empty = hir.is_match_empty();
+        self.nfa.borrow_mut().static_explicit_captures_len =
+            hir.static_explicit_captures_len();
         let compiled = self.c_capture(0, None, hir)?;
         let mat = self.add(State::Match)?;
         self.patch(compiled.end, mat)?;

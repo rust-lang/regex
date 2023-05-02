@@ -56,10 +56,7 @@ pub(crate) fn dfa_try_search_half_fwd(
     use crate::dfa::{accel, Automaton};
 
     let mut mat = None;
-    let mut sid = match dfa.start_state_forward(input)? {
-        None => return Ok(Err(input.start())),
-        Some(sid) => sid,
-    };
+    let mut sid = dfa.start_state_forward(input)?;
     let mut at = input.start();
     while at < input.end() {
         sid = dfa.next_state(sid, input.haystack()[at]);
@@ -109,10 +106,7 @@ pub(crate) fn hybrid_try_search_half_fwd(
     input: &Input<'_>,
 ) -> Result<Result<HalfMatch, usize>, RetryFailError> {
     let mut mat = None;
-    let mut sid = match dfa.start_state_forward(cache, input)? {
-        None => return Ok(Err(input.start())),
-        Some(sid) => sid,
-    };
+    let mut sid = dfa.start_state_forward(cache, input)?;
     let mut at = input.start();
     while at < input.end() {
         sid = dfa

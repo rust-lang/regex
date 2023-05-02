@@ -132,11 +132,7 @@ pub unsafe trait Automaton {
     ///
     /// // The start state is determined by inspecting the position and the
     /// // initial bytes of the haystack.
-    /// //
-    /// // The unwrap is OK because we aren't requesting a start state for a
-    /// // specific pattern.
-    /// let mut state =
-    ///     dfa.start_state_forward(&Input::new(haystack))?.unwrap();
+    /// let mut state = dfa.start_state_forward(&Input::new(haystack))?;
     /// // Walk all the bytes in the haystack.
     /// for &b in haystack {
     ///     state = dfa.next_state(state, b);
@@ -214,8 +210,7 @@ pub unsafe trait Automaton {
     /// //
     /// // The unwrap is OK because we aren't requesting a start state for a
     /// // specific pattern.
-    /// let mut state =
-    ///     dfa.start_state_forward(&Input::new(haystack))?.unwrap();
+    /// let mut state = dfa.start_state_forward(&Input::new(haystack))?;
     /// // Walk all the bytes in the haystack.
     /// for &b in haystack {
     ///     state = dfa.next_state(state, b);
@@ -232,8 +227,7 @@ pub unsafe trait Automaton {
     fn next_eoi_state(&self, current: StateID) -> StateID;
 
     /// Return the ID of the start state for this lazy DFA when executing a
-    /// forward search. If a match is known to be impossible while computing
-    /// the start state, then `None` is returned.
+    /// forward search.
     ///
     /// Unlike typical DFA implementations, the start state for DFAs in this
     /// crate is dependent on a few different factors:
@@ -257,11 +251,10 @@ pub unsafe trait Automaton {
     fn start_state_forward(
         &self,
         input: &Input<'_>,
-    ) -> Result<Option<StateID>, MatchError>;
+    ) -> Result<StateID, MatchError>;
 
     /// Return the ID of the start state for this lazy DFA when executing a
-    /// reverse search. If a match is known to be impossible while computing
-    /// the start state, then `None` is returned.
+    /// reverse search.
     ///
     /// Unlike typical DFA implementations, the start state for DFAs in this
     /// crate is dependent on a few different factors:
@@ -285,7 +278,7 @@ pub unsafe trait Automaton {
     fn start_state_reverse(
         &self,
         input: &Input<'_>,
-    ) -> Result<Option<StateID>, MatchError>;
+    ) -> Result<StateID, MatchError>;
 
     /// If this DFA has a universal starting state for the given anchor mode
     /// and the DFA supports universal starting states, then this returns that
@@ -386,12 +379,7 @@ pub unsafe trait Automaton {
     ///     // initial bytes of the haystack. Note that start states can never
     ///     // be match states (since DFAs in this crate delay matches by 1
     ///     // byte), so we don't need to check if the start state is a match.
-    ///     //
-    ///     // Also, we unwrap this because the only way to get a None start
-    ///     // state ID is if we asked to search for a pattern that isn't in
-    ///     // this DFA, but we don't use that functionality here.
-    ///     let mut state =
-    ///         dfa.start_state_forward(&Input::new(haystack))?.unwrap();
+    ///     let mut state = dfa.start_state_forward(&Input::new(haystack))?;
     ///     let mut last_match = None;
     ///     // Walk all the bytes in the haystack. We can quit early if we see
     ///     // a dead or a quit state. The former means the automaton will
@@ -629,8 +617,7 @@ pub unsafe trait Automaton {
     ///     // See the Automaton::is_special_state example for similar code
     ///     // with more comments.
     ///
-    ///     let mut state =
-    ///         dfa.start_state_forward(&Input::new(haystack))?.unwrap();
+    ///     let mut state = dfa.start_state_forward(&Input::new(haystack))?;
     ///     let mut last_match = None;
     ///     let mut pos = 0;
     ///     while pos < haystack.len() {
@@ -844,11 +831,7 @@ pub unsafe trait Automaton {
     ///
     /// // The start state is determined by inspecting the position and the
     /// // initial bytes of the haystack.
-    /// //
-    /// // The unwrap is OK because we aren't requesting a start state for a
-    /// // specific pattern.
-    /// let mut state =
-    ///     dfa.start_state_forward(&Input::new(haystack))?.unwrap();
+    /// let mut state = dfa.start_state_forward(&Input::new(haystack))?;
     /// // Walk all the bytes in the haystack.
     /// for &b in haystack {
     ///     state = dfa.next_state(state, b);
@@ -1819,7 +1802,7 @@ unsafe impl<'a, A: Automaton + ?Sized> Automaton for &'a A {
     fn start_state_forward(
         &self,
         input: &Input<'_>,
-    ) -> Result<Option<StateID>, MatchError> {
+    ) -> Result<StateID, MatchError> {
         (**self).start_state_forward(input)
     }
 
@@ -1827,7 +1810,7 @@ unsafe impl<'a, A: Automaton + ?Sized> Automaton for &'a A {
     fn start_state_reverse(
         &self,
         input: &Input<'_>,
-    ) -> Result<Option<StateID>, MatchError> {
+    ) -> Result<StateID, MatchError> {
         (**self).start_state_reverse(input)
     }
 

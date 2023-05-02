@@ -1,17 +1,8 @@
-use alloc::{
-    borrow::Cow, boxed::Box, string::String, string::ToString, sync::Arc, vec,
-    vec::Vec,
-};
+use alloc::{borrow::Cow, string::String, sync::Arc};
 
-use crate::{
-    error::Error,
-    hir::{self, Hir},
-    int::NonMaxUsize,
-    interpolate,
-    nfa::{self, NFA},
-    pikevm::{self, Cache, PikeVM},
-    pool::CachePool,
-};
+use regex_automata::{meta, util::captures, Input, PatternID};
+
+use crate::{error::Error, RegexBuilder};
 
 /// A compiled regular expression for searching Unicode haystacks.
 ///
@@ -25,7 +16,9 @@ use crate::{
 /// expression or in the haystack), all positions returned are **byte
 /// offsets**. Every byte offset is guaranteed to be at a Unicode code point
 /// boundary. That is, all offsets returned by the `Regex` API are guaranteed
-/// to be ranges that can slice a `&str` without panicking.
+/// to be ranges that can slice a `&str` without panicking. If you want to
+/// relax this requirement, then you must search `&[u8]` haystacks with a
+/// [`bytes::Regex`](crate::bytes::Regex).
 ///
 /// The only methods that allocate new strings are the string replacement
 /// methods. All other methods (searching and splitting) return borrowed
@@ -36,7 +29,7 @@ use crate::{
 /// Find the offsets of a US phone number:
 ///
 /// ```
-/// use regex_lite::Regex;
+/// use regex::Regex;
 ///
 /// let re = Regex::new("[0-9]{3}-[0-9]{3}-[0-9]{4}").unwrap();
 /// let m = re.find("phone: 111-222-3333").unwrap();
@@ -56,7 +49,7 @@ use crate::{
 /// into a fixed size array:
 ///
 /// ```
-/// use regex_lite::Regex;
+/// use regex::Regex;
 ///
 /// let hay = "
 /// rabbit         54 true
@@ -77,21 +70,37 @@ use crate::{
 ///
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
+///
+/// # Example: searching with the `Pattern` trait
+///
+/// **Note**: This section requires that this crate is compiled with the
+/// `pattern` Cargo feature enabled, which **requires nightly Rust**.
+///
+/// Since `Regex` implements `Pattern` from the standard library, one can
+/// use regexes with methods defined on `&str`. For example, `is_match`,
+/// `find`, `find_iter` and `split` can, in some cases, be replaced with
+/// `str::contains`, `str::find`, `str::match_indices` and `str::split`.
+///
+/// Here are some examples:
+///
+/// ```ignore
+/// use regex::Regex;
+///
+/// let re = Regex::new(r"\d+").unwrap();
+/// let hay = "a111b222c";
+///
+/// assert!(hay.contains(&re));
+/// assert_eq!(hay.find(&re), Some(1));
+/// assert_eq!(hay.match_indices(&re).collect::<Vec<_>>(), vec![
+///     (1, "111"),
+///     (5, "222"),
+/// ]);
+/// assert_eq!(hay.split(&re).collect::<Vec<_>>(), vec!["a", "b", "c"]);
+/// ```
+#[derive(Clone)]
 pub struct Regex {
-    pikevm: Arc<PikeVM>,
-    pool: CachePool,
-}
-
-impl Clone for Regex {
-    fn clone(&self) -> Regex {
-        let pikevm = Arc::clone(&self.pikevm);
-        let pool = {
-            let pikevm = Arc::clone(&self.pikevm);
-            let create = Box::new(move || Cache::new(&pikevm));
-            CachePool::new(create)
-        };
-        Regex { pikevm, pool }
-    }
+    pub(crate) meta: meta::Regex,
+    pub(crate) pattern: Arc<str>,
 }
 
 impl core::fmt::Display for Regex {
@@ -139,16 +148,19 @@ impl Regex {
     /// # Example
     ///
     /// ```
-    /// use regex_lite::Regex;
+    /// use regex::Regex;
     ///
     /// // An Invalid pattern because of an unclosed parenthesis
     /// assert!(Regex::new(r"foo(bar").is_err());
     /// // An invalid pattern because the regex would be too big
     /// // because Unicode tends to inflate things.
-    /// assert!(Regex::new(r"\w{1000000}").is_err());
+    /// assert!(Regex::new(r"\w{1000}").is_err());
+    /// // Disabling Unicode can make the regex much smaller,
+    /// // potentially by up to or more than an order of magnitude.
+    /// assert!(Regex::new(r"(?-u:\w){1000}").is_ok());
     /// ```
-    pub fn new(pattern: &str) -> Result<Regex, Error> {
-        RegexBuilder::new(pattern).build()
+    pub fn new(re: &str) -> Result<Regex, Error> {
+        RegexBuilder::new(re).build()
     }
 
     /// Returns true if and only if there is a match for the regex anywhere
@@ -161,10 +173,10 @@ impl Regex {
     /// # Example
     ///
     /// Test if some haystack contains at least one word with exactly 13
-    /// word characters:
+    /// Unicode word characters:
     ///
     /// ```
-    /// use regex_lite::Regex;
+    /// use regex::Regex;
     ///
     /// let re = Regex::new(r"\b\w{13}\b").unwrap();
     /// let hay = "I categorically deny having triskaidekaphobia.";
@@ -187,10 +199,10 @@ impl Regex {
     ///
     /// # Example
     ///
-    /// Find the first word with exactly 13 word characters:
+    /// Find the first word with exactly 13 Unicode word characters:
     ///
     /// ```
-    /// use regex_lite::Regex;
+    /// use regex::Regex;
     ///
     /// let re = Regex::new(r"\b\w{13}\b").unwrap();
     /// let hay = "I categorically deny having triskaidekaphobia.";
@@ -215,10 +227,10 @@ impl Regex {
     ///
     /// # Example
     ///
-    /// Find every word with exactly 13 word characters:
+    /// Find every word with exactly 13 Unicode word characters:
     ///
     /// ```
-    /// use regex_lite::Regex;
+    /// use regex::Regex;
     ///
     /// let re = Regex::new(r"\b\w{13}\b").unwrap();
     /// let hay = "Retroactively relinquishing remunerations is reprehensible.";
@@ -232,10 +244,7 @@ impl Regex {
     /// ```
     #[inline]
     pub fn find_iter<'r, 'h>(&'r self, haystack: &'h str) -> Matches<'r, 'h> {
-        Matches {
-            haystack,
-            it: self.pikevm.find_iter(self.pool.get(), haystack.as_bytes()),
-        }
+        Matches { haystack, it: self.meta.find_iter(haystack) }
     }
 
     /// This routine searches for the first match of this regex in the haystack
@@ -263,7 +272,7 @@ impl Regex {
     /// its release year separately. The example below shows how to do that.
     ///
     /// ```
-    /// use regex_lite::Regex;
+    /// use regex::Regex;
     ///
     /// let re = Regex::new(r"'([^']+)'\s+\((\d{4})\)").unwrap();
     /// let hay = "Not my favorite movie: 'Citizen Kane' (1941).";
@@ -286,7 +295,7 @@ impl Regex {
     /// We can make this example a bit clearer by using *named* capture groups:
     ///
     /// ```
-    /// use regex_lite::Regex;
+    /// use regex::Regex;
     ///
     /// let re = Regex::new(r"'(?<title>[^']+)'\s+\((?<year>\d{4})\)").unwrap();
     /// let hay = "Not my favorite movie: 'Citizen Kane' (1941).";
@@ -315,7 +324,7 @@ impl Regex {
     /// [`Captures::extract`] API:
     ///
     /// ```
-    /// use regex_lite::Regex;
+    /// use regex::Regex;
     ///
     /// let re = Regex::new(r"'([^']+)'\s+\((\d{4})\)").unwrap();
     /// let hay = "Not my favorite movie: 'Citizen Kane' (1941).";
@@ -352,7 +361,7 @@ impl Regex {
     /// some haystack, where the movie is formatted like "'Title' (xxxx)":
     ///
     /// ```
-    /// use regex_lite::Regex;
+    /// use regex::Regex;
     ///
     /// let re = Regex::new(r"'([^']+)'\s+\(([0-9]{4})\)").unwrap();
     /// let hay = "'Citizen Kane' (1941), 'The Wizard of Oz' (1939), 'M' (1931).";
@@ -371,7 +380,7 @@ impl Regex {
     /// Or with named groups:
     ///
     /// ```
-    /// use regex_lite::Regex;
+    /// use regex::Regex;
     ///
     /// let re = Regex::new(r"'(?<title>[^']+)'\s+\((?<year>[0-9]{4})\)").unwrap();
     /// let hay = "'Citizen Kane' (1941), 'The Wizard of Oz' (1939), 'M' (1931).";
@@ -394,13 +403,7 @@ impl Regex {
         &'r self,
         haystack: &'h str,
     ) -> CaptureMatches<'r, 'h> {
-        CaptureMatches {
-            haystack,
-            re: self,
-            it: self
-                .pikevm
-                .captures_iter(self.pool.get(), haystack.as_bytes()),
-        }
+        CaptureMatches { haystack, it: self.meta.captures_iter(haystack) }
     }
 
     /// Returns an iterator of substrings of the haystack given, delimited by a
@@ -419,7 +422,7 @@ impl Regex {
     /// To split a string delimited by arbitrary amounts of spaces or tabs:
     ///
     /// ```
-    /// use regex_lite::Regex;
+    /// use regex::Regex;
     ///
     /// let re = Regex::new(r"[ \t]+").unwrap();
     /// let hay = "a b \t  c\td    e";
@@ -432,7 +435,7 @@ impl Regex {
     /// Basic usage:
     ///
     /// ```
-    /// use regex_lite::Regex;
+    /// use regex::Regex;
     ///
     /// let re = Regex::new(r" ").unwrap();
     /// let hay = "Mary had a little lamb";
@@ -459,7 +462,7 @@ impl Regex {
     /// with empty spans yielded by the iterator:
     ///
     /// ```
-    /// use regex_lite::Regex;
+    /// use regex::Regex;
     ///
     /// let re = Regex::new(r"X").unwrap();
     /// let hay = "XXXXaXXbXc";
@@ -476,7 +479,7 @@ impl Regex {
     /// substring.
     ///
     /// ```
-    /// use regex_lite::Regex;
+    /// use regex::Regex;
     ///
     /// let re = Regex::new(r"0").unwrap();
     /// let hay = "010";
@@ -489,7 +492,7 @@ impl Regex {
     /// haystack):
     ///
     /// ```
-    /// use regex_lite::Regex;
+    /// use regex::Regex;
     ///
     /// let re = Regex::new(r"").unwrap();
     /// let hay = "rust";
@@ -507,7 +510,7 @@ impl Regex {
     /// possibly surprising behavior. For example, this code is correct:
     ///
     /// ```
-    /// use regex_lite::Regex;
+    /// use regex::Regex;
     ///
     /// let re = Regex::new(r" ").unwrap();
     /// let hay = "    a  b c";
@@ -519,7 +522,7 @@ impl Regex {
     /// to match contiguous space characters:
     ///
     /// ```
-    /// use regex_lite::Regex;
+    /// use regex::Regex;
     ///
     /// let re = Regex::new(r" +").unwrap();
     /// let hay = "    a  b c";
@@ -530,7 +533,7 @@ impl Regex {
     /// ```
     #[inline]
     pub fn split<'r, 'h>(&'r self, haystack: &'h str) -> Split<'r, 'h> {
-        Split { haystack, finder: self.find_iter(haystack), last: 0 }
+        Split { haystack, it: self.meta.split(haystack) }
     }
 
     /// Returns an iterator of at most `limit` substrings of the haystack
@@ -555,7 +558,7 @@ impl Regex {
     /// Get the first two words in some haystack:
     ///
     /// ```
-    /// use regex_lite::Regex;
+    /// use regex::Regex;
     ///
     /// let re = Regex::new(r"\W+").unwrap();
     /// let hay = "Hey! How are you?";
@@ -566,7 +569,7 @@ impl Regex {
     /// # Examples: more cases
     ///
     /// ```
-    /// use regex_lite::Regex;
+    /// use regex::Regex;
     ///
     /// let re = Regex::new(r" ").unwrap();
     /// let hay = "Mary had a little lamb";
@@ -609,7 +612,7 @@ impl Regex {
         haystack: &'h str,
         limit: usize,
     ) -> SplitN<'r, 'h> {
-        SplitN { splits: self.split(haystack), limit }
+        SplitN { haystack, it: self.meta.splitn(haystack, limit) }
     }
 
     /// Replaces the leftmost-first match in the given haystack with the
@@ -646,7 +649,7 @@ impl Regex {
     /// In typical usage, this can just be a normal string:
     ///
     /// ```
-    /// use regex_lite::Regex;
+    /// use regex::Regex;
     ///
     /// let re = Regex::new(r"[^01]+").unwrap();
     /// assert_eq!(re.replace("1078910", ""), "1010");
@@ -658,7 +661,7 @@ impl Regex {
     /// group matches easily:
     ///
     /// ```
-    /// use regex_lite::{Captures, Regex};
+    /// use regex::{Captures, Regex};
     ///
     /// let re = Regex::new(r"([^,\s]+),\s+(\S+)").unwrap();
     /// let result = re.replace("Springsteen, Bruce", |caps: &Captures| {
@@ -673,7 +676,7 @@ impl Regex {
     /// expansion technique with named capture groups:
     ///
     /// ```
-    /// use regex_lite::Regex;
+    /// use regex::Regex;
     ///
     /// let re = Regex::new(r"(?<last>[^,\s]+),\s+(?<first>\S+)").unwrap();
     /// let result = re.replace("Springsteen, Bruce", "$first $last");
@@ -689,7 +692,7 @@ impl Regex {
     /// an underscore:
     ///
     /// ```
-    /// use regex_lite::Regex;
+    /// use regex::Regex;
     ///
     /// let re = Regex::new(r"(?<first>\w+)\s+(?<second>\w+)").unwrap();
     /// let result = re.replace("deep fried", "${first}_$second");
@@ -705,7 +708,7 @@ impl Regex {
     /// string with [`NoExpand`]:
     ///
     /// ```
-    /// use regex_lite::{NoExpand, Regex};
+    /// use regex::{NoExpand, Regex};
     ///
     /// let re = Regex::new(r"(?<last>[^,\s]+),\s+(\S+)").unwrap();
     /// let result = re.replace("Springsteen, Bruce", NoExpand("$2 $last"));
@@ -746,7 +749,7 @@ impl Regex {
     /// implementing your own replacement routine:
     ///
     /// ```
-    /// use regex_lite::{Captures, Regex};
+    /// use regex::{Captures, Regex};
     ///
     /// fn replace_all<E>(
     ///     re: &Regex,
@@ -783,13 +786,14 @@ impl Regex {
     ///
     /// # Example
     ///
-    /// This example shows how to flip the order of whitespace delimited
-    /// fields, and normalizes the whitespace that delimits the fields:
+    /// This example shows how to flip the order of whitespace (excluding line
+    /// terminators) delimited fields, and normalizes the whitespace that
+    /// delimits the fields:
     ///
     /// ```
-    /// use regex_lite::Regex;
+    /// use regex::Regex;
     ///
-    /// let re = Regex::new(r"(?m)^(\S+)\s+(\S+)$").unwrap();
+    /// let re = Regex::new(r"(?m)^(\S+)[\s--\r\n]+(\S+)$").unwrap();
     /// let hay = "
     /// Greetings  1973
     /// Wild\t1973
@@ -840,14 +844,14 @@ impl Regex {
     ///
     /// # Example
     ///
-    /// This example shows how to flip the order of whitespace delimited
-    /// fields, and normalizes the whitespace that delimits the fields. But we
-    /// only do it for the first two matches.
+    /// This example shows how to flip the order of whitespace (excluding line
+    /// terminators) delimited fields, and normalizes the whitespace that
+    /// delimits the fields. But we only do it for the first two matches.
     ///
     /// ```
-    /// use regex_lite::Regex;
+    /// use regex::Regex;
     ///
-    /// let re = Regex::new(r"(?m)^(\S+)\s+(\S+)$").unwrap();
+    /// let re = Regex::new(r"(?m)^(\S+)[\s--\r\n]+(\S+)$").unwrap();
     /// let hay = "
     /// Greetings  1973
     /// Wild\t1973
@@ -899,7 +903,7 @@ impl Regex {
             return Cow::Owned(new);
         }
 
-        // The slower path, which we use if the replacement needs access to
+        // The slower path, which we use if the replacement may need access to
         // capture groups.
         let mut it = self.captures_iter(haystack).enumerate().peekable();
         if it.peek().is_none() {
@@ -949,7 +953,7 @@ impl Regex {
     /// first `a`.
     ///
     /// ```
-    /// use regex_lite::Regex;
+    /// use regex::Regex;
     ///
     /// let re = Regex::new(r"a+").unwrap();
     /// let offset = re.shortest_match("aaaaa").unwrap();
@@ -981,7 +985,7 @@ impl Regex {
     /// surrounding context into account.
     ///
     /// ```
-    /// use regex_lite::Regex;
+    /// use regex::Regex;
     ///
     /// let re = Regex::new(r"\bchew\b").unwrap();
     /// let hay = "eschew";
@@ -996,20 +1000,9 @@ impl Regex {
         haystack: &str,
         start: usize,
     ) -> Option<usize> {
-        let mut cache = self.pool.get();
-        let mut slots = [None, None];
-        let matched = self.pikevm.search(
-            &mut cache,
-            haystack.as_bytes(),
-            start,
-            haystack.len(),
-            true,
-            &mut slots,
-        );
-        if !matched {
-            return None;
-        }
-        Some(slots[1].unwrap().get())
+        let input =
+            Input::new(haystack).earliest(true).span(start..haystack.len());
+        self.meta.search_half(&input).map(|hm| hm.offset())
     }
 
     /// Returns the same as [`Regex::is_match`], but starts the search at the
@@ -1030,7 +1023,7 @@ impl Regex {
     /// surrounding context into account.
     ///
     /// ```
-    /// use regex_lite::Regex;
+    /// use regex::Regex;
     ///
     /// let re = Regex::new(r"\bchew\b").unwrap();
     /// let hay = "eschew";
@@ -1041,15 +1034,9 @@ impl Regex {
     /// ```
     #[inline]
     pub fn is_match_at(&self, haystack: &str, start: usize) -> bool {
-        let mut cache = self.pool.get();
-        self.pikevm.search(
-            &mut cache,
-            haystack.as_bytes(),
-            start,
-            haystack.len(),
-            true,
-            &mut [],
-        )
+        let input =
+            Input::new(haystack).earliest(true).span(start..haystack.len());
+        self.meta.search_half(&input).is_some()
     }
 
     /// Returns the same as [`Regex::find`], but starts the search at the given
@@ -1070,7 +1057,7 @@ impl Regex {
     /// surrounding context into account.
     ///
     /// ```
-    /// use regex_lite::Regex;
+    /// use regex::Regex;
     ///
     /// let re = Regex::new(r"\bchew\b").unwrap();
     /// let hay = "eschew";
@@ -1085,21 +1072,10 @@ impl Regex {
         haystack: &'h str,
         start: usize,
     ) -> Option<Match<'h>> {
-        let mut cache = self.pool.get();
-        let mut slots = [None, None];
-        let matched = self.pikevm.search(
-            &mut cache,
-            haystack.as_bytes(),
-            start,
-            haystack.len(),
-            false,
-            &mut slots,
-        );
-        if !matched {
-            return None;
-        }
-        let (start, end) = (slots[0].unwrap().get(), slots[1].unwrap().get());
-        Some(Match::new(haystack, start, end))
+        let input = Input::new(haystack).span(start..haystack.len());
+        self.meta
+            .search(&input)
+            .map(|m| Match::new(haystack, m.start(), m.end()))
     }
 
     /// Returns the same as [`Regex::captures`], but starts the search at the
@@ -1120,7 +1096,7 @@ impl Regex {
     /// surrounding context into account.
     ///
     /// ```
-    /// use regex_lite::Regex;
+    /// use regex::Regex;
     ///
     /// let re = Regex::new(r"\bchew\b").unwrap();
     /// let hay = "eschew";
@@ -1135,24 +1111,15 @@ impl Regex {
         haystack: &'h str,
         start: usize,
     ) -> Option<Captures<'h>> {
-        let mut caps = Captures {
-            haystack,
-            slots: self.capture_locations(),
-            pikevm: Arc::clone(&self.pikevm),
-        };
-        let mut cache = self.pool.get();
-        let matched = self.pikevm.search(
-            &mut cache,
-            haystack.as_bytes(),
-            start,
-            haystack.len(),
-            false,
-            &mut caps.slots.0,
-        );
-        if !matched {
-            return None;
+        let input = Input::new(haystack).span(start..haystack.len());
+        let mut caps = self.meta.create_captures();
+        self.meta.search_captures(&input, &mut caps);
+        if caps.is_match() {
+            let static_captures_len = self.static_captures_len();
+            Some(Captures { haystack, caps, static_captures_len })
+        } else {
+            None
         }
-        Some(caps)
     }
 
     /// This is like [`Regex::captures`], but writes the byte offsets of each
@@ -1179,7 +1146,7 @@ impl Regex {
     /// # Example
     ///
     /// ```
-    /// use regex_lite::Regex;
+    /// use regex::Regex;
     ///
     /// let re = Regex::new(r"^([a-z]+)=(\S*)$").unwrap();
     /// let mut locs = re.capture_locations();
@@ -1218,7 +1185,7 @@ impl Regex {
     /// surrounding context into account.
     ///
     /// ```
-    /// use regex_lite::Regex;
+    /// use regex::Regex;
     ///
     /// let re = Regex::new(r"\bchew\b").unwrap();
     /// let hay = "eschew";
@@ -1235,20 +1202,25 @@ impl Regex {
         haystack: &'h str,
         start: usize,
     ) -> Option<Match<'h>> {
-        let mut cache = self.pool.get();
-        let matched = self.pikevm.search(
-            &mut cache,
-            haystack.as_bytes(),
-            start,
-            haystack.len(),
-            false,
-            &mut locs.0,
-        );
-        if !matched {
-            return None;
-        }
-        let (start, end) = locs.get(0).unwrap();
-        Some(Match::new(haystack, start, end))
+        let input = Input::new(haystack).span(start..haystack.len());
+        self.meta.search_captures(&input, &mut locs.0);
+        locs.0.get_match().map(|m| Match::new(haystack, m.start(), m.end()))
+    }
+
+    /// An undocumented alias for `captures_read_at`.
+    ///
+    /// The `regex-capi` crate previously used this routine, so to avoid
+    /// breaking that crate, we continue to provide the name as an undocumented
+    /// alias.
+    #[doc(hidden)]
+    #[inline]
+    pub fn read_captures_at<'h>(
+        &self,
+        locs: &mut CaptureLocations,
+        haystack: &'h str,
+        start: usize,
+    ) -> Option<Match<'h>> {
+        self.captures_read_at(locs, haystack, start)
     }
 }
 
@@ -1259,14 +1231,14 @@ impl Regex {
     /// # Example
     ///
     /// ```
-    /// use regex_lite::Regex;
+    /// use regex::Regex;
     ///
     /// let re = Regex::new(r"foo\w+bar").unwrap();
     /// assert_eq!(re.as_str(), r"foo\w+bar");
     /// ```
     #[inline]
     pub fn as_str(&self) -> &str {
-        &self.pikevm.nfa().pattern()
+        &self.pattern
     }
 
     /// Returns an iterator over the capture names in this regex.
@@ -1285,7 +1257,7 @@ impl Regex {
     /// This shows basic usage with a mix of named and unnamed capture groups:
     ///
     /// ```
-    /// use regex_lite::Regex;
+    /// use regex::Regex;
     ///
     /// let re = Regex::new(r"(?<a>.(?<b>.))(.)(?:.)(?<c>.)").unwrap();
     /// let mut names = re.capture_names();
@@ -1302,21 +1274,21 @@ impl Regex {
     /// no capture groups and even for regexes that can never match:
     ///
     /// ```
-    /// use regex_lite::Regex;
+    /// use regex::Regex;
     ///
     /// let re = Regex::new(r"").unwrap();
     /// let mut names = re.capture_names();
     /// assert_eq!(names.next(), Some(None));
     /// assert_eq!(names.next(), None);
     ///
-    /// let re = Regex::new(r"[^\s\S]").unwrap();
+    /// let re = Regex::new(r"[a&&b]").unwrap();
     /// let mut names = re.capture_names();
     /// assert_eq!(names.next(), Some(None));
     /// assert_eq!(names.next(), None);
     /// ```
     #[inline]
     pub fn capture_names(&self) -> CaptureNames<'_> {
-        CaptureNames(self.pikevm.nfa().capture_names())
+        CaptureNames(self.meta.group_info().pattern_names(PatternID::ZERO))
     }
 
     /// Returns the number of captures groups in this regex.
@@ -1331,7 +1303,7 @@ impl Regex {
     /// # Example
     ///
     /// ```
-    /// use regex_lite::Regex;
+    /// use regex::Regex;
     ///
     /// let re = Regex::new(r"foo").unwrap();
     /// assert_eq!(1, re.captures_len());
@@ -1342,12 +1314,12 @@ impl Regex {
     /// let re = Regex::new(r"(?<a>.(?<b>.))(.)(?:.)(?<c>.)").unwrap();
     /// assert_eq!(5, re.captures_len());
     ///
-    /// let re = Regex::new(r"[^\s\S]").unwrap();
+    /// let re = Regex::new(r"[a&&b]").unwrap();
     /// assert_eq!(1, re.captures_len());
     /// ```
     #[inline]
     pub fn captures_len(&self) -> usize {
-        self.pikevm.nfa().group_len()
+        self.meta.group_info().group_len(PatternID::ZERO)
     }
 
     /// Returns the total number of capturing groups that appear in every
@@ -1368,7 +1340,7 @@ impl Regex {
     /// available and a few cases where it is not.
     ///
     /// ```
-    /// use regex_lite::Regex;
+    /// use regex::Regex;
     ///
     /// let len = |pattern| {
     ///     Regex::new(pattern).map(|re| re.static_captures_len())
@@ -1387,10 +1359,7 @@ impl Regex {
     /// ```
     #[inline]
     pub fn static_captures_len(&self) -> Option<usize> {
-        self.pikevm
-            .nfa()
-            .static_explicit_captures_len()
-            .map(|len| len.saturating_add(1))
+        self.meta.static_captures_len()
     }
 
     /// Returns a fresh allocated set of capture locations that can
@@ -1404,7 +1373,7 @@ impl Regex {
     /// # Example
     ///
     /// ```
-    /// use regex_lite::Regex;
+    /// use regex::Regex;
     ///
     /// let re = Regex::new(r"(.)(.)(\w+)").unwrap();
     /// let mut locs = re.capture_locations();
@@ -1416,9 +1385,17 @@ impl Regex {
     /// ```
     #[inline]
     pub fn capture_locations(&self) -> CaptureLocations {
-        // OK because NFA construction would have failed if this overflowed.
-        let len = self.pikevm.nfa().group_len().checked_mul(2).unwrap();
-        CaptureLocations(vec![None; len])
+        CaptureLocations(self.meta.create_captures())
+    }
+
+    /// An alias for `capture_locations` to preserve backward compatibility.
+    ///
+    /// The `regex-capi` crate used this method, so to avoid breaking that
+    /// crate, we continue to export it as an undocumented API.
+    #[doc(hidden)]
+    #[inline]
+    pub fn locations(&self) -> CaptureLocations {
+        self.capture_locations()
     }
 }
 
@@ -1462,17 +1439,17 @@ impl Regex {
 /// particular search.
 ///
 /// ```
-/// use regex_lite::Regex;
+/// use regex::Regex;
 ///
-/// let re = Regex::new(r"\d+").unwrap();
-/// let hay = "numbers: 1234";
+/// let re = Regex::new(r"\p{Greek}+").unwrap();
+/// let hay = "Greek: αβγδ";
 /// let m = re.find(hay).unwrap();
-/// assert_eq!(9, m.start());
-/// assert_eq!(13, m.end());
+/// assert_eq!(7, m.start());
+/// assert_eq!(15, m.end());
 /// assert!(!m.is_empty());
-/// assert_eq!(4, m.len());
-/// assert_eq!(9..13, m.range());
-/// assert_eq!("1234", m.as_str());
+/// assert_eq!(8, m.len());
+/// assert_eq!(7..15, m.range());
+/// assert_eq!("αβγδ", m.as_str());
 /// ```
 #[derive(Copy, Clone, Eq, PartialEq)]
 pub struct Match<'h> {
@@ -1482,12 +1459,6 @@ pub struct Match<'h> {
 }
 
 impl<'h> Match<'h> {
-    /// Creates a new match from the given haystack and byte offsets.
-    #[inline]
-    fn new(haystack: &'h str, start: usize, end: usize) -> Match<'h> {
-        Match { haystack, start, end }
-    }
-
     /// Returns the byte offset of the start of the match in the haystack. The
     /// start of the match corresponds to the position where the match begins
     /// and includes the first byte in the match.
@@ -1552,10 +1523,16 @@ impl<'h> Match<'h> {
     pub fn as_str(&self) -> &'h str {
         &self.haystack[self.range()]
     }
+
+    /// Creates a new match from the given haystack and byte offsets.
+    #[inline]
+    fn new(haystack: &'h str, start: usize, end: usize) -> Match<'h> {
+        Match { haystack, start, end }
+    }
 }
 
 impl<'h> core::fmt::Debug for Match<'h> {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         f.debug_struct("Match")
             .field("start", &self.start)
             .field("end", &self.end)
@@ -1613,7 +1590,7 @@ impl<'h> From<Match<'h>> for core::ops::Range<usize> {
 /// # Example
 ///
 /// ```
-/// use regex_lite::Regex;
+/// use regex::Regex;
 ///
 /// let re = Regex::new(r"(?<first>\w)(\w)(?:\w)\w(?<last>\w)").unwrap();
 /// let caps = re.captures("toady").unwrap();
@@ -1624,11 +1601,8 @@ impl<'h> From<Match<'h>> for core::ops::Range<usize> {
 /// ```
 pub struct Captures<'h> {
     haystack: &'h str,
-    slots: CaptureLocations,
-    // It's a little weird to put the PikeVM in our Captures, but it's the
-    // simplest thing to do and is cheap. The PikeVM gives us access to the
-    // NFA and the NFA gives us access to the capture name<->index mapping.
-    pikevm: Arc<PikeVM>,
+    caps: captures::Captures,
+    static_captures_len: Option<usize>,
 }
 
 impl<'h> Captures<'h> {
@@ -1644,7 +1618,7 @@ impl<'h> Captures<'h> {
     /// group didn't participate in the match:
     ///
     /// ```
-    /// use regex_lite::Regex;
+    /// use regex::Regex;
     ///
     /// let re = Regex::new(r"[a-z]+(?:([0-9]+)|([A-Z]+))").unwrap();
     /// let caps = re.captures("abc123").unwrap();
@@ -1656,7 +1630,9 @@ impl<'h> Captures<'h> {
     /// ```
     #[inline]
     pub fn get(&self, i: usize) -> Option<Match<'h>> {
-        self.slots.get(i).map(|(s, e)| Match::new(self.haystack, s, e))
+        self.caps
+            .get_group(i)
+            .map(|sp| Match::new(self.haystack, sp.start, sp.end))
     }
 
     /// Returns the `Match` associated with the capture group named `name`. If
@@ -1676,7 +1652,7 @@ impl<'h> Captures<'h> {
     /// group didn't participate in the match:
     ///
     /// ```
-    /// use regex_lite::Regex;
+    /// use regex::Regex;
     ///
     /// let re = Regex::new(
     ///     r"[a-z]+(?:(?<numbers>[0-9]+)|(?<letters>[A-Z]+))",
@@ -1690,8 +1666,9 @@ impl<'h> Captures<'h> {
     /// ```
     #[inline]
     pub fn name(&self, name: &str) -> Option<Match<'h>> {
-        let i = self.pikevm.nfa().to_index(name)?;
-        self.get(i)
+        self.caps
+            .get_group_by_name(name)
+            .map(|sp| Match::new(self.haystack, sp.start, sp.end))
     }
 
     /// This is a convenience routine for extracting the substrings
@@ -1723,7 +1700,7 @@ impl<'h> Captures<'h> {
     /// # Example
     ///
     /// ```
-    /// use regex_lite::Regex;
+    /// use regex::Regex;
     ///
     /// let re = Regex::new(r"([0-9]{4})-([0-9]{2})-([0-9]{2})").unwrap();
     /// let hay = "On 2010-03-14, I became a Tenneessee lamb.";
@@ -1741,7 +1718,7 @@ impl<'h> Captures<'h> {
     /// `Captures` matches in a haystack.
     ///
     /// ```
-    /// use regex_lite::Regex;
+    /// use regex::Regex;
     ///
     /// let re = Regex::new(r"([0-9]{4})-([0-9]{2})-([0-9]{2})").unwrap();
     /// let hay = "1973-01-05, 1975-08-25 and 1980-10-18";
@@ -1764,7 +1741,7 @@ impl<'h> Captures<'h> {
     /// an identifier that might be in double quotes or single quotes:
     ///
     /// ```
-    /// use regex_lite::Regex;
+    /// use regex::Regex;
     ///
     /// let re = Regex::new(r#"id:(?:"([^"]+)"|'([^']+)')"#).unwrap();
     /// let hay = r#"The first is id:"foo" and the second is id:'bar'."#;
@@ -1776,17 +1753,18 @@ impl<'h> Captures<'h> {
     /// ```
     pub fn extract<const N: usize>(&self) -> (&'h str, [&'h str; N]) {
         let len = self
-            .pikevm
-            .nfa()
-            .static_explicit_captures_len()
-            .expect("number of capture groups can vary in a match");
+            .static_captures_len
+            .expect("number of capture groups can vary in a match")
+            .checked_sub(1)
+            .expect("number of groups is always greater than zero");
         assert_eq!(N, len, "asked for {} groups, but must ask for {}", N, len);
-        let mut matched = self.iter().flatten();
-        let whole_match = matched.next().expect("a match").as_str();
-        let group_matches = [0; N].map(|_| {
-            matched.next().expect("too few matching groups").as_str()
-        });
-        (whole_match, group_matches)
+        // The regex-automata variant of extract is a bit more permissive.
+        // It doesn't require the number of matching capturing groups to be
+        // static, and you can even request fewer groups than what's there. So
+        // this is guaranteed to never panic because we've asserted above that
+        // the user has requested precisely the number of groups that must be
+        // present in any match for this regex.
+        self.caps.extract(self.haystack)
     }
 
     /// Expands all instances of `$ref` in `replacement` to the corresponding
@@ -1829,7 +1807,7 @@ impl<'h> Captures<'h> {
     /// # Example
     ///
     /// ```
-    /// use regex_lite::Regex;
+    /// use regex::Regex;
     ///
     /// let re = Regex::new(
     ///     r"(?<day>[0-9]{2})-(?<month>[0-9]{2})-(?<year>[0-9]{4})",
@@ -1843,18 +1821,7 @@ impl<'h> Captures<'h> {
     /// ```
     #[inline]
     pub fn expand(&self, replacement: &str, dst: &mut String) {
-        interpolate::string(
-            replacement,
-            |index, dst| {
-                let m = match self.get(index) {
-                    None => return,
-                    Some(m) => m,
-                };
-                dst.push_str(&self.haystack[m.range()]);
-            },
-            |name| self.pikevm.nfa().to_index(name),
-            dst,
-        );
+        self.caps.interpolate_string_into(self.haystack, replacement, dst);
     }
 
     /// Returns an iterator over all capture groups. This includes both
@@ -1870,7 +1837,7 @@ impl<'h> Captures<'h> {
     /// # Example
     ///
     /// ```
-    /// use regex_lite::Regex;
+    /// use regex::Regex;
     ///
     /// let re = Regex::new(r"(\w)(\d)?(\w)").unwrap();
     /// let caps = re.captures("AZ").unwrap();
@@ -1884,10 +1851,7 @@ impl<'h> Captures<'h> {
     /// ```
     #[inline]
     pub fn iter<'c>(&'c self) -> SubCaptureMatches<'c, 'h> {
-        SubCaptureMatches {
-            caps: self,
-            it: self.pikevm.nfa().capture_names().enumerate(),
-        }
+        SubCaptureMatches { haystack: self.haystack, it: self.caps.iter() }
     }
 
     /// Returns the total number of capture groups. This includes both
@@ -1901,7 +1865,7 @@ impl<'h> Captures<'h> {
     /// # Example
     ///
     /// ```
-    /// use regex_lite::Regex;
+    /// use regex::Regex;
     ///
     /// let re = Regex::new(r"(\w)(\d)?(\w)").unwrap();
     /// let caps = re.captures("AZ").unwrap();
@@ -1909,7 +1873,7 @@ impl<'h> Captures<'h> {
     /// ```
     #[inline]
     pub fn len(&self) -> usize {
-        self.pikevm.nfa().group_len()
+        self.caps.group_len()
     }
 }
 
@@ -1929,7 +1893,8 @@ impl<'h> core::fmt::Debug for Captures<'h> {
         impl<'a> core::fmt::Debug for CapturesDebugMap<'a> {
             fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
                 let mut map = f.debug_map();
-                let names = self.caps.pikevm.nfa().capture_names();
+                let names =
+                    self.caps.caps.group_info().pattern_names(PatternID::ZERO);
                 for (group_index, maybe_name) in names.enumerate() {
                     let key = Key(group_index, maybe_name);
                     match self.caps.get(group_index) {
@@ -1992,7 +1957,7 @@ impl<'h> core::ops::Index<usize> for Captures<'h> {
 
     // The lifetime is written out to make it clear that the &str returned
     // does NOT have a lifetime equivalent to 'h.
-    fn index(&self, i: usize) -> &str {
+    fn index<'a>(&'a self, i: usize) -> &'a str {
         self.get(i)
             .map(|m| m.as_str())
             .unwrap_or_else(|| panic!("no group at index '{}'", i))
@@ -2045,7 +2010,7 @@ impl<'h, 'n> core::ops::Index<&'n str> for Captures<'h> {
 /// This example shows how to create and use `CaptureLocations` in a search.
 ///
 /// ```
-/// use regex_lite::Regex;
+/// use regex::Regex;
 ///
 /// let re = Regex::new(r"(?<first>\w+)\s+(?<last>\w+)").unwrap();
 /// let mut locs = re.capture_locations();
@@ -2061,7 +2026,15 @@ impl<'h, 'n> core::ops::Index<&'n str> for Captures<'h> {
 /// assert_eq!(None, locs.get(9944060567225171988));
 /// ```
 #[derive(Clone, Debug)]
-pub struct CaptureLocations(Vec<Option<NonMaxUsize>>);
+pub struct CaptureLocations(captures::Captures);
+
+/// A type alias for `CaptureLocations` for backwards compatibility.
+///
+/// Previously, we exported `CaptureLocations` as `Locations` in an
+/// undocumented API. To prevent breaking that code (e.g., in `regex-capi`),
+/// we continue re-exporting the same undocumented API.
+#[doc(hidden)]
+pub type Locations = CaptureLocations;
 
 impl CaptureLocations {
     /// Returns the start and end byte offsets of the capture group at index
@@ -2071,7 +2044,7 @@ impl CaptureLocations {
     /// # Example
     ///
     /// ```
-    /// use regex_lite::Regex;
+    /// use regex::Regex;
     ///
     /// let re = Regex::new(r"(?<first>\w+)\s+(?<last>\w+)").unwrap();
     /// let mut locs = re.capture_locations();
@@ -2082,11 +2055,7 @@ impl CaptureLocations {
     /// ```
     #[inline]
     pub fn get(&self, i: usize) -> Option<(usize, usize)> {
-        let slot = i.checked_mul(2)?;
-        let start = self.0.get(slot).copied()??.get();
-        let slot = slot.checked_add(1)?;
-        let end = self.0.get(slot).copied()??.get();
-        Some((start, end))
+        self.0.get_group(i).map(|sp| (sp.start, sp.end))
     }
 
     /// Returns the total number of capture groups (even if they didn't match).
@@ -2098,7 +2067,7 @@ impl CaptureLocations {
     /// # Example
     ///
     /// ```
-    /// use regex_lite::Regex;
+    /// use regex::Regex;
     ///
     /// let re = Regex::new(r"(?<first>\w+)\s+(?<last>\w+)").unwrap();
     /// let mut locs = re.capture_locations();
@@ -2110,21 +2079,34 @@ impl CaptureLocations {
     /// Notice that the length is always at least `1`, regardless of the regex:
     ///
     /// ```
-    /// use regex_lite::Regex;
+    /// use regex::Regex;
     ///
     /// let re = Regex::new(r"").unwrap();
     /// let locs = re.capture_locations();
     /// assert_eq!(1, locs.len());
     ///
     /// // [a&&b] is a regex that never matches anything.
-    /// let re = Regex::new(r"[^\s\S]").unwrap();
+    /// let re = Regex::new(r"[a&&b]").unwrap();
     /// let locs = re.capture_locations();
     /// assert_eq!(1, locs.len());
     /// ```
     #[inline]
     pub fn len(&self) -> usize {
-        // We always have twice as many slots as groups.
-        self.0.len().checked_shr(1).unwrap()
+        // self.0.group_len() returns 0 if the underlying captures doesn't
+        // represent a match, but the behavior guaranteed for this method is
+        // that the length doesn't change based on a match or not.
+        self.0.group_info().group_len(PatternID::ZERO)
+    }
+
+    /// An alias for the `get` method for backwards compatibility.
+    ///
+    /// Previously, we exported `get` as `pos` in an undocumented API. To
+    /// prevent breaking that code (e.g., in `regex-capi`), we continue
+    /// re-exporting the same undocumented API.
+    #[doc(hidden)]
+    #[inline]
+    pub fn pos(&self, i: usize) -> Option<(usize, usize)> {
+        self.get(i)
     }
 }
 
@@ -2146,7 +2128,7 @@ impl CaptureLocations {
 #[derive(Debug)]
 pub struct Matches<'r, 'h> {
     haystack: &'h str,
-    it: pikevm::FindMatches<'r, 'h>,
+    it: meta::FindMatches<'r, 'h>,
 }
 
 impl<'r, 'h> Iterator for Matches<'r, 'h> {
@@ -2154,11 +2136,18 @@ impl<'r, 'h> Iterator for Matches<'r, 'h> {
 
     #[inline]
     fn next(&mut self) -> Option<Match<'h>> {
-        self.it.next().map(|(s, e)| Match::new(self.haystack, s, e))
+        self.it
+            .next()
+            .map(|sp| Match::new(self.haystack, sp.start(), sp.end()))
     }
 
     #[inline]
     fn count(self) -> usize {
+        // This can actually be up to 2x faster than calling `next()` until
+        // completion, because counting matches when using a DFA only requires
+        // finding the end of each match. But returning a `Match` via `next()`
+        // requires the start of each match which, with a DFA, requires a
+        // reverse forward scan to find it.
         self.it.count()
     }
 }
@@ -2183,8 +2172,7 @@ impl<'r, 'h> core::iter::FusedIterator for Matches<'r, 'h> {}
 #[derive(Debug)]
 pub struct CaptureMatches<'r, 'h> {
     haystack: &'h str,
-    re: &'r Regex,
-    it: pikevm::CapturesMatches<'r, 'h>,
+    it: meta::CapturesMatches<'r, 'h>,
 }
 
 impl<'r, 'h> Iterator for CaptureMatches<'r, 'h> {
@@ -2192,15 +2180,21 @@ impl<'r, 'h> Iterator for CaptureMatches<'r, 'h> {
 
     #[inline]
     fn next(&mut self) -> Option<Captures<'h>> {
-        self.it.next().map(|slots| Captures {
+        let static_captures_len = self.it.regex().static_captures_len();
+        self.it.next().map(|caps| Captures {
             haystack: self.haystack,
-            slots: CaptureLocations(slots),
-            pikevm: Arc::clone(&self.re.pikevm),
+            caps,
+            static_captures_len,
         })
     }
 
     #[inline]
     fn count(self) -> usize {
+        // This can actually be up to 2x faster than calling `next()` until
+        // completion, because counting matches when using a DFA only requires
+        // finding the end of each match. But returning a `Match` via `next()`
+        // requires the start of each match which, with a DFA, requires a
+        // reverse forward scan to find it.
         self.it.count()
     }
 }
@@ -2222,8 +2216,7 @@ impl<'r, 'h> core::iter::FusedIterator for CaptureMatches<'r, 'h> {}
 #[derive(Debug)]
 pub struct Split<'r, 'h> {
     haystack: &'h str,
-    finder: Matches<'r, 'h>,
-    last: usize,
+    it: meta::Split<'r, 'h>,
 }
 
 impl<'r, 'h> Iterator for Split<'r, 'h> {
@@ -2231,27 +2224,11 @@ impl<'r, 'h> Iterator for Split<'r, 'h> {
 
     #[inline]
     fn next(&mut self) -> Option<&'h str> {
-        match self.finder.next() {
-            None => {
-                let len = self.haystack.len();
-                if self.last > len {
-                    None
-                } else {
-                    let range = self.last..len;
-                    self.last = len + 1; // Next call will return None
-                    Some(&self.haystack[range])
-                }
-            }
-            Some(m) => {
-                let range = self.last..m.start();
-                self.last = m.end();
-                Some(&self.haystack[range])
-            }
-        }
+        self.it.next().map(|span| &self.haystack[span])
     }
 }
 
-impl<'r, 't> core::iter::FusedIterator for Split<'r, 't> {}
+impl<'r, 'h> core::iter::FusedIterator for Split<'r, 'h> {}
 
 /// An iterator over at most `N` substrings delimited by a regex match.
 ///
@@ -2273,8 +2250,8 @@ impl<'r, 't> core::iter::FusedIterator for Split<'r, 't> {}
 /// by the `limit` parameter to [`Regex::splitn`].
 #[derive(Debug)]
 pub struct SplitN<'r, 'h> {
-    splits: Split<'r, 'h>,
-    limit: usize,
+    haystack: &'h str,
+    it: meta::SplitN<'r, 'h>,
 }
 
 impl<'r, 'h> Iterator for SplitN<'r, 'h> {
@@ -2282,32 +2259,16 @@ impl<'r, 'h> Iterator for SplitN<'r, 'h> {
 
     #[inline]
     fn next(&mut self) -> Option<&'h str> {
-        if self.limit == 0 {
-            return None;
-        }
-
-        self.limit -= 1;
-        if self.limit > 0 {
-            return self.splits.next();
-        }
-
-        let len = self.splits.haystack.len();
-        if self.splits.last > len {
-            // We've already returned all substrings.
-            None
-        } else {
-            // self.n == 0, so future calls will return None immediately
-            Some(&self.splits.haystack[self.splits.last..len])
-        }
+        self.it.next().map(|span| &self.haystack[span])
     }
 
     #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
-        self.splits.size_hint()
+        self.it.size_hint()
     }
 }
 
-impl<'r, 't> core::iter::FusedIterator for SplitN<'r, 't> {}
+impl<'r, 'h> core::iter::FusedIterator for SplitN<'r, 'h> {}
 
 /// An iterator over the names of all capture groups in a regex.
 ///
@@ -2320,7 +2281,7 @@ impl<'r, 't> core::iter::FusedIterator for SplitN<'r, 't> {}
 ///
 /// This iterator is created by [`Regex::capture_names`].
 #[derive(Clone, Debug)]
-pub struct CaptureNames<'r>(nfa::CaptureNames<'r>);
+pub struct CaptureNames<'r>(captures::GroupInfoPatternNames<'r>);
 
 impl<'r> Iterator for CaptureNames<'r> {
     type Item = Option<&'r str>;
@@ -2363,8 +2324,8 @@ impl<'r> core::iter::FusedIterator for CaptureNames<'r> {}
 /// matched haystack.
 #[derive(Clone, Debug)]
 pub struct SubCaptureMatches<'c, 'h> {
-    caps: &'c Captures<'h>,
-    it: core::iter::Enumerate<nfa::CaptureNames<'c>>,
+    haystack: &'h str,
+    it: captures::CapturesPatternIter<'c>,
 }
 
 impl<'c, 'h> Iterator for SubCaptureMatches<'c, 'h> {
@@ -2372,8 +2333,9 @@ impl<'c, 'h> Iterator for SubCaptureMatches<'c, 'h> {
 
     #[inline]
     fn next(&mut self) -> Option<Option<Match<'h>>> {
-        let (group_index, _) = self.it.next()?;
-        Some(self.caps.get(group_index))
+        self.it.next().map(|group| {
+            group.map(|sp| Match::new(self.haystack, sp.start, sp.end))
+        })
     }
 
     #[inline]
@@ -2407,7 +2369,7 @@ impl<'c, 'h> core::iter::FusedIterator for SubCaptureMatches<'c, 'h> {}
 /// the replacement string at all.
 ///
 /// ```
-/// use regex_lite::{Captures, Regex, Replacer};
+/// use regex::{Captures, Regex, Replacer};
 ///
 /// struct NameSwapper;
 ///
@@ -2454,7 +2416,7 @@ pub trait Replacer {
     /// # Example
     ///
     /// ```
-    /// use regex_lite::{Regex, Replacer};
+    /// use regex::{Regex, Replacer};
     ///
     /// fn replace_all_twice<R: Replacer>(
     ///     re: Regex,
@@ -2563,16 +2525,16 @@ impl<'a, R: Replacer + ?Sized + 'a> Replacer for ReplacerRef<'a, R> {
 /// # Example
 ///
 /// ```
-/// use regex_lite::{NoExpand, Regex};
+/// use regex::{NoExpand, Regex};
 ///
 /// let re = Regex::new(r"(?<last>[^,\s]+),\s+(\S+)").unwrap();
 /// let result = re.replace("Springsteen, Bruce", NoExpand("$2 $last"));
 /// assert_eq!(result, "$2 $last");
 /// ```
 #[derive(Clone, Debug)]
-pub struct NoExpand<'t>(pub &'t str);
+pub struct NoExpand<'s>(pub &'s str);
 
-impl<'t> Replacer for NoExpand<'t> {
+impl<'s> Replacer for NoExpand<'s> {
     fn replace_append(&mut self, _: &Captures<'_>, dst: &mut String) {
         dst.push_str(self.0);
     }
@@ -2590,366 +2552,10 @@ impl<'t> Replacer for NoExpand<'t> {
 ///
 /// This is meant to be used to implement the `Replacer::no_expandsion` method
 /// in its various trait impls.
-fn no_expansion<T: AsRef<str>>(t: &T) -> Option<Cow<'_, str>> {
-    let s = t.as_ref();
-    match s.find('$') {
+fn no_expansion<T: AsRef<str>>(replacement: &T) -> Option<Cow<'_, str>> {
+    let replacement = replacement.as_ref();
+    match crate::find_byte::find_byte(b'$', replacement.as_bytes()) {
         Some(_) => None,
-        None => Some(Cow::Borrowed(s)),
-    }
-}
-
-/// A configurable builder for a [`Regex`].
-///
-/// This builder can be used to programmatically set flags such as `i` (case
-/// insensitive) and `x` (for verbose mode). This builder can also be used to
-/// configure things like a size limit on the compiled regular expression.
-#[derive(Debug)]
-pub struct RegexBuilder {
-    pattern: String,
-    hir_config: hir::Config,
-    nfa_config: nfa::Config,
-}
-
-impl RegexBuilder {
-    /// Create a new builder with a default configuration for the given
-    /// pattern.
-    ///
-    /// If the pattern is invalid or exceeds the configured size limits, then
-    /// an error will be returned when [`RegexBuilder::build`] is called.
-    pub fn new(pattern: &str) -> RegexBuilder {
-        RegexBuilder {
-            pattern: pattern.to_string(),
-            hir_config: hir::Config::default(),
-            nfa_config: nfa::Config::default(),
-        }
-    }
-
-    /// Compiles the pattern given to `RegexBuilder::new` with the
-    /// configuration set on this builder.
-    ///
-    /// If the pattern isn't a valid regex or if a configured size limit was
-    /// exceeded, then an error is returned.
-    pub fn build(&self) -> Result<Regex, Error> {
-        let hir = Hir::parse(self.hir_config, &self.pattern)?;
-        let nfa = NFA::new(self.nfa_config, self.pattern.clone(), &hir)?;
-        let pikevm = Arc::new(PikeVM::new(nfa));
-        let pool = {
-            let pikevm = Arc::clone(&pikevm);
-            let create = Box::new(move || Cache::new(&pikevm));
-            CachePool::new(create)
-        };
-        Ok(Regex { pikevm, pool })
-    }
-
-    /// This configures whether to enable ASCII case insensitive matching for
-    /// the entire pattern.
-    ///
-    /// This setting can also be configured using the inline flag `i`
-    /// in the pattern. For example, `(?i:foo)` matches `foo` case
-    /// insensitively while `(?-i:foo)` matches `foo` case sensitively.
-    ///
-    /// The default for this is `false`.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// use regex_lite::RegexBuilder;
-    ///
-    /// let re = RegexBuilder::new(r"foo(?-i:bar)quux")
-    ///     .case_insensitive(true)
-    ///     .build()
-    ///     .unwrap();
-    /// assert!(re.is_match("FoObarQuUx"));
-    /// // Even though case insensitive matching is enabled in the builder,
-    /// // it can be locally disabled within the pattern. In this case,
-    /// // `bar` is matched case sensitively.
-    /// assert!(!re.is_match("fooBARquux"));
-    /// ```
-    pub fn case_insensitive(&mut self, yes: bool) -> &mut RegexBuilder {
-        self.hir_config.flags.case_insensitive = yes;
-        self
-    }
-
-    /// This configures multi-line mode for the entire pattern.
-    ///
-    /// Enabling multi-line mode changes the behavior of the `^` and `$` anchor
-    /// assertions. Instead of only matching at the beginning and end of a
-    /// haystack, respectively, multi-line mode causes them to match at the
-    /// beginning and end of a line *in addition* to the beginning and end of
-    /// a haystack. More precisely, `^` will match at the position immediately
-    /// following a `\n` and `$` will match at the position immediately
-    /// preceding a `\n`.
-    ///
-    /// The behavior of this option is impacted by the [`RegexBuilder::crlf`]
-    /// setting. Namely, CRLF mode changes the line terminator to be either
-    /// `\r` or `\n`, but never at the position between a `\r` and `\`n.
-    ///
-    /// This setting can also be configured using the inline flag `m` in the
-    /// pattern.
-    ///
-    /// The default for this is `false`.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// use regex_lite::RegexBuilder;
-    ///
-    /// let re = RegexBuilder::new(r"^foo$")
-    ///     .multi_line(true)
-    ///     .build()
-    ///     .unwrap();
-    /// assert_eq!(Some(1..4), re.find("\nfoo\n").map(|m| m.range()));
-    /// ```
-    pub fn multi_line(&mut self, yes: bool) -> &mut RegexBuilder {
-        self.hir_config.flags.multi_line = yes;
-        self
-    }
-
-    /// This configures dot-matches-new-line mode for the entire pattern.
-    ///
-    /// Perhaps surprisingly, the default behavior for `.` is not to match
-    /// any character, but rather, to match any character except for the line
-    /// terminator (which is `\n` by default). When this mode is enabled, the
-    /// behavior changes such that `.` truly matches any character.
-    ///
-    /// This setting can also be configured using the inline flag `s` in the
-    /// pattern.
-    ///
-    /// The default for this is `false`.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// use regex_lite::RegexBuilder;
-    ///
-    /// let re = RegexBuilder::new(r"foo.bar")
-    ///     .dot_matches_new_line(true)
-    ///     .build()
-    ///     .unwrap();
-    /// let hay = "foo\nbar";
-    /// assert_eq!(Some("foo\nbar"), re.find(hay).map(|m| m.as_str()));
-    /// ```
-    pub fn dot_matches_new_line(&mut self, yes: bool) -> &mut RegexBuilder {
-        self.hir_config.flags.dot_matches_new_line = yes;
-        self
-    }
-
-    /// This configures CRLF mode for the entire pattern.
-    ///
-    /// When CRLF mode is enabled, both `\r` ("carriage return" or CR for
-    /// short) and `\n` ("line feed" or LF for short) are treated as line
-    /// terminators. This results in the following:
-    ///
-    /// * Unless dot-matches-new-line mode is enabled, `.` will now match any
-    /// character except for `\n` and `\r`.
-    /// * When multi-line mode is enabled, `^` will match immediatelly
-    /// following a `\n` or a `\r`. Similarly, `$` will match immediately
-    /// preceding a `\n` or a `\r`. Neither `^` nor `$` will ever match between
-    /// `\r` and `\n`.
-    ///
-    /// This setting can also be configured using the inline flag `R` in
-    /// the pattern.
-    ///
-    /// The default for this is `false`.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// use regex_lite::RegexBuilder;
-    ///
-    /// let re = RegexBuilder::new(r"^foo$")
-    ///     .multi_line(true)
-    ///     .crlf(true)
-    ///     .build()
-    ///     .unwrap();
-    /// let hay = "\r\nfoo\r\n";
-    /// // If CRLF mode weren't enabled here, then '$' wouldn't match
-    /// // immediately after 'foo', and thus no match would be found.
-    /// assert_eq!(Some("foo"), re.find(hay).map(|m| m.as_str()));
-    /// ```
-    ///
-    /// This example demonstrates that `^` will never match at a position
-    /// between `\r` and `\n`. (`$` will similarly not match between a `\r`
-    /// and a `\n`.)
-    ///
-    /// ```
-    /// use regex_lite::RegexBuilder;
-    ///
-    /// let re = RegexBuilder::new(r"^")
-    ///     .multi_line(true)
-    ///     .crlf(true)
-    ///     .build()
-    ///     .unwrap();
-    /// let hay = "\r\n\r\n";
-    /// let ranges: Vec<_> = re.find_iter(hay).map(|m| m.range()).collect();
-    /// assert_eq!(ranges, vec![0..0, 2..2, 4..4]);
-    /// ```
-    pub fn crlf(&mut self, yes: bool) -> &mut RegexBuilder {
-        self.hir_config.flags.crlf = yes;
-        self
-    }
-
-    /// This configures swap-greed mode for the entire pattern.
-    ///
-    /// When swap-greed mode is enabled, patterns like `a+` will become
-    /// non-greedy and patterns like `a+?` will become greedy. In other words,
-    /// the meanings of `a+` and `a+?` are switched.
-    ///
-    /// This setting can also be configured using the inline flag `U` in the
-    /// pattern.
-    ///
-    /// The default for this is `false`.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// use regex_lite::RegexBuilder;
-    ///
-    /// let re = RegexBuilder::new(r"a+")
-    ///     .swap_greed(true)
-    ///     .build()
-    ///     .unwrap();
-    /// assert_eq!(Some("a"), re.find("aaa").map(|m| m.as_str()));
-    /// ```
-    pub fn swap_greed(&mut self, yes: bool) -> &mut RegexBuilder {
-        self.hir_config.flags.swap_greed = yes;
-        self
-    }
-
-    /// This configures verbose mode for the entire pattern.
-    ///
-    /// When enabled, whitespace will treated as insignifcant in the pattern
-    /// and `#` can be used to start a comment until the next new line.
-    ///
-    /// Normally, in most places in a pattern, whitespace is treated literally.
-    /// For example ` +` will match one or more ASCII whitespace characters.
-    ///
-    /// When verbose mode is enabled, `\#` can be used to match a literal `#`
-    /// and `\ ` can be used to match a literal ASCII whitespace character.
-    ///
-    /// Verbose mode is useful for permitting regexes to be formatted and
-    /// broken up more nicely. This may make them more easily readable.
-    ///
-    /// This setting can also be configured using the inline flag `x` in the
-    /// pattern.
-    ///
-    /// The default for this is `false`.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// use regex_lite::RegexBuilder;
-    ///
-    /// let pat = r"
-    ///     \b
-    ///     (?<first>[A-Z]\w*)  # always start with uppercase letter
-    ///     \s+                 # whitespace should separate names
-    ///     (?: # middle name can be an initial!
-    ///         (?:(?<initial>[A-Z])\.|(?<middle>[A-Z]\w*))
-    ///         \s+
-    ///     )?
-    ///     (?<last>[A-Z]\w*)
-    ///     \b
-    /// ";
-    /// let re = RegexBuilder::new(pat)
-    ///     .ignore_whitespace(true)
-    ///     .build()
-    ///     .unwrap();
-    ///
-    /// let caps = re.captures("Harry Potter").unwrap();
-    /// assert_eq!("Harry", &caps["first"]);
-    /// assert_eq!("Potter", &caps["last"]);
-    ///
-    /// let caps = re.captures("Harry J. Potter").unwrap();
-    /// assert_eq!("Harry", &caps["first"]);
-    /// // Since a middle name/initial isn't required for an overall match,
-    /// // we can't assume that 'initial' or 'middle' will be populated!
-    /// assert_eq!(Some("J"), caps.name("initial").map(|m| m.as_str()));
-    /// assert_eq!(None, caps.name("middle").map(|m| m.as_str()));
-    /// assert_eq!("Potter", &caps["last"]);
-    ///
-    /// let caps = re.captures("Harry James Potter").unwrap();
-    /// assert_eq!("Harry", &caps["first"]);
-    /// // Since a middle name/initial isn't required for an overall match,
-    /// // we can't assume that 'initial' or 'middle' will be populated!
-    /// assert_eq!(None, caps.name("initial").map(|m| m.as_str()));
-    /// assert_eq!(Some("James"), caps.name("middle").map(|m| m.as_str()));
-    /// assert_eq!("Potter", &caps["last"]);
-    /// ```
-    pub fn ignore_whitespace(&mut self, yes: bool) -> &mut RegexBuilder {
-        self.hir_config.flags.ignore_whitespace = yes;
-        self
-    }
-
-    /// Sets the approximate size limit, in bytes, of the compiled regex.
-    ///
-    /// This roughly corresponds to the number of heap memory, in bytes,
-    /// occupied by a single regex. If the regex would otherwise approximately
-    /// exceed this limit, then compiling that regex will fail.
-    ///
-    /// The main utility of a method like this is to avoid compiling regexes
-    /// that use an unexpected amount of resources, such as time and memory.
-    /// Even if the memory usage of a large regex is acceptable, its search
-    /// time may not be. Namely, worst case time complexity for search is `O(m
-    /// * n)`, where `m ~ len(pattern)` and `n ~ len(haystack)`. That is,
-    /// search time depends, in part, on the size of the compiled regex. This
-    /// means that putting a limit on the size of the regex limits how much a
-    /// regex can impact search time.
-    ///
-    /// The default for this is some reasonable number that permits most
-    /// patterns to compile successfully.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// use regex_lite::RegexBuilder;
-    ///
-    /// assert!(RegexBuilder::new(r"\w").size_limit(100).build().is_err());
-    /// ```
-    pub fn size_limit(&mut self, limit: usize) -> &mut RegexBuilder {
-        self.nfa_config.size_limit = Some(limit);
-        self
-    }
-
-    /// Set the nesting limit for this parser.
-    ///
-    /// The nesting limit controls how deep the abstract syntax tree is allowed
-    /// to be. If the AST exceeds the given limit (e.g., with too many nested
-    /// groups), then an error is returned by the parser.
-    ///
-    /// The purpose of this limit is to act as a heuristic to prevent stack
-    /// overflow for consumers that do structural induction on an AST using
-    /// explicit recursion. While this crate never does this (instead using
-    /// constant stack space and moving the call stack to the heap), other
-    /// crates may.
-    ///
-    /// This limit is not checked until the entire AST is parsed. Therefore, if
-    /// callers want to put a limit on the amount of heap space used, then they
-    /// should impose a limit on the length, in bytes, of the concrete pattern
-    /// string. In particular, this is viable since this parser implementation
-    /// will limit itself to heap space proportional to the length of the
-    /// pattern string. See also the [untrusted inputs](crate#untrusted-input)
-    /// section in the top-level crate documentation for more information about
-    /// this.
-    ///
-    /// Note that a nest limit of `0` will return a nest limit error for most
-    /// patterns but not all. For example, a nest limit of `0` permits `a` but
-    /// not `ab`, since `ab` requires an explicit concatenation, which results
-    /// in a nest depth of `1`. In general, a nest limit is not something that
-    /// manifests in an obvious way in the concrete syntax, therefore, it
-    /// should not be used in a granular way.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// use regex_lite::RegexBuilder;
-    ///
-    /// assert!(RegexBuilder::new(r"").nest_limit(0).build().is_ok());
-    /// assert!(RegexBuilder::new(r"a").nest_limit(0).build().is_ok());
-    /// assert!(RegexBuilder::new(r"(a)").nest_limit(0).build().is_err());
-    /// ```
-    pub fn nest_limit(&mut self, limit: u32) -> &mut RegexBuilder {
-        self.hir_config.nest_limit = limit;
-        self
+        None => Some(Cow::Borrowed(replacement)),
     }
 }

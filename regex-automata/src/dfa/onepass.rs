@@ -51,7 +51,7 @@ use crate::{
         int::{Usize, U32, U64, U8},
         look::{Look, LookSet, UnicodeWordBoundaryError},
         primitives::{NonMaxUsize, PatternID, StateID},
-        search::{Anchored, Input, MatchError, MatchKind},
+        search::{Anchored, Input, Match, MatchError, MatchKind, Span},
         sparse_set::SparseSet,
     },
 };
@@ -1630,6 +1630,91 @@ impl DFA {
         self.try_search_slots(cache, &input, &mut []).unwrap().is_some()
     }
 
+    /// Executes an anchored leftmost forward search, and returns a `Match` if
+    /// and only if this one-pass DFA matches the given haystack.
+    ///
+    /// This routine only includes the overall match span. To get access to the
+    /// individual spans of each capturing group, use [`DFA::captures`].
+    ///
+    /// The given `Input` is forcefully set to use [`Anchored::Yes`] if the
+    /// given configuration was [`Anchored::No`] (which is the default).
+    ///
+    /// # Panics
+    ///
+    /// This routine panics if the search could not complete. This can occur
+    /// in the following circumstances:
+    ///
+    /// * When the provided `Input` configuration is not supported. For
+    /// example, by providing an unsupported anchor mode. Concretely,
+    /// this occurs when using [`Anchored::Pattern`] without enabling
+    /// [`Config::starts_for_each_pattern`].
+    ///
+    /// When a search panics, callers cannot know whether a match exists or
+    /// not.
+    ///
+    /// Use [`DFA::try_search`] if you want to handle these panics as error
+    /// values instead.
+    ///
+    /// # Example
+    ///
+    /// Leftmost first match semantics corresponds to the match with the
+    /// smallest starting offset, but where the end offset is determined by
+    /// preferring earlier branches in the original regular expression. For
+    /// example, `Sam|Samwise` will match `Sam` in `Samwise`, but `Samwise|Sam`
+    /// will match `Samwise` in `Samwise`.
+    ///
+    /// Generally speaking, the "leftmost first" match is how most backtracking
+    /// regular expressions tend to work. This is in contrast to POSIX-style
+    /// regular expressions that yield "leftmost longest" matches. Namely,
+    /// both `Sam|Samwise` and `Samwise|Sam` match `Samwise` when using
+    /// leftmost longest semantics. (This crate does not currently support
+    /// leftmost longest semantics.)
+    ///
+    /// ```
+    /// use regex_automata::{dfa::onepass::DFA, Match};
+    ///
+    /// let re = DFA::new("foo[0-9]+")?;
+    /// let mut cache = re.create_cache();
+    /// let expected = Match::must(0, 0..8);
+    /// assert_eq!(Some(expected), re.find(&mut cache, "foo12345"));
+    ///
+    /// // Even though a match is found after reading the first byte (`a`),
+    /// // the leftmost first match semantics demand that we find the earliest
+    /// // match that prefers earlier parts of the pattern over later parts.
+    /// let re = DFA::new("abc|a")?;
+    /// let mut cache = re.create_cache();
+    /// let expected = Match::must(0, 0..3);
+    /// assert_eq!(Some(expected), re.find(&mut cache, "abc"));
+    ///
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
+    #[inline]
+    pub fn find<'h, I: Into<Input<'h>>>(
+        &self,
+        cache: &mut Cache,
+        input: I,
+    ) -> Option<Match> {
+        let mut input = input.into();
+        if matches!(input.get_anchored(), Anchored::No) {
+            input.set_anchored(Anchored::Yes);
+        }
+        if self.get_nfa().pattern_len() == 1 {
+            let mut slots = [None, None];
+            let pid =
+                self.try_search_slots(cache, &input, &mut slots).unwrap()?;
+            let start = slots[0].unwrap().get();
+            let end = slots[1].unwrap().get();
+            return Some(Match::new(pid, Span { start, end }));
+        }
+        let ginfo = self.get_nfa().group_info();
+        let slots_len = ginfo.implicit_slot_len();
+        let mut slots = vec![None; slots_len];
+        let pid = self.try_search_slots(cache, &input, &mut slots).unwrap()?;
+        let start = slots[pid.as_usize() * 2].unwrap().get();
+        let end = slots[pid.as_usize() * 2 + 1].unwrap().get();
+        Some(Match::new(pid, Span { start, end }))
+    }
+
     /// Executes an anchored leftmost forward search and writes the spans
     /// of capturing groups that participated in a match into the provided
     /// [`Captures`] value. If no match was found, then [`Captures::is_match`]
@@ -2031,10 +2116,7 @@ impl DFA {
         let mut pid = None;
         let mut next_sid = match input.get_anchored() {
             Anchored::Yes => self.start(),
-            Anchored::Pattern(pid) => match self.start_pattern(pid)? {
-                None => return Ok(None),
-                Some(sid) => sid,
-            },
+            Anchored::Pattern(pid) => self.start_pattern(pid)?,
             Anchored::No => {
                 // If the regex is itself always anchored, then we're fine,
                 // even if the search is configured to be unanchored.
@@ -2153,10 +2235,7 @@ impl DFA {
     /// 'starts_for_each_pattern'
     /// was not enabled, then this returns an error. If the given pattern is
     /// not in this DFA, then `Ok(None)` is returned.
-    fn start_pattern(
-        &self,
-        pid: PatternID,
-    ) -> Result<Option<StateID>, MatchError> {
+    fn start_pattern(&self, pid: PatternID) -> Result<StateID, MatchError> {
         if !self.config.get_starts_for_each_pattern() {
             return Err(MatchError::unsupported_anchored(Anchored::Pattern(
                 pid,
@@ -2168,7 +2247,7 @@ impl DFA {
         // patterns at pid+1. Thus, starts.len()-1 corresponds to the total
         // number of patterns that one can explicitly search for. (And it may
         // be zero.)
-        Ok(self.starts.get(pid.one_more()).copied())
+        Ok(self.starts.get(pid.one_more()).copied().unwrap_or(DEAD))
     }
 
     /// Returns the transition from the given state ID and byte of input. The

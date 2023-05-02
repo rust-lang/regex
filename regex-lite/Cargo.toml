@@ -15,9 +15,13 @@ autotests = false
 
 # Features are documented in the "Crate features" section of the crate docs:
 # https://docs.rs/regex-syntax/*/#crate-features
+#
+# (Currently there are no supported features. 'std' is technically one, but it
+# is currently required.)
 [features]
-default = ["std"]
+default = ["std", "string"]
 std = []
+string = []
 
 [dev-dependencies]
 anyhow = "1.0.69"
@@ -30,7 +34,3 @@ name = "integration"
 [package.metadata.docs.rs]
 # We want to document all features.
 all-features = true
-# To test this locally, run:
-#
-#     RUSTDOCFLAGS="--cfg docsrs" cargo +nightly doc --all-features
-rustdoc-args = ["--cfg", "docsrs"]

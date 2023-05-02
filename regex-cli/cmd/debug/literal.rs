@@ -91,7 +91,9 @@ OPTIONS:
     }
     if !common.quiet {
         let mut out = stdout();
-        writeln!(out, "")?;
+        if common.table() {
+            writeln!(out, "")?;
+        }
         match seq.literals() {
             None => writeln!(out, "{:?}", seq)?,
             Some(literals) => {

@@ -1770,7 +1770,7 @@ impl Default for MatchKind {
 /// There are a couple other ways a search
 /// can fail. For example, when using the
 /// [`BoundedBacktracker`](crate::nfa::thompson::backtrack::BoundedBacktracker)
-/// with a haystack that is too long, or a trying to run an unanchored search
+/// with a haystack that is too long, or trying to run an unanchored search
 /// with a [one-pass DFA](crate::dfa::onepass).
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct MatchError(

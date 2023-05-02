@@ -171,12 +171,20 @@ OPTIONS:
 
     let pats = patterns.get()?;
     let mut table = Table::empty();
-    let (asts, time) = util::timeitr(|| syntax.asts(&pats))?;
-    table.add("parse time", time);
-    let (hirs, time) = util::timeitr(|| syntax.hirs(&pats, &asts))?;
-    table.add("translate time", time);
-    let (re, time) = util::timeitr(|| meta.from_hirs(&hirs))?;
-    table.add("build meta time", time);
+
+    let re = if meta.build_from_patterns() {
+        let (re, time) = util::timeitr(|| meta.from_patterns(&syntax, &pats))?;
+        table.add("build meta time", time);
+        re
+    } else {
+        let (asts, time) = util::timeitr(|| syntax.asts(&pats))?;
+        table.add("parse time", time);
+        let (hirs, time) = util::timeitr(|| syntax.hirs(&pats, &asts))?;
+        table.add("translate time", time);
+        let (re, time) = util::timeitr(|| meta.from_hirs(&hirs))?;
+        table.add("build meta time", time);
+        re
+    };
 
     let search = |input: &Input<'_>, patset: &mut PatternSet| {
         Ok(re.which_overlapping_matches(input, patset))

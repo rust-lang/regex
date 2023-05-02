@@ -1210,7 +1210,7 @@ unsafe impl<T: AsRef<[u8]>> Automaton for DFA<T> {
     fn start_state_forward(
         &self,
         input: &Input<'_>,
-    ) -> Result<Option<StateID>, MatchError> {
+    ) -> Result<StateID, MatchError> {
         if !self.quitset.is_empty() && input.start() > 0 {
             let offset = input.start() - 1;
             let byte = input.haystack()[offset];
@@ -1226,7 +1226,7 @@ unsafe impl<T: AsRef<[u8]>> Automaton for DFA<T> {
     fn start_state_reverse(
         &self,
         input: &Input<'_>,
-    ) -> Result<Option<StateID>, MatchError> {
+    ) -> Result<StateID, MatchError> {
         if !self.quitset.is_empty() && input.end() < input.haystack().len() {
             let offset = input.end();
             let byte = input.haystack()[offset];
@@ -2147,7 +2147,7 @@ impl<T: AsRef<[u8]>> StartTable<T> {
         &self,
         input: &Input<'_>,
         start: Start,
-    ) -> Result<Option<StateID>, MatchError> {
+    ) -> Result<StateID, MatchError> {
         let start_index = start.as_usize();
         let mode = input.get_anchored();
         let index = match mode {
@@ -2171,7 +2171,7 @@ impl<T: AsRef<[u8]>> StartTable<T> {
                     Some(len) => len,
                 };
                 if pid.as_usize() >= len {
-                    return Ok(None);
+                    return Ok(DEAD);
                 }
                 (2 * self.stride)
                     + (self.stride * pid.as_usize())
@@ -2181,7 +2181,7 @@ impl<T: AsRef<[u8]>> StartTable<T> {
         let start = index * StateID::SIZE;
         // This OK since we're allowed to assume that the start table contains
         // valid StateIDs.
-        Ok(Some(wire::read_state_id_unchecked(&self.table()[start..]).0))
+        Ok(wire::read_state_id_unchecked(&self.table()[start..]).0)
     }
 
     /// Return an iterator over all start IDs in this table.

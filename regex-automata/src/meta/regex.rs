@@ -159,10 +159,10 @@ type CachePoolFn =
 ///
 /// # Example: anchored search
 ///
-/// This example shows how use [`Input::anchored`] to run an anchored search,
-/// even when the regex pattern itself isn't anchored. An anchored search
-/// guarantees that if a match is found, then the start offset of the match
-/// corresponds to the offset at which the search was started.
+/// This example shows how to use [`Input::anchored`] to run an anchored
+/// search, even when the regex pattern itself isn't anchored. An anchored
+/// search guarantees that if a match is found, then the start offset of the
+/// match corresponds to the offset at which the search was started.
 ///
 /// ```
 /// use regex_automata::{meta::Regex, Anchored, Input, Match};
@@ -732,9 +732,9 @@ impl Regex {
     /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// ```
     ///
-    /// When the empty string is used as a regex, it splits every at every
-    /// valid UTF-8 boundary by default (which includes the beginning and
-    /// end of the haystack):
+    /// When the empty string is used as a regex, it splits at every valid
+    /// UTF-8 boundary by default (which includes the beginning and end of the
+    /// haystack):
     ///
     /// ```
     /// use regex_automata::meta::Regex;
@@ -827,11 +827,10 @@ impl Regex {
     /// use regex_automata::meta::Regex;
     ///
     /// let re = Regex::new(r"\W+").unwrap();
-    /// let hay = "a b \t  c\td    e";
     /// let hay = "Hey! How are you?";
     /// let fields: Vec<&str> =
     ///     re.splitn(hay, 3).map(|span| &hay[span]).collect();
-    /// assert_eq!(fields, vec!("Hey", "How", "are you?"));
+    /// assert_eq!(fields, vec!["Hey", "How", "are you?"]);
     ///
     /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// ```
@@ -1813,6 +1812,57 @@ impl Regex {
     #[inline]
     pub fn get_config(&self) -> &Config {
         self.imp.info.config()
+    }
+
+    /// Returns true if this regex has a high chance of being "accelerated."
+    ///
+    /// The precise meaning of "accelerated" is specifically left unspecified,
+    /// but the general meaning is that the search is a high likelihood of
+    /// running faster than than a character-at-a-time loop inside a standard
+    /// regex engine.
+    ///
+    /// When a regex is accelerated, it is only a *probabilistic* claim. That
+    /// is, just because the regex is believed to be accelerated, that doesn't
+    /// mean it will definitely execute searches very fast. Similarly, if a
+    /// regex is *not* accelerated, that is also a probabilistic claim. That
+    /// is, a regex for which `is_accelerated` returns `false` could still run
+    /// searches more quickly than a regex for which `is_accelerated` returns
+    /// `true`.
+    ///
+    /// Whether a regex is marked as accelerated or not is dependent on
+    /// implementations details that may change in a semver compatible release.
+    /// That is, a regex that is accelerated in a `x.y.1` release might not be
+    /// accelerated in a `x.y.2` release.
+    ///
+    /// Basically, the value of acceleration boils down to a hedge: a hodge
+    /// podge of internal heuristics combine to make a probabilistic guess
+    /// that this regex search may run "fast." The value in knowing this from
+    /// a caller's perspective is that it may act as a signal that no further
+    /// work should be done to accelerate a search. For example, a grep-like
+    /// tool might try to do some extra work extracting literals from a regex
+    /// to create its own heuristic acceleration strategies. But it might
+    /// choose to defer to this crate's acceleration strategy if one exists.
+    /// This routine permits querying whether such a strategy is active for a
+    /// particular regex.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use regex_automata::meta::Regex;
+    ///
+    /// // A simple literal is very likely to be accelerated.
+    /// let re = Regex::new(r"foo")?;
+    /// assert!(re.is_accelerated());
+    ///
+    /// // A regex with no literals is likely to not be accelerated.
+    /// let re = Regex::new(r"\w")?;
+    /// assert!(!re.is_accelerated());
+    ///
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
+    #[inline]
+    pub fn is_accelerated(&self) -> bool {
+        self.imp.strat.is_accelerated()
     }
 
     /// Return the total approximate heap memory, in bytes, used by this `Regex`.
@@ -2818,6 +2868,12 @@ impl Config {
     /// and a `\n`).
     ///
     /// By default, `\n` is the line terminator.
+    ///
+    /// **Warning**: This does not change the behavior of `.`. To do that,
+    /// you'll need to configure the syntax option
+    /// [`syntax::Config::line_terminator`](crate::util::syntax::Config::line_terminator)
+    /// in addition to this. Otherwise, `.` will continue to match any
+    /// character other than `\n`.
     ///
     /// # Example
     ///

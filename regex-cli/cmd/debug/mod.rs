@@ -76,7 +76,10 @@ OPTIONS:
         table.print(stdout())?;
     }
     if !common.quiet {
-        writeln!(stdout(), "\n{:#?}", &asts[0])?;
+        if common.table() {
+            writeln!(stdout(), "")?;
+        }
+        writeln!(stdout(), "{:#?}", &asts[0])?;
     }
     Ok(())
 }
@@ -117,7 +120,10 @@ OPTIONS:
         table.print(stdout())?;
     }
     if !common.quiet {
-        writeln!(stdout(), "\n{:#?}", &hirs[0])?;
+        if common.table() {
+            writeln!(stdout(), "")?;
+        }
+        writeln!(stdout(), "{:#?}", &hirs[0])?;
     }
     Ok(())
 }
@@ -172,7 +178,10 @@ OPTIONS:
         table.print(stdout())?;
     }
     if !common.quiet {
-        writeln!(stdout(), "\n{:?}", dfa)?;
+        if common.table() {
+            writeln!(stdout(), "")?;
+        }
+        writeln!(stdout(), "{:?}", dfa)?;
     }
     Ok(())
 }
@@ -222,12 +231,14 @@ OPTIONS:
     );
     table.add("lookset any", nfa.look_set_any());
     table.add("lookset prefix any", nfa.look_set_prefix_any());
-    table.add("lookset prefix all", nfa.look_set_prefix_all());
     if common.table() {
         table.print(stdout())?;
     }
     if !common.quiet {
-        writeln!(stdout(), "\n{:?}", nfa)?;
+        if common.table() {
+            writeln!(stdout(), "")?;
+        }
+        writeln!(stdout(), "{:?}", nfa)?;
     }
     Ok(())
 }

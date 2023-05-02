@@ -57,10 +57,7 @@ fn find_fwd_imp(
     // See 'prefilter_restart' docs for explanation.
     let universal_start = dfa.get_nfa().look_set_prefix_any().is_empty();
     let mut mat = None;
-    let mut sid = match init_fwd(dfa, cache, input)? {
-        None => return Ok(None),
-        Some(sid) => sid,
-    };
+    let mut sid = init_fwd(dfa, cache, input)?;
     let mut at = input.start();
     // This could just be a closure, but then I think it would be unsound
     // because it would need to be safe to invoke. This way, the lack of safety
@@ -319,10 +316,7 @@ fn find_rev_imp(
     earliest: bool,
 ) -> Result<Option<HalfMatch>, MatchError> {
     let mut mat = None;
-    let mut sid = match init_rev(dfa, cache, input)? {
-        None => return Ok(None),
-        Some(sid) => sid,
-    };
+    let mut sid = init_rev(dfa, cache, input)?;
     // In reverse search, the loop below can't handle the case of searching an
     // empty slice. Ideally we could write something congruent to the forward
     // search, i.e., 'while at >= start', but 'start' might be 0. Since we use
@@ -481,10 +475,7 @@ fn find_overlapping_fwd_imp(
     let mut sid = match state.id {
         None => {
             state.at = input.start();
-            match init_fwd(dfa, cache, input)? {
-                None => return Ok(()),
-                Some(sid) => sid,
-            }
+            init_fwd(dfa, cache, input)?
         }
         Some(sid) => {
             if let Some(match_index) = state.next_match_index {
@@ -585,10 +576,7 @@ pub(crate) fn find_overlapping_rev(
     }
     let mut sid = match state.id {
         None => {
-            let sid = match init_rev(dfa, cache, input)? {
-                None => return Ok(()),
-                Some(sid) => sid,
-            };
+            let sid = init_rev(dfa, cache, input)?;
             state.id = Some(sid);
             if input.start() == input.end() {
                 state.rev_eoi = true;
@@ -680,15 +668,12 @@ fn init_fwd(
     dfa: &DFA,
     cache: &mut Cache,
     input: &Input<'_>,
-) -> Result<Option<LazyStateID>, MatchError> {
-    let sid = match dfa.start_state_forward(cache, input)? {
-        None => return Ok(None),
-        Some(sid) => sid,
-    };
+) -> Result<LazyStateID, MatchError> {
+    let sid = dfa.start_state_forward(cache, input)?;
     // Start states can never be match states, since all matches are delayed
     // by 1 byte.
     debug_assert!(!sid.is_match());
-    Ok(Some(sid))
+    Ok(sid)
 }
 
 #[cfg_attr(feature = "perf-inline", inline(always))]
@@ -696,15 +681,12 @@ fn init_rev(
     dfa: &DFA,
     cache: &mut Cache,
     input: &Input<'_>,
-) -> Result<Option<LazyStateID>, MatchError> {
-    let sid = match dfa.start_state_reverse(cache, input)? {
-        None => return Ok(None),
-        Some(sid) => sid,
-    };
+) -> Result<LazyStateID, MatchError> {
+    let sid = dfa.start_state_reverse(cache, input)?;
     // Start states can never be match states, since all matches are delayed
     // by 1 byte.
     debug_assert!(!sid.is_match());
-    Ok(Some(sid))
+    Ok(sid)
 }
 
 #[cfg_attr(feature = "perf-inline", inline(always))]
@@ -810,13 +792,7 @@ fn prefilter_restart(
 ) -> Result<LazyStateID, MatchError> {
     let mut input = input.clone();
     input.set_start(at);
-    // We can unwrap the inner state ID because restarting a prefilter comes
-    // after the initial computation of the start state, which we know already
-    // succeeded by virtue of running the prefilter. Thus, we know it will
-    // succeed to find a start state again. (The only way it can't is if
-    // the pattern ID doesn't exist in this DFA, but that configuration is
-    // invariant throughout the lifetime of a search.)
-    init_fwd(dfa, cache, &input).map(|start| start.unwrap())
+    init_fwd(dfa, cache, &input)
 }
 
 /// A convenience routine for constructing a "gave up" match error.

@@ -129,7 +129,7 @@ impl Config {
     /// The visited capacity represents the amount of heap memory (in bytes) to
     /// allocate toward tracking which parts of the backtracking search have
     /// been done before. The heap memory needed for any particular search is
-    /// proportional to `haystack.len() * nfa.states().len()`, whichc an be
+    /// proportional to `haystack.len() * nfa.states().len()`, which an be
     /// quite large. Therefore, the bounded backtracker is typically only able
     /// to run on shorter haystacks.
     ///

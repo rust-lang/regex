@@ -51,10 +51,7 @@ fn find_fwd_imp<A: Automaton + ?Sized>(
     // See 'prefilter_restart' docs for explanation.
     let universal_start = dfa.universal_start_state(Anchored::No).is_some();
     let mut mat = None;
-    let mut sid = match init_fwd(dfa, input)? {
-        None => return Ok(None),
-        Some(sid) => sid,
-    };
+    let mut sid = init_fwd(dfa, input)?;
     let mut at = input.start();
     // This could just be a closure, but then I think it would be unsound
     // because it would need to be safe to invoke. This way, the lack of safety
@@ -211,10 +208,7 @@ fn find_rev_imp<A: Automaton + ?Sized>(
     earliest: bool,
 ) -> Result<Option<HalfMatch>, MatchError> {
     let mut mat = None;
-    let mut sid = match init_rev(dfa, input)? {
-        None => return Ok(None),
-        Some(sid) => sid,
-    };
+    let mut sid = init_rev(dfa, input)?;
     // In reverse search, the loop below can't handle the case of searching an
     // empty slice. Ideally we could write something congruent to the forward
     // search, i.e., 'while at >= start', but 'start' might be 0. Since we use
@@ -350,10 +344,7 @@ fn find_overlapping_fwd_imp<A: Automaton + ?Sized>(
     let mut sid = match state.id {
         None => {
             state.at = input.start();
-            match init_fwd(dfa, input)? {
-                None => return Ok(()),
-                Some(sid) => sid,
-            }
+            init_fwd(dfa, input)?
         }
         Some(sid) => {
             if let Some(match_index) = state.next_match_index {
@@ -402,9 +393,12 @@ fn find_overlapping_fwd_imp<A: Automaton + ?Sized>(
                     }
                 } else if dfa.is_accel_state(sid) {
                     let needles = dfa.accelerator(sid);
-                    state.at =
-                        accel::find_fwd(needles, input.haystack(), state.at)
-                            .unwrap_or(input.end());
+                    state.at = accel::find_fwd(
+                        needles,
+                        input.haystack(),
+                        state.at + 1,
+                    )
+                    .unwrap_or(input.end());
                     continue;
                 }
             } else if dfa.is_match_state(sid) {
@@ -421,8 +415,9 @@ fn find_overlapping_fwd_imp<A: Automaton + ?Sized>(
                 // byte values. However, there might be an EOI transition. So
                 // we set 'at' to the end of the haystack, which will cause
                 // this loop to stop and fall down into the EOI transition.
-                state.at = accel::find_fwd(needs, input.haystack(), state.at)
-                    .unwrap_or(input.end());
+                state.at =
+                    accel::find_fwd(needs, input.haystack(), state.at + 1)
+                        .unwrap_or(input.end());
                 continue;
             } else if dfa.is_dead_state(sid) {
                 return Ok(());
@@ -461,10 +456,7 @@ pub(crate) fn find_overlapping_rev<A: Automaton + ?Sized>(
     }
     let mut sid = match state.id {
         None => {
-            let sid = match init_rev(dfa, input)? {
-                None => return Ok(()),
-                Some(sid) => sid,
-            };
+            let sid = init_rev(dfa, input)?;
             state.id = Some(sid);
             if input.start() == input.end() {
                 state.rev_eoi = true;
@@ -564,30 +556,24 @@ pub(crate) fn find_overlapping_rev<A: Automaton + ?Sized>(
 fn init_fwd<A: Automaton + ?Sized>(
     dfa: &A,
     input: &Input<'_>,
-) -> Result<Option<StateID>, MatchError> {
-    let sid = match dfa.start_state_forward(input)? {
-        None => return Ok(None),
-        Some(sid) => sid,
-    };
+) -> Result<StateID, MatchError> {
+    let sid = dfa.start_state_forward(input)?;
     // Start states can never be match states, since all matches are delayed
     // by 1 byte.
     debug_assert!(!dfa.is_match_state(sid));
-    Ok(Some(sid))
+    Ok(sid)
 }
 
 #[cfg_attr(feature = "perf-inline", inline(always))]
 fn init_rev<A: Automaton + ?Sized>(
     dfa: &A,
     input: &Input<'_>,
-) -> Result<Option<StateID>, MatchError> {
-    let sid = match dfa.start_state_reverse(input)? {
-        None => return Ok(None),
-        Some(sid) => sid,
-    };
+) -> Result<StateID, MatchError> {
+    let sid = dfa.start_state_reverse(input)?;
     // Start states can never be match states, since all matches are delayed
     // by 1 byte.
     debug_assert!(!dfa.is_match_state(sid));
-    Ok(Some(sid))
+    Ok(sid)
 }
 
 #[cfg_attr(feature = "perf-inline", inline(always))]
@@ -664,5 +650,5 @@ fn prefilter_restart<A: Automaton + ?Sized>(
 ) -> Result<StateID, MatchError> {
     let mut input = input.clone();
     input.set_start(at);
-    init_fwd(dfa, &input).map(|start| start.unwrap())
+    init_fwd(dfa, &input)
 }

@@ -41,7 +41,7 @@ pub struct rure_match {
     pub end: size_t,
 }
 
-pub struct Captures(bytes::Locations);
+pub struct Captures(bytes::CaptureLocations);
 
 pub struct Iter {
     re: *const Regex,
@@ -198,7 +198,7 @@ ffi_fn! {
         let re = unsafe { &*re };
         let haystack = unsafe { slice::from_raw_parts(haystack, len) };
         let slots = unsafe { &mut (*captures).0 };
-        re.read_captures_at(slots, haystack, start).is_some()
+        re.captures_read_at(slots, haystack, start).is_some()
     }
 }
 
@@ -375,7 +375,7 @@ ffi_fn! {
         if it.last_end > text.len() {
             return false;
         }
-        let (s, e) = match re.read_captures_at(slots, text, it.last_end) {
+        let (s, e) = match re.captures_read_at(slots, text, it.last_end) {
             None => return false,
             Some(m) => (m.start(), m.end()),
         };
@@ -400,7 +400,7 @@ ffi_fn! {
 ffi_fn! {
     fn rure_captures_new(re: *const Regex) -> *mut Captures {
         let re = unsafe { &*re };
-        let captures = Captures(re.locations());
+        let captures = Captures(re.capture_locations());
         Box::into_raw(Box::new(captures))
     }
 }
@@ -418,7 +418,7 @@ ffi_fn! {
         match_info: *mut rure_match,
     ) -> bool {
         let locs = unsafe { &(*captures).0 };
-        match locs.pos(i) {
+        match locs.get(i) {
             Some((start, end)) => {
                 if !match_info.is_null() {
                     unsafe {
@@ -562,7 +562,7 @@ ffi_fn! {
         for item in matches.iter_mut() {
             *item = false;
         }
-        re.read_matches_at(&mut matches, haystack, start)
+        re.matches_read_at(&mut matches, haystack, start)
     }
 }
 

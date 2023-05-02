@@ -13,6 +13,7 @@ use crate::args::{self, flags, Configurable, Usage};
 #[derive(Debug, Default)]
 pub struct Config {
     meta: meta::Config,
+    build_from_patterns: bool,
 }
 
 impl Config {
@@ -21,11 +22,28 @@ impl Config {
         Ok(self.meta.clone())
     }
 
-    /// Build a lazy DFA from the NFA given.
+    /// Whether to build a meta regex directly from the pattern strings, or to
+    /// require the caller to build their own HIR first.
     ///
-    /// Building a lazy DFA is generally cheap. It only does a little bit of
-    /// work, but otherwise, the actual determinization process is carried out
-    /// on demand at search time.
+    /// i.e., Whether the caller should use `from_patterns` or `from_hirs`.
+    pub fn build_from_patterns(&self) -> bool {
+        self.build_from_patterns
+    }
+
+    /// Build a meta regex from the pattern strings given.
+    pub fn from_patterns<P: AsRef<str>>(
+        &self,
+        syntax: &crate::args::syntax::Config,
+        patterns: &[P],
+    ) -> anyhow::Result<meta::Regex> {
+        meta::Builder::new()
+            .configure(self.meta()?)
+            .syntax(syntax.syntax()?)
+            .build_many(patterns)
+            .context("failed to compile meta regex")
+    }
+
+    /// Build a meta regex from the HIRs given.
     pub fn from_hirs<H: Borrow<Hir>>(
         &self,
         hirs: &[H],
@@ -44,6 +62,9 @@ impl Configurable for Config {
         arg: &mut Arg,
     ) -> anyhow::Result<bool> {
         match *arg {
+            Arg::Long("build-from-patterns") => {
+                self.build_from_patterns = true;
+            }
             Arg::Short('k') | Arg::Long("match-kind") => {
                 let kind: flags::MatchKind =
                     args::parse(p, "-k/--match-kind")?;
@@ -52,7 +73,7 @@ impl Configurable for Config {
             Arg::Short('B') | Arg::Long("no-utf8-nfa") => {
                 self.meta = self.meta.clone().utf8_empty(false);
             }
-            Arg::Long("--no-auto-prefilter") => {
+            Arg::Long("no-auto-prefilter") => {
                 self.meta = self.meta.clone().auto_prefilter(false);
             }
             Arg::Long("nfa-size-limit") => {
@@ -102,6 +123,27 @@ impl Configurable for Config {
 
     fn usage(&self) -> &[Usage] {
         const USAGES: &'static [Usage] = &[
+            Usage::new(
+                "--build-from-patterns",
+                "Build a meta regex directly from pattern strings.",
+                r#"
+Build a meta regex directly from pattern strings.
+
+By default, a meta regex is built in this tool by first explicitly parsing the
+patterns into ASTs, then translating them into HIRs and finally providing the
+HIRs to the meta regex builder. This flag changes the behavior to pass the
+pattern strings directly to the meta regex builder such that the builder is
+responsible for parsing and translating.
+
+The main reason to use this is if you specifically want to test the meta regex
+builder from patterns directly, as it may contain optimizations for skipping
+aspects of parsing.
+
+The default behavior splits these steps out in order to time them so that
+one gets a good idea of where most time is being spent during meta regex
+construction.
+"#,
+            ),
             flags::MatchKind::USAGE,
             Usage::new(
                 "-B, --no-utf8-nfa",

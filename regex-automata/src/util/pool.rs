@@ -123,9 +123,9 @@ being quite expensive.
 /// # Warning: may use a spin lock
 ///
 /// When this crate is compiled _without_ the `std` feature, then this type
-/// may used a spin lock internally. This can have subtle effects that may be
-/// desirable. See [Spinlocks Considered Harmful][spinharm] for a more thorough
-/// treatment of this topic.
+/// may used a spin lock internally. This can have subtle effects that may
+/// be undesirable. See [Spinlocks Considered Harmful][spinharm] for a more
+/// thorough treatment of this topic.
 ///
 /// [spinharm]: https://matklad.github.io/2020/01/02/spinlocks-considered-harmful.html
 ///

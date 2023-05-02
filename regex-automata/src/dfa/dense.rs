@@ -732,9 +732,7 @@ impl Config {
     ///     .build(r"[a-z]+")?;
     ///
     /// let haystack = "123 foobar 4567".as_bytes();
-    /// // The unwrap is OK because we aren't requesting a start state for a
-    /// // specific pattern.
-    /// let sid = dfa.start_state_forward(&Input::new(haystack))?.unwrap();
+    /// let sid = dfa.start_state_forward(&Input::new(haystack))?;
     /// // The ID returned by 'start_state_forward' will always be tagged as
     /// // a start state when start state specialization is enabled.
     /// assert!(dfa.is_special_state(sid));
@@ -753,9 +751,7 @@ impl Config {
     /// let dfa = DFA::new(r"[a-z]+")?;
     ///
     /// let haystack = "123 foobar 4567";
-    /// // The unwrap is OK because we aren't requesting a start state for a
-    /// // specific pattern.
-    /// let sid = dfa.start_state_forward(&Input::new(haystack))?.unwrap();
+    /// let sid = dfa.start_state_forward(&Input::new(haystack))?;
     /// // Start states are not special in the default configuration!
     /// assert!(!dfa.is_special_state(sid));
     /// assert!(!dfa.is_start_state(sid));
@@ -2887,10 +2883,7 @@ impl OwnedDFA {
         let start_id = |dfa: &mut OwnedDFA, inp: &Input<'_>, start: Start| {
             // This OK because we only call 'start' under conditions
             // in which we know it will succeed.
-            dfa.st
-                .start(inp, start)
-                .expect("valid Input configuration")
-                .expect("valid start state")
+            dfa.st.start(inp, start).expect("valid Input configuration")
         };
         if self.start_kind().has_unanchored() {
             let inp = Input::new("").anchored(Anchored::No);
@@ -3220,7 +3213,7 @@ unsafe impl<T: AsRef<[u32]>> Automaton for DFA<T> {
     fn start_state_forward(
         &self,
         input: &Input<'_>,
-    ) -> Result<Option<StateID>, MatchError> {
+    ) -> Result<StateID, MatchError> {
         if !self.quitset.is_empty() && input.start() > 0 {
             let offset = input.start() - 1;
             let byte = input.haystack()[offset];
@@ -3236,7 +3229,7 @@ unsafe impl<T: AsRef<[u32]>> Automaton for DFA<T> {
     fn start_state_reverse(
         &self,
         input: &Input<'_>,
-    ) -> Result<Option<StateID>, MatchError> {
+    ) -> Result<StateID, MatchError> {
         if !self.quitset.is_empty() && input.end() < input.haystack().len() {
             let offset = input.end();
             let byte = input.haystack()[offset];
@@ -4183,7 +4176,7 @@ impl<T: AsRef<[u32]>> StartTable<T> {
         &self,
         input: &Input<'_>,
         start: Start,
-    ) -> Result<Option<StateID>, MatchError> {
+    ) -> Result<StateID, MatchError> {
         let start_index = start.as_usize();
         let mode = input.get_anchored();
         let index = match mode {
@@ -4207,14 +4200,14 @@ impl<T: AsRef<[u32]>> StartTable<T> {
                     Some(len) => len,
                 };
                 if pid.as_usize() >= len {
-                    return Ok(None);
+                    return Ok(DEAD);
                 }
                 (2 * self.stride)
                     + (self.stride * pid.as_usize())
                     + start_index
             }
         };
-        Ok(Some(self.table()[index]))
+        Ok(self.table()[index])
     }
 
     /// Returns an iterator over all start state IDs in this table.

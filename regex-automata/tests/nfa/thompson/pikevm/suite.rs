@@ -158,4 +158,5 @@ fn config_syntax(test: &RegexTest) -> syntax::Config {
         .case_insensitive(test.case_insensitive())
         .unicode(test.unicode())
         .utf8(test.utf8())
+        .line_terminator(test.line_terminator())
 }

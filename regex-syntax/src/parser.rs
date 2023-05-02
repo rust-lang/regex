@@ -165,6 +165,31 @@ impl ParserBuilder {
         self
     }
 
+    /// Sets the line terminator for use with `(?u-s:.)` and `(?-us:.)`.
+    ///
+    /// Namely, instead of `.` (by default) matching everything except for `\n`,
+    /// this will cause `.` to match everything except for the byte given.
+    ///
+    /// If `.` is used in a context where Unicode mode is enabled and this byte
+    /// isn't ASCII, then an error will be returned. When Unicode mode is
+    /// disabled, then any byte is permitted, but will return an error if UTF-8
+    /// mode is enabled and it is a non-ASCII byte.
+    ///
+    /// In short, any ASCII value for a line terminator is always okay. But a
+    /// non-ASCII byte might result in an error depending on whether Unicode
+    /// mode or UTF-8 mode are enabled.
+    ///
+    /// Note that if `R` mode is enabled then it always takes precedence and
+    /// the line terminator will be treated as `\r` and `\n` simultaneously.
+    ///
+    /// Note also that this *doesn't* impact the look-around assertions
+    /// `(?m:^)` and `(?m:$)`. That's usually controlled by additional
+    /// configuration in the regex engine itself.
+    pub fn line_terminator(&mut self, byte: u8) -> &mut ParserBuilder {
+        self.hir.line_terminator(byte);
+        self
+    }
+
     /// Enable or disable the "swap greed" flag by default.
     ///
     /// By default this is disabled. It may alternatively be selectively

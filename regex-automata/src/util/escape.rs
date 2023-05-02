@@ -1,18 +1,22 @@
 /*!
-This module defines a few convenience routines for escaping raw bytes. Namely,
-since this crate tends to deal with `&[u8]` everywhere and the default
+Provides convenience routines for escaping raw bytes.
+
+Since this crate tends to deal with `&[u8]` everywhere and the default
 `Debug` implementation just shows decimal integers, it makes debugging those
-representations quite difficult. So this module provides types that show
-`&[u8]` as if it were a string, with invalid UTF-8 escaped into its hex
+representations quite difficult. This module provides types that show `&[u8]`
+as if it were a string, with invalid UTF-8 escaped into its byte-by-byte hex
 representation.
 */
 
 use crate::util::utf8;
 
-/// A type that wraps a single byte with a convenient fmt::Debug impl that
-/// escapes the byte.
+/// Provides a convenient `Debug` implementation for a `u8`.
+///
+/// The `Debug` impl treats the byte as an ASCII, and emits a human readable
+/// representation of it. If the byte isn't ASCII, then it's emitted as a hex
+/// escape sequence.
 #[derive(Clone, Copy)]
-pub(crate) struct DebugByte(pub(crate) u8);
+pub struct DebugByte(pub u8);
 
 impl core::fmt::Debug for DebugByte {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
@@ -37,11 +41,12 @@ impl core::fmt::Debug for DebugByte {
     }
 }
 
-/// A type that provides a human readable debug impl for arbitrary bytes.
+/// Provides a convenient `Debug` implementation for `&[u8]`.
 ///
 /// This generally works best when the bytes are presumed to be mostly UTF-8,
-/// but will work for anything.
-pub(crate) struct DebugHaystack<'a>(pub(crate) &'a [u8]);
+/// but will work for anything. For any bytes that aren't UTF-8, they are
+/// emitted as hex escape sequences.
+pub struct DebugHaystack<'a>(pub &'a [u8]);
 
 impl<'a> core::fmt::Debug for DebugHaystack<'a> {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {

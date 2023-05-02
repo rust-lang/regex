@@ -13,10 +13,7 @@ mod suite_string;
 mod suite_string_set;
 
 const BLACKLIST: &[&str] = &[
-    // CRLF-aware line anchors aren't supported in regex API yet.
-    "crlf",
-    // Custom line terminators aren't supported in regex API yet.
-    "line-terminator",
+    // Nothing to blacklist yet!
 ];
 
 fn suite() -> anyhow::Result<regex_test::RegexTests> {

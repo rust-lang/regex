@@ -85,7 +85,10 @@ OPTIONS:
         table.print(stdout())?;
     }
     if !common.quiet {
-        writeln!(stdout(), "\n{:?}", dfa)?;
+        if common.table() {
+            writeln!(stdout(), "")?;
+        }
+        writeln!(stdout(), "{:?}", dfa)?;
     }
     Ok(())
 }
@@ -155,7 +158,10 @@ OPTIONS:
         table.print(stdout())?;
     }
     if !common.quiet {
-        writeln!(stdout(), "\n{:?}", re)?;
+        if common.table() {
+            writeln!(stdout(), "")?;
+        }
+        writeln!(stdout(), "{:?}", re)?;
     }
     Ok(())
 }
@@ -236,7 +242,10 @@ OPTIONS:
         table.print(stdout())?;
     }
     if !common.quiet {
-        writeln!(stdout(), "\n{:?}", dfa)?;
+        if common.table() {
+            writeln!(stdout(), "")?;
+        }
+        writeln!(stdout(), "{:?}", dfa)?;
     }
     Ok(())
 }
@@ -308,7 +317,10 @@ OPTIONS:
         table.print(stdout())?;
     }
     if !common.quiet {
-        writeln!(stdout(), "\n{:?}", re)?;
+        if common.table() {
+            writeln!(stdout(), "")?;
+        }
+        writeln!(stdout(), "{:?}", re)?;
     }
     Ok(())
 }

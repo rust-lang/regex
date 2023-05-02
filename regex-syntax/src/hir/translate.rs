@@ -19,6 +19,7 @@ type Result<T> = core::result::Result<T, Error>;
 #[derive(Clone, Debug)]
 pub struct TranslatorBuilder {
     utf8: bool,
+    line_terminator: u8,
     flags: Flags,
 }
 
@@ -31,7 +32,11 @@ impl Default for TranslatorBuilder {
 impl TranslatorBuilder {
     /// Create a new translator builder with a default c onfiguration.
     pub fn new() -> TranslatorBuilder {
-        TranslatorBuilder { utf8: true, flags: Flags::default() }
+        TranslatorBuilder {
+            utf8: true,
+            line_terminator: b'\n',
+            flags: Flags::default(),
+        }
     }
 
     /// Build a translator using the current configuration.
@@ -40,6 +45,7 @@ impl TranslatorBuilder {
             stack: RefCell::new(vec![]),
             flags: Cell::new(self.flags),
             utf8: self.utf8,
+            line_terminator: self.line_terminator,
         }
     }
 
@@ -60,6 +66,31 @@ impl TranslatorBuilder {
     /// that split a codepoint).
     pub fn utf8(&mut self, yes: bool) -> &mut TranslatorBuilder {
         self.utf8 = yes;
+        self
+    }
+
+    /// Sets the line terminator for use with `(?u-s:.)` and `(?-us:.)`.
+    ///
+    /// Namely, instead of `.` (by default) matching everything except for `\n`,
+    /// this will cause `.` to match everything except for the byte given.
+    ///
+    /// If `.` is used in a context where Unicode mode is enabled and this byte
+    /// isn't ASCII, then an error will be returned. When Unicode mode is
+    /// disabled, then any byte is permitted, but will return an error if UTF-8
+    /// mode is enabled and it is a non-ASCII byte.
+    ///
+    /// In short, any ASCII value for a line terminator is always okay. But a
+    /// non-ASCII byte might result in an error depending on whether Unicode
+    /// mode or UTF-8 mode are enabled.
+    ///
+    /// Note that if `R` mode is enabled then it always takes precedence and
+    /// the line terminator will be treated as `\r` and `\n` simultaneously.
+    ///
+    /// Note also that this *doesn't* impact the look-around assertions
+    /// `(?m:^)` and `(?m:$)`. That's usually controlled by additional
+    /// configuration in the regex engine itself.
+    pub fn line_terminator(&mut self, byte: u8) -> &mut TranslatorBuilder {
+        self.line_terminator = byte;
         self
     }
 
@@ -120,6 +151,8 @@ pub struct Translator {
     flags: Cell<Flags>,
     /// Whether we're allowed to produce HIR that can match arbitrary bytes.
     utf8: bool,
+    /// The line terminator to use for `.`.
+    line_terminator: u8,
 }
 
 impl Translator {
@@ -862,10 +895,38 @@ impl<'t, 'p> TranslatorI<'t, 'p> {
     }
 
     fn hir_dot(&self, span: Span) -> Result<Hir> {
-        if !self.flags().unicode() && self.trans().utf8 {
+        let (utf8, lineterm, flags) =
+            (self.trans().utf8, self.trans().line_terminator, self.flags());
+        if utf8 && (!flags.unicode() || !lineterm.is_ascii()) {
             return Err(self.error(span, ErrorKind::InvalidUtf8));
         }
-        Ok(Hir::dot(self.flags().dot()))
+        let dot = if flags.dot_matches_new_line() {
+            if flags.unicode() {
+                hir::Dot::AnyChar
+            } else {
+                hir::Dot::AnyByte
+            }
+        } else {
+            if flags.unicode() {
+                if flags.crlf() {
+                    hir::Dot::AnyCharExceptCRLF
+                } else {
+                    if !lineterm.is_ascii() {
+                        return Err(
+                            self.error(span, ErrorKind::InvalidLineTerminator)
+                        );
+                    }
+                    hir::Dot::AnyCharExcept(char::from(lineterm))
+                }
+            } else {
+                if flags.crlf() {
+                    hir::Dot::AnyByteExceptCRLF
+                } else {
+                    hir::Dot::AnyByteExcept(lineterm)
+                }
+            }
+        };
+        Ok(Hir::dot(dot))
     }
 
     fn hir_assertion(&self, asst: &ast::Assertion) -> Result<Hir> {
@@ -1206,30 +1267,6 @@ impl Flags {
         }
         if self.crlf.is_none() {
             self.crlf = previous.crlf;
-        }
-    }
-
-    fn dot(&self) -> hir::Dot {
-        if self.dot_matches_new_line() {
-            if self.unicode() {
-                hir::Dot::AnyChar
-            } else {
-                hir::Dot::AnyByte
-            }
-        } else {
-            if self.unicode() {
-                if self.crlf() {
-                    hir::Dot::AnyCharExceptCRLF
-                } else {
-                    hir::Dot::AnyCharExceptLF
-                }
-            } else {
-                if self.crlf() {
-                    hir::Dot::AnyByteExceptCRLF
-                } else {
-                    hir::Dot::AnyByteExceptLF
-                }
-            }
         }
     }
 

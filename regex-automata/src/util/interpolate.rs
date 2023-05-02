@@ -281,8 +281,8 @@ fn find_cap_ref(replacement: &[u8]) -> Option<CaptureRef<'_>> {
     let cap = core::str::from_utf8(&rep[i..cap_end])
         .expect("valid UTF-8 capture name");
     Some(CaptureRef {
-        cap: match cap.parse::<u32>() {
-            Ok(i) => Ref::Number(i as usize),
+        cap: match cap.parse::<usize>() {
+            Ok(i) => Ref::Number(i),
             Err(_) => Ref::Named(cap),
         },
         end: cap_end,
@@ -310,8 +310,8 @@ fn find_cap_ref_braced(rep: &[u8], mut i: usize) -> Option<CaptureRef<'_>> {
         Ok(cap) => cap,
     };
     Some(CaptureRef {
-        cap: match cap.parse::<u32>() {
-            Ok(i) => Ref::Number(i as usize),
+        cap: match cap.parse::<usize>() {
+            Ok(i) => Ref::Number(i),
             Err(_) => Ref::Named(cap),
         },
         end: i + 1,
