@@ -830,6 +830,13 @@ lazy_static::lazy_static! {{
         let version = env!("CARGO_PKG_VERSION");
         let cmd = std::env::args_os()
             .map(|a| a.to_string_lossy().into_owned())
+            .map(|a| {
+                if a.contains('\n') {
+                    "<snip: arg too long>".to_string()
+                } else {
+                    a
+                }
+            })
             .collect::<Vec<String>>()
             .join(" ");
         format!(

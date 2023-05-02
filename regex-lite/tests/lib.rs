@@ -2,8 +2,6 @@ mod fuzz;
 mod string;
 
 const BLACKLIST: &[&str] = &[
-    // CRLF-aware line anchors aren't supported in regex API yet.
-    "crlf",
     // Custom line terminators aren't supported in regex-lite. We could add it,
     // but it didn't seem worth it.
     "line-terminator",

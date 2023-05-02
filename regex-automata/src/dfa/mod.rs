@@ -216,8 +216,8 @@ you would any regex.
 Deserialization can happen anywhere. For example, with bytes embedded into a
 binary or with a file memory mapped at runtime.
 
-TODO: Include link to `regex-cli` here pointing out how to generate Rust code
-for deserializing DFAs.
+The `regex-cli` command (found in the same repository as this crate) can be
+used to serialize DFAs to files and generate Rust code to read them.
 
 # Syntax
 

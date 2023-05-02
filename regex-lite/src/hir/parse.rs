@@ -182,12 +182,12 @@ impl<'a> Parser<'a> {
     /// This returns the old depth.
     fn increment_depth(&self) -> Result<u32, Error> {
         let old = self.depth.get();
+        if old > self.config.nest_limit {
+            return Err(Error::new(ERR_TOO_MUCH_NESTING));
+        }
         // OK because our depth starts at 0, and we return an error if it
         // ever reaches the limit. So the call depth can never exceed u32::MAX.
         let new = old.checked_add(1).unwrap();
-        if new >= self.config.nest_limit {
-            return Err(Error::new(ERR_TOO_MUCH_NESTING));
-        }
         self.depth.set(new);
         Ok(old)
     }
@@ -1896,7 +1896,7 @@ bar
     fn err_standard() {
         assert_eq!(
             ERR_TOO_MUCH_NESTING,
-            perr("(((((((((((((((((((((((((((((((((((((((((((((((((a)))))))))))))))))))))))))))))))))))))))))))))))))"),
+            perr("(((((((((((((((((((((((((((((((((((((((((((((((((((a)))))))))))))))))))))))))))))))))))))))))))))))))))"),
         );
         // This one is tricky, because the only way it can happen is if the
         // number of captures overflows u32. Perhaps we should allow setting a

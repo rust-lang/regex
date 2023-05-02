@@ -1,97 +1,117 @@
-regex-syntax
-============
-This crate provides a robust regular expression parser.
+regex-automata
+==============
+This crate exposes a variety of regex engines used by the `regex` crate.
+It provides a vast, sprawling and "expert" level API to each regex engine.
+The regex engines provided by this crate focus heavily on finite automata
+implementations and specifically guarantee worst case `O(m * n)` time
+complexity for all searches. (Where `m ~ len(regex)` and `n ~ len(haystack)`.)
 
 [![Build status](https://github.com/rust-lang/regex/workflows/ci/badge.svg)](https://github.com/rust-lang/regex/actions)
-[![Crates.io](https://img.shields.io/crates/v/regex-syntax.svg)](https://crates.io/crates/regex-syntax)
-[![Rust](https://img.shields.io/badge/rust-1.28.0%2B-blue.svg?maxAge=3600)](https://github.com/rust-lang/regex)
+[![Crates.io](https://img.shields.io/crates/v/regex-automata.svg)](https://crates.io/crates/regex-automata)
 
 
 ### Documentation
 
-https://docs.rs/regex-syntax
-
-
-### Overview
-
-There are two primary types exported by this crate: `Ast` and `Hir`. The former
-is a faithful abstract syntax of a regular expression, and can convert regular
-expressions back to their concrete syntax while mostly preserving its original
-form. The latter type is a high level intermediate representation of a regular
-expression that is amenable to analysis and compilation into byte codes or
-automata. An `Hir` achieves this by drastically simplifying the syntactic
-structure of the regular expression. While an `Hir` can be converted back to
-its equivalent concrete syntax, the result is unlikely to resemble the original
-concrete syntax that produced the `Hir`.
+https://docs.rs/regex-automata
 
 
 ### Example
 
-This example shows how to parse a pattern string into its HIR:
+This example shows how to search for matches of multiple regexes, where each
+regex uses the same capture group names to parse different key-value formats.
 
 ```rust
-use regex_syntax::{hir::Hir, parse};
+use regex_automata::{meta::Regex, PatternID};
 
-let hir = parse("a|b").unwrap();
-assert_eq!(hir, Hir::alternation(vec![
-    Hir::literal("a".as_bytes()),
-    Hir::literal("b".as_bytes()),
-]));
+let re = Regex::new_many(&[
+    r#"(?m)^(?<key>[[:word:]]+)=(?<val>[[:word:]]+)$"#,
+    r#"(?m)^(?<key>[[:word:]]+)="(?<val>[^"]+)"$"#,
+    r#"(?m)^(?<key>[[:word:]]+)='(?<val>[^']+)'$"#,
+    r#"(?m)^(?<key>[[:word:]]+):\s*(?<val>[[:word:]]+)$"#,
+]).unwrap();
+let hay = r#"
+best_album="Blow Your Face Out"
+best_quote='"then as it was, then again it will be"'
+best_year=1973
+best_simpsons_episode: HOMR
+"#;
+let mut kvs = vec![];
+for caps in re.captures_iter(hay) {
+    // N.B. One could use capture indices '1' and '2' here
+    // as well. Capture indices are local to each pattern.
+    // (Just like names are.)
+    let key = &hay[caps.get_group_by_name("key").unwrap()];
+    let val = &hay[caps.get_group_by_name("val").unwrap()];
+    kvs.push((key, val));
+}
+assert_eq!(kvs, vec![
+    ("best_album", "Blow Your Face Out"),
+    ("best_quote", "\"then as it was, then again it will be\""),
+    ("best_year", "1973"),
+    ("best_simpsons_episode", "HOMR"),
+]);
 ```
 
 
 ### Safety
 
-This crate has no `unsafe` code and sets `forbid(unsafe_code)`. While it's
-possible this crate could use `unsafe` code in the future, the standard
-for doing so is extremely high. In general, most code in this crate is not
-performance critical, since it tends to be dwarfed by the time it takes to
-compile a regular expression into an automaton. Therefore, there is little need
-for extreme optimization, and therefore, use of `unsafe`.
+**I welcome audits of `unsafe` code.**
 
-The standard for using `unsafe` in this crate is extremely high because this
-crate is intended to be reasonably safe to use with user supplied regular
-expressions. Therefore, while there may be bugs in the regex parser itself,
-they should _never_ result in memory unsafety unless there is either a bug
-in the compiler or the standard library. (Since `regex-syntax` has zero
-dependencies.)
+This crate tries to be extremely conservative in its use of `unsafe`, but does
+use it in a few spots. In general, I am very open to removing uses of `unsafe`
+if it doesn't result in measurable performance regressions and doesn't result
+in significantly more complex code.
 
+Below is an outline of how `unsafe` is used in this crate.
 
-### Crate features
+* `util::pool::Pool` makes use of `unsafe` to implement a fast path for
+accessing an element of the pool. The fast path applies to the first thread
+that uses the pool. In effect, the fast path is fast because it avoid a mutex
+lock. `unsafe` is also used in the no-std version of `Pool` to implement a spin
+lock for synchronization.
+* `util::lazy::Lazy` uses `unsafe` to implement a variant of
+`once_cell::sync::Lazy` that works in no-std environments. A no-std no-alloc
+implementation is also provided that requires use of `unsafe`.
+* The `dfa` module makes extensive use of `unsafe` to support zero-copy
+deserialization of DFAs. The high level problem is that you need to get from
+`&[u8]` to the internal representation of a DFA without doing any copies.
+This is required for support in no-std no-alloc environments. It also makes
+deserialization extremely cheap.
+* The `dfa` and `hybrid` modules use `unsafe` to explicitly elide bounds checks
+in the core search loops. This makes the codegen tighter and typically leads to
+consistent 5-10% performance improvements on some workloads.
 
-By default, this crate bundles a fairly large amount of Unicode data tables
-(a source size of ~750KB). Because of their large size, one can disable some
-or all of these data tables. If a regular expression attempts to use Unicode
-data that is not available, then an error will occur when translating the `Ast`
-to the `Hir`.
-
-The full set of features one can disable are
-[in the "Crate features" section of the documentation](https://docs.rs/regex-syntax/*/#crate-features).
-
-
-### Testing
-
-Simply running `cargo test` will give you very good coverage. However, because
-of the large number of features exposed by this crate, a `test` script is
-included in this directory which will test several feature combinations. This
-is the same script that is run in CI.
+In general, the above reflect the only uses of `unsafe` throughout the entire
+`regex` crate. At present, there are no plans to meaningfully expand the use
+of `unsafe`. With that said, one thing folks have been asking for is cheap
+deserialization of a `regex::Regex`. My sense is that this feature will require
+a lot more `unsafe` in places to support zero-copy deserialization. It is
+unclear at this point whether this will be pursued.
 
 
 ### Motivation
 
-The primary purpose of this crate is to provide the parser used by `regex`.
-Specifically, this crate is treated as an implementation detail of the `regex`,
-and is primarily developed for the needs of `regex`.
+I started out building this crate because I wanted to re-work the `regex`
+crate internals to make it more amenable to optimizations. It turns out that
+there are a lot of different ways to build regex engines and even more ways to
+compose them. Moreover, heuristic literal optimizations are often tricky to
+get correct, but the fruit they bear is attractive. All of these things were
+difficult to expand upon without risking the introduction of more bugs. So I
+decided to tear things down and start fresh.
 
-Since this crate is an implementation detail of `regex`, it may experience
-breaking change releases at a different cadence from `regex`. This is only
-possible because this crate is _not_ a public dependency of `regex`.
+In the course of doing so, I ended up designing strong boundaries between each
+component so that each component could be reasoned and tested independently.
+This also made it somewhat natural to expose the components as a library unto
+itself. Namely, folks have been asking for more capabilities in the regex
+crate for a long time, but these capabilities usually come with additional API
+complexity that I didn't want to introduce in the `regex` crate proper. But
+exposing them in an "expert" level crate like `regex-automata` seemed quite
+fine.
 
-Another consequence of this de-coupling is that there is no direct way to
-compile a `regex::Regex` from a `regex_syntax::hir::Hir`. Instead, one must
-first convert the `Hir` to a string (via its `std::fmt::Display`) and then
-compile that via `Regex::new`. While this does repeat some work, compilation
-typically takes much longer than parsing.
-
-Stated differently, the coupling between `regex` and `regex-syntax` exists only
-at the level of the concrete syntax.
+In the end, I do still somewhat consider this crate an experiment. It is
+unclear whether the strong boundaries between components will be an impediment
+to ongoing development or not. De-coupling tends to lead to slower development
+in my experience, and when you mix in the added cost of not introducing
+breaking changes all of the time, things can get quite complicated. But, I
+don't think anyone has ever release the internals of a regex engine as a
+library before. So it will be interesting to see how it plays out!

@@ -1,9 +1,9 @@
 #![no_main]
 
-use libfuzzer_sys::fuzz_target;
+use libfuzzer_sys::{fuzz_target, Corpus};
 
-fuzz_target!(|data: &[u8]| {
-    let _ = run(data);
+fuzz_target!(|data: &[u8]| -> Corpus {
+    run(data).map_or(Corpus::Reject, |_| Corpus::Keep)
 });
 
 fn run(given_data: &[u8]) -> Option<()> {

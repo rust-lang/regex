@@ -79,6 +79,7 @@ fn regression_big_regex_overflow() {
     assert!(Regex::new(pat).is_err());
 }
 
+// See: https://github.com/rust-lang/regex/issues/999
 #[test]
 fn regression_complete_literals_suffix_incorrect() {
     let needles = vec![
@@ -89,5 +90,5 @@ fn regression_complete_literals_suffix_incorrect() {
     let pattern = needles.join("|");
     let re = regex!(&pattern);
     let hay = "FUBAR";
-    assert_eq!(0, re.find_iter(text!(hay)).count());
+    assert_eq!(0, re.find_iter(hay).count());
 }

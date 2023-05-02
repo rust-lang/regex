@@ -51,7 +51,7 @@ the "trickier" parts are how to combine literal sequences, and that is all
 implemented on [`Seq`].
 */
 
-use core::{cmp, mem};
+use core::{cmp, mem, num::NonZeroUsize};
 
 use alloc::{vec, vec::Vec};
 
@@ -1571,7 +1571,7 @@ impl Seq {
     /// unioning `self` with `other`. If either set is infinite, then this
     /// returns `None`.
     #[inline]
-    fn max_union_len(&self, other: &Seq) -> Option<usize> {
+    pub fn max_union_len(&self, other: &Seq) -> Option<usize> {
         let len1 = self.len()?;
         let len2 = other.len()?;
         Some(len1.saturating_add(len2))
@@ -1581,7 +1581,7 @@ impl Seq {
     /// cross product of `self` with `other`. If either set is infinite, then
     /// this returns `None`.
     #[inline]
-    fn max_cross_len(&self, other: &Seq) -> Option<usize> {
+    pub fn max_cross_len(&self, other: &Seq) -> Option<usize> {
         let len1 = self.len()?;
         let len2 = other.len()?;
         Some(len1.saturating_mul(len2))
@@ -1966,7 +1966,11 @@ impl Seq {
             } else {
                 self.keep_last_bytes(keep);
             }
-            self.minimize_by_preference();
+            if prefix {
+                if let Some(ref mut lits) = self.literals {
+                    PreferenceTrie::minimize(lits, true);
+                }
+            }
         }
         // Check for a poison literal. A poison literal is one that is short
         // and is believed to have a very high match count. These poisons
@@ -2016,7 +2020,7 @@ impl core::fmt::Debug for Seq {
         if let Some(lits) = self.literals() {
             f.debug_list().entries(lits.iter()).finish()
         } else {
-            write!(f, "[∅]")
+            write!(f, "[∞]")
         }
     }
 }
@@ -2199,12 +2203,19 @@ impl core::fmt::Debug for Literal {
 /// never seen this show up on a profile. Because of the heuristic limits
 /// imposed on literal extractions, the size of the inputs here is usually
 /// very small.)
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct PreferenceTrie {
     /// The states in this trie. The index of a state in this vector is its ID.
     states: Vec<State>,
+    /// This vec indicates which states are match states. It always has
+    /// the same length as `states` and is indexed by the same state ID.
+    /// A state with identifier `sid` is a match state if and only if
+    /// `matches[sid].is_some()`. The option contains the index of the literal
+    /// corresponding to the match. The index is offset by 1 so that it fits in
+    /// a NonZeroUsize.
+    matches: Vec<Option<NonZeroUsize>>,
     /// The index to allocate to the next literal added to this trie. Starts at
-    /// 0 and increments by 1 for every literal successfully added to the trie.
+    /// 1 and increments by 1 for every literal successfully added to the trie.
     next_literal_index: usize,
 }
 
@@ -2215,9 +2226,6 @@ struct State {
     /// are sorted by byte. There is at most one such transition for any
     /// particular byte.
     trans: Vec<(u8, usize)>,
-    /// Whether this is a matching state or not. If it is, then it contains the
-    /// index to the matching literal.
-    literal_index: Option<usize>,
 }
 
 impl PreferenceTrie {
@@ -2234,14 +2242,18 @@ impl PreferenceTrie {
         use core::cell::RefCell;
 
         // MSRV(1.61): Use retain_mut here to avoid interior mutability.
-        let trie = RefCell::new(PreferenceTrie::default());
+        let trie = RefCell::new(PreferenceTrie {
+            states: vec![],
+            matches: vec![],
+            next_literal_index: 1,
+        });
         let mut make_inexact = vec![];
         literals.retain(|lit| {
             match trie.borrow_mut().insert(lit.as_bytes()) {
                 Ok(_) => true,
                 Err(i) => {
                     if !keep_exact {
-                        make_inexact.push(i);
+                        make_inexact.push(i.checked_sub(1).unwrap());
                     }
                     false
                 }
@@ -2264,15 +2276,15 @@ impl PreferenceTrie {
     /// search.
     fn insert(&mut self, bytes: &[u8]) -> Result<usize, usize> {
         let mut prev = self.root();
-        if let Some(idx) = self.states[prev].literal_index {
-            return Err(idx);
+        if let Some(idx) = self.matches[prev] {
+            return Err(idx.get());
         }
         for &b in bytes.iter() {
             match self.states[prev].trans.binary_search_by_key(&b, |t| t.0) {
                 Ok(i) => {
                     prev = self.states[prev].trans[i].1;
-                    if let Some(idx) = self.states[prev].literal_index {
-                        return Err(idx);
+                    if let Some(idx) = self.matches[prev] {
+                        return Err(idx.get());
                     }
                 }
                 Err(i) => {
@@ -2284,7 +2296,7 @@ impl PreferenceTrie {
         }
         let idx = self.next_literal_index;
         self.next_literal_index += 1;
-        self.states[prev].literal_index = Some(idx);
+        self.matches[prev] = NonZeroUsize::new(idx);
         Ok(idx)
     }
 
@@ -2301,6 +2313,7 @@ impl PreferenceTrie {
     fn create_state(&mut self) -> usize {
         let id = self.states.len();
         self.states.push(State::default());
+        self.matches.push(None);
         id
     }
 }

@@ -12,6 +12,7 @@ walking its state graph directly.
 * `captures` contains APIs for dealing with capture group matches and their
 mapping to "slots" used inside an NFA graph. This is also where you can find
 iterators over capture group names.
+* `escape` contains types for pretty-printing raw byte slices as strings.
 * `iter` contains API helpers for writing regex iterators.
 * `lazy` contains a no-std and no-alloc variant of `lazy_static!` and
 `once_cell`.
@@ -29,6 +30,7 @@ with the `regex-syntax` crate.
 pub mod alphabet;
 #[cfg(feature = "alloc")]
 pub mod captures;
+pub mod escape;
 #[cfg(feature = "alloc")]
 pub mod interpolate;
 pub mod iter;
@@ -45,7 +47,6 @@ pub mod wire;
 #[cfg(any(feature = "dfa-build", feature = "hybrid"))]
 pub(crate) mod determinize;
 pub(crate) mod empty;
-pub(crate) mod escape;
 pub(crate) mod int;
 pub(crate) mod memchr;
 pub(crate) mod search;

@@ -1,5 +1,3 @@
-# TODO: There are still a couple of manually written tests in crazy.rs.
-
 [[test]]
 name = "nothing-empty"
 regex = []

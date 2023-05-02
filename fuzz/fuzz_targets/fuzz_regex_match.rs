@@ -1,6 +1,6 @@
 #![no_main]
 
-use libfuzzer_sys::{arbitrary, fuzz_target};
+use libfuzzer_sys::{arbitrary, fuzz_target, Corpus};
 
 #[derive(arbitrary::Arbitrary)]
 struct FuzzCase<'a> {
@@ -43,6 +43,7 @@ let Ok(re) = regex::RegexBuilder::new({pattern:?})
     .ignore_whitespace({ignore_whitespace:?})
     .unicode({unicode:?})
     .octal({octal:?})
+    .size_limit(1<<20)
     .build() else {{ return }};
 re.is_match({haystack:?});
         "#
@@ -50,7 +51,7 @@ re.is_match({haystack:?});
     }
 }
 
-fuzz_target!(|case: FuzzCase| {
+fuzz_target!(|case: FuzzCase| -> Corpus {
     let _ = env_logger::try_init();
 
     let Ok(re) = regex::RegexBuilder::new(case.pattern)
@@ -62,6 +63,7 @@ fuzz_target!(|case: FuzzCase| {
         .unicode(case.unicode)
         .octal(case.octal)
         .size_limit(1<<20)
-        .build() else { return };
+        .build() else { return Corpus::Reject };
     re.is_match(case.haystack);
+    Corpus::Keep
 });

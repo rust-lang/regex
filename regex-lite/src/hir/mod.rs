@@ -4,7 +4,7 @@ use crate::{error::Error, utf8};
 
 mod parse;
 
-/// Escapes all regular expression meta characters in `haystack`.
+/// Escapes all regular expression meta characters in `pattern`.
 ///
 /// The string returned may be safely used as a literal in a regular
 /// expression.
@@ -155,6 +155,7 @@ pub(crate) struct Hir {
     kind: HirKind,
     is_start_anchored: bool,
     is_match_empty: bool,
+    static_explicit_captures_len: Option<usize>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -199,24 +200,51 @@ impl Hir {
         self.is_match_empty
     }
 
+    /// If the pattern always reports the same number of matching capture groups
+    /// for every match, then this returns the number of those groups. This
+    /// doesn't include the implicit group found in every pattern.
+    pub(crate) fn static_explicit_captures_len(&self) -> Option<usize> {
+        self.static_explicit_captures_len
+    }
+
     fn fail() -> Hir {
         let kind = HirKind::Class(Class { ranges: vec![] });
-        Hir { kind, is_start_anchored: false, is_match_empty: false }
+        Hir {
+            kind,
+            is_start_anchored: false,
+            is_match_empty: false,
+            static_explicit_captures_len: Some(0),
+        }
     }
 
     fn empty() -> Hir {
         let kind = HirKind::Empty;
-        Hir { kind, is_start_anchored: false, is_match_empty: true }
+        Hir {
+            kind,
+            is_start_anchored: false,
+            is_match_empty: true,
+            static_explicit_captures_len: Some(0),
+        }
     }
 
     fn char(ch: char) -> Hir {
         let kind = HirKind::Char(ch);
-        Hir { kind, is_start_anchored: false, is_match_empty: false }
+        Hir {
+            kind,
+            is_start_anchored: false,
+            is_match_empty: false,
+            static_explicit_captures_len: Some(0),
+        }
     }
 
     fn class(class: Class) -> Hir {
         let kind = HirKind::Class(class);
-        Hir { kind, is_start_anchored: false, is_match_empty: false }
+        Hir {
+            kind,
+            is_start_anchored: false,
+            is_match_empty: false,
+            static_explicit_captures_len: Some(0),
+        }
     }
 
     fn look(look: Look) -> Hir {
@@ -225,6 +253,7 @@ impl Hir {
             kind,
             is_start_anchored: matches!(look, Look::Start),
             is_match_empty: true,
+            static_explicit_captures_len: Some(0),
         }
     }
 
@@ -236,15 +265,47 @@ impl Hir {
         }
         let is_start_anchored = rep.min > 0 && rep.sub.is_start_anchored;
         let is_match_empty = rep.min == 0 || rep.sub.is_match_empty;
-        let kind = HirKind::Repetition(rep);
-        Hir { kind, is_start_anchored, is_match_empty }
+        let mut static_explicit_captures_len =
+            rep.sub.static_explicit_captures_len;
+        // If the static captures len of the sub-expression is not known or
+        // is greater than zero, then it automatically propagates to the
+        // repetition, regardless of the repetition. Otherwise, it might
+        // change, but only when the repetition can match 0 times.
+        if rep.min == 0
+            && static_explicit_captures_len.map_or(false, |len| len > 0)
+        {
+            // If we require a match 0 times, then our captures len is
+            // guaranteed to be zero. Otherwise, if we *can* match the empty
+            // string, then it's impossible to know how many captures will be
+            // in the resulting match.
+            if rep.max == Some(0) {
+                static_explicit_captures_len = Some(0);
+            } else {
+                static_explicit_captures_len = None;
+            }
+        }
+        Hir {
+            kind: HirKind::Repetition(rep),
+            is_start_anchored,
+            is_match_empty,
+            static_explicit_captures_len,
+        }
     }
 
     fn capture(cap: Capture) -> Hir {
         let is_start_anchored = cap.sub.is_start_anchored;
         let is_match_empty = cap.sub.is_match_empty;
+        let static_explicit_captures_len = cap
+            .sub
+            .static_explicit_captures_len
+            .map(|len| len.saturating_add(1));
         let kind = HirKind::Capture(cap);
-        Hir { kind, is_start_anchored, is_match_empty }
+        Hir {
+            kind,
+            is_start_anchored,
+            is_match_empty,
+            static_explicit_captures_len,
+        }
     }
 
     fn concat(mut subs: Vec<Hir>) -> Hir {
@@ -254,9 +315,22 @@ impl Hir {
             subs.pop().unwrap()
         } else {
             let is_start_anchored = subs[0].is_start_anchored;
-            let is_match_empty = subs.iter().all(|s| s.is_match_empty);
-            let kind = HirKind::Concat(subs);
-            Hir { kind, is_start_anchored, is_match_empty }
+            let mut is_match_empty = true;
+            let mut static_explicit_captures_len = Some(0usize);
+            for sub in subs.iter() {
+                is_match_empty = is_match_empty && sub.is_match_empty;
+                static_explicit_captures_len = static_explicit_captures_len
+                    .and_then(|len1| {
+                        Some((len1, sub.static_explicit_captures_len?))
+                    })
+                    .and_then(|(len1, len2)| Some(len1.saturating_add(len2)));
+            }
+            Hir {
+                kind: HirKind::Concat(subs),
+                is_start_anchored,
+                is_match_empty,
+                static_explicit_captures_len,
+            }
         }
     }
 
@@ -266,10 +340,28 @@ impl Hir {
         } else if subs.len() == 1 {
             subs.pop().unwrap()
         } else {
-            let is_start_anchored = subs.iter().all(|s| s.is_start_anchored);
-            let is_match_empty = subs.iter().any(|s| s.is_match_empty);
-            let kind = HirKind::Alternation(subs);
-            Hir { kind, is_start_anchored, is_match_empty }
+            let mut it = subs.iter().peekable();
+            let mut is_start_anchored =
+                it.peek().map_or(false, |sub| sub.is_start_anchored);
+            let mut is_match_empty =
+                it.peek().map_or(false, |sub| sub.is_match_empty);
+            let mut static_explicit_captures_len =
+                it.peek().and_then(|sub| sub.static_explicit_captures_len);
+            for sub in it {
+                is_start_anchored = is_start_anchored && sub.is_start_anchored;
+                is_match_empty = is_match_empty || sub.is_match_empty;
+                if static_explicit_captures_len
+                    != sub.static_explicit_captures_len
+                {
+                    static_explicit_captures_len = None;
+                }
+            }
+            Hir {
+                kind: HirKind::Alternation(subs),
+                is_start_anchored,
+                is_match_empty,
+                static_explicit_captures_len,
+            }
         }
     }
 }

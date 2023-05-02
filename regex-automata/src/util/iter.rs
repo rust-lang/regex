@@ -712,6 +712,15 @@ impl<'h, F> TryHalfMatchesIter<'h, F> {
     pub fn infallible(self) -> HalfMatchesIter<'h, F> {
         HalfMatchesIter(self)
     }
+
+    /// Returns the current `Input` used by this iterator.
+    ///
+    /// The `Input` returned is generally equivalent to the one used to
+    /// construct this iterator, but its start position may be different to
+    /// reflect the start of the next search to be executed.
+    pub fn input<'i>(&'i self) -> &'i Input<'h> {
+        self.it.input()
+    }
 }
 
 impl<'h, F> Iterator for TryHalfMatchesIter<'h, F>
@@ -756,6 +765,17 @@ impl<'h, F> core::fmt::Debug for TryHalfMatchesIter<'h, F> {
 /// then calling [`TryHalfMatchesIter::infallible`].
 #[derive(Debug)]
 pub struct HalfMatchesIter<'h, F>(TryHalfMatchesIter<'h, F>);
+
+impl<'h, F> HalfMatchesIter<'h, F> {
+    /// Returns the current `Input` used by this iterator.
+    ///
+    /// The `Input` returned is generally equivalent to the one used to
+    /// construct this iterator, but its start position may be different to
+    /// reflect the start of the next search to be executed.
+    pub fn input<'i>(&'i self) -> &'i Input<'h> {
+        self.0.it.input()
+    }
+}
 
 impl<'h, F> Iterator for HalfMatchesIter<'h, F>
 where
@@ -808,6 +828,15 @@ impl<'h, F> TryMatchesIter<'h, F> {
     pub fn infallible(self) -> MatchesIter<'h, F> {
         MatchesIter(self)
     }
+
+    /// Returns the current `Input` used by this iterator.
+    ///
+    /// The `Input` returned is generally equivalent to the one used to
+    /// construct this iterator, but its start position may be different to
+    /// reflect the start of the next search to be executed.
+    pub fn input<'i>(&'i self) -> &'i Input<'h> {
+        self.it.input()
+    }
 }
 
 impl<'h, F> Iterator for TryMatchesIter<'h, F>
@@ -851,6 +880,17 @@ impl<'h, F> core::fmt::Debug for TryMatchesIter<'h, F> {
 /// then calling [`TryMatchesIter::infallible`].
 #[derive(Debug)]
 pub struct MatchesIter<'h, F>(TryMatchesIter<'h, F>);
+
+impl<'h, F> MatchesIter<'h, F> {
+    /// Returns the current `Input` used by this iterator.
+    ///
+    /// The `Input` returned is generally equivalent to the one used to
+    /// construct this iterator, but its start position may be different to
+    /// reflect the start of the next search to be executed.
+    pub fn input<'i>(&'i self) -> &'i Input<'h> {
+        self.0.it.input()
+    }
+}
 
 impl<'h, F> Iterator for MatchesIter<'h, F>
 where

@@ -105,8 +105,8 @@ overlapping ranges between '[80-BF]' and '[A0-BF]'. Thus, there is no
 simple way to apply Daciuk's algorithm.
 
 And thus, the range trie was born. The range trie's only purpose is to take
-sequences of byte ranges like the ones above, collect them into a trie and
-then spit them in a sorted fashion with no overlapping ranges. For example,
+sequences of byte ranges like the ones above, collect them into a trie and then
+spit them out in a sorted fashion with no overlapping ranges. For example,
 0x00-0x10FFFF gets translated to:
 
     [0-7F]
@@ -130,42 +130,31 @@ We've thus satisfied our requirements for running Daciuk's algorithm. All
 sequences of ranges are sorted, and any corresponding ranges are either
 exactly equivalent or non-overlapping.
 
-In effect, a range trie is building a DFA from a sequence of arbitrary
-byte ranges. But it uses an algoritm custom tailored to its input, so it
-is not as costly as traditional DFA construction. While it is still quite
-a bit more costly than the forward's case (which only needs Daciuk's
-algorithm), it winds up saving a substantial amount of time if one is doing
-a full DFA powerset construction later by virtue of producing a much much
-smaller NFA.
+In effect, a range trie is building a DFA from a sequence of arbitrary byte
+ranges. But it uses an algoritm custom tailored to its input, so it is not as
+costly as traditional DFA construction. While it is still quite a bit more
+costly than the forward case (which only needs Daciuk's algorithm), it winds
+up saving a substantial amount of time if one is doing a full DFA powerset
+construction later by virtue of producing a much much smaller NFA.
 
 [1] - https://blog.burntsushi.net/transducers/
 [2] - https://www.mitpressjournals.org/doi/pdfplus/10.1162/089120100561601
 */
 
-use core::{
-    cell::RefCell, convert::TryFrom, fmt, mem, ops::RangeInclusive, u32,
-};
+use core::{cell::RefCell, convert::TryFrom, fmt, mem, ops::RangeInclusive};
 
 use alloc::{format, string::String, vec, vec::Vec};
 
 use regex_syntax::utf8::Utf8Range;
 
-/// A smaller state ID means more effective use of the CPU cache and less
-/// time spent copying. The implementation below will panic if the state ID
-/// space is exhausted, but in order for that to happen, the range trie itself
-/// would use well over 100GB of memory. Moreover, it's likely impossible
-/// for the state ID space to get that big. In fact, it's likely that even a
-/// u16 would be good enough here. But it's not quite clear how to prove this.
-///
-/// TODO: We should switch to using crate::util::primitives::StateID.
-type StateID = u32;
+use crate::util::primitives::StateID;
 
 /// There is only one final state in this trie. Every sequence of byte ranges
 /// added shares the same final state.
-const FINAL: StateID = 0;
+const FINAL: StateID = StateID::ZERO;
 
 /// The root state of the trie.
-const ROOT: StateID = 1;
+const ROOT: StateID = StateID::new_unchecked(1);
 
 /// A range trie represents an ordered set of sequences of bytes.
 ///
@@ -550,12 +539,12 @@ impl RangeTrie {
 
     /// Return an immutable borrow for the state with the given ID.
     fn state(&self, id: StateID) -> &State {
-        &self.states[usize::try_from(id).unwrap()]
+        &self.states[id]
     }
 
     /// Return a mutable borrow for the state with the given ID.
     fn state_mut(&mut self, id: StateID) -> &mut State {
-        &mut self.states[usize::try_from(id).unwrap()]
+        &mut self.states[id]
     }
 }
 
@@ -877,11 +866,9 @@ impl Split {
 
 impl fmt::Debug for RangeTrie {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // OK since FINAL == 0.
-        let ufinal = usize::try_from(FINAL).unwrap();
         writeln!(f, "")?;
         for (i, state) in self.states.iter().enumerate() {
-            let status = if i == ufinal { '*' } else { ' ' };
+            let status = if i == FINAL.as_usize() { '*' } else { ' ' };
             writeln!(f, "{}{:06}: {:?}", status, i, state)?;
         }
         Ok(())
@@ -903,12 +890,19 @@ impl fmt::Debug for State {
 impl fmt::Debug for Transition {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.range.start == self.range.end {
-            write!(f, "{:02X} => {:02X}", self.range.start, self.next_id)
+            write!(
+                f,
+                "{:02X} => {:02X}",
+                self.range.start,
+                self.next_id.as_usize(),
+            )
         } else {
             write!(
                 f,
                 "{:02X}-{:02X} => {:02X}",
-                self.range.start, self.range.end, self.next_id
+                self.range.start,
+                self.range.end,
+                self.next_id.as_usize(),
             )
         }
     }

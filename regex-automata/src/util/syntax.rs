@@ -147,6 +147,7 @@ pub struct Config {
     multi_line: bool,
     dot_matches_new_line: bool,
     crlf: bool,
+    line_terminator: u8,
     swap_greed: bool,
     ignore_whitespace: bool,
     unicode: bool,
@@ -164,6 +165,7 @@ impl Config {
             multi_line: false,
             dot_matches_new_line: false,
             crlf: false,
+            line_terminator: b'\n',
             swap_greed: false,
             ignore_whitespace: false,
             unicode: true,
@@ -236,6 +238,31 @@ impl Config {
     /// match between a `\r` and a `\n`.
     pub fn crlf(mut self, yes: bool) -> Config {
         self.crlf = yes;
+        self
+    }
+
+    /// Sets the line terminator for use with `(?u-s:.)` and `(?-us:.)`.
+    ///
+    /// Namely, instead of `.` (by default) matching everything except for `\n`,
+    /// this will cause `.` to match everything except for the byte given.
+    ///
+    /// If `.` is used in a context where Unicode mode is enabled and this byte
+    /// isn't ASCII, then an error will be returned. When Unicode mode is
+    /// disabled, then any byte is permitted, but will return an error if UTF-8
+    /// mode is enabled and it is a non-ASCII byte.
+    ///
+    /// In short, any ASCII value for a line terminator is always okay. But a
+    /// non-ASCII byte might result in an error depending on whether Unicode
+    /// mode or UTF-8 mode are enabled.
+    ///
+    /// Note that if `R` mode is enabled then it always takes precedence and
+    /// the line terminator will be treated as `\r` and `\n` simultaneously.
+    ///
+    /// Note also that this *doesn't* impact the look-around assertions
+    /// `(?m:^)` and `(?m:$)`. That's usually controlled by additional
+    /// configuration in the regex engine itself.
+    pub fn line_terminator(mut self, byte: u8) -> Config {
+        self.line_terminator = byte;
         self
     }
 
@@ -377,6 +404,11 @@ impl Config {
         self.crlf
     }
 
+    /// Returns the line terminator in this syntax configuration.
+    pub fn get_line_terminator(&self) -> u8 {
+        self.line_terminator
+    }
+
     /// Returns whether "swap greed" mode is enabled.
     pub fn get_swap_greed(&self) -> bool {
         self.swap_greed
@@ -410,6 +442,7 @@ impl Config {
             .multi_line(self.multi_line)
             .dot_matches_new_line(self.dot_matches_new_line)
             .crlf(self.crlf)
+            .line_terminator(self.line_terminator)
             .swap_greed(self.swap_greed)
             .ignore_whitespace(self.ignore_whitespace)
             .utf8(self.utf8)
@@ -436,6 +469,7 @@ impl Config {
             .multi_line(self.multi_line)
             .crlf(self.crlf)
             .dot_matches_new_line(self.dot_matches_new_line)
+            .line_terminator(self.line_terminator)
             .swap_greed(self.swap_greed)
             .utf8(self.utf8);
     }

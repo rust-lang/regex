@@ -23,6 +23,20 @@ use crate::{
     },
 };
 
+/// A trait that represents a single meta strategy. Its main utility is in
+/// providing a way to do dynamic dispatch over a few choices.
+///
+/// Why dynamic dispatch? I actually don't have a super compelling reason, and
+/// importantly, I have not benchmarked it with the main alternative: an enum.
+/// I went with dynamic dispatch initially because the regex engine search code
+/// really can't be inlined into caller code in most cases because it's just
+/// too big. In other words, it is already expected that every regex search
+/// will entail at least the cost of a function call.
+///
+/// I do wonder whether using enums would result in better codegen overall
+/// though. It's a worthwhile experiment to try. Probably the most interesting
+/// benchmark to run in such a case would be one with a high match count. That
+/// is, a benchmark to test the overall latency of a search call.
 pub(super) trait Strategy:
     Debug + Send + Sync + RefUnwindSafe + UnwindSafe + 'static
 {
@@ -31,6 +45,8 @@ pub(super) trait Strategy:
     fn create_cache(&self) -> Cache;
 
     fn reset_cache(&self, cache: &mut Cache);
+
+    fn is_accelerated(&self) -> bool;
 
     fn memory_usage(&self) -> usize;
 
@@ -61,38 +77,18 @@ pub(super) fn new(
     info: &RegexInfo,
     hirs: &[&Hir],
 ) -> Result<Arc<dyn Strategy>, BuildError> {
-    let kind = info.config().get_match_kind();
-    let prefixes = crate::util::prefilter::prefixes(kind, hirs);
-    if let Some(pre) = Pre::from_prefixes(info, &prefixes) {
-        debug!(
-            "found that the regex can be broken down to a literal \
-             search, avoiding the regex engine entirely",
-        );
-        return Ok(pre);
-    }
-    // This now attempts another short-circuit of the regex engine: if we
-    // have a huge alternation of just plain literals, then we can just use
-    // Aho-Corasick for that and avoid the regex engine entirely.
-    if let Some(pre) = Pre::from_alternation_literals(info, hirs) {
-        debug!(
-            "found plain alternation of literals, \
-             avoiding regex engine entirely and using Aho-Corasick"
-        );
-        return Ok(pre);
-    }
-
     // At this point, we're committed to a regex engine of some kind. So pull
     // out a prefilter if we can, which will feed to each of the constituent
     // regex engines.
     let pre = if info.is_always_anchored_start() {
         // PERF: I'm not sure we necessarily want to do this... We may want to
-        // run a prefilter for quickly rejecting in some cases. The problem is
-        // that anchored searches overlap quite a bit with the use case of
-        // "run a regex on every line to extra data." In that case, the regex
-        // always matches, so running a prefilter doesn't really help us there.
-        // The main place where a prefilter helps in an anchored search is if
-        // the anchored search is not expected to match frequently. That is,
-        // the prefilter gives us a way to possibly reject a haystack very
+        // run a prefilter for quickly rejecting in some cases. The problem
+        // is that anchored searches overlap quite a bit with the use case
+        // of "run a regex on every line to extract data." In that case, the
+        // regex always matches, so running a prefilter doesn't really help us
+        // there. The main place where a prefilter helps in an anchored search
+        // is if the anchored search is not expected to match frequently. That
+        // is, the prefilter gives us a way to possibly reject a haystack very
         // quickly.
         //
         // Maybe we should do use a prefilter, but only for longer haystacks?
@@ -102,15 +98,44 @@ pub(super) fn new(
         // disabling a prefilter based on haystack length. That would probably
         // need to be a new 'Input' option. (Interestingly, an 'Input' used to
         // carry a 'Prefilter' with it, but I moved away from that.)
-        debug!("discarding prefixes (if any) since regex is anchored");
+        debug!("skipping literal extraction since regex is anchored");
         None
     } else if let Some(pre) = info.config().get_prefilter() {
         debug!(
-            "discarding extracted prefixes (if any) \
-             since the caller provided a prefilter"
+            "skipping literal extraction since the caller provided a prefilter"
         );
         Some(pre.clone())
     } else if info.config().get_auto_prefilter() {
+        let kind = info.config().get_match_kind();
+        let prefixes = crate::util::prefilter::prefixes(kind, hirs);
+        // If we can build a full `Strategy` from just the extracted prefixes,
+        // then we can short-circuit and avoid building a regex engine at all.
+        if let Some(pre) = Pre::from_prefixes(info, &prefixes) {
+            debug!(
+                "found that the regex can be broken down to a literal \
+                 search, avoiding the regex engine entirely",
+            );
+            return Ok(pre);
+        }
+        // This now attempts another short-circuit of the regex engine: if we
+        // have a huge alternation of just plain literals, then we can just use
+        // Aho-Corasick for that and avoid the regex engine entirely.
+        //
+        // You might think this case would just be handled by
+        // `Pre::from_prefixes`, but that technique relies on heuristic literal
+        // extraction from the corresponding `Hir`. That works, but part of
+        // heuristics limit the size and number of literals returned. This case
+        // will specifically handle patterns with very large alternations.
+        //
+        // One wonders if we should just roll this our heuristic literal
+        // extraction, and then I think this case could disappear entirely.
+        if let Some(pre) = Pre::from_alternation_literals(info, hirs) {
+            debug!(
+                "found plain alternation of literals, \
+                 avoiding regex engine entirely and using Aho-Corasick"
+            );
+            return Ok(pre);
+        }
         prefixes.literals().and_then(|strings| {
             debug!(
                 "creating prefilter from {} literals: {:?}",
@@ -120,7 +145,7 @@ pub(super) fn new(
             Prefilter::new(kind, strings)
         })
     } else {
-        debug!("discarding prefixes (if any) since prefilters were disabled");
+        debug!("skipping literal extraction since prefilters were disabled");
         None
     };
     let mut core = Core::new(info.clone(), pre.clone(), hirs)?;
@@ -342,6 +367,10 @@ impl<P: PrefilterI> Strategy for Pre<P> {
     }
 
     fn reset_cache(&self, _cache: &mut Cache) {}
+
+    fn is_accelerated(&self) -> bool {
+        self.pre.is_fast()
+    }
 
     fn memory_usage(&self) -> usize {
         self.pre.memory_usage()
@@ -622,6 +651,10 @@ impl Strategy for Core {
         cache.hybrid.reset(&self.hybrid);
     }
 
+    fn is_accelerated(&self) -> bool {
+        self.pre.as_ref().map_or(false, |pre| pre.is_fast())
+    }
+
     fn memory_usage(&self) -> usize {
         self.info.memory_usage()
             + self.pre.as_ref().map_or(0, |pre| pre.memory_usage())
@@ -882,6 +915,13 @@ impl Strategy for ReverseAnchored {
     #[cfg_attr(feature = "perf-inline", inline(always))]
     fn reset_cache(&self, cache: &mut Cache) {
         self.core.reset_cache(cache);
+    }
+
+    fn is_accelerated(&self) -> bool {
+        // Since this is anchored at the end, a reverse anchored search is
+        // almost certainly guaranteed to result in a much faster search than
+        // a standard forward search.
+        true
     }
 
     fn memory_usage(&self) -> usize {
@@ -1159,6 +1199,10 @@ impl Strategy for ReverseSuffix {
     #[cfg_attr(feature = "perf-inline", inline(always))]
     fn reset_cache(&self, cache: &mut Cache) {
         self.core.reset_cache(cache);
+    }
+
+    fn is_accelerated(&self) -> bool {
+        self.pre.is_fast()
     }
 
     fn memory_usage(&self) -> usize {
@@ -1576,6 +1620,10 @@ impl Strategy for ReverseInner {
     fn reset_cache(&self, cache: &mut Cache) {
         self.core.reset_cache(cache);
         cache.revhybrid.reset(&self.hybrid);
+    }
+
+    fn is_accelerated(&self) -> bool {
+        self.preinner.is_fast()
     }
 
     fn memory_usage(&self) -> usize {

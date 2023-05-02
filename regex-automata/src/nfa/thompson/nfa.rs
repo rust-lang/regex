@@ -1100,6 +1100,11 @@ impl NFA {
         self.0.look_set_prefix_any
     }
 
+    // FIXME: The `look_set_prefix_all` computation was not correct, and it
+    // seemed a little tricky to fix it. Since I wasn't actually using it for
+    // anything, I just decided to remove it in the run up to the regex 1.9
+    // release. If you need this, please file an issue.
+    /*
     /// Returns the intersection of all prefix look-around assertions for every
     /// pattern in this NFA. When the returned set is empty, it implies at
     /// least one of the patterns does not require moving through a conditional
@@ -1127,7 +1132,7 @@ impl NFA {
     /// // When multiple patterns are present, since this returns the
     /// // intersection, it will only include assertions present in every
     /// // prefix, and only the prefix.
-    /// let nfa = NFA::new_many(&["^a$", "^b$", "^ab$", "^c$"])?;
+    /// let nfa = NFA::new_many(&["^a$", "^b$", "$^ab$", "^c$"])?;
     /// assert!(nfa.look_set_prefix_all().contains(Look::Start));
     /// assert!(!nfa.look_set_prefix_all().contains(Look::End));
     ///
@@ -1137,6 +1142,7 @@ impl NFA {
     pub fn look_set_prefix_all(&self) -> LookSet {
         self.0.look_set_prefix_all
     }
+    */
 
     /// Returns the memory usage, in bytes, of this NFA.
     ///
@@ -1249,9 +1255,11 @@ pub(super) struct Inner {
     /// The union of all look-around assertions that occur as a zero-length
     /// prefix for any of the patterns in this NFA.
     look_set_prefix_any: LookSet,
+    /*
     /// The intersection of all look-around assertions that occur as a
     /// zero-length prefix for any of the patterns in this NFA.
     look_set_prefix_all: LookSet,
+    */
     /// Heap memory used indirectly by NFA states and other things (like the
     /// various capturing group representations above). Since each state
     /// might use a different amount of heap, we need to keep track of this
@@ -1271,7 +1279,8 @@ impl Inner {
         for &start_id in self.start_pattern.iter() {
             stack.push(start_id);
             seen.clear();
-            let mut prefix = LookSet::empty();
+            // let mut prefix_all = LookSet::full();
+            let mut prefix_any = LookSet::empty();
             while let Some(sid) = stack.pop() {
                 if !seen.insert(sid) {
                     continue;
@@ -1307,7 +1316,7 @@ impl Inner {
                     }
                     State::Match { .. } => self.has_empty = true,
                     State::Look { look, next } => {
-                        prefix = prefix.insert(look);
+                        prefix_any = prefix_any.insert(look);
                         stack.push(next);
                     }
                     State::Union { ref alternates } => {
@@ -1326,8 +1335,8 @@ impl Inner {
                     }
                 }
             }
-            self.look_set_prefix_any = self.look_set_prefix_any.union(prefix);
-            self.look_set_prefix_all = self.look_set_prefix_all.union(prefix);
+            self.look_set_prefix_any =
+                self.look_set_prefix_any.union(prefix_any);
         }
         NFA(Arc::new(self))
     }

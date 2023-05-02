@@ -17,7 +17,10 @@ fn unclosed_group_error() {
 fn regex_string() {
     assert_eq!(r"[a-zA-Z0-9]+", regex!(r"[a-zA-Z0-9]+").as_str());
     assert_eq!(r"[a-zA-Z0-9]+", &format!("{}", regex!(r"[a-zA-Z0-9]+")));
-    assert_eq!(r"[a-zA-Z0-9]+", &format!("{:?}", regex!(r"[a-zA-Z0-9]+")));
+    assert_eq!(
+        r#"Regex("[a-zA-Z0-9]+")"#,
+        &format!("{:?}", regex!(r"[a-zA-Z0-9]+"))
+    );
 }
 
 #[test]

@@ -1,7 +1,8 @@
 #![no_main]
 
 use {
-    libfuzzer_sys::fuzz_target, regex::bytes::RegexBuilder,
+    libfuzzer_sys::{fuzz_target, Corpus},
+    regex::bytes::RegexBuilder,
     regex_syntax::ast::Ast,
 };
 
@@ -20,14 +21,15 @@ impl std::fmt::Debug for FuzzData {
     }
 }
 
-fuzz_target!(|data: FuzzData| {
+fuzz_target!(|data: FuzzData| -> Corpus {
     let _ = env_logger::try_init();
 
     let pattern = format!("{}", data.ast);
     let Ok(re) = RegexBuilder::new(&pattern).size_limit(1<<20).build() else {
-        return
+        return Corpus::Reject;
     };
     re.is_match(&data.haystack);
     re.find(&data.haystack);
     re.captures(&data.haystack).map_or(0, |c| c.len());
+    Corpus::Keep
 });

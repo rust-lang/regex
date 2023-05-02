@@ -1197,12 +1197,9 @@ impl DFA {
     ///
     /// // The start state is determined by inspecting the position and the
     /// // initial bytes of the haystack.
-    /// //
-    /// // The unwrap is OK because we aren't requesting a start state for a
-    /// // specific pattern.
     /// let mut sid = dfa.start_state_forward(
     ///     &mut cache, &Input::new(haystack),
-    /// )?.unwrap();
+    /// )?;
     /// // Walk all the bytes in the haystack.
     /// for &b in haystack {
     ///     sid = dfa.next_state(&mut cache, sid, b)?;
@@ -1300,12 +1297,9 @@ impl DFA {
     ///
     /// // The start state is determined by inspecting the position and the
     /// // initial bytes of the haystack.
-    /// //
-    /// // The unwrap is OK because we aren't requesting a start state for a
-    /// // specific pattern.
     /// let mut sid = dfa.start_state_forward(
     ///     &mut cache, &Input::new(haystack),
-    /// )?.unwrap();
+    /// )?;
     /// // Walk all the bytes in the haystack.
     /// let mut at = 0;
     /// while at < haystack.len() {
@@ -1492,12 +1486,9 @@ impl DFA {
     ///
     /// // The start state is determined by inspecting the position and the
     /// // initial bytes of the haystack.
-    /// //
-    /// // The unwrap is OK because we aren't requesting a start state for a
-    /// // specific pattern.
     /// let mut sid = dfa.start_state_forward(
     ///     &mut cache, &Input::new(haystack),
-    /// )?.unwrap();
+    /// )?;
     /// // Walk all the bytes in the haystack.
     /// for &b in haystack {
     ///     sid = dfa.next_state(&mut cache, sid, b)?;
@@ -1528,8 +1519,7 @@ impl DFA {
     }
 
     /// Return the ID of the start state for this lazy DFA when executing a
-    /// forward search. If a match is known to be impossible while computing
-    /// the start state, then `None` is returned.
+    /// forward search.
     ///
     /// Unlike typical DFA implementations, the start state for DFAs in this
     /// crate is dependent on a few different factors:
@@ -1547,15 +1537,16 @@ impl DFA {
     /// # Errors
     ///
     /// This may return a [`MatchError`] (not a [`CacheError`]!) if the search
-    /// needs to give up when determining the start state (for example, if it
-    /// sees a "quit" byte). This can also return an error if the given `Input`
-    /// contains an unsupported [`Anchored`] configuration.
+    /// needs to give up when determining the start state (for example, if
+    /// it sees a "quit" byte or if the cache has been cleared too many
+    /// times). This can also return an error if the given `Input` contains an
+    /// unsupported [`Anchored`] configuration.
     #[cfg_attr(feature = "perf-inline", inline(always))]
     pub fn start_state_forward(
         &self,
         cache: &mut Cache,
         input: &Input<'_>,
-    ) -> Result<Option<LazyStateID>, MatchError> {
+    ) -> Result<LazyStateID, MatchError> {
         if !self.quitset.is_empty() && input.start() > 0 {
             let offset = input.start() - 1;
             let byte = input.haystack()[offset];
@@ -1566,19 +1557,14 @@ impl DFA {
         let start_type = self.start_map.fwd(input);
         let start = LazyRef::new(self, cache)
             .get_cached_start_id(input, start_type)?;
-        let sid = match start {
-            None => return Ok(None),
-            Some(sid) => sid,
-        };
-        if !sid.is_unknown() {
-            return Ok(Some(sid));
+        if !start.is_unknown() {
+            return Ok(start);
         }
         Lazy::new(self, cache).cache_start_group(input, start_type)
     }
 
     /// Return the ID of the start state for this lazy DFA when executing a
-    /// reverse search. If a match is known to be impossible while computing
-    /// the start state, then `None` is returned.
+    /// reverse search.
     ///
     /// Unlike typical DFA implementations, the start state for DFAs in this
     /// crate is dependent on a few different factors:
@@ -1596,15 +1582,16 @@ impl DFA {
     /// # Errors
     ///
     /// This may return a [`MatchError`] (not a [`CacheError`]!) if the search
-    /// needs to give up when determining the start state (for example, if it
-    /// sees a "quit" byte). This can also return an error if the given `Input`
-    /// contains an unsupported [`Anchored`] configuration.
+    /// needs to give up when determining the start state (for example, if
+    /// it sees a "quit" byte or if the cache has been cleared too many
+    /// times). This can also return an error if the given `Input` contains an
+    /// unsupported [`Anchored`] configuration.
     #[cfg_attr(feature = "perf-inline", inline(always))]
     pub fn start_state_reverse(
         &self,
         cache: &mut Cache,
         input: &Input<'_>,
-    ) -> Result<Option<LazyStateID>, MatchError> {
+    ) -> Result<LazyStateID, MatchError> {
         if !self.quitset.is_empty() && input.end() < input.haystack().len() {
             let offset = input.end();
             let byte = input.haystack()[offset];
@@ -1615,12 +1602,8 @@ impl DFA {
         let start_type = self.start_map.rev(input);
         let start = LazyRef::new(self, cache)
             .get_cached_start_id(input, start_type)?;
-        let sid = match start {
-            None => return Ok(None),
-            Some(sid) => sid,
-        };
-        if !sid.is_unknown() {
-            return Ok(Some(sid));
+        if !start.is_unknown() {
+            return Ok(start);
         }
         Lazy::new(self, cache).cache_start_group(input, start_type)
     }
@@ -1673,12 +1656,9 @@ impl DFA {
     ///
     /// // The start state is determined by inspecting the position and the
     /// // initial bytes of the haystack.
-    /// //
-    /// // The unwrap is OK because we aren't requesting a start state for a
-    /// // specific pattern.
     /// let mut sid = dfa.start_state_forward(
     ///     &mut cache, &Input::new(haystack),
-    /// )?.unwrap();
+    /// )?;
     /// // Walk all the bytes in the haystack.
     /// for &b in haystack {
     ///     sid = dfa.next_state(&mut cache, sid, b)?;
@@ -1954,7 +1934,7 @@ impl Cache {
     /// This panics if no search has been started by [`Cache::search_start`].
     #[inline]
     pub fn search_update(&mut self, at: usize) {
-        let mut p =
+        let p =
             self.progress.as_mut().expect("no in-progress search to update");
         p.at = at;
     }
@@ -2144,7 +2124,7 @@ impl<'i, 'c> Lazy<'i, 'c> {
         &mut self,
         input: &Input<'_>,
         start: Start,
-    ) -> Result<Option<LazyStateID>, MatchError> {
+    ) -> Result<LazyStateID, MatchError> {
         let mode = input.get_anchored();
         let nfa_start_id = match mode {
             Anchored::No => self.dfa.get_nfa().start_unanchored(),
@@ -2154,7 +2134,7 @@ impl<'i, 'c> Lazy<'i, 'c> {
                     return Err(MatchError::unsupported_anchored(mode));
                 }
                 match self.dfa.get_nfa().start_pattern(pid) {
-                    None => return Ok(None),
+                    None => return Ok(self.as_ref().dead_id()),
                     Some(sid) => sid,
                 }
             }
@@ -2164,7 +2144,7 @@ impl<'i, 'c> Lazy<'i, 'c> {
             .cache_start_one(nfa_start_id, start)
             .map_err(|_| MatchError::gave_up(input.start()))?;
         self.set_start_state(input, start, id);
-        Ok(Some(id))
+        Ok(id)
     }
 
     /// Compute and cache the starting state for the given NFA state ID and the
@@ -2664,7 +2644,7 @@ impl<'i, 'c> LazyRef<'i, 'c> {
         &self,
         input: &Input<'_>,
         start: Start,
-    ) -> Result<Option<LazyStateID>, MatchError> {
+    ) -> Result<LazyStateID, MatchError> {
         let start_index = start.as_usize();
         let mode = input.get_anchored();
         let index = match mode {
@@ -2675,14 +2655,14 @@ impl<'i, 'c> LazyRef<'i, 'c> {
                     return Err(MatchError::unsupported_anchored(mode));
                 }
                 if pid.as_usize() >= self.dfa.pattern_len() {
-                    return Ok(None);
+                    return Ok(self.dead_id());
                 }
                 (2 * Start::len())
                     + (Start::len() * pid.as_usize())
                     + start_index
             }
         };
-        Ok(Some(self.cache.starts[index]))
+        Ok(self.cache.starts[index])
     }
 
     /// Return the cached NFA/DFA powerset state for the given ID.
@@ -3401,11 +3381,7 @@ impl Config {
     /// let mut cache = dfa.create_cache();
     ///
     /// let haystack = "123 foobar 4567".as_bytes();
-    /// // The unwrap is OK because we aren't requesting a start state for a
-    /// // specific pattern.
-    /// let sid = dfa.start_state_forward(
-    ///     &mut cache, &Input::new(haystack),
-    /// ).map_err(|_| MatchError::gave_up(0))?.unwrap();
+    /// let sid = dfa.start_state_forward(&mut cache, &Input::new(haystack))?;
     /// // The ID returned by 'start_state_forward' will always be tagged as
     /// // a start state when start state specialization is enabled.
     /// assert!(sid.is_tagged());
@@ -3425,11 +3401,7 @@ impl Config {
     /// let mut cache = dfa.create_cache();
     ///
     /// let haystack = "123 foobar 4567".as_bytes();
-    /// // The unwrap is OK because we aren't requesting a start state for a
-    /// // specific pattern.
-    /// let sid = dfa.start_state_forward(
-    ///     &mut cache, &Input::new(haystack),
-    /// ).map_err(|_| MatchError::gave_up(0))?.unwrap();
+    /// let sid = dfa.start_state_forward(&mut cache, &Input::new(haystack))?;
     /// // Start states are not tagged in the default configuration!
     /// assert!(!sid.is_tagged());
     /// assert!(!sid.is_start());

@@ -89,9 +89,16 @@ impl<W: fmt::Write> Visitor for Writer<W> {
 
     fn visit_pre(&mut self, hir: &Hir) -> fmt::Result {
         match *hir.kind() {
-            // Empty is represented by nothing in the concrete syntax, and
-            // repetition operators are strictly suffix oriented.
-            HirKind::Empty | HirKind::Repetition(_) => {}
+            HirKind::Empty => {
+                // Technically an empty sub-expression could be "printed" by
+                // just ignoring it, but in practice, you could have a
+                // repetition operator attached to an empty expression, and you
+                // really need something in the concrete syntax to make that
+                // work as you'd expect.
+                self.wtr.write_str(r"(?:)")?;
+            }
+            // Repetition operators are strictly suffix oriented.
+            HirKind::Repetition(_) => {}
             HirKind::Literal(hir::Literal(ref bytes)) => {
                 // See the comment on the 'Concat' and 'Alternation' case below
                 // for why we put parens here. Literals are, conceptually,
@@ -424,20 +431,20 @@ mod tests {
         // Test that various zero-length repetitions always translate to an
         // empty regex. This is more a property of HIR's smart constructors
         // than the printer though.
-        roundtrip("a{0}", "");
-        roundtrip("(?:ab){0}", "");
+        roundtrip("a{0}", "(?:)");
+        roundtrip("(?:ab){0}", "(?:)");
         #[cfg(feature = "unicode-gencat")]
         {
-            roundtrip(r"\p{any}{0}", "");
-            roundtrip(r"\P{any}{0}", "");
+            roundtrip(r"\p{any}{0}", "(?:)");
+            roundtrip(r"\P{any}{0}", "(?:)");
         }
     }
 
     #[test]
     fn print_group() {
-        roundtrip("()", "()");
-        roundtrip("(?P<foo>)", "(?P<foo>)");
-        roundtrip("(?:)", "");
+        roundtrip("()", "((?:))");
+        roundtrip("(?P<foo>)", "(?P<foo>(?:))");
+        roundtrip("(?:)", "(?:)");
 
         roundtrip("(a)", "(a)");
         roundtrip("(?P<foo>a)", "(?P<foo>a)");
@@ -448,8 +455,8 @@ mod tests {
 
     #[test]
     fn print_alternation() {
-        roundtrip("|", "(?:|)");
-        roundtrip("||", "(?:||)");
+        roundtrip("|", "(?:(?:)|(?:))");
+        roundtrip("||", "(?:(?:)|(?:)|(?:))");
 
         roundtrip("a|b", "[ab]");
         roundtrip("ab|cd", "(?:(?:ab)|(?:cd))");

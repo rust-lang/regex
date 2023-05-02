@@ -577,6 +577,11 @@ impl Choice {
             debug!("prefilter building failed: literals match empty string");
             return None;
         }
+        // BREADCRUMBS: Perhaps the literal optimizer should special case
+        // sequences of length two or three if the leading bytes of each are
+        // "rare"? Or perhaps, if there are two or three total possible leading
+        // bytes, regardless of the number of literals, and all are rare...
+        // Then well, perhaps we should use memchr2 or memchr3 in those cases?
         if let Some(pre) = Memchr::new(kind, needles) {
             debug!("prefilter built: memchr");
             return Some(Choice::Memchr(pre));

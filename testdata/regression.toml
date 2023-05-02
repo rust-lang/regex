@@ -728,3 +728,14 @@ name = "missed-match"
 regex = 'e..+e.ee>'
 haystack = 'Zeee.eZZZZZZZZeee>eeeeeee>'
 matches = [[1, 26]]
+
+# This test came from the 'ignore' crate and tripped a bug in how accelerated
+# DFA states were handled in an overlapping search.
+[[test]]
+name = "regex-to-glob"
+regex = ['(?-u)^path1/[^/]*$']
+haystack = "path1/foo"
+matches = [[0, 9]]
+utf8 = false
+match-kind = "all"
+search-kind = "overlapping"
