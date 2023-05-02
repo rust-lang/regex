@@ -8,6 +8,7 @@ struct RegexOptions {
     pats: Vec<String>,
     size_limit: usize,
     dfa_size_limit: usize,
+    line_terminator: u8,
     syntax: syntax::Config,
 }
 
@@ -17,6 +18,7 @@ impl Default for RegexOptions {
             pats: vec![],
             size_limit: 10 * (1 << 20),
             dfa_size_limit: 2 * (1 << 20),
+            line_terminator: b'\n',
             syntax: syntax::Config::default(),
         }
     }
@@ -61,6 +63,7 @@ macro_rules! define_builder {
                     let config = meta::Config::new()
                         .match_kind(regex_automata::MatchKind::LeftmostFirst)
                         .utf8_empty($utf8)
+                        .line_terminator(self.0.line_terminator)
                         .nfa_size_limit(Some(self.0.size_limit))
                         .hybrid_cache_capacity(self.0.dfa_size_limit);
                     meta::Builder::new()
@@ -109,6 +112,40 @@ macro_rules! define_builder {
                     yes: bool,
                 ) -> &mut RegexBuilder {
                     self.0.syntax = self.0.syntax.dot_matches_new_line(yes);
+                    self
+                }
+
+                /// Enable or disable the CRLF mode flag by default.
+                ///
+                /// By default this is disabled. It may alternatively be selectively
+                /// enabled in the regular expression itself via the `R` flag.
+                ///
+                /// When CRLF mode is enabled, the following happens:
+                ///
+                /// * Unless `dot_matches_new_line` is enabled, `.` will match any character
+                /// except for `\r` and `\n`.
+                /// * When `multi_line` mode is enabled, `^` and `$` will treat `\r\n`,
+                /// `\r` and `\n` as line terminators. And in particular, neither will
+                /// match between a `\r` and a `\n`.
+                pub fn crlf(&mut self, yes: bool) -> &mut RegexBuilder {
+                    self.0.syntax = self.0.syntax.crlf(yes);
+                    self
+                }
+
+                /// Set the line terminator to be used by the `^` and `$` anchors in
+                /// multi-line mode.
+                ///
+                /// This option has no effect when CRLF mode is enabled. That is,
+                /// regardless of this setting, `(?Rm:^)` and `(?Rm:$)` will always treat
+                /// `\r` and `\n` as line terminators (and will never match between a `\r`
+                /// and a `\n`).
+                ///
+                /// By default, `\n` is the line terminator.
+                pub fn line_terminator(
+                    &mut self,
+                    byte: u8,
+                ) -> &mut RegexBuilder {
+                    self.0.line_terminator = byte;
                     self
                 }
 
@@ -273,6 +310,7 @@ macro_rules! define_set_builder {
                     let config = meta::Config::new()
                         .match_kind(regex_automata::MatchKind::All)
                         .utf8_empty($utf8)
+                        .line_terminator(self.0.line_terminator)
                         .nfa_size_limit(Some(self.0.size_limit))
                         .hybrid_cache_capacity(self.0.dfa_size_limit);
                     meta::Builder::new()
@@ -316,6 +354,40 @@ macro_rules! define_set_builder {
                     yes: bool,
                 ) -> &mut RegexSetBuilder {
                     self.0.syntax = self.0.syntax.dot_matches_new_line(yes);
+                    self
+                }
+
+                /// Enable or disable the CRLF mode flag by default.
+                ///
+                /// By default this is disabled. It may alternatively be selectively
+                /// enabled in the regular expression itself via the `R` flag.
+                ///
+                /// When CRLF mode is enabled, the following happens:
+                ///
+                /// * Unless `dot_matches_new_line` is enabled, `.` will match any character
+                /// except for `\r` and `\n`.
+                /// * When `multi_line` mode is enabled, `^` and `$` will treat `\r\n`,
+                /// `\r` and `\n` as line terminators. And in particular, neither will
+                /// match between a `\r` and a `\n`.
+                pub fn crlf(&mut self, yes: bool) -> &mut RegexSetBuilder {
+                    self.0.syntax = self.0.syntax.crlf(yes);
+                    self
+                }
+
+                /// Set the line terminator to be used by the `^` and `$` anchors in
+                /// multi-line mode.
+                ///
+                /// This option has no effect when CRLF mode is enabled. That is,
+                /// regardless of this setting, `(?Rm:^)` and `(?Rm:$)` will always treat
+                /// `\r` and `\n` as line terminators (and will never match between a `\r`
+                /// and a `\n`).
+                ///
+                /// By default, `\n` is the line terminator.
+                pub fn line_terminator(
+                    &mut self,
+                    byte: u8,
+                ) -> &mut RegexSetBuilder {
+                    self.0.line_terminator = byte;
                     self
                 }
 

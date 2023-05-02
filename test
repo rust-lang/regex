@@ -25,6 +25,9 @@ features=(
     "std perf-dfa"
     "std perf-inline"
     "std perf-literal"
+    "std perf-dfa-full"
+    "std perf-onepass"
+    "std perf-backtrack"
 )
 for f in "${features[@]}"; do
     echo "===== FEATURE: $f ====="

@@ -655,7 +655,8 @@ impl Regex {
         input.set_start(start);
         self.meta.captures(input, &mut caps);
         if caps.is_match() {
-            Some(Captures { text, caps })
+            let static_captures_len = self.static_captures_len();
+            Some(Captures { text, caps, static_captures_len })
         } else {
             None
         }
@@ -842,7 +843,12 @@ impl<'r, 't> Iterator for CaptureMatches<'r, 't> {
 
     #[inline]
     fn next(&mut self) -> Option<Captures<'t>> {
-        self.it.next().map(|caps| Captures { text: self.text, caps })
+        let static_captures_len = self.it.regex().static_captures_len();
+        self.it.next().map(|caps| Captures {
+            text: self.text,
+            caps,
+            static_captures_len,
+        })
     }
 
     #[inline]
@@ -1026,6 +1032,7 @@ impl CaptureLocations {
 pub struct Captures<'t> {
     text: &'t [u8],
     caps: captures::Captures,
+    static_captures_len: Option<usize>,
 }
 
 impl<'t> Captures<'t> {
@@ -1062,6 +1069,102 @@ impl<'t> Captures<'t> {
         self.caps
             .get_group_by_name(name)
             .map(|sp| Match::new(self.text, sp.start, sp.end))
+    }
+
+    /// This is a convenience routine for extracting the substrings
+    /// corresponding to matching capture groups.
+    ///
+    /// This returns a tuple where the first element corresponds to the full
+    /// substring of the haystack that matched the regex. The second element is
+    /// an array of substrings, with each corresponding to the to the substring
+    /// that matched for a particular capture group.
+    ///
+    /// # Panics
+    ///
+    /// This panics if the number of possible matching groups in this
+    /// `Captures` value is not fixed to `N` in all circumstances.
+    /// More precisely, this routine only works when `N` is equivalent to
+    /// [`Regex::static_captures_len`].
+    ///
+    /// Stated more plainly, if the number of matching capture groups in a
+    /// regex can vary from match to match, then this function always panics.
+    ///
+    /// For example, `(a)(b)|(c)` could produce two matching capture groups
+    /// or one matching capture group for any given match. Therefore, one
+    /// cannot use `extract` with such a pattern.
+    ///
+    /// But a pattern like `(a)(b)|(c)(d)` can be used with `extract` because
+    /// the number of capture groups in every match is always equivalent,
+    /// even if the capture _indices_ in each match are not.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use regex::bytes::Regex;
+    ///
+    /// let re = Regex::new(r"([0-9]{4})-([0-9]{2})-([0-9]{2})").unwrap();
+    /// let hay = b"On 2010-03-14, I became a Tenneessee lamb.";
+    /// let Some((full, [year, month, day])) =
+    ///     re.captures(hay).map(|caps| caps.extract()) else { return };
+    /// assert_eq!(b"2010-03-14", full);
+    /// assert_eq!(b"2010", year);
+    /// assert_eq!(b"03", month);
+    /// assert_eq!(b"14", day);
+    /// ```
+    ///
+    /// # Example: iteration
+    ///
+    /// This example shows how to use this method when iterating over all
+    /// `Captures` matches in a haystack.
+    ///
+    /// ```
+    /// use regex::bytes::Regex;
+    ///
+    /// let re = Regex::new(r"([0-9]{4})-([0-9]{2})-([0-9]{2})").unwrap();
+    /// let hay = b"1973-01-05, 1975-08-25 and 1980-10-18";
+    ///
+    /// let mut dates: Vec<(&[u8], &[u8], &[u8])> = vec![];
+    /// for (_, [y, m, d]) in re.captures_iter(hay).map(|c| c.extract()) {
+    ///     dates.push((y, m, d));
+    /// }
+    /// assert_eq!(dates, vec![
+    ///     (&b"1973"[..], &b"01"[..], &b"05"[..]),
+    ///     (&b"1975"[..], &b"08"[..], &b"25"[..]),
+    ///     (&b"1980"[..], &b"10"[..], &b"18"[..]),
+    /// ]);
+    /// ```
+    ///
+    /// # Example: parsing different formats
+    ///
+    /// This API is particularly useful when you need to extract a particular
+    /// value that might occur in a different format. Consider, for example,
+    /// an identifier that might be in double quotes or single quotes:
+    ///
+    /// ```
+    /// use regex::bytes::Regex;
+    ///
+    /// let re = Regex::new(r#"id:(?:"([^"]+)"|'([^']+)')"#).unwrap();
+    /// let hay = br#"The first is id:"foo" and the second is id:'bar'."#;
+    /// let mut ids = vec![];
+    /// for (_, [id]) in re.captures_iter(hay).map(|c| c.extract()) {
+    ///     ids.push(id);
+    /// }
+    /// assert_eq!(ids, vec![b"foo", b"bar"]);
+    /// ```
+    pub fn extract<const N: usize>(&self) -> (&'t [u8], [&'t [u8]; N]) {
+        let len = self
+            .static_captures_len
+            .expect("number of capture groups can vary in a match")
+            .checked_sub(1)
+            .expect("number of groups is always greater than zero");
+        assert_eq!(N, len, "asked for {} groups, but must ask for {}", N, len);
+        // The regex-automata variant of extract is a bit more permissive.
+        // It doesn't require the number of matching capturing groups to be
+        // static, and you can even request fewer groups than what's there. So
+        // this is guaranteed to never panic because we've asserted above that
+        // the user has requested precisely the number of groups that must be
+        // present in any match for this regex.
+        self.caps.extract_bytes(self.text)
     }
 
     /// An iterator that yields all capturing matches in the order in which

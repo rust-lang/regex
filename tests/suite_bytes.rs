@@ -89,6 +89,7 @@ fn compiler(
     let re = RegexBuilder::new(pattern)
         .case_insensitive(test.case_insensitive())
         .unicode(test.unicode())
+        .line_terminator(test.line_terminator())
         .build()?;
     Ok(CompiledRegex::compiled(move |test| run_test(&re, test)))
 }
