@@ -180,9 +180,6 @@ fn find_fwd_imp<A: Automaton + ?Sized>(
                 // actually be tripped even if DFA::from_bytes succeeds and
                 // returns a supposedly valid DFA.
                 debug_assert!(dfa.is_quit_state(sid));
-                if mat.is_some() {
-                    return Ok(mat);
-                }
                 return Err(MatchError::quit(input.haystack()[at], at));
             }
         }
@@ -307,9 +304,6 @@ fn find_rev_imp<A: Automaton + ?Sized>(
                 return Ok(mat);
             } else {
                 debug_assert!(dfa.is_quit_state(sid));
-                if mat.is_some() {
-                    return Ok(mat);
-                }
                 return Err(MatchError::quit(input.haystack()[at], at));
             }
         }
@@ -611,9 +605,6 @@ fn eoi_fwd<A: Automaton + ?Sized>(
                 let pattern = dfa.match_pattern(*sid, 0);
                 *mat = Some(HalfMatch::new(pattern, sp.end));
             } else if dfa.is_quit_state(*sid) {
-                if mat.is_some() {
-                    return Ok(());
-                }
                 return Err(MatchError::quit(b, sp.end));
             }
         }
@@ -646,9 +637,6 @@ fn eoi_rev<A: Automaton + ?Sized>(
             let pattern = dfa.match_pattern(*sid, 0);
             *mat = Some(HalfMatch::new(pattern, sp.start));
         } else if dfa.is_quit_state(*sid) {
-            if mat.is_some() {
-                return Ok(());
-            }
             return Err(MatchError::quit(byte, sp.start - 1));
         }
     } else {
