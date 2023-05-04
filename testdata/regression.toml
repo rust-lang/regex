@@ -719,3 +719,12 @@ name = "negated-unicode-word-boundary-dfa-fail"
 regex = '\B.*'
 haystack = "!\u02D7"
 matches = [[0, 3]]
+
+# This failure was found in the *old* regex crate (prior to regex 1.9), but
+# I didn't investigate why. My best guess is that it's a literal optimization
+# bug. It didn't occur in the rewrite.
+[[test]]
+name = "missed-match"
+regex = 'e..+e.ee>'
+haystack = 'Zeee.eZZZZZZZZeee>eeeeeee>'
+matches = [[1, 26]]
