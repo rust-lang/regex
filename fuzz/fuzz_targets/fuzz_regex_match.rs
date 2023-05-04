@@ -59,6 +59,7 @@ fuzz_target!(|case: FuzzCase| {
         .ignore_whitespace(case.ignore_whitespace)
         .unicode(case.unicode)
         .octal(case.octal)
+        .size_limit(1<<20)
         .build() else { return };
     re.is_match(case.haystack);
 });
