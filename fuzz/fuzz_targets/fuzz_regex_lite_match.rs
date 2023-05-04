@@ -55,6 +55,7 @@ fuzz_target!(|case: FuzzCase| {
         .dot_matches_new_line(case.dot_matches_new_line)
         .swap_greed(case.swap_greed)
         .ignore_whitespace(case.ignore_whitespace)
+        .size_limit(1<<20)
         .build() else { return };
     re.is_match(case.haystack);
 });
