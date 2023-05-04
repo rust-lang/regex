@@ -20,6 +20,7 @@ mod visitor;
 /// valid Unicode property name. That particular error is reported when
 /// translating an AST to the high-level intermediate representation (`HIR`).
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct Error {
     /// The kind of error.
     kind: ErrorKind,
@@ -70,6 +71,7 @@ impl Error {
 /// new variant is not considered a breaking change.
 #[non_exhaustive]
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum ErrorKind {
     /// The capturing group limit was exceeded.
     ///
@@ -278,6 +280,7 @@ impl core::fmt::Display for ErrorKind {
 /// All span positions are absolute byte offsets that can be used on the
 /// original regular expression that was parsed.
 #[derive(Clone, Copy, Eq, PartialEq)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct Span {
     /// The start byte offset.
     pub start: Position,
@@ -308,6 +311,7 @@ impl PartialOrd for Span {
 /// A position encodes one half of a span, and include the byte offset, line
 /// number and column number.
 #[derive(Clone, Copy, Eq, PartialEq)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct Position {
     /// The absolute offset of this position, starting at `0` from the
     /// beginning of the regular expression pattern string.
@@ -396,6 +400,7 @@ impl Position {
 /// comment contains a span of precisely where it occurred in the original
 /// regular expression.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct WithComments {
     /// The actual ast.
     pub ast: Ast,
@@ -408,6 +413,7 @@ pub struct WithComments {
 /// A regular expression can only contain comments when the `x` flag is
 /// enabled.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct Comment {
     /// The span of this comment, including the beginning `#` and ending `\n`.
     pub span: Span,
@@ -424,6 +430,7 @@ pub struct Comment {
 /// This type defines its own destructor that uses constant stack space and
 /// heap space proportional to the size of the `Ast`.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum Ast {
     /// An empty regex that matches everything.
     Empty(Span),
@@ -508,6 +515,7 @@ impl core::fmt::Display for Ast {
 
 /// An alternation of regular expressions.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct Alternation {
     /// The span of this alternation.
     pub span: Span,
@@ -532,6 +540,7 @@ impl Alternation {
 
 /// A concatenation of regular expressions.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct Concat {
     /// The span of this concatenation.
     pub span: Span,
@@ -560,6 +569,7 @@ impl Concat {
 /// represented in their literal form, e.g., `a` or in their escaped form,
 /// e.g., `\x61`.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct Literal {
     /// The span of this literal.
     pub span: Span,
@@ -584,6 +594,7 @@ impl Literal {
 
 /// The kind of a single literal expression.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum LiteralKind {
     /// The literal is written verbatim, e.g., `a` or `☃`.
     Verbatim,
@@ -613,6 +624,7 @@ pub enum LiteralKind {
 /// A special literal is a special escape sequence recognized by the regex
 /// parser, e.g., `\f` or `\n`.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum SpecialLiteralKind {
     /// Bell, spelled `\a` (`\x07`).
     Bell,
@@ -637,6 +649,7 @@ pub enum SpecialLiteralKind {
 /// differ when used without brackets in the number of hex digits that must
 /// follow.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum HexLiteralKind {
     /// A `\x` prefix. When used without brackets, this form is limited to
     /// two digits.
@@ -664,6 +677,7 @@ impl HexLiteralKind {
 
 /// A single character class expression.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum Class {
     /// A Unicode character class, e.g., `\pL` or `\p{Greek}`.
     Unicode(ClassUnicode),
@@ -688,6 +702,7 @@ impl Class {
 
 /// A Perl character class.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct ClassPerl {
     /// The span of this class.
     pub span: Span,
@@ -700,6 +715,7 @@ pub struct ClassPerl {
 
 /// The available Perl character classes.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum ClassPerlKind {
     /// Decimal numbers.
     Digit,
@@ -711,6 +727,7 @@ pub enum ClassPerlKind {
 
 /// An ASCII character class.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct ClassAscii {
     /// The span of this class.
     pub span: Span,
@@ -723,6 +740,7 @@ pub struct ClassAscii {
 
 /// The available ASCII character classes.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum ClassAsciiKind {
     /// `[0-9A-Za-z]`
     Alnum,
@@ -786,6 +804,7 @@ impl ClassAsciiKind {
 
 /// A Unicode character class.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct ClassUnicode {
     /// The span of this class.
     pub span: Span,
@@ -821,6 +840,7 @@ impl ClassUnicode {
 
 /// The available forms of Unicode character classes.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum ClassUnicodeKind {
     /// A one letter abbreviated class, e.g., `\pN`.
     OneLetter(char),
@@ -840,6 +860,7 @@ pub enum ClassUnicodeKind {
 
 /// The type of op used in a Unicode character class.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum ClassUnicodeOpKind {
     /// A property set to a specific value, e.g., `\p{scx=Katakana}`.
     Equal,
@@ -862,6 +883,7 @@ impl ClassUnicodeOpKind {
 
 /// A bracketed character class, e.g., `[a-z0-9]`.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct ClassBracketed {
     /// The span of this class.
     pub span: Span,
@@ -880,6 +902,7 @@ pub struct ClassBracketed {
 /// items (literals, ranges, other bracketed classes) or a tree of binary set
 /// operations.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum ClassSet {
     /// An item, which can be a single literal, range, nested character class
     /// or a union of items.
@@ -913,6 +936,7 @@ impl ClassSet {
 
 /// A single component of a character class set.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum ClassSetItem {
     /// An empty item.
     ///
@@ -956,6 +980,7 @@ impl ClassSetItem {
 
 /// A single character class range in a set.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct ClassSetRange {
     /// The span of this range.
     pub span: Span,
@@ -977,6 +1002,7 @@ impl ClassSetRange {
 
 /// A union of items inside a character class set.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct ClassSetUnion {
     /// The span of the items in this operation. e.g., the `a-z0-9` in
     /// `[^a-z0-9]`
@@ -1021,6 +1047,7 @@ impl ClassSetUnion {
 
 /// A Unicode character class set operation.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct ClassSetBinaryOp {
     /// The span of this operation. e.g., the `a-z--[h-p]` in `[a-z--h-p]`.
     pub span: Span,
@@ -1038,6 +1065,7 @@ pub struct ClassSetBinaryOp {
 /// explicit union operator. Concatenation inside a character class corresponds
 /// to the union operation.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum ClassSetBinaryOpKind {
     /// The intersection of two sets, e.g., `\pN&&[a-z]`.
     Intersection,
@@ -1051,6 +1079,7 @@ pub enum ClassSetBinaryOpKind {
 
 /// A single zero-width assertion.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct Assertion {
     /// The span of this assertion.
     pub span: Span,
@@ -1060,6 +1089,7 @@ pub struct Assertion {
 
 /// An assertion kind.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum AssertionKind {
     /// `^`
     StartLine,
@@ -1077,6 +1107,7 @@ pub enum AssertionKind {
 
 /// A repetition operation applied to a regular expression.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct Repetition {
     /// The span of this operation.
     pub span: Span,
@@ -1090,6 +1121,7 @@ pub struct Repetition {
 
 /// The repetition operator itself.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct RepetitionOp {
     /// The span of this operator. This includes things like `+`, `*?` and
     /// `{m,n}`.
@@ -1100,6 +1132,7 @@ pub struct RepetitionOp {
 
 /// The kind of a repetition operator.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum RepetitionKind {
     /// `?`
     ZeroOrOne,
@@ -1113,6 +1146,7 @@ pub enum RepetitionKind {
 
 /// A range repetition operator.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum RepetitionRange {
     /// `{m}`
     Exactly(u32),
@@ -1142,6 +1176,7 @@ impl RepetitionRange {
 /// contains a sub-expression, e.g., `(a)`, `(?P<name>a)`, `(?:a)` and
 /// `(?is:a)`.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct Group {
     /// The span of this group.
     pub span: Span,
@@ -1183,6 +1218,7 @@ impl Group {
 
 /// The kind of a group.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum GroupKind {
     /// `(a)`
     CaptureIndex(u32),
@@ -1202,6 +1238,7 @@ pub enum GroupKind {
 /// This corresponds to the name itself between the angle brackets in, e.g.,
 /// `(?P<foo>expr)`.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct CaptureName {
     /// The span of this capture name.
     pub span: Span,
@@ -1213,6 +1250,7 @@ pub struct CaptureName {
 
 /// A group of flags that is not applied to a particular regular expression.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct SetFlags {
     /// The span of these flags, including the grouping parentheses.
     pub span: Span,
@@ -1224,6 +1262,7 @@ pub struct SetFlags {
 ///
 /// This corresponds only to the sequence of flags themselves, e.g., `is-u`.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct Flags {
     /// The span of this group of flags.
     pub span: Span,
@@ -1276,6 +1315,7 @@ impl Flags {
 
 /// A single item in a group of flags.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct FlagsItem {
     /// The span of this item.
     pub span: Span,
@@ -1285,6 +1325,7 @@ pub struct FlagsItem {
 
 /// The kind of an item in a group of flags.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum FlagsItemKind {
     /// A negation operator applied to all subsequent flags in the enclosing
     /// group.
@@ -1305,6 +1346,7 @@ impl FlagsItemKind {
 
 /// A single flag.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum Flag {
     /// `i`
     CaseInsensitive,
