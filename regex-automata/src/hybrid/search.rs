@@ -282,9 +282,6 @@ fn find_fwd_imp(
                 return Ok(mat);
             } else if sid.is_quit() {
                 cache.search_finish(at);
-                if mat.is_some() {
-                    return Ok(mat);
-                }
                 return Err(MatchError::quit(input.haystack()[at], at));
             } else {
                 debug_assert!(sid.is_unknown());
@@ -432,9 +429,6 @@ fn find_rev_imp(
                 return Ok(mat);
             } else if sid.is_quit() {
                 cache.search_finish(at);
-                if mat.is_some() {
-                    return Ok(mat);
-                }
                 return Err(MatchError::quit(input.haystack()[at], at));
             } else {
                 debug_assert!(sid.is_unknown());
@@ -730,9 +724,6 @@ fn eoi_fwd(
                 let pattern = dfa.match_pattern(cache, *sid, 0);
                 *mat = Some(HalfMatch::new(pattern, sp.end));
             } else if sid.is_quit() {
-                if mat.is_some() {
-                    return Ok(());
-                }
                 return Err(MatchError::quit(b, sp.end));
             }
         }
@@ -770,9 +761,6 @@ fn eoi_rev(
             let pattern = dfa.match_pattern(cache, *sid, 0);
             *mat = Some(HalfMatch::new(pattern, sp.start));
         } else if sid.is_quit() {
-            if mat.is_some() {
-                return Ok(());
-            }
             return Err(MatchError::quit(byte, sp.start - 1));
         }
     } else {
