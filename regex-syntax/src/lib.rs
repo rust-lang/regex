@@ -157,6 +157,11 @@ The following features are available:
   [Unicode text segmentation algorithms](https://www.unicode.org/reports/tr29/).
   This enables using classes like `\p{gcb=Extend}`, `\p{wb=Katakana}` and
   `\p{sb=ATerm}`.
+* **arbitrary** -
+  Enabling this feature introduces a public dependency on the
+  [`arbitrary`](https://crates.io/crates/arbitrary)
+  crate. Namely, it implements the `Arbitrary` trait from that crate for the
+  [`Ast`](crate::ast::Ast) type. This feature is disabled by default.
 */
 
 #![no_std]
