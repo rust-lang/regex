@@ -9,7 +9,7 @@ edition = "2021"
 cargo-fuzz = true
 
 [dependencies]
-libfuzzer-sys = "0.4.1"
+libfuzzer-sys = { version = "0.4.1", features = ["arbitrary-derive"] }
 regex = { path = ".." }
 regex-automata = { path = "../regex-automata" }
 regex-lite = { path = "../regex-lite" }
