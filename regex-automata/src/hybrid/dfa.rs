@@ -3226,7 +3226,7 @@ impl Config {
     ///
     /// // The match occurs before the search ever observes the snowman
     /// // character, so no error occurs.
-    /// let haystack = "foo 123 ☃";
+    /// let haystack = "foo 123  ☃";
     /// let expected = Some(HalfMatch::must(0, 7));
     /// let got = dfa.try_search_fwd(&mut cache, &Input::new(haystack))?;
     /// assert_eq!(expected, got);
@@ -3236,8 +3236,8 @@ impl Config {
     /// // routines read one byte past the end of the search to account for
     /// // look-around, and indeed, this is required here to determine whether
     /// // the trailing \b matches.
-    /// let haystack = "foo 123☃";
-    /// let expected = MatchError::quit(0xE2, 7);
+    /// let haystack = "foo 123 ☃";
+    /// let expected = MatchError::quit(0xE2, 8);
     /// let got = dfa.try_search_fwd(&mut cache, &Input::new(haystack));
     /// assert_eq!(Err(expected), got);
     ///

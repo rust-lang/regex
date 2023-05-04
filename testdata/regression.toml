@@ -689,3 +689,33 @@ name = "captures-wrong-order"
 regex = '(a){0}(a)'
 haystack = 'a'
 matches = [[[0, 1], [], [0, 1]]]
+
+# This tests a bug in how quit states are handled in the DFA. At some point
+# during development, the DFAs were tweaked slightly such that if they hit
+# a quit state (which means, they hit a byte that the caller configured should
+# stop the search), then it might not return an error necessarily. Namely, if a
+# match had already been found, then it would be returned instead of an error.
+#
+# But this is actually wrong! Why? Because even though a match had been found,
+# it wouldn't be fully correct to return it once a quit state has been seen
+# because you can't determine whether the match offset returned is the correct
+# greedy/leftmost-first match. Since you can't complete the search as requested
+# by the caller, the DFA should just stop and return an error.
+#
+# Interestingly, this does seem to produce an unavoidable difference between
+# 'try_is_match().unwrap()' and 'try_find().unwrap().is_some()' for the DFAs.
+# The former will stop immediately once a match is known to occur and return
+# 'Ok(true)', where as the latter could find the match but quit with an
+# 'Err(..)' first.
+#
+# Thankfully, I believe this inconsistency between 'is_match()' and 'find()'
+# cannot be observed in the higher level meta regex API because it specifically
+# will try another engine that won't fail in the case of a DFA failing.
+#
+# This regression happened in the regex crate rewrite, but before anything got
+# released.
+[[test]]
+name = "negated-unicode-word-boundary-dfa-fail"
+regex = '\B.*'
+haystack = "!\u02D7"
+matches = [[0, 3]]
