@@ -959,10 +959,11 @@ impl arbitrary::Arbitrary<'_> for ClassUnicodeKind {
                 arbitrary::size_hint::or_all(&[
                     char::size_hint(depth),
                     String::size_hint(depth),
-                    arbitrary::size_hint::and(
+                    arbitrary::size_hint::and_all(&[
                         String::size_hint(depth),
                         String::size_hint(depth),
-                    ),
+                        ClassUnicodeOpKind::size_hint(depth),
+                    ]),
                 ]),
             )
         }
