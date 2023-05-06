@@ -15,7 +15,8 @@ struct FuzzData {
 impl std::fmt::Debug for FuzzData {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut builder = f.debug_struct("FuzzData");
-        builder.field("ast", &format!("{}", self.ast));
+        builder.field("ast", &self.ast);
+        builder.field("stringified", &format!("{}", self.ast));
         builder.finish()
     }
 }
