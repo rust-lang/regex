@@ -884,7 +884,20 @@ impl arbitrary::Arbitrary<'_> for ClassUnicodeKind {
                         .chars().next().unwrap();
                     Ok(ClassUnicodeKind::OneLetter(value))
                 }
-                variant => {
+                1 => {
+                    let all = super::unicode_tables::property_values::PROPERTY_VALUES.iter()
+                        .map(|e| e.1.len())
+                        .sum::<usize>() + super::unicode_tables::property_names::PROPERTY_NAMES.len();
+                    let idx = u.choose_index(all)?;
+                    let name = super::unicode_tables::property_values::PROPERTY_VALUES.iter()
+                        .flat_map(|e| e.1.iter())
+                        .chain(super::unicode_tables::property_names::PROPERTY_NAMES)
+                        .map(|(_, e)| e)
+                        .take(idx + 1)
+                        .last().unwrap();
+                    Ok(ClassUnicodeKind::Named(name.to_string()))
+                }
+                2 => {
                     let all = super::unicode_tables::property_values::PROPERTY_VALUES.iter()
                         .map(|e| e.1.len())
                         .sum::<usize>();
@@ -893,16 +906,13 @@ impl arbitrary::Arbitrary<'_> for ClassUnicodeKind {
                         .flat_map(|e| e.1.iter().map(|(_, value)| (e.0, value)))
                         .take(idx + 1)
                         .last().unwrap();
-                    if variant == 1 {
-                        Ok(ClassUnicodeKind::Named(value.to_string()))
-                    } else {
-                        Ok(ClassUnicodeKind::NamedValue {
-                            op: u.arbitrary()?,
-                            name: prop.to_string(),
-                            value: value.to_string(),
-                        })
-                    }
+                    Ok(ClassUnicodeKind::NamedValue {
+                        op: u.arbitrary()?,
+                        name: prop.to_string(),
+                        value: value.to_string(),
+                    })
                 }
+                _ => unreachable!("index chosen is impossible"),
             }
         }
         #[cfg(not(any(
