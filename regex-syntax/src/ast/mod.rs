@@ -840,7 +840,6 @@ impl ClassUnicode {
 
 /// The available forms of Unicode character classes.
 #[derive(Clone, Debug, Eq, PartialEq)]
-#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum ClassUnicodeKind {
     /// A one letter abbreviated class, e.g., `\pN`.
     OneLetter(char),
@@ -856,6 +855,153 @@ pub enum ClassUnicodeKind {
         /// The property value (which may be empty).
         value: String,
     },
+}
+
+#[cfg(feature = "arbitrary")]
+impl arbitrary::Arbitrary<'_> for ClassUnicodeKind {
+    fn arbitrary(
+        u: &mut arbitrary::Unstructured,
+    ) -> arbitrary::Result<ClassUnicodeKind> {
+        #[cfg(any(
+            feature = "unicode-age",
+            feature = "unicode-bool",
+            feature = "unicode-gencat",
+            feature = "unicode-perl",
+            feature = "unicode-script",
+            feature = "unicode-segment",
+        ))]
+        {
+            use alloc::string::ToString;
+
+            use super::unicode_tables::{
+                property_names::PROPERTY_NAMES,
+                property_values::PROPERTY_VALUES,
+            };
+
+            match u.choose_index(3)? {
+                0 => {
+                    let all = PROPERTY_VALUES
+                        .iter()
+                        .flat_map(|e| e.1.iter())
+                        .filter(|(name, _)| name.len() == 1)
+                        .count();
+                    let idx = u.choose_index(all)?;
+                    let value = PROPERTY_VALUES
+                        .iter()
+                        .flat_map(|e| e.1.iter())
+                        .take(idx + 1)
+                        .last()
+                        .unwrap()
+                        .0
+                        .chars()
+                        .next()
+                        .unwrap();
+                    Ok(ClassUnicodeKind::OneLetter(value))
+                }
+                1 => {
+                    let all = PROPERTY_VALUES
+                        .iter()
+                        .map(|e| e.1.len())
+                        .sum::<usize>()
+                        + PROPERTY_NAMES.len();
+                    let idx = u.choose_index(all)?;
+                    let name = PROPERTY_VALUES
+                        .iter()
+                        .flat_map(|e| e.1.iter())
+                        .chain(PROPERTY_NAMES)
+                        .map(|(_, e)| e)
+                        .take(idx + 1)
+                        .last()
+                        .unwrap();
+                    Ok(ClassUnicodeKind::Named(name.to_string()))
+                }
+                2 => {
+                    let all = PROPERTY_VALUES
+                        .iter()
+                        .map(|e| e.1.len())
+                        .sum::<usize>();
+                    let idx = u.choose_index(all)?;
+                    let (prop, value) = PROPERTY_VALUES
+                        .iter()
+                        .flat_map(|e| {
+                            e.1.iter().map(|(_, value)| (e.0, value))
+                        })
+                        .take(idx + 1)
+                        .last()
+                        .unwrap();
+                    Ok(ClassUnicodeKind::NamedValue {
+                        op: u.arbitrary()?,
+                        name: prop.to_string(),
+                        value: value.to_string(),
+                    })
+                }
+                _ => unreachable!("index chosen is impossible"),
+            }
+        }
+        #[cfg(not(any(
+            feature = "unicode-age",
+            feature = "unicode-bool",
+            feature = "unicode-gencat",
+            feature = "unicode-perl",
+            feature = "unicode-script",
+            feature = "unicode-segment",
+        )))]
+        {
+            match u.choose_index(3)? {
+                0 => Ok(ClassUnicodeKind::OneLetter(u.arbitrary()?)),
+                1 => Ok(ClassUnicodeKind::Named(u.arbitrary()?)),
+                2 => Ok(ClassUnicodeKind::NamedValue {
+                    op: u.arbitrary()?,
+                    name: u.arbitrary()?,
+                    value: u.arbitrary()?,
+                }),
+                _ => unreachable!("index chosen is impossible"),
+            }
+        }
+    }
+
+    fn size_hint(depth: usize) -> (usize, Option<usize>) {
+        #[cfg(any(
+            feature = "unicode-age",
+            feature = "unicode-bool",
+            feature = "unicode-gencat",
+            feature = "unicode-perl",
+            feature = "unicode-script",
+            feature = "unicode-segment",
+        ))]
+        {
+            arbitrary::size_hint::and_all(&[
+                usize::size_hint(depth),
+                usize::size_hint(depth),
+                arbitrary::size_hint::or(
+                    (0, Some(0)),
+                    ClassUnicodeOpKind::size_hint(depth),
+                ),
+            ])
+        }
+        #[cfg(not(any(
+            feature = "unicode-age",
+            feature = "unicode-bool",
+            feature = "unicode-gencat",
+            feature = "unicode-perl",
+            feature = "unicode-script",
+            feature = "unicode-segment",
+        )))]
+        {
+            arbitrary::size_hint::and(
+                usize::size_hint(depth),
+                arbitrary::size_hint::or_all(&[
+                    char::size_hint(depth),
+                    String::size_hint(depth),
+                    arbitrary::size_hint::and_all(&[
+                        String::size_hint(depth),
+                        String::size_hint(depth),
+                        ClassUnicodeOpKind::size_hint(depth),
+                    ]),
+                ]),
+            )
+        }
+    }
 }
 
 /// The type of op used in a Unicode character class.
@@ -1238,7 +1384,6 @@ pub enum GroupKind {
 /// This corresponds to the name itself between the angle brackets in, e.g.,
 /// `(?P<foo>expr)`.
 #[derive(Clone, Debug, Eq, PartialEq)]
-#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct CaptureName {
     /// The span of this capture name.
     pub span: Span,
@@ -1246,6 +1391,35 @@ pub struct CaptureName {
     pub name: String,
     /// The capture index.
     pub index: u32,
+}
+
+#[cfg(feature = "arbitrary")]
+impl arbitrary::Arbitrary<'_> for CaptureName {
+    fn arbitrary(
+        u: &mut arbitrary::Unstructured,
+    ) -> arbitrary::Result<CaptureName> {
+        let len = u.arbitrary_len::<char>()?;
+        if len == 0 {
+            return Err(arbitrary::Error::NotEnoughData);
+        }
+        let mut name: String = String::new();
+        for _ in 0..len {
+            let ch: char = u.arbitrary()?;
+            let cp = u32::from(ch);
+            let ascii_letter_offset = u8::try_from(cp % 26).unwrap();
+            let ascii_letter = b'a' + ascii_letter_offset;
+            name.push(char::from(ascii_letter));
+        }
+        Ok(CaptureName { span: u.arbitrary()?, name, index: u.arbitrary()? })
+    }
+
+    fn size_hint(depth: usize) -> (usize, Option<usize>) {
+        arbitrary::size_hint::and_all(&[
+            Span::size_hint(depth),
+            usize::size_hint(depth),
+            u32::size_hint(depth),
+        ])
+    }
 }
 
 /// A group of flags that is not applied to a particular regular expression.
