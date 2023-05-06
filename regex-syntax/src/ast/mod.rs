@@ -922,6 +922,7 @@ impl arbitrary::Arbitrary<'_> for ClassUnicodeKind {
                     name: u.arbitrary()?,
                     value: u.arbitrary()?,
                 }),
+                _ => unreachable!("index chosen is impossible"),
             }
         }
     }
