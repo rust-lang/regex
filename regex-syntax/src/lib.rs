@@ -138,7 +138,7 @@ The following features are available:
   [Unicode's "simple loose matches" specification](https://www.unicode.org/reports/tr18/#Simple_Loose_Matches).
 * **unicode-gencat** -
   Provide the data for
-  [Uncode general categories](https://www.unicode.org/reports/tr44/tr44-24.html#General_Category_Values).
+  [Unicode general categories](https://www.unicode.org/reports/tr44/tr44-24.html#General_Category_Values).
   This includes, but is not limited to, `Decimal_Number`, `Letter`,
   `Math_Symbol`, `Number` and `Punctuation`.
 * **unicode-perl** -
