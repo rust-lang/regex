@@ -47,6 +47,8 @@ impl Visitor for VerboseVisitor {
 }
 
 fuzz_target!(|data: FuzzData| -> Corpus {
+    let _ = env_logger::try_init();
+
     let pattern = format!("{}", data.ast);
     let Ok(ast) = Parser::new().parse(&pattern) else {
         return Corpus::Keep;

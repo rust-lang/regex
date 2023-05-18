@@ -48,6 +48,8 @@ re.is_match({haystack:?});
 }
 
 fuzz_target!(|case: FuzzCase| {
+    let _ = env_logger::try_init();
+
     let Ok(re) = regex_lite::RegexBuilder::new(case.pattern)
         .case_insensitive(case.case_insensitive)
         .multi_line(case.multi_line)

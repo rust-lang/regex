@@ -18,6 +18,8 @@ impl std::fmt::Debug for FuzzData {
 }
 
 fuzz_target!(|data: FuzzData| {
+    let _ = env_logger::try_init();
+
     let pattern = format!("{}", data.ast);
     RegexBuilder::new(&pattern).size_limit(1 << 20).build().ok();
 });
