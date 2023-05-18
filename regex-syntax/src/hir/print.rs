@@ -503,7 +503,7 @@ mod tests {
             }),
             Hir::look(hir::Look::End),
         ]);
-        assert_eq!(r"(?:\A(?:\A\z)+\z)", expr.to_string());
+        assert_eq!(r"(?:\A\A\z\z)", expr.to_string());
     }
 
     // Just like regression_repetition_concat, but with the repetition using
@@ -540,7 +540,7 @@ mod tests {
             }),
             Hir::look(hir::Look::End),
         ]);
-        assert_eq!(r"(?:\A(?:\A|\z)+\z)", expr.to_string());
+        assert_eq!(r"(?:\A(?:\A|\z)\z)", expr.to_string());
     }
 
     // This regression test is very similar in flavor to

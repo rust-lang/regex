@@ -355,7 +355,13 @@ impl Hir {
 
     /// Creates a repetition HIR expression.
     #[inline]
-    pub fn repetition(rep: Repetition) -> Hir {
+    pub fn repetition(mut rep: Repetition) -> Hir {
+        // If the sub-expression of a repetition can only match the empty
+        // string, then we force its maximum to be at most 1.
+        if rep.sub.properties().maximum_len() == Some(0) {
+            rep.min = cmp::min(rep.min, 1);
+            rep.max = rep.max.map(|n| cmp::min(n, 1)).or(Some(1));
+        }
         // The regex 'a{0}' is always equivalent to the empty regex. This is
         // true even when 'a' is an expression that never matches anything
         // (like '\P{any}').

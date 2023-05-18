@@ -3489,6 +3489,15 @@ mod tests {
         assert!(!props(r"(?:z|xx)@|xx").is_alternation_literal());
     }
 
+    // This tests that the smart Hir::repetition constructors does some basic
+    // simplifications.
+    #[test]
+    fn smart_repetition() {
+        assert_eq!(t(r"a{0}"), Hir::empty());
+        assert_eq!(t(r"a{1}"), hir_lit("a"));
+        assert_eq!(t(r"\B{32111}"), hir_look(hir::Look::WordUnicodeNegate));
+    }
+
     // This tests that the smart Hir::concat constructor simplifies the given
     // exprs in a way we expect.
     #[test]

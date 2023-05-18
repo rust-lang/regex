@@ -2854,13 +2854,13 @@ mod tests {
     // repeats.
     #[test]
     fn crazy_repeats() {
-        assert_eq!(inexact([I("")], [I("")]), e(r"(?:){4294967295}"));
+        assert_eq!(inexact([E("")], [E("")]), e(r"(?:){4294967295}"));
         assert_eq!(
-            inexact([I("")], [I("")]),
+            inexact([E("")], [E("")]),
             e(r"(?:){64}{64}{64}{64}{64}{64}")
         );
-        assert_eq!(inexact([I("")], [I("")]), e(r"x{0}{4294967295}"));
-        assert_eq!(inexact([I("")], [I("")]), e(r"(?:|){4294967295}"));
+        assert_eq!(inexact([E("")], [E("")]), e(r"x{0}{4294967295}"));
+        assert_eq!(inexact([E("")], [E("")]), e(r"(?:|){4294967295}"));
 
         assert_eq!(
             inexact([E("")], [E("")]),
