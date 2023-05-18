@@ -240,3 +240,11 @@ fn regression_unicode_perl_not_enabled() {
     let re = regex_new!(pat);
     assert!(re.is_ok());
 }
+
+// See: https://github.com/rust-lang/regex/issues/995
+#[test]
+fn regression_big_regex_overflow() {
+    let pat = r" {2147483516}{2147483416}{5}";
+    let re = regex_new!(pat);
+    assert!(re.is_err());
+}

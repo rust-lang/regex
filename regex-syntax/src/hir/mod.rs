@@ -2481,16 +2481,24 @@ impl Properties {
             props.literal = props.literal && p.is_literal();
             props.alternation_literal =
                 props.alternation_literal && p.is_alternation_literal();
-            if let Some(ref mut minimum_len) = props.minimum_len {
+            if let Some(minimum_len) = props.minimum_len {
                 match p.minimum_len() {
                     None => props.minimum_len = None,
-                    Some(len) => *minimum_len += len,
+                    Some(len) => {
+                        // We use saturating arithmetic here because the
+                        // minimum is just a lower bound. We can't go any
+                        // higher than what our number types permit.
+                        props.minimum_len =
+                            Some(minimum_len.saturating_add(len));
+                    }
                 }
             }
-            if let Some(ref mut maximum_len) = props.maximum_len {
+            if let Some(maximum_len) = props.maximum_len {
                 match p.maximum_len() {
                     None => props.maximum_len = None,
-                    Some(len) => *maximum_len += len,
+                    Some(len) => {
+                        props.maximum_len = maximum_len.checked_add(len)
+                    }
                 }
             }
         }
