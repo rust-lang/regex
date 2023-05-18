@@ -9,6 +9,8 @@ fuzz_target!(|data: &[u8]| {
 fn run(given_data: &[u8]) -> Option<()> {
     use regex_automata::dfa::Automaton;
 
+    let _ = env_logger::try_init();
+
     if given_data.len() < 2 {
         return None;
     }

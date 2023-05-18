@@ -16,10 +16,17 @@ cargo-fuzz = true
 [dependencies]
 arbitrary = { version = "1.3.0", features = ["derive"] }
 libfuzzer-sys = { version = "0.4.1", features = ["arbitrary-derive"] }
-regex = { path = ".." }
-regex-automata = { path = "../regex-automata" }
+regex = { path = "..", features = ["logging"] }
+regex-automata = { path = "../regex-automata", features = ["logging"] }
 regex-lite = { path = "../regex-lite" }
 regex-syntax = { path = "../regex-syntax", features = ["arbitrary"] }
+
+[dependencies.env_logger]
+# Note that this is currently using an older version because of the dependency
+# tree explosion that happened in 0.10.
+version = "0.9.3"
+default-features = false
+features = ["atty", "humantime", "termcolor"]
 
 # Prevent this from interfering with workspaces
 [workspace]
