@@ -1,3 +1,18 @@
+1.8.2 (2023-05-22)
+==================
+This is a patch release that fixes a bug where regex compilation could panic
+in debug mode for regexes with large counted repetitions. For example,
+`a{2147483516}{2147483416}{5}` resulted in an integer overflow that wrapped
+in release mode but panicking in debug mode. Despite the unintended wrapping
+arithmetic in release mode, it didn't cause any other logical bugs since the
+errant code was for new analysis that wasn't used yet.
+
+Bug fixes:
+
+* [BUG #995](https://github.com/rust-lang/regex/issues/995):
+Fix a bug where regex compilation with large counted repetitions could panic.
+
+
 1.8.1 (2023-04-21)
 ==================
 This is a patch release that fixes a bug where a regex match could be reported
