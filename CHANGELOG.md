@@ -1,3 +1,17 @@
+1.8.3 (2023-05-25)
+==================
+This is a patch release that fixes a bug where the regex would report a
+match at every position even when it shouldn't. This could occur in a very
+small subset of regexes, usually an alternation of simple literals that
+have particular properties. (See the issue linked below for a more precise
+description.)
+
+Bug fixes:
+
+* [BUG #999](https://github.com/rust-lang/regex/issues/999):
+Fix a bug where a match at every position is erroneously reported.
+
+
 1.8.2 (2023-05-22)
 ==================
 This is a patch release that fixes a bug where regex compilation could panic
