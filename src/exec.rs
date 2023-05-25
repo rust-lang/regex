@@ -1439,7 +1439,18 @@ impl ExecReadOnly {
                     // This case shouldn't happen. When the regex isn't
                     // anchored, then complete prefixes should imply complete
                     // suffixes.
-                    Some(MatchType::Literal(MatchLiteralType::Unanchored))
+                    //
+                    // The above is wrong! This case can happen. While
+                    // complete prefixes should imply complete suffixes
+                    // here, that doesn't necessarily mean we have a useful
+                    // prefix matcher! It could be the case that the literal
+                    // searcher decided the prefixes---even though they are
+                    // "complete"---weren't good enough and thus created an
+                    // empty matcher. If that happens and we return Unanchored
+                    // here, then we'll end up using that matcher, which is
+                    // very bad because it matches at every position. So...
+                    // return None.
+                    None
                 };
             }
             None
