@@ -1,9 +1,9 @@
 #![no_main]
-use libfuzzer_sys::fuzz_target;
+use libfuzzer_sys::{fuzz_target, Corpus};
 
-fuzz_target!(|data: &[u8]| {
+fuzz_target!(|data: &[u8]| -> Corpus {
     if data.len() < 2 {
-        return;
+        return Corpus::Reject;
     }
     let split_point = data[0] as usize;
     if let Ok(data) = std::str::from_utf8(&data[1..]) {
@@ -21,7 +21,7 @@ fuzz_target!(|data: &[u8]| {
             // be done about them. Unicode word boundaries in the PikeVM are
             // slow. It is what it is.
             if input.len() >= 8 * (1 << 10) {
-                return;
+                return Corpus::Reject;
             }
             let result =
                 regex::RegexBuilder::new(pattern).size_limit(1 << 18).build();
@@ -30,4 +30,5 @@ fuzz_target!(|data: &[u8]| {
             }
         }
     }
+    Corpus::Keep
 });
