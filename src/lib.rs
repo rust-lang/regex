@@ -54,22 +54,19 @@ microseconds to a few **milliseconds** depending on the size of the
 regex.) Not only is compilation itself expensive, but this also prevents
 optimizations that reuse allocations internally to the matching engines.
 
-In Rust, it can sometimes be a pain to pass regular expressions around if
-they're used from inside a helper function. Instead, we recommend using the
-[`lazy_static`](https://crates.io/crates/lazy_static) crate to ensure that
-regular expressions are compiled exactly once.
+Starting from [Rust 1.70](https://blog.rust-lang.org/2023/06/01/Rust-1.70.0.html#oncecell-and-oncelock),
+you can use [`std::sync::OnceLock`](https://doc.rust-lang.org/std/sync/struct.OnceLock.html)
+to ensure that regular expressions are compiled exactly once.
 
 For example:
 
 ```rust
-use lazy_static::lazy_static;
+use std::sync::OnceLock;
 use regex::Regex;
 
 fn some_helper_function(text: &str) -> bool {
-    lazy_static! {
-        static ref RE: Regex = Regex::new("...").unwrap();
-    }
-    RE.is_match(text)
+    static RE: OnceLock<RegexSet> = OnceLock::new();
+    RE.get_or_init(|| Regex::new("...").unwrap()).is_match(text)
 }
 
 fn main() {}
@@ -77,6 +74,21 @@ fn main() {}
 
 Specifically, in this example, the regex will be compiled when it is used for
 the first time. On subsequent uses, it will reuse the previous compilation.
+
+If you need to define multiple regexes, you can use the following macro:
+
+```rust
+macro_rules! regex {
+    ($re:literal $(,)?) => {{
+        static RE: once_cell::sync::OnceCell<regex::Regex> = once_cell::sync::OnceCell::new();
+        RE.get_or_init(|| regex::Regex::new($re).unwrap())
+    }};
+}
+```
+
+In future, the companion [`std::sync::LazyLock`](https://doc.rust-lang.org/std/sync/struct.LazyLock.html)
+type may be stabilized as well, which would allow to write the above
+regex definition in a single line.
 
 # Example: iterating over capture groups
 
