@@ -1,3 +1,28 @@
+1.8.4 (2023-06-05)
+==================
+This is a patch release that fixes a bug where `(?-u:\B)` was allowed in
+Unicode regexes, despite the fact that the current matching engines can report
+match offsets between the code units of a single UTF-8 encoded codepoint. That
+in turn means that match offsets that split a codepoint could be reported,
+which in turn results in panicking when one uses them to slice a `&str`.
+
+This bug occurred in the transition to `regex 1.8` because the underlying
+syntactical error that prevented this regex from compiling was intentionally
+removed. That's because `(?-u:\B)` will be permitted in Unicode regexes in
+`regex 1.9`, but the matching engines will guarantee to never report match
+offsets that split a codepoint. When the underlying syntactical error was
+removed, no code was added to ensure that `(?-u:\B)` didn't compile in the
+`regex 1.8` transition release. This release, `regex 1.8.4`, adds that code
+such that `Regex::new(r"(?-u:\B)")` returns to the `regex <1.8` behavior of
+not compiling. (A `bytes::Regex` can still of course compile it.)
+
+Bug fixes:
+
+* [BUG #1006](https://github.com/rust-lang/regex/issues/1006):
+Fix a bug where `(?-u:\B)` was allowed in Unicode regexes, and in turn could
+lead to match offsets that split a codepoint in `&str`.
+
+
 1.8.3 (2023-05-25)
 ==================
 This is a patch release that fixes a bug where the regex would report a
