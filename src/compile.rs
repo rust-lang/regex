@@ -137,6 +137,15 @@ impl Compiler {
     }
 
     fn compile_one(mut self, expr: &Hir) -> result::Result<Program, Error> {
+        if self.compiled.only_utf8
+            && expr.properties().look_set().contains(Look::WordAsciiNegate)
+        {
+            return Err(Error::Syntax(
+                "ASCII-only \\B is not allowed in Unicode regexes \
+                 because it may result in invalid UTF-8 matches"
+                    .to_string(),
+            ));
+        }
         // If we're compiling a forward DFA and we aren't anchored, then
         // add a `.*?` before the first capture group.
         // Other matching engines handle this by baking the logic into the
