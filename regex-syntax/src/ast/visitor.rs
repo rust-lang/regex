@@ -48,6 +48,11 @@ pub trait Visitor {
         Ok(())
     }
 
+    /// This method is called between child nodes of a concatenation.
+    fn visit_concat_in(&mut self) -> Result<(), Self::Err> {
+        Ok(())
+    }
+
     /// This method is called on every [`ClassSetItem`](ast::ClassSetItem)
     /// before descending into child nodes.
     fn visit_class_set_item_pre(
@@ -228,8 +233,14 @@ impl<'a> HeapVisitor<'a> {
                 // If this is a concat/alternate, then we might have additional
                 // inductive steps to process.
                 if let Some(x) = self.pop(frame) {
-                    if let Frame::Alternation { .. } = x {
-                        visitor.visit_alternation_in()?;
+                    match x {
+                        Frame::Alternation { .. } => {
+                            visitor.visit_alternation_in()?;
+                        }
+                        Frame::Concat { .. } => {
+                            visitor.visit_concat_in()?;
+                        }
+                        _ => {}
                     }
                     ast = x.child();
                     self.stack.push((post_ast, x));

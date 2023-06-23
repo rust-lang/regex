@@ -41,6 +41,11 @@ pub trait Visitor {
     fn visit_alternation_in(&mut self) -> Result<(), Self::Err> {
         Ok(())
     }
+
+    /// This method is called between child nodes of a concatenation.
+    fn visit_concat_in(&mut self) -> Result<(), Self::Err> {
+        Ok(())
+    }
 }
 
 /// Executes an implementation of `Visitor` in constant stack space.
@@ -131,8 +136,14 @@ impl<'a> HeapVisitor<'a> {
                 // If this is a concat/alternate, then we might have additional
                 // inductive steps to process.
                 if let Some(x) = self.pop(frame) {
-                    if let Frame::Alternation { .. } = x {
-                        visitor.visit_alternation_in()?;
+                    match x {
+                        Frame::Alternation { .. } => {
+                            visitor.visit_alternation_in()?;
+                        }
+                        Frame::Concat { .. } => {
+                            visitor.visit_concat_in()?;
+                        }
+                        _ => {}
                     }
                     hir = x.child();
                     self.stack.push((post_hir, x));
