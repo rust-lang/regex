@@ -43,7 +43,7 @@ pub trait Visitor {
     }
 
     /// This method is called between child nodes of a concatenation.
-    fn visit_concat_in(&mut self)-> Result<(), Self::Err> {
+    fn visit_concat_in(&mut self) -> Result<(), Self::Err> {
         Ok(())
     }
 }
