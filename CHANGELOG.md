@@ -1,3 +1,80 @@
+1.9.0 (2023-07-05)
+==================
+This release marks the end of a [years long rewrite of the regex crate
+internals](https://github.com/rust-lang/regex/issues/656). Since this is
+such a big release, please report any issues or regressions you find. I would
+also love to hear about improvements as well.
+
+In addition to many internal improvements that should hopefully result in
+"my regex searches are faster," there have also been a few API additions:
+
+* A new `Captures::extract` method exists for quickly accessing the substrings
+that match each capture group in a regex.
+* A new inline flag, `R`, which enables CRLF mode. This makes `.` match any
+Unicode scalar value except for `\r` and `\n`, and also makes `(?m:^)` and
+`(?m:$)` match after and before both `\r` and `\n`, respectively, but never
+between a `\r` and `\n`.
+* `RegexBuilder::line_terminator` was added to further customize the line
+terminator used by `(?m:^)` and `(?m:$)` to be any arbitrary byte.
+* The `std` Cargo feature is now actually optional. That is, the `regex` crate
+can be used without the standard library.
+* Because `regex 1.9` may make binary size and compile times even worse, a
+new experimental crate called `regex-lite` has been published. It prioritizes
+binary size and compile times over functionality (like Unicode) and
+performance. It shares no code with the `regex` crate.
+
+New features:
+
+* [FEATURE #244](https://github.com/rust-lang/regex/issues/244):
+One can opt into CRLF mode via the `R` flag.
+e.g., `(?mR:$)` matches just before `\r\n`.
+* [FEATURE #259](https://github.com/rust-lang/regex/issues/259):
+Multi-pattern searches with offsets can be done with `regex-automata 0.3`.
+* [FEATURE #476](https://github.com/rust-lang/regex/issues/476):
+`std` is now an optional feature. `regex` may be used with only `alloc`.
+* [FEATURE #644](https://github.com/rust-lang/regex/issues/644):
+`RegexBuilder::line_terminator` configures how `(?m:^)` and `(?m:$)` behave.
+* [FEATURE #675](https://github.com/rust-lang/regex/issues/675):
+Anchored search APIs are now available in `regex-automata 0.3`.
+* [FEATURE #824](https://github.com/rust-lang/regex/issues/824):
+Add new `Capptures::extract` method for easier capture group access.
+* [FEATURE #961](https://github.com/rust-lang/regex/issues/961):
+Add `regex-lite` crate with smaller binary sizes and faster compile times.
+
+Performance improvements:
+
+* [PERF #68](https://github.com/rust-lang/regex/issues/68):
+Added a one-pass DFA engine for faster capture group matching.
+* [PERF #510](https://github.com/rust-lang/regex/issues/510):
+Inner literals are now used to accelerate searches, e.g., `\w+@\w+` will scan
+for `@`.
+* [PERF #787](https://github.com/rust-lang/regex/issues/787),
+[PERF #891](https://github.com/rust-lang/regex/issues/891):
+Makes literal optimizations apply to regexes of the form `\b(foo|bar|quux)\b`.
+
+(There are many more performance improvements as well, but not all of them have
+specific issues devoted to them.)
+
+Bug fixes:
+
+* [BUG #429](https://github.com/rust-lang/regex/issues/429):
+Fix matching bugs related to `\B` and inconsistencies across internal engines.
+* [BUG #517](https://github.com/rust-lang/regex/issues/517):
+Fix matching bug with capture groups.
+* [BUG #579](https://github.com/rust-lang/regex/issues/579):
+Fix matching bug with word boundaries.
+* [BUG #779](https://github.com/rust-lang/regex/issues/779):
+Fix bug where some regexes like `(re)+` were not equivalent to `(re)(re)*`.
+* [BUG #850](https://github.com/rust-lang/regex/issues/850):
+Fix matching bug inconsistency between NFA and DFA engines.
+* [BUG #921](https://github.com/rust-lang/regex/issues/921):
+Fix matching bug where literal extraction got confused by `$`.
+* [BUG #976](https://github.com/rust-lang/regex/issues/976):
+Add documentation to replacement routines about dealing with fallibility.
+* [BUG #1002](https://github.com/rust-lang/regex/issues/1002):
+Use corpus rejection in fuzz testing.
+
+
 1.8.4 (2023-06-05)
 ==================
 This is a patch release that fixes a bug where `(?-u:\B)` was allowed in
