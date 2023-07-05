@@ -14,15 +14,14 @@ use crate::args::{self, Usage};
 
 const REGEX_COMBOS: &[&[&str]] = &[
     &["std", "perf", "unicode"],
-    // TODO: Enable this once we've fully migrated over to regex-automata.
-    // &["std", "perf", "unicode", "perf-dfa-full"],
+    &["std", "perf", "unicode", "perf-dfa-full"],
     &["std"],
     &["std", "perf"],
     &["std", "unicode"],
     &["std", "unicode-case", "unicode-perl"],
 ];
 
-const REGEX_LITE_COMBOS: &[&[&str]] = &[&["std"]];
+const REGEX_LITE_COMBOS: &[&[&str]] = &[&["std", "string"]];
 
 const REGEX_AUTOMATA_COMBOS: &[&[&str]] = &[
     &["std", "syntax", "perf", "unicode", "meta", "nfa", "dfa", "hybrid"],
