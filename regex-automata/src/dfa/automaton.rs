@@ -842,9 +842,13 @@ pub unsafe trait Automaton {
     /// assert_eq!(dfa.match_len(state), 3);
     /// // The following calls are guaranteed to not panic since `match_len`
     /// // returned `3` above.
-    /// assert_eq!(dfa.match_pattern(state, 0).as_usize(), 3);
-    /// assert_eq!(dfa.match_pattern(state, 1).as_usize(), 0);
-    /// assert_eq!(dfa.match_pattern(state, 2).as_usize(), 1);
+    /// let pattern_ids = [
+    ///   dfa.match_pattern(state, 0).as_usize(),
+    ///   dfa.match_pattern(state, 1).as_usize(),
+    ///   dfa.match_pattern(state, 2).as_usize(),
+    /// ];
+    /// pattern_ids.sort();
+    /// assert_eq!(pattern_ids, [0, 1, 3]);
     ///
     /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// ```
