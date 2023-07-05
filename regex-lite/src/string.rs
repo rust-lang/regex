@@ -117,6 +117,24 @@ impl core::str::FromStr for Regex {
     }
 }
 
+impl TryFrom<&str> for Regex {
+    type Error = Error;
+
+    /// Attempts to parse a string into a regular expression
+    fn try_from(s: &str) -> Result<Regex, Error> {
+        Regex::new(s)
+    }
+}
+
+impl TryFrom<String> for Regex {
+    type Error = Error;
+
+    /// Attempts to parse a string into a regular expression
+    fn try_from(s: String) -> Result<Regex, Error> {
+        Regex::new(&s)
+    }
+}
+
 /// Core regular expression methods.
 impl Regex {
     /// Compiles a regular expression. Once compiled, it can be used repeatedly
