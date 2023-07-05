@@ -40,6 +40,8 @@ Anchored search APIs are now available in `regex-automata 0.3`.
 Add new `Captures::extract` method for easier capture group access.
 * [FEATURE #961](https://github.com/rust-lang/regex/issues/961):
 Add `regex-lite` crate with smaller binary sizes and faster compile times.
+* [FEATURE #1022](https://github.com/rust-lang/regex/pull/1022):
+Add `TryFrom` implementations for the `Regex` type.
 
 Performance improvements:
 

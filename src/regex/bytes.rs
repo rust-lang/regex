@@ -1,4 +1,4 @@
-use alloc::{borrow::Cow, sync::Arc, vec::Vec};
+use alloc::{borrow::Cow, string::String, sync::Arc, vec::Vec};
 
 use regex_automata::{meta, util::captures, Input, PatternID};
 
@@ -121,6 +121,24 @@ impl core::str::FromStr for Regex {
     /// Attempts to parse a string into a regular expression
     fn from_str(s: &str) -> Result<Regex, Error> {
         Regex::new(s)
+    }
+}
+
+impl TryFrom<&str> for Regex {
+    type Error = Error;
+
+    /// Attempts to parse a string into a regular expression
+    fn try_from(s: &str) -> Result<Regex, Error> {
+        Regex::new(s)
+    }
+}
+
+impl TryFrom<String> for Regex {
+    type Error = Error;
+
+    /// Attempts to parse a string into a regular expression
+    fn try_from(s: String) -> Result<Regex, Error> {
+        Regex::new(&s)
     }
 }
 
