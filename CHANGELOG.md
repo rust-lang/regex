@@ -2,13 +2,13 @@
 ==================
 This release marks the end of a [years long rewrite of the regex crate
 internals](https://github.com/rust-lang/regex/issues/656). Since this is
-such a big release, please report any issues or regressions you find. I would
+such a big release, please report any issues or regressions you find. We would
 also love to hear about improvements as well.
 
 In addition to many internal improvements that should hopefully result in
 "my regex searches are faster," there have also been a few API additions:
 
-* A new `Captures::extract` method exists for quickly accessing the substrings
+* A new `Captures::extract` method for quickly accessing the substrings
 that match each capture group in a regex.
 * A new inline flag, `R`, which enables CRLF mode. This makes `.` match any
 Unicode scalar value except for `\r` and `\n`, and also makes `(?m:^)` and
@@ -37,7 +37,7 @@ Multi-pattern searches with offsets can be done with `regex-automata 0.3`.
 * [FEATURE #675](https://github.com/rust-lang/regex/issues/675):
 Anchored search APIs are now available in `regex-automata 0.3`.
 * [FEATURE #824](https://github.com/rust-lang/regex/issues/824):
-Add new `Capptures::extract` method for easier capture group access.
+Add new `Captures::extract` method for easier capture group access.
 * [FEATURE #961](https://github.com/rust-lang/regex/issues/961):
 Add `regex-lite` crate with smaller binary sizes and faster compile times.
 
