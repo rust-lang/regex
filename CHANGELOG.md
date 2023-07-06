@@ -187,7 +187,7 @@ More specifically, any ASCII character except for `[0-9A-Za-z<>]` can now be
 escaped. Also, a new routine, `is_escapeable_character`, has been added to
 `regex-syntax` to query whether a character is escapeable or not.
 * [FEATURE #547](https://github.com/rust-lang/regex/issues/547):
-Add `Regex::captures_at`. This filles a hole in the API, but doesn't otherwise
+Add `Regex::captures_at`. This fills a hole in the API, but doesn't otherwise
 introduce any new expressive power.
 * [FEATURE #595](https://github.com/rust-lang/regex/issues/595):
 Capture group names are now Unicode-aware. They can now begin with either a `_`
