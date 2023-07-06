@@ -1,5 +1,5 @@
 /*!
-A module for building and searching with lazy determinstic finite automata
+A module for building and searching with lazy deterministic finite automata
 (DFAs).
 
 Like other modules in this crate, lazy DFAs support a rich regex syntax with

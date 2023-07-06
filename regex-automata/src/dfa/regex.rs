@@ -590,7 +590,7 @@ impl<A: Automaton> Regex<A> {
 ///
 /// The type parameters are as follows:
 ///
-/// * `A` represents the type of the underyling DFA that implements the
+/// * `A` represents the type of the underlying DFA that implements the
 /// [`Automaton`] trait.
 ///
 /// The lifetime parameters are as follows:

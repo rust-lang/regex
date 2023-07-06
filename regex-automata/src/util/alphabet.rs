@@ -132,7 +132,7 @@ impl Unit {
         }
     }
 
-    /// If this unit is an "end of input" sentinel, then return the underyling
+    /// If this unit is an "end of input" sentinel, then return the underlying
     /// sentinel value that was given to [`Unit::eoi`]. Otherwise return
     /// `None`.
     pub fn as_eoi(self) -> Option<u16> {

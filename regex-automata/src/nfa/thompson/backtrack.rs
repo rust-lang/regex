@@ -825,7 +825,7 @@ impl BoundedBacktracker {
     #[inline]
     pub fn max_haystack_len(&self) -> usize {
         // The capacity given in the config is "bytes of heap memory," but the
-        // capacity we use here is "number of bits." So conver the capacity in
+        // capacity we use here is "number of bits." So convert the capacity in
         // bytes to the capacity in bits.
         let capacity = 8 * self.get_config().get_visited_capacity();
         let blocks = div_ceil(capacity, Visited::BLOCK_SIZE);
@@ -1845,7 +1845,7 @@ impl Visited {
     /// Reset this visited set to work with the given bounded backtracker.
     fn reset(&mut self, re: &BoundedBacktracker) {
         // The capacity given in the config is "bytes of heap memory," but the
-        // capacity we use here is "number of bits." So conver the capacity in
+        // capacity we use here is "number of bits." So convert the capacity in
         // bytes to the capacity in bits.
         let capacity = 8 * re.get_config().get_visited_capacity();
         let blocks = div_ceil(capacity, Visited::BLOCK_SIZE);

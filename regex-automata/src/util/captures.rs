@@ -1453,7 +1453,7 @@ impl GroupInfo {
     /// sequence of patterns yields a sequence of possible group names. The
     /// index of each pattern in the sequence corresponds to its `PatternID`,
     /// and the index of each group in each pattern's sequence corresponds to
-    /// its coresponding group index.
+    /// its corresponding group index.
     ///
     /// While this constructor is very generic and therefore perhaps hard to
     /// chew on, an example of a valid concrete type that can be passed to

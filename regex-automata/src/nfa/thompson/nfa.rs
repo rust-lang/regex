@@ -1587,7 +1587,7 @@ pub enum State {
     /// in case they are useful. But mostly, all you'll need is `next` and
     /// `slot`.
     Capture {
-        /// The state to transtition to, unconditionally.
+        /// The state to transition to, unconditionally.
         next: StateID,
         /// The pattern ID that this capture belongs to.
         pattern_id: PatternID,

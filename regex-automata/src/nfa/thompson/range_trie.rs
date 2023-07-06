@@ -131,7 +131,7 @@ sequences of ranges are sorted, and any corresponding ranges are either
 exactly equivalent or non-overlapping.
 
 In effect, a range trie is building a DFA from a sequence of arbitrary byte
-ranges. But it uses an algoritm custom tailored to its input, so it is not as
+ranges. But it uses an algorithm custom tailored to its input, so it is not as
 costly as traditional DFA construction. While it is still quite a bit more
 costly than the forward case (which only needs Daciuk's algorithm), it winds
 up saving a substantial amount of time if one is doing a full DFA powerset
@@ -188,7 +188,7 @@ pub struct RangeTrie {
     /// A stack for traversing this trie to yield sequences of byte ranges in
     /// lexicographic order.
     iter_stack: RefCell<Vec<NextIter>>,
-    /// A bufer that stores the current sequence during iteration.
+    /// A buffer that stores the current sequence during iteration.
     iter_ranges: RefCell<Vec<Utf8Range>>,
     /// A stack used for traversing the trie in order to (deeply) duplicate
     /// a state. States are recursively duplicated when ranges are split.
@@ -622,7 +622,7 @@ struct NextIter {
 }
 
 /// The next state to process during insertion and any remaining ranges that we
-/// want to add for a partcular sequence of ranges. The first such instance
+/// want to add for a particular sequence of ranges. The first such instance
 /// is always the root state along with all ranges given.
 #[derive(Clone, Debug)]
 struct NextInsert {

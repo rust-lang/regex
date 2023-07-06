@@ -395,7 +395,7 @@ pub(crate) mod string {
         ///
         /// * Unless dot-matches-new-line mode is enabled, `.` will now match
         /// any character except for `\n` and `\r`.
-        /// * When multi-line mode is enabled, `^` will match immediatelly
+        /// * When multi-line mode is enabled, `^` will match immediately
         /// following a `\n` or a `\r`. Similarly, `$` will match immediately
         /// preceding a `\n` or a `\r`. Neither `^` nor `$` will ever match
         /// between `\r` and `\n`.
@@ -973,7 +973,7 @@ pub(crate) mod string {
         ///
         /// * Unless dot-matches-new-line mode is enabled, `.` will now match
         /// any character except for `\n` and `\r`.
-        /// * When multi-line mode is enabled, `^` will match immediatelly
+        /// * When multi-line mode is enabled, `^` will match immediately
         /// following a `\n` or a `\r`. Similarly, `$` will match immediately
         /// preceding a `\n` or a `\r`. Neither `^` nor `$` will ever match
         /// between `\r` and `\n`.
@@ -1563,7 +1563,7 @@ pub(crate) mod bytes {
         ///
         /// * Unless dot-matches-new-line mode is enabled, `.` will now match
         /// any character except for `\n` and `\r`.
-        /// * When multi-line mode is enabled, `^` will match immediatelly
+        /// * When multi-line mode is enabled, `^` will match immediately
         /// following a `\n` or a `\r`. Similarly, `$` will match immediately
         /// preceding a `\n` or a `\r`. Neither `^` nor `$` will ever match
         /// between `\r` and `\n`.
@@ -2162,7 +2162,7 @@ pub(crate) mod bytes {
         ///
         /// * Unless dot-matches-new-line mode is enabled, `.` will now match
         /// any character except for `\n` and `\r`.
-        /// * When multi-line mode is enabled, `^` will match immediatelly
+        /// * When multi-line mode is enabled, `^` will match immediately
         /// following a `\n` or a `\r`. Similarly, `$` will match immediately
         /// preceding a `\n` or a `\r`. Neither `^` nor `$` will ever match
         /// between `\r` and `\n`.

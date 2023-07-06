@@ -1316,7 +1316,7 @@ impl Regex {
     /// unnamed group that is always present and corresponds to the entire
     /// match.
     ///
-    /// Since the implict unnamed group is always included in this length, the
+    /// Since the implicit unnamed group is always included in this length, the
     /// length returned is guaranteed to be greater than zero.
     ///
     /// # Example

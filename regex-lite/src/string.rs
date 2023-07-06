@@ -1343,7 +1343,7 @@ impl Regex {
     /// unnamed group that is always present and corresponds to the entire
     /// match.
     ///
-    /// Since the implict unnamed group is always included in this length, the
+    /// Since the implicit unnamed group is always included in this length, the
     /// length returned is guaranteed to be greater than zero.
     ///
     /// # Example
@@ -2760,7 +2760,7 @@ impl RegexBuilder {
     ///
     /// * Unless dot-matches-new-line mode is enabled, `.` will now match any
     /// character except for `\n` and `\r`.
-    /// * When multi-line mode is enabled, `^` will match immediatelly
+    /// * When multi-line mode is enabled, `^` will match immediately
     /// following a `\n` or a `\r`. Similarly, `$` will match immediately
     /// preceding a `\n` or a `\r`. Neither `^` nor `$` will ever match between
     /// `\r` and `\n`.

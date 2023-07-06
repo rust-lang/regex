@@ -2109,7 +2109,7 @@ impl<T: AsRef<[u32]>> DFA<T> {
     /// let mut buf = vec![0; original_dfa.write_to_len()];
     /// // This is guaranteed to succeed, because the only serialization error
     /// // that can occur is when the provided buffer is too small. But
-    /// // write_to_len guarantees a correct sie.
+    /// // write_to_len guarantees a correct size.
     /// let written = original_dfa.write_to_native_endian(&mut buf).unwrap();
     /// // But this is not guaranteed to succeed! In particular,
     /// // deserialization requires proper alignment for &[u32], but our buffer
@@ -3336,7 +3336,7 @@ impl<'a> TransitionTable<&'a [u32]> {
     ///
     /// # Safety
     ///
-    /// This routine is not safe because it does not check the valdity of the
+    /// This routine is not safe because it does not check the validity of the
     /// transition table itself. In particular, the transition table can be
     /// quite large, so checking its validity can be somewhat expensive. An
     /// invalid transition table is not safe because other code may rely on the
@@ -3929,7 +3929,7 @@ impl<'a> StartTable<&'a [u32]> {
     ///
     /// # Safety
     ///
-    /// This routine is not safe because it does not check the valdity of the
+    /// This routine is not safe because it does not check the validity of the
     /// starting state IDs themselves. In particular, the number of starting
     /// IDs can be of variable length, so it's possible that checking their
     /// validity cannot be done in constant time. An invalid starting state

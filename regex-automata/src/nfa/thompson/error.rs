@@ -3,7 +3,7 @@ use crate::util::{
     primitives::{PatternID, StateID},
 };
 
-/// An error that can occured during the construction of a thompson NFA.
+/// An error that can occurred during the construction of a thompson NFA.
 ///
 /// This error does not provide many introspection capabilities. There are
 /// generally only two things you can do with it:
@@ -161,13 +161,13 @@ impl core::fmt::Display for BuildError {
             }
             BuildErrorKind::TooManyPatterns { given, limit } => write!(
                 f,
-                "attemped to compile {} patterns, \
+                "attempted to compile {} patterns, \
                  which exceeds the limit of {}",
                 given, limit,
             ),
             BuildErrorKind::TooManyStates { given, limit } => write!(
                 f,
-                "attemped to compile {} NFA states, \
+                "attempted to compile {} NFA states, \
                  which exceeds the limit of {}",
                 given, limit,
             ),

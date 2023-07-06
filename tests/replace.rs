@@ -39,7 +39,7 @@ replace!(
     "",
     "trim me"
 );
-replace!(number_hypen, replace, r"(.)(.)", "ab", "$1-$2", "a-b");
+replace!(number_hyphen, replace, r"(.)(.)", "ab", "$1-$2", "a-b");
 // replace!(number_underscore, replace, r"(.)(.)", "ab", "$1_$2", "a_b");
 replace!(
     simple_expand,

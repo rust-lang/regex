@@ -44,7 +44,7 @@ let hay = b"\x12\xd0\x3b\x5f\x7b\xa9\x85\xe2\x98\x83\x80\x98\x54\x76\x68\x65";
 
 // Notice that despite the `.*` at the end, it will only match valid UTF-8
 // because Unicode mode was enabled with the `u` flag. Without the `u` flag,
-// the `.*` would match the rest of the bytes regardless of whehter they were
+// the `.*` would match the rest of the bytes regardless of whether they were
 // valid UTF-8.
 let (_, [title]) = re.captures(hay).unwrap().extract();
 assert_eq!(title, b"\xE2\x98\x83");

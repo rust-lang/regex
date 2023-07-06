@@ -17,7 +17,7 @@ pub fn run(p: &mut Parser) -> anyhow::Result<()> {
 Prints the debug representation of extract literals from a regex pattern.
 
 Note that the literals this command prints by default should roughly reflect
-what regex-automata's meta regex engine does by defualt. In particular, this
+what regex-automata's meta regex engine does by default. In particular, this
 will optimize the extracted literals and will do so under the presumption of
 leftmost-first match semantics. The --no-optimize flag can be given to skip
 this optimization step and instead get the literals precisely as they were

@@ -429,7 +429,7 @@ impl RegexTest {
         matches
     }
 
-    /// Returns the matches expected by this test, includng the spans of any
+    /// Returns the matches expected by this test, including the spans of any
     /// matching capture groups.
     fn captures(&self) -> Vec<Captures> {
         self.matches.clone()
@@ -1432,7 +1432,7 @@ pub enum SearchKind {
     /// Report matches as soon as they are found.
     ///
     /// This is somewhat tricky to test, as this semantic is specified in terms
-    /// of whatever the regex engine can do. For exmaple, an automata oriented
+    /// of whatever the regex engine can do. For example, an automata oriented
     /// engine might be able to report a match earlier than a backtracking
     /// engine.
     Earliest,

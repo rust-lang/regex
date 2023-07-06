@@ -415,7 +415,7 @@ pub(crate) fn alloc_aligned_buffer<T>(size: usize) -> (Vec<u8>, usize) {
 /// Reads a NUL terminated label starting at the beginning of the given slice.
 ///
 /// If a NUL terminated label could not be found, then an error is returned.
-/// Similary, if a label is found but doesn't match the expected label, then
+/// Similarly, if a label is found but doesn't match the expected label, then
 /// an error is returned.
 ///
 /// Upon success, the total number of bytes read (including padding bytes) is

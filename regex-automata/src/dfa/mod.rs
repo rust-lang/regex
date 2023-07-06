@@ -1,5 +1,5 @@
 /*!
-A module for building and searching with determinstic finite automata (DFAs).
+A module for building and searching with deterministic finite automata (DFAs).
 
 Like other modules in this crate, DFAs support a rich regex syntax with Unicode
 features. DFAs also have extensive options for configuring the best space vs
@@ -267,7 +267,7 @@ the regexes in this module are almost universally slow to compile, especially
 when they contain large Unicode character classes. For example, on my system,
 compiling `\w{50}` takes about 1 second and almost 15MB of memory! (Compiling
 a sparse regex takes about the same time but only uses about 1.2MB of
-memory.) Conversly, compiling the same regex without Unicode support, e.g.,
+memory.) Conversely, compiling the same regex without Unicode support, e.g.,
 `(?-u)\w{50}`, takes under 1 millisecond and about 15KB of memory. For this
 reason, you should only use Unicode character classes if you absolutely need
 them! (They are enabled by default though.)
