@@ -120,7 +120,7 @@ impl core::fmt::Display for BuildError {
 ///
 /// The first is one where potential quadratic behavior has been detected.
 /// In this case, whatever optimization that led to this behavior should be
-/// stopped, and the next best strategy shouldbe used.
+/// stopped, and the next best strategy should be used.
 ///
 /// The second indicates that the underlying regex engine has failed for some
 /// reason. This usually occurs because either a lazy DFA's cache has become
@@ -194,7 +194,7 @@ impl From<RetryQuadraticError> for RetryError {
 /// Note that this has convenient `From` impls that will automatically
 /// convert a `MatchError` into this error. This works because the meta
 /// regex engine internals guarantee that errors like `HaystackTooLong` and
-/// `UnsupportAnchored` will never occur. The only errors left are `Quit` and
+/// `UnsupportedAnchored` will never occur. The only errors left are `Quit` and
 /// `GaveUp`, which both correspond to this "failure" error.
 #[derive(Debug)]
 pub(crate) struct RetryFailError {

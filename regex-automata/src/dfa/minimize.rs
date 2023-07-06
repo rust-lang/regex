@@ -152,7 +152,7 @@ impl<'a> Minimizer<'a> {
 
         // At this point, we now have a minimal partitioning of states, where
         // each partition is an equivalence class of DFA states. Now we need to
-        // use this partioning to update the DFA to only contain one state for
+        // use this partitioning to update the DFA to only contain one state for
         // each partition.
 
         // Create a map from DFA state ID to the representative ID of the

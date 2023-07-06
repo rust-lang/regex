@@ -225,7 +225,7 @@ cannot get too big.
                 "-C, --no-byte-classes",
                 "Disable byte classes.",
                 r#"
-This casues all bytes to be an equivalence class unto themselves. By default,
+This causes all bytes to be an equivalence class unto themselves. By default,
 bytes are grouped into equivalence classes to reduce the size of the alphabet
 for a DFA, and therefore decreases overall space usage.
 

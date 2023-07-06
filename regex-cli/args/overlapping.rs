@@ -32,7 +32,7 @@ impl Configurable for Config {
             "Enable overlapping search.",
             r#"
 Enable overlapping search. When this is enabled, the regex matcher will
-atempt to report all possible matches. Generally speaking, when one enables
+attempt to report all possible matches. Generally speaking, when one enables
 overlapping search, you also want to ensure that '--match-kind all' is given as
 well. Otherwise the overlapping search is unlikely to work as one would expect
 since any match semantics other than 'all' exclude some subset of matches from

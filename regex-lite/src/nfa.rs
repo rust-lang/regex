@@ -375,7 +375,7 @@ impl Compiler {
     /// but no more than `max` times.
     ///
     /// When `greedy` is true, then the preference is for the expression to
-    /// match as much as possible. Otheriwse, it will match as little as
+    /// match as much as possible. Otherwise, it will match as little as
     /// possible.
     fn c_bounded(
         &self,
@@ -438,7 +438,7 @@ impl Compiler {
     /// integer is likely to run afoul of any configured size limits.)
     ///
     /// When `greedy` is true, then the preference is for the expression to
-    /// match as much as possible. Otheriwse, it will match as little as
+    /// match as much as possible. Otherwise, it will match as little as
     /// possible.
     fn c_at_least(
         &self,
@@ -506,7 +506,7 @@ impl Compiler {
     /// times.
     ///
     /// When `greedy` is true, then the preference is for the expression to
-    /// match as much as possible. Otheriwse, it will match as little as
+    /// match as much as possible. Otherwise, it will match as little as
     /// possible.
     fn c_zero_or_one(
         &self,

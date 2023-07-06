@@ -184,7 +184,7 @@ impl core::fmt::Display for ErrorKind {
 /// matches.
 ///
 /// For empty matches, those can occur at any position. It is the
-/// repsonsibility of the regex engine to determine whether empty matches are
+/// responsibility of the regex engine to determine whether empty matches are
 /// permitted between the code units of a single codepoint.
 ///
 /// # Stack space

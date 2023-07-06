@@ -2277,7 +2277,7 @@ impl<'r, 'h> core::iter::FusedIterator for SplitN<'r, 'h> {}
 /// explicitly separated from the the core regex object (such as a
 /// [`thompson::NFA`](crate::nfa::thompson::NFA)) so that the read-only regex
 /// object can be shared across multiple threads simultaneously without any
-/// synchronization. Conversly, a `Cache` must either be duplicated if using
+/// synchronization. Conversely, a `Cache` must either be duplicated if using
 /// the same `Regex` from multiple threads, or else there must be some kind of
 /// synchronization that guarantees exclusive access while it's in use by one
 /// thread.

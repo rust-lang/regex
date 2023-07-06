@@ -60,7 +60,7 @@ DFA state to check if it already exists. If it does, then there's no need to
 freeze it into a `State`. It it doesn't exist, then `StateBuilderNFA::to_state`
 can be called to freeze the builder into an immutable `State`. In either
 case, `clear` should be called on the builder to turn it back into a
-`StateBuilderEmpty` that reuses the underyling memory.
+`StateBuilderEmpty` that reuses the underlying memory.
 
 The main purpose for splitting the builder into these distinct types is to
 make it impossible to do things like adding a pattern ID after adding an NFA
@@ -103,7 +103,7 @@ use crate::util::{
 /// This type is intended to be used only in NFA-to-DFA conversion via powerset
 /// construction.
 ///
-/// It may be cheaply cloned and accessed safely from mulitple threads
+/// It may be cheaply cloned and accessed safely from multiple threads
 /// simultaneously.
 #[derive(Clone, Eq, Hash, PartialEq, PartialOrd, Ord)]
 pub(crate) struct State(Arc<[u8]>);

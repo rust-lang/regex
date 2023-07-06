@@ -1074,7 +1074,7 @@ pub unsafe trait Automaton {
     ///     // encoding of any Unicode scalar value except for 'a', 'b' or 'c'.
     ///     // That translates to a much more complicated DFA, and also
     ///     // inhibits the 'accelerator' optimization that we are trying to
-    ///     // demostrate in this example.
+    ///     // demonstrate in this example.
     ///     .syntax(syntax::Config::new().unicode(false).utf8(false))
     ///     .build("[^abc]+a")?;
     ///

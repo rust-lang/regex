@@ -330,7 +330,7 @@ at search time and it requires the caller to opt into this.
 
 There are other ways for regex engines to fail in this crate, but the above
 two should represent the general theme of failures one can find. Dealing
-with these failures is, in part, one the reaponsibilities of the [meta regex
+with these failures is, in part, one the responsibilities of the [meta regex
 engine](meta). Notice, for example, that the meta regex engine exposes an API
 that never returns an error nor panics. It carefully manages all of the ways
 in which the regex engines can fail and either avoids the predictable ones

@@ -205,7 +205,7 @@ pub(crate) fn next(
         && unit.is_byte(lookm.get_line_terminator())
     {
         // Why only handle StartLF here and not Start? That's because Start
-        // can only impact the starting state, which is speical cased in
+        // can only impact the starting state, which is special cased in
         // start state handling.
         builder.set_look_have(|have| have.insert(Look::StartLF));
     }
@@ -412,7 +412,7 @@ pub(crate) fn epsilon_closure(
 /// and whether this state is being generated for a transition over a word byte
 /// when applicable) that are true immediately prior to transitioning into this
 /// state (via `builder.look_have()`). The match pattern IDs should correspond
-/// to matches that occured on the previous transition, since all matches are
+/// to matches that occurred on the previous transition, since all matches are
 /// delayed by one byte. The things that should _not_ be set are look-ahead
 /// assertions (EndLF, End and whether the next byte is a word byte or not).
 /// The builder state should also not have anything in `look_need` set, as this

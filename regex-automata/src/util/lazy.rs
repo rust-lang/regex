@@ -159,7 +159,7 @@ mod lazy {
     impl<T, F: Fn() -> T> Lazy<T, F> {
         /// Get the underlying lazy value. If it hasn't been initialized
         /// yet, then always attempt to initialize it (even if some other
-        /// thread is initializing it) and atomicly attach it to this lazy
+        /// thread is initializing it) and atomically attach it to this lazy
         /// value before returning it.
         pub(super) fn get(&self) -> &T {
             if let Some(data) = self.poll() {

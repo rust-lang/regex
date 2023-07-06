@@ -34,7 +34,7 @@ const ERR_UNOPENED_GROUP: &str = "found closing ')' without matching '('";
 const ERR_LOOK_UNSUPPORTED: &str = "look-around is not supported";
 const ERR_EMPTY_FLAGS: &str = "empty flag directive '(?)' is not allowed";
 const ERR_MISSING_GROUP_NAME: &str =
-    "exepcted capture group name, but got end of pattern";
+    "expected capture group name, but got end of pattern";
 const ERR_INVALID_GROUP_NAME: &str = "invalid group name";
 const ERR_UNCLOSED_GROUP_NAME: &str =
     "expected end of capture group name, but got end of pattern";

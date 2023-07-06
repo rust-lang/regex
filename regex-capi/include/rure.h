@@ -418,7 +418,7 @@ rure_options *rure_options_new(void);
 void rure_options_free(rure_options *options);
 
 /*
- * rure_options_size_limit sets the appoximate size limit of the compiled
+ * rure_options_size_limit sets the approximate size limit of the compiled
  * regular expression.
  *
  * This size limit roughly corresponds to the number of bytes occupied by a

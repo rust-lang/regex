@@ -2,7 +2,7 @@
 Generic helpers for iteration of matches from a regex engine in a haystack.
 
 The principle type in this module is a [`Searcher`]. A `Searcher` provides
-its own lower level iterater-like API in addition to methods for constructing
+its own lower level iterator-like API in addition to methods for constructing
 types that implement `Iterator`. The documentation for `Searcher` explains a
 bit more about why these different APIs exist.
 

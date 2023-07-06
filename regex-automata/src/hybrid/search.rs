@@ -188,7 +188,7 @@ fn find_fwd_imp(
             // mentioned above was a pretty big pessimization in some other
             // cases. Namely, it resulted in too much ping-ponging into and out
             // of the loop, which resulted in nearly ~2x regressions in search
-            // time when compared to the originaly lazy DFA in the regex crate.
+            // time when compared to the originally lazy DFA in the regex crate.
             // So I've removed the second loop unrolling that targets the
             // self-transition case.
             let mut prev_sid = sid;

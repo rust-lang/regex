@@ -32,7 +32,7 @@ use crate::{
     },
 };
 
-/// The mininum number of states that a lazy DFA's cache size must support.
+/// The minimum number of states that a lazy DFA's cache size must support.
 ///
 /// This is checked at time of construction to ensure that at least some small
 /// number of states can fit in the given capacity allotment. If we can't fit
@@ -2332,7 +2332,7 @@ impl<'i, 'c> Lazy<'i, 'c> {
                             "lazy DFA cache has been cleared {} times, \
                              which exceeds the limit of {}, \
                              AND its bytes searched per state is less \
-                             than the configured mininum of {}, \
+                             than the configured minimum of {}, \
                              therefore lazy DFA is giving up \
                              (bytes searched since cache clear = {}, \
                               number of states = {})",
@@ -2348,7 +2348,7 @@ impl<'i, 'c> Lazy<'i, 'c> {
                             "lazy DFA cache has been cleared {} times, \
                              which exceeds the limit of {}, \
                              AND its bytes searched per state is greater \
-                             than the configured mininum of {}, \
+                             than the configured minimum of {}, \
                              therefore lazy DFA is continuing! \
                              (bytes searched since cache clear = {}, \
                               number of states = {})",
@@ -2771,7 +2771,7 @@ enum StateSaver {
     /// is stored in 'Saved' since it may have changed.
     ToSave { id: LazyStateID, state: State },
     /// An ID that of a state that has been persisted through a lazy DFA
-    /// cache clearing. The ID recorded here corresonds to an ID that was
+    /// cache clearing. The ID recorded here corresponds to an ID that was
     /// once marked as ToSave. The IDs are likely not equivalent even though
     /// the states they point to are.
     Saved(LazyStateID),

@@ -274,7 +274,7 @@ impl<'h> Input<'h> {
     ///    requires that it only report a match that begins at the same offset
     ///    as the beginning of the search.
     /// 4. The regex `a` is compiled with `Anchored::No` and searches `aba`
-    ///    startting at position `1`. Since the search is not anchored and
+    ///    starting at position `1`. Since the search is not anchored and
     ///    the regex does not start with `^`, the search executes as if there
     ///    is a `(?s:.)*?` prefix that permits it to match anywhere. Thus, it
     ///    reports a match at `[2, 3]`.
@@ -745,7 +745,7 @@ impl<'h> Input<'h> {
     ///
     /// # Example
     ///
-    /// This shows where codepoint bounardies do and don't exist in valid
+    /// This shows where codepoint boundaries do and don't exist in valid
     /// UTF-8.
     ///
     /// ```
@@ -1179,7 +1179,7 @@ impl PatternSet {
     /// impossible if you use the `pattern_len()` method as defined on any of
     /// the regex engines in this crate. Namely, a regex will fail to build by
     /// returning an error if the number of patterns given to it exceeds the
-    /// limit. Therefore, the number of patterns in a valid regex is alwasys
+    /// limit. Therefore, the number of patterns in a valid regex is always
     /// a correct capacity to provide here.
     pub fn new(capacity: usize) -> PatternSet {
         assert!(

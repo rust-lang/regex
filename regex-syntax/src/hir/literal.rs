@@ -23,7 +23,7 @@ effective literal optimizations:
 to lead to substring search that is only a little faster than a regex search,
 and thus the overhead of using literal optimizations in the first place might
 make things slower overall.
-* The literals in your [`Seq`] shoudn't be too short. In general, longer is
+* The literals in your [`Seq`] shouldn't be too short. In general, longer is
 better. A sequence corresponding to single bytes that occur frequently in the
 haystack, for example, is probably a bad literal optimization because it's
 likely to produce many false positive candidates. Longer literals are less
@@ -692,7 +692,7 @@ impl Default for ExtractKind {
 /// from making assumptions about what literals are required in order to match
 /// a particular [`Hir`] expression. Generally speaking, when a set is in this
 /// state, literal optimizations are inhibited. A good example of a regex that
-/// will cause this sort of set to apppear is `[A-Za-z]`. The character class
+/// will cause this sort of set to appear is `[A-Za-z]`. The character class
 /// is just too big (and also too narrow) to be usefully expanded into 52
 /// different literals. (Note that the decision for when a seq should become
 /// infinite is determined by the caller. A seq itself has no hard-coded

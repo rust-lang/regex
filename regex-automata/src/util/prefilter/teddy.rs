@@ -28,7 +28,7 @@ pub(crate) struct Teddy {
     anchored_ac: aho_corasick::dfa::DFA,
     /// The length of the smallest literal we look for.
     ///
-    /// We use this as a hueristic to figure out whether this will be "fast" or
+    /// We use this as a heuristic to figure out whether this will be "fast" or
     /// not. Generally, the longer the better, because longer needles are more
     /// discriminating and thus reduce false positive rate.
     #[cfg(feature = "perf-literal-multisubstring")]

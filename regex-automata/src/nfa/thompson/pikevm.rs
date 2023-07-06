@@ -2297,7 +2297,7 @@ impl Counters {
         trace!("===== START PikeVM Instrumentation Output =====");
         // We take the top-K most occurring state sets. Otherwise the output
         // is likely to be overwhelming. And we probably only care about the
-        // most frequently occuring ones anyway.
+        // most frequently occurring ones anyway.
         const LIMIT: usize = 20;
         let mut set_counts =
             self.state_sets.iter().collect::<Vec<(&Vec<StateID>, &u64)>>();

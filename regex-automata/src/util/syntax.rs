@@ -209,7 +209,7 @@ impl Config {
     /// then `.` will match any character except for a new line character.
     ///
     /// Note that `.` is impacted by whether the "unicode" setting is enabled
-    /// or not. When Unicode is enabled (the defualt), `.` will match any UTF-8
+    /// or not. When Unicode is enabled (the default), `.` will match any UTF-8
     /// encoding of any Unicode scalar value (sans a new line, depending on
     /// whether this "dot matches new line" option is enabled). When Unicode
     /// mode is disabled, `.` will match any byte instead. Because of this,
@@ -345,7 +345,7 @@ impl Config {
     /// if callers want to put a limit on the amount of heap space used, then
     /// they should impose a limit on the length, in bytes, of the concrete
     /// pattern string. In particular, this is viable since the parser will
-    /// limit itself to heap space proportional to the lenth of the pattern
+    /// limit itself to heap space proportional to the length of the pattern
     /// string.
     ///
     /// Note that a nest limit of `0` will return a nest limit error for most

@@ -539,7 +539,7 @@ impl<'a> Runner<'a> {
         }
         let state = builder.to_state();
         // States use reference counting internally, so we only need to count
-        // their memroy usage once.
+        // their memory usage once.
         self.memory_usage_state += state.memory_usage();
         self.builder_states.push(state.clone());
         self.cache.insert(state, id);
