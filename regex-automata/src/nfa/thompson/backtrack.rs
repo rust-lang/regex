@@ -1376,7 +1376,7 @@ impl BoundedBacktracker {
         for slot in slots.iter_mut() {
             *slot = None;
         }
-        cache.setup_search(&self.nfa, input)?;
+        cache.setup_search(&self, input)?;
         if input.is_done() {
             return Ok(None);
         }
@@ -1750,11 +1750,11 @@ impl Cache {
     /// in the BoundedBacktracker.
     fn setup_search(
         &mut self,
-        nfa: &NFA,
+        re: &BoundedBacktracker,
         input: &Input<'_>,
     ) -> Result<(), MatchError> {
         self.stack.clear();
-        self.visited.setup_search(nfa, input)?;
+        self.visited.setup_search(re, input)?;
         Ok(())
     }
 }
@@ -1836,23 +1836,9 @@ impl Visited {
         true
     }
 
-    /// Returns the capacity of this visited set in terms of the number of bits
-    /// it has to track (StateID, offset) pairs.
-    fn capacity(&self) -> usize {
-        self.bitset.len() * Visited::BLOCK_SIZE
-    }
-
     /// Reset this visited set to work with the given bounded backtracker.
-    fn reset(&mut self, re: &BoundedBacktracker) {
-        // The capacity given in the config is "bytes of heap memory," but the
-        // capacity we use here is "number of bits." So convert the capacity in
-        // bytes to the capacity in bits.
-        let capacity = 8 * re.get_config().get_visited_capacity();
-        let blocks = div_ceil(capacity, Visited::BLOCK_SIZE);
-        self.bitset.resize(blocks, 0);
-        // N.B. 'stride' is set in 'setup_search', since it isn't known until
-        // we know the length of the haystack. (That is also when we return an
-        // error if the haystack is too big.)
+    fn reset(&mut self, _: &BoundedBacktracker) {
+        self.bitset.truncate(0);
     }
 
     /// Setup this visited set to work for a search using the given NFA
@@ -1861,7 +1847,7 @@ impl Visited {
     /// result in panics or silently incorrect search behavior.
     fn setup_search(
         &mut self,
-        nfa: &NFA,
+        re: &BoundedBacktracker,
         input: &Input<'_>,
     ) -> Result<(), MatchError> {
         // Our haystack length is only the length of the span of the entire
@@ -1872,18 +1858,22 @@ impl Visited {
         // search loop includes the position at input.end(). (And it does this
         // because matches are delayed by one byte to account for look-around.)
         self.stride = haylen + 1;
-        let capacity = match nfa.states().len().checked_mul(self.stride) {
-            None => return Err(err()),
-            Some(capacity) => capacity,
-        };
-        if capacity > self.capacity() {
+        let needed_capacity =
+            match re.get_nfa().states().len().checked_mul(self.stride) {
+                None => return Err(err()),
+                Some(capacity) => capacity,
+            };
+        let max_capacity = 8 * re.get_config().get_visited_capacity();
+        if needed_capacity > max_capacity {
             return Err(err());
         }
-        // We only need to zero out our desired capacity, not our total
-        // capacity in this set.
-        let blocks = div_ceil(capacity, Visited::BLOCK_SIZE);
-        for block in self.bitset.iter_mut().take(blocks) {
+        let needed_blocks = div_ceil(needed_capacity, Visited::BLOCK_SIZE);
+        self.bitset.truncate(needed_blocks);
+        for block in self.bitset.iter_mut() {
             *block = 0;
+        }
+        if needed_blocks > self.bitset.len() {
+            self.bitset.resize(needed_blocks, 0);
         }
         Ok(())
     }
