@@ -1,3 +1,16 @@
+1.9.1 (2023-07-07)
+==================
+This is a patch release which fixes a memory usage regression. In the regex
+1.9 release, one of the internal engines used a more aggressive allocation
+strategy than what was done previously. This patch release reverts to the
+prior on-demand strategy.
+
+Bug fixes:
+
+* [BUG #1027](https://github.com/rust-lang/regex/issues/1027):
+Change the allocation strategy for the backtracker to be less aggressive.
+
+
 1.9.0 (2023-07-05)
 ==================
 This release marks the end of a [years long rewrite of the regex crate
