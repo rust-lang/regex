@@ -62,10 +62,12 @@ impl StartKind {
         size_of::<u32>()
     }
 
+    #[cfg_attr(feature = "perf-inline", inline(always))]
     pub(crate) fn has_unanchored(&self) -> bool {
         matches!(*self, StartKind::Both | StartKind::Unanchored)
     }
 
+    #[cfg_attr(feature = "perf-inline", inline(always))]
     pub(crate) fn has_anchored(&self) -> bool {
         matches!(*self, StartKind::Both | StartKind::Anchored)
     }

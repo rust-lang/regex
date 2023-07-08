@@ -72,6 +72,7 @@ impl StartByteMap {
     }
 
     /// Return the forward starting configuration for the given `input`.
+    #[cfg_attr(feature = "perf-inline", inline(always))]
     pub(crate) fn fwd(&self, input: &Input) -> Start {
         match input
             .start()
@@ -84,6 +85,7 @@ impl StartByteMap {
     }
 
     /// Return the reverse starting configuration for the given `input`.
+    #[cfg_attr(feature = "perf-inline", inline(always))]
     pub(crate) fn rev(&self, input: &Input) -> Start {
         match input.haystack().get(input.end()) {
             None => Start::Text,
@@ -91,6 +93,7 @@ impl StartByteMap {
         }
     }
 
+    #[cfg_attr(feature = "perf-inline", inline(always))]
     fn get(&self, byte: u8) -> Start {
         self.map[usize::from(byte)]
     }

@@ -1526,6 +1526,7 @@ impl Anchored {
     /// assert!(Anchored::Yes.is_anchored());
     /// assert!(Anchored::Pattern(PatternID::ZERO).is_anchored());
     /// ```
+    #[inline]
     pub fn is_anchored(&self) -> bool {
         matches!(*self, Anchored::Yes | Anchored::Pattern(_))
     }
@@ -1544,6 +1545,7 @@ impl Anchored {
     /// let pid = PatternID::must(5);
     /// assert_eq!(Some(pid), Anchored::Pattern(pid).pattern());
     /// ```
+    #[inline]
     pub fn pattern(&self) -> Option<PatternID> {
         match *self {
             Anchored::Pattern(pid) => Some(pid),

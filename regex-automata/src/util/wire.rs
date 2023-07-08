@@ -270,6 +270,7 @@ impl core::fmt::Display for DeserializeError {
 }
 
 /// Safely converts a `&[u32]` to `&[StateID]` with zero cost.
+#[cfg_attr(feature = "perf-inline", inline(always))]
 pub(crate) fn u32s_to_state_ids(slice: &[u32]) -> &[StateID] {
     // SAFETY: This is safe because StateID is defined to have the same memory
     // representation as a u32 (it is repr(transparent)). While not every u32
@@ -300,6 +301,7 @@ pub(crate) fn u32s_to_state_ids_mut(slice: &mut [u32]) -> &mut [StateID] {
 }
 
 /// Safely converts a `&[u32]` to `&[PatternID]` with zero cost.
+#[cfg_attr(feature = "perf-inline", inline(always))]
 pub(crate) fn u32s_to_pattern_ids(slice: &[u32]) -> &[PatternID] {
     // SAFETY: This is safe because PatternID is defined to have the same
     // memory representation as a u32 (it is repr(transparent)). While not
