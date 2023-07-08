@@ -3012,6 +3012,7 @@ impl<T: AsRef<[u32]>> DFA<T> {
     /// Returns the index of the match state for the given ID. If the
     /// given ID does not correspond to a match state, then this may
     /// panic or produce an incorrect result.
+    #[cfg_attr(feature = "perf-inline", inline(always))]
     fn match_state_index(&self, id: StateID) -> usize {
         debug_assert!(self.is_match_state(id));
         // This is one of the places where we rely on the fact that match
@@ -4599,6 +4600,7 @@ impl<T: AsRef<[u32]>> MatchStates<T> {
     ///
     /// The match index is the index of the pattern ID for the given state.
     /// The index must be less than `self.pattern_len(state_index)`.
+    #[cfg_attr(feature = "perf-inline", inline(always))]
     fn pattern_id(&self, state_index: usize, match_index: usize) -> PatternID {
         self.pattern_id_slice(state_index)[match_index]
     }
@@ -4607,6 +4609,7 @@ impl<T: AsRef<[u32]>> MatchStates<T> {
     ///
     /// The match state index is the state index minus the state index of the
     /// first match state in the DFA.
+    #[cfg_attr(feature = "perf-inline", inline(always))]
     fn pattern_len(&self, state_index: usize) -> usize {
         self.slices()[state_index * 2 + 1].as_usize()
     }
@@ -4615,6 +4618,7 @@ impl<T: AsRef<[u32]>> MatchStates<T> {
     ///
     /// The match state index is the state index minus the state index of the
     /// first match state in the DFA.
+    #[cfg_attr(feature = "perf-inline", inline(always))]
     fn pattern_id_slice(&self, state_index: usize) -> &[PatternID] {
         let start = self.slices()[state_index * 2].as_usize();
         let len = self.pattern_len(state_index);
@@ -4622,17 +4626,20 @@ impl<T: AsRef<[u32]>> MatchStates<T> {
     }
 
     /// Returns the pattern ID offset slice of u32 as a slice of PatternID.
+    #[cfg_attr(feature = "perf-inline", inline(always))]
     fn slices(&self) -> &[PatternID] {
         wire::u32s_to_pattern_ids(self.slices.as_ref())
     }
 
     /// Returns the total number of match states.
+    #[cfg_attr(feature = "perf-inline", inline(always))]
     fn len(&self) -> usize {
         assert_eq!(0, self.slices().len() % 2);
         self.slices().len() / 2
     }
 
     /// Returns the pattern ID slice of u32 as a slice of PatternID.
+    #[cfg_attr(feature = "perf-inline", inline(always))]
     fn pattern_ids(&self) -> &[PatternID] {
         wire::u32s_to_pattern_ids(self.pattern_ids.as_ref())
     }
