@@ -67,6 +67,7 @@ use crate::{
         start::{Start, StartByteMap},
         wire::{self, DeserializeError, Endian, SerializeError},
     },
+    Span,
 };
 
 const LABEL: &str = "rust-regex-automata-dfa-sparse";
@@ -1206,36 +1207,69 @@ unsafe impl<T: AsRef<[u8]>> Automaton for DFA<T> {
         self.flags.is_always_start_anchored
     }
 
-    #[inline]
+    #[cfg_attr(feature = "perf-inline", inline(always))]
     fn start_state_forward(
         &self,
         input: &Input<'_>,
     ) -> Result<StateID, MatchError> {
-        if !self.quitset.is_empty() && input.start() > 0 {
-            let offset = input.start() - 1;
-            let byte = input.haystack()[offset];
-            if self.quitset.contains(byte) {
-                return Err(MatchError::quit(byte, offset));
-            }
-        }
-        let start = self.st.start_map.fwd(&input);
-        self.st.start(input, start)
+        self.start_state_forward_with(
+            input.get_anchored(),
+            input.start().checked_sub(1).map(|i| input.haystack()[i]),
+            input.get_span(),
+        )
     }
 
-    #[inline]
+    #[cfg_attr(feature = "perf-inline", inline(always))]
+    fn start_state_forward_with(
+        &self,
+        mode: Anchored,
+        look_behind: Option<u8>,
+        span: Span,
+    ) -> Result<StateID, MatchError> {
+        debug_assert_eq!(
+            span.start != 0,
+            look_behind.is_some(),
+            "look_behind should be provided if and only if the DFA starts at an offset"
+        );
+        if !self.quitset.is_empty() {
+            if let Some(byte) = look_behind {
+                if self.quitset.contains(byte) {
+                    return Err(MatchError::quit(byte, span.start - 1));
+                }
+            }
+        }
+        let start = self.st.start_map.fwd_with(look_behind);
+        self.st.start(mode, start)
+    }
+
+    #[cfg_attr(feature = "perf-inline", inline(always))]
     fn start_state_reverse(
         &self,
         input: &Input<'_>,
     ) -> Result<StateID, MatchError> {
-        if !self.quitset.is_empty() && input.end() < input.haystack().len() {
-            let offset = input.end();
-            let byte = input.haystack()[offset];
-            if self.quitset.contains(byte) {
-                return Err(MatchError::quit(byte, offset));
+        self.start_state_reverse_with(
+            input.get_anchored(),
+            input.haystack().get(input.end()).copied(),
+            input.get_span(),
+        )
+    }
+
+    #[cfg_attr(feature = "perf-inline", inline(always))]
+    fn start_state_reverse_with(
+        &self,
+        mode: Anchored,
+        look_ahead: Option<u8>,
+        span: Span,
+    ) -> Result<StateID, MatchError> {
+        if !self.quitset.is_empty() {
+            if let Some(byte) = look_ahead {
+                if self.quitset.contains(byte) {
+                    return Err(MatchError::quit(byte, span.end));
+                }
             }
         }
-        let start = self.st.start_map.rev(&input);
-        self.st.start(input, start)
+        let start = self.st.start_map.rev_with(look_ahead);
+        self.st.start(mode, start)
     }
 
     #[inline]
@@ -2145,11 +2179,10 @@ impl<T: AsRef<[u8]>> StartTable<T> {
     /// panics.
     fn start(
         &self,
-        input: &Input<'_>,
+        mode: Anchored,
         start: Start,
     ) -> Result<StateID, MatchError> {
         let start_index = start.as_usize();
-        let mode = input.get_anchored();
         let index = match mode {
             Anchored::No => {
                 if !self.kind.has_unanchored() {

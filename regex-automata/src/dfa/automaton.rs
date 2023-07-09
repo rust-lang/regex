@@ -8,6 +8,7 @@ use crate::{
         primitives::{PatternID, StateID},
         search::{Anchored, HalfMatch, Input, MatchError},
     },
+    Span,
 };
 
 /// A trait describing the interface of a deterministic finite automaton (DFA).
@@ -253,6 +254,14 @@ pub unsafe trait Automaton {
         input: &Input<'_>,
     ) -> Result<StateID, MatchError>;
 
+    /// TODO
+    fn start_state_forward_with(
+        &self,
+        mode: Anchored,
+        look_behind: Option<u8>,
+        span: Span,
+    ) -> Result<StateID, MatchError>;
+
     /// Return the ID of the start state for this lazy DFA when executing a
     /// reverse search.
     ///
@@ -278,6 +287,14 @@ pub unsafe trait Automaton {
     fn start_state_reverse(
         &self,
         input: &Input<'_>,
+    ) -> Result<StateID, MatchError>;
+
+    /// TODO
+    fn start_state_reverse_with(
+        &self,
+        mode: Anchored,
+        look_ahead: Option<u8>,
+        span: Span,
     ) -> Result<StateID, MatchError>;
 
     /// If this DFA has a universal starting state for the given anchor mode
@@ -1807,11 +1824,31 @@ unsafe impl<'a, A: Automaton + ?Sized> Automaton for &'a A {
     }
 
     #[inline]
+    fn start_state_forward_with(
+        &self,
+        mode: Anchored,
+        look_behind: Option<u8>,
+        span: Span,
+    ) -> Result<StateID, MatchError> {
+        (**self).start_state_forward_with(mode, look_behind, span)
+    }
+
+    #[inline]
     fn start_state_reverse(
         &self,
         input: &Input<'_>,
     ) -> Result<StateID, MatchError> {
         (**self).start_state_reverse(input)
+    }
+
+    #[inline]
+    fn start_state_reverse_with(
+        &self,
+        mode: Anchored,
+        look_behind: Option<u8>,
+        span: Span,
+    ) -> Result<StateID, MatchError> {
+        (**self).start_state_reverse_with(mode, look_behind, span)
     }
 
     #[inline]

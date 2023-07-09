@@ -30,6 +30,7 @@ use crate::{
         sparse_set::SparseSets,
         start::{Start, StartByteMap},
     },
+    Span,
 };
 
 /// The minimum number of states that a lazy DFA's cache size must support.
@@ -1547,20 +1548,64 @@ impl DFA {
         cache: &mut Cache,
         input: &Input<'_>,
     ) -> Result<LazyStateID, MatchError> {
-        if !self.quitset.is_empty() && input.start() > 0 {
-            let offset = input.start() - 1;
-            let byte = input.haystack()[offset];
-            if self.quitset.contains(byte) {
-                return Err(MatchError::quit(byte, offset));
+        self.start_state_forward_with(
+            cache,
+            input.get_anchored(),
+            input.start().checked_sub(1).map(|i| input.haystack()[i]),
+            input.get_span(),
+        )
+    }
+
+    /// Return the ID of the start state for this lazy DFA when executing a
+    /// forward search.
+    ///
+    /// Unlike typical DFA implementations, the start state for DFAs in this
+    /// crate is dependent on a few different factors:
+    ///
+    /// * The [`Anchored`] mode of the search. Unanchored, anchored and
+    /// anchored searches for a specific [`PatternID`] all use different start
+    /// states.
+    /// * The position at which the search begins, via [`Input::start`]. This
+    /// and the byte immediately preceding the start of the search (if one
+    /// exists) influence which look-behind assertions are true at the start
+    /// of the search. This in turn influences which start state is selected.
+    /// * Whether the search is a forward or reverse search. This routine can
+    /// only be used for forward searches.
+    ///
+    /// # Errors
+    ///
+    /// This may return a [`MatchError`] (not a [`CacheError`]!) if the search
+    /// needs to give up when determining the start state (for example, if
+    /// it sees a "quit" byte or if the cache has been cleared too many
+    /// times). This can also return an error if the given `Input` contains an
+    /// unsupported [`Anchored`] configuration.
+    #[cfg_attr(feature = "perf-inline", inline(always))]
+    pub fn start_state_forward_with(
+        &self,
+        cache: &mut Cache,
+        mode: Anchored,
+        look_behind: Option<u8>,
+        span: Span,
+    ) -> Result<LazyStateID, MatchError> {
+        debug_assert_eq!(
+            span.start != 0,
+            look_behind.is_some(),
+            "look_behind should be provided if and only if the DFA starts at an offset"
+        );
+        if !self.quitset.is_empty() {
+            if let Some(byte) = look_behind {
+                if self.quitset.contains(byte) {
+                    return Err(MatchError::quit(byte, span.start - 1));
+                }
             }
         }
-        let start_type = self.start_map.fwd(input);
-        let start = LazyRef::new(self, cache)
-            .get_cached_start_id(input, start_type)?;
+        let start_type = self.start_map.fwd_with(look_behind);
+        let start =
+            LazyRef::new(self, cache).get_cached_start_id(mode, start_type)?;
         if !start.is_unknown() {
             return Ok(start);
         }
-        Lazy::new(self, cache).cache_start_group(input, start_type)
+        Lazy::new(self, cache).cache_start_group(mode, start_type, span)
     }
 
     /// Return the ID of the start state for this lazy DFA when executing a
@@ -1592,20 +1637,59 @@ impl DFA {
         cache: &mut Cache,
         input: &Input<'_>,
     ) -> Result<LazyStateID, MatchError> {
-        if !self.quitset.is_empty() && input.end() < input.haystack().len() {
-            let offset = input.end();
-            let byte = input.haystack()[offset];
-            if self.quitset.contains(byte) {
-                return Err(MatchError::quit(byte, offset));
+        self.start_state_reverse_with(
+            cache,
+            input.get_anchored(),
+            input.haystack().get(input.end()).copied(),
+            input.get_span(),
+        )
+    }
+
+    /// Return the ID of the start state for this lazy DFA when executing a
+    /// reverse search.
+    ///
+    /// Unlike typical DFA implementations, the start state for DFAs in this
+    /// crate is dependent on a few different factors:
+    ///
+    /// * The [`Anchored`] mode of the search. Unanchored, anchored and
+    /// anchored searches for a specific [`PatternID`] all use different start
+    /// states.
+    /// * The position at which the search begins, via [`Input::start`]. This
+    /// and the byte immediately preceding the start of the search (if one
+    /// exists) influence which look-behind assertions are true at the start
+    /// of the search. This in turn influences which start state is selected.
+    /// * Whether the search is a forward or reverse search. This routine can
+    /// only be used for reverse searches.
+    ///
+    /// # Errors
+    ///
+    /// This may return a [`MatchError`] (not a [`CacheError`]!) if the search
+    /// needs to give up when determining the start state (for example, if
+    /// it sees a "quit" byte or if the cache has been cleared too many
+    /// times). This can also return an error if the given `Input` contains an
+    /// unsupported [`Anchored`] configuration.
+    #[cfg_attr(feature = "perf-inline", inline(always))]
+    pub fn start_state_reverse_with(
+        &self,
+        cache: &mut Cache,
+        mode: Anchored,
+        look_ahead: Option<u8>,
+        span: Span,
+    ) -> Result<LazyStateID, MatchError> {
+        if !self.quitset.is_empty() {
+            if let Some(byte) = look_ahead {
+                if self.quitset.contains(byte) {
+                    return Err(MatchError::quit(byte, span.end));
+                }
             }
         }
-        let start_type = self.start_map.rev(input);
-        let start = LazyRef::new(self, cache)
-            .get_cached_start_id(input, start_type)?;
+        let start_type = self.start_map.rev_with(look_ahead);
+        let start =
+            LazyRef::new(self, cache).get_cached_start_id(mode, start_type)?;
         if !start.is_unknown() {
             return Ok(start);
         }
-        Lazy::new(self, cache).cache_start_group(input, start_type)
+        Lazy::new(self, cache).cache_start_group(mode, start_type, span)
     }
 
     /// Returns the total number of patterns that match in this state.
@@ -2122,10 +2206,10 @@ impl<'i, 'c> Lazy<'i, 'c> {
     #[inline(never)]
     fn cache_start_group(
         &mut self,
-        input: &Input<'_>,
+        mode: Anchored,
         start: Start,
+        span: Span,
     ) -> Result<LazyStateID, MatchError> {
-        let mode = input.get_anchored();
         let nfa_start_id = match mode {
             Anchored::No => self.dfa.get_nfa().start_unanchored(),
             Anchored::Yes => self.dfa.get_nfa().start_anchored(),
@@ -2142,8 +2226,8 @@ impl<'i, 'c> Lazy<'i, 'c> {
 
         let id = self
             .cache_start_one(nfa_start_id, start)
-            .map_err(|_| MatchError::gave_up(input.start()))?;
-        self.set_start_state(input, start, id);
+            .map_err(|_| MatchError::gave_up(span.start))?;
+        self.set_start_state(mode, start, id);
         Ok(id)
     }
 
@@ -2574,13 +2658,13 @@ impl<'i, 'c> Lazy<'i, 'c> {
     /// 'starts_for_each_pattern' is not enabled.
     fn set_start_state(
         &mut self,
-        input: &Input<'_>,
+        mode: Anchored,
         start: Start,
         id: LazyStateID,
     ) {
         assert!(self.as_ref().is_valid(id));
         let start_index = start.as_usize();
-        let index = match input.get_anchored() {
+        let index = match mode {
             Anchored::No => start_index,
             Anchored::Yes => Start::len() + start_index,
             Anchored::Pattern(pid) => {
@@ -2642,11 +2726,10 @@ impl<'i, 'c> LazyRef<'i, 'c> {
     #[cfg_attr(feature = "perf-inline", inline(always))]
     fn get_cached_start_id(
         &self,
-        input: &Input<'_>,
+        mode: Anchored,
         start: Start,
     ) -> Result<LazyStateID, MatchError> {
         let start_index = start.as_usize();
-        let mode = input.get_anchored();
         let index = match mode {
             Anchored::No => start_index,
             Anchored::Yes => Start::len() + start_index,

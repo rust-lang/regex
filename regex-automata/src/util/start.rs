@@ -73,23 +73,39 @@ impl StartByteMap {
 
     /// Return the forward starting configuration for the given `input`.
     #[cfg_attr(feature = "perf-inline", inline(always))]
+    #[cfg(test)]
     pub(crate) fn fwd(&self, input: &Input) -> Start {
-        match input
-            .start()
-            .checked_sub(1)
-            .and_then(|i| input.haystack().get(i))
-        {
-            None => Start::Text,
-            Some(&byte) => self.get(byte),
-        }
+        self.fwd_with(
+            input
+                .start()
+                .checked_sub(1)
+                .and_then(|i| input.haystack().get(i))
+                .copied(),
+        )
     }
 
     /// Return the reverse starting configuration for the given `input`.
     #[cfg_attr(feature = "perf-inline", inline(always))]
+    #[cfg(test)]
     pub(crate) fn rev(&self, input: &Input) -> Start {
-        match input.haystack().get(input.end()) {
+        self.rev_with(input.haystack().get(input.end()).copied())
+    }
+
+    /// Return the forward starting configuration for the given `look_behind`
+    #[cfg_attr(feature = "perf-inline", inline(always))]
+    pub(crate) fn fwd_with(&self, look_behind: Option<u8>) -> Start {
+        match look_behind {
             None => Start::Text,
-            Some(&byte) => self.get(byte),
+            Some(byte) => self.get(byte),
+        }
+    }
+
+    /// Return the reverse starting configuration for the given `look_ahead`.
+    #[cfg_attr(feature = "perf-inline", inline(always))]
+    pub(crate) fn rev_with(&self, look_ahead: Option<u8>) -> Start {
+        match look_ahead {
+            None => Start::Text,
+            Some(byte) => self.get(byte),
         }
     }
 
