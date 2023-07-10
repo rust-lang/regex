@@ -477,7 +477,7 @@ impl Extractor {
                 }
                 seq
             }
-            hir::Repetition { min, .. } =>{
+            hir::Repetition { min, .. } => {
                 assert!(min > 0); // handled above
                 let limit =
                     u32::try_from(self.limit_repeat).unwrap_or(u32::MAX);
@@ -2651,21 +2651,12 @@ mod tests {
             ]),
             e(r"(ab|cd)(ef|gh)(ij|kl)")
         );
-        
-        assert_eq!(
-            inexact([E("abab")], [E("abab")]),
-            e(r"(ab){2}")
-        );
 
-        assert_eq!(
-            inexact([I("abab")], [I("abab")]),
-            e(r"(ab){2,3}")
-        );
+        assert_eq!(inexact([E("abab")], [E("abab")]), e(r"(ab){2}"));
 
-        assert_eq!(
-            inexact([I("abab")], [I("abab")]),
-            e(r"(ab){2,}")
-        );
+        assert_eq!(inexact([I("abab")], [I("abab")]), e(r"(ab){2,3}"));
+
+        assert_eq!(inexact([I("abab")], [I("abab")]), e(r"(ab){2,}"));
     }
 
     #[test]
