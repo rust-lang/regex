@@ -7,11 +7,10 @@ various regex development tasks such as generating tests.
 
 ### Installation
 
-Currently `regex-cli` is not on crates.io and should be installed from this
-git repository:
+Simply use `cargo` to install from crates.io.
 
 ```
-$ cargo install --git https://github.com/rust-lang/regex regex-cli
+$ cargo install regex-cli
 ```
 
 
