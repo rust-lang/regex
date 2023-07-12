@@ -433,6 +433,7 @@ impl Captures {
     ///
     /// ```
     /// # if cfg!(miri) { return Ok(()); } // miri takes too long
+    /// # if !cfg!(target_pointer_width = "64") { return Ok(()); } // see #1039
     /// use regex_automata::{nfa::thompson::pikevm::PikeVM, Span, Match};
     ///
     /// let re = PikeVM::new(r"^(?P<first>\pL+)\s+(?P<last>\pL+)$")?;
