@@ -69,3 +69,13 @@ haystack = 'abcβ'
 matches = [[0, 3]]
 anchored = true
 unicode = false
+
+# Tests that '.c' doesn't match 'abc' when performing an anchored search from
+# the beginning of the haystack. This test found two different bugs in the
+# PikeVM and the meta engine.
+[[test]]
+name = "no-match-at-start"
+regex = '.c'
+haystack = 'abc'
+matches = []
+anchored = true
