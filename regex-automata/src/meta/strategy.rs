@@ -845,6 +845,14 @@ impl ReverseAnchored {
             );
             return Err(core);
         }
+        // Note that the caller can still request an anchored search even when
+        // the regex isn't anchored at the start. We detect that case in the
+        // search routines below and just fallback to the core engine. This
+        // is fine because both searches are anchored. It's just a matter of
+        // picking one. Falling back to the core engine is a little simpler,
+        // since if we used the reverse anchored approach, we'd have to add an
+        // extra check to ensure the match reported starts at the place where
+        // the caller requested the search to start.
         if core.info.is_always_anchored_start() {
             debug!(
                 "skipping reverse anchored optimization because \
@@ -930,6 +938,9 @@ impl Strategy for ReverseAnchored {
 
     #[cfg_attr(feature = "perf-inline", inline(always))]
     fn search(&self, cache: &mut Cache, input: &Input<'_>) -> Option<Match> {
+        if input.get_anchored().is_anchored() {
+            return self.core.search(cache, input);
+        }
         match self.try_search_half_anchored_rev(cache, input) {
             Err(_err) => {
                 trace!("fast reverse anchored search failed: {}", _err);
@@ -948,6 +959,9 @@ impl Strategy for ReverseAnchored {
         cache: &mut Cache,
         input: &Input<'_>,
     ) -> Option<HalfMatch> {
+        if input.get_anchored().is_anchored() {
+            return self.core.search_half(cache, input);
+        }
         match self.try_search_half_anchored_rev(cache, input) {
             Err(_err) => {
                 trace!("fast reverse anchored search failed: {}", _err);
@@ -973,6 +987,9 @@ impl Strategy for ReverseAnchored {
         input: &Input<'_>,
         slots: &mut [Option<NonMaxUsize>],
     ) -> Option<PatternID> {
+        if input.get_anchored().is_anchored() {
+            return self.core.search_slots(cache, input, slots);
+        }
         match self.try_search_half_anchored_rev(cache, input) {
             Err(_err) => {
                 trace!("fast reverse anchored search failed: {}", _err);
@@ -1034,6 +1051,13 @@ impl ReverseSuffix {
         // requires a reverse scan after a literal match to confirm or reject
         // the match. (Although, in the case of confirmation, it then needs to
         // do another forward scan to find the end position.)
+        //
+        // Note that the caller can still request an anchored search even
+        // when the regex isn't anchored. We detect that case in the search
+        // routines below and just fallback to the core engine. Currently this
+        // optimization assumes all searches are unanchored, so if we do want
+        // to enable this optimization for anchored searches, it will need a
+        // little work to support it.
         if core.info.is_always_anchored_start() {
             debug!(
                 "skipping reverse suffix optimization because \
@@ -1211,6 +1235,9 @@ impl Strategy for ReverseSuffix {
 
     #[cfg_attr(feature = "perf-inline", inline(always))]
     fn search(&self, cache: &mut Cache, input: &Input<'_>) -> Option<Match> {
+        if input.get_anchored().is_anchored() {
+            return self.core.search(cache, input);
+        }
         match self.try_search_half_start(cache, input) {
             Err(RetryError::Quadratic(_err)) => {
                 trace!("reverse suffix optimization failed: {}", _err);
@@ -1255,6 +1282,9 @@ impl Strategy for ReverseSuffix {
         cache: &mut Cache,
         input: &Input<'_>,
     ) -> Option<HalfMatch> {
+        if input.get_anchored().is_anchored() {
+            return self.core.search_half(cache, input);
+        }
         match self.try_search_half_start(cache, input) {
             Err(RetryError::Quadratic(_err)) => {
                 trace!("reverse suffix half optimization failed: {}", _err);
@@ -1309,6 +1339,9 @@ impl Strategy for ReverseSuffix {
         input: &Input<'_>,
         slots: &mut [Option<NonMaxUsize>],
     ) -> Option<PatternID> {
+        if input.get_anchored().is_anchored() {
+            return self.core.search_slots(cache, input, slots);
+        }
         if !self.core.is_capture_search_needed(slots.len()) {
             trace!("asked for slots unnecessarily, trying fast path");
             let m = self.search(cache, input)?;
@@ -1396,6 +1429,13 @@ impl ReverseInner {
         // or when the literal scan matches. If it matches, then confirming the
         // match requires a reverse scan followed by a forward scan to confirm
         // or reject, which is a fair bit of work.
+        //
+        // Note that the caller can still request an anchored search even
+        // when the regex isn't anchored. We detect that case in the search
+        // routines below and just fallback to the core engine. Currently this
+        // optimization assumes all searches are unanchored, so if we do want
+        // to enable this optimization for anchored searches, it will need a
+        // little work to support it.
         if core.info.is_always_anchored_start() {
             debug!(
                 "skipping reverse inner optimization because \
@@ -1635,6 +1675,9 @@ impl Strategy for ReverseInner {
 
     #[cfg_attr(feature = "perf-inline", inline(always))]
     fn search(&self, cache: &mut Cache, input: &Input<'_>) -> Option<Match> {
+        if input.get_anchored().is_anchored() {
+            return self.core.search(cache, input);
+        }
         match self.try_search_full(cache, input) {
             Err(RetryError::Quadratic(_err)) => {
                 trace!("reverse inner optimization failed: {}", _err);
@@ -1654,6 +1697,9 @@ impl Strategy for ReverseInner {
         cache: &mut Cache,
         input: &Input<'_>,
     ) -> Option<HalfMatch> {
+        if input.get_anchored().is_anchored() {
+            return self.core.search_half(cache, input);
+        }
         match self.try_search_full(cache, input) {
             Err(RetryError::Quadratic(_err)) => {
                 trace!("reverse inner half optimization failed: {}", _err);
@@ -1675,6 +1721,9 @@ impl Strategy for ReverseInner {
         input: &Input<'_>,
         slots: &mut [Option<NonMaxUsize>],
     ) -> Option<PatternID> {
+        if input.get_anchored().is_anchored() {
+            return self.core.search_slots(cache, input, slots);
+        }
         if !self.core.is_capture_search_needed(slots.len()) {
             trace!("asked for slots unnecessarily, trying fast path");
             let m = self.search(cache, input)?;
