@@ -1356,7 +1356,15 @@ impl PikeVM {
             // matches their behavior. (Generally, 'allmatches' is useful for
             // overlapping searches or leftmost anchored searches to find the
             // longest possible match by ignoring match priority.)
-            if !pid.is_some() || allmatches {
+            //
+            // Additionally, when we're running an anchored search, this
+            // epsilon closure should only be computed at the beginning of the
+            // search. If we re-computed it at every position, we would be
+            // simulating an unanchored search when we were tasked to perform
+            // an anchored search.
+            if (!pid.is_some() || allmatches)
+                && (!anchored || at == input.start())
+            {
                 // Since we are adding to the 'curr' active states and since
                 // this is for the start ID, we use a slots slice that is
                 // guaranteed to have the right length but where every element
