@@ -879,6 +879,7 @@ impl Config {
     ///
     /// ```
     /// # if cfg!(miri) { return Ok(()); } // miri takes too long
+    /// # if !cfg!(target_pointer_width = "64") { return Ok(()); } // see #1039
     /// use regex_automata::{dfa::{dense, Automaton}, Input};
     ///
     /// // 600KB isn't enough!
@@ -912,6 +913,7 @@ impl Config {
     ///
     /// ```
     /// # if cfg!(miri) { return Ok(()); } // miri takes too long
+    /// # if !cfg!(target_pointer_width = "64") { return Ok(()); } // see #1039
     /// use regex_automata::{
     ///     dfa::{dense, Automaton, StartKind},
     ///     Anchored, Input,
