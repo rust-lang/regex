@@ -32,6 +32,9 @@ features = ["atty", "humantime", "termcolor"]
 [workspace]
 members = ["."]
 
+# NOTE: If you add a new fuzzer below, please make sure to add it to the
+# oss-fuzz-build.sh script, otherwise it won't get run in OSS-fuzz.
+
 [[bin]]
 name = "fuzz_regex_match"
 path = "fuzz_targets/fuzz_regex_match.rs"
