@@ -67,6 +67,10 @@ path = "fuzz_targets/ast_fuzz_regex.rs"
 name = "ast_fuzz_match_bytes"
 path = "fuzz_targets/ast_fuzz_match_bytes.rs"
 
+[[bin]]
+name = "ast_diff_default"
+path = "fuzz_targets/ast_diff_default.rs"
+
 [profile.release]
 opt-level = 3
 debug = true
