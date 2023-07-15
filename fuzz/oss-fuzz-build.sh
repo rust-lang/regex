@@ -14,5 +14,8 @@ targets=(
   ast_fuzz_match_bytes
 )
 for target in "${targets[@]}"; do
-  cp fuzz/target/x86_64-unknown-linux-gnu/release/$target $OUT/
+  cp "fuzz/target/x86_64-unknown-linux-gnu/release/${target}" "${OUT}/"
+  if [[ "$target" == ast_* ]]; then
+    cp fuzz/ast-fuzzers.options "${OUT}/${target}.options"
+  fi
 done
