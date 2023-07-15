@@ -12,6 +12,7 @@ targets=(
   ast_fuzz_match
   ast_fuzz_regex
   ast_fuzz_match_bytes
+  ast_diff_default
 )
 for target in "${targets[@]}"; do
   cp "fuzz/target/x86_64-unknown-linux-gnu/release/${target}" "${OUT}/"
