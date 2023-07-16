@@ -38,16 +38,16 @@ fn do_fuzz(data: FuzzData) -> Corpus {
     let mut baseline_cache = baseline.create_cache();
 
     let config = DFA::config().size_limit(Some(1 << 20));
-    let Ok(re) = RegexBuilder::new().configure(config).build(&pattern) else {
+    let Ok(onepass) = RegexBuilder::new().configure(config).build(&pattern) else {
         return Corpus::Reject;
     };
-    let mut onepass_cache = re.create_cache();
+    let mut onepass_cache = onepass.create_cache();
 
     assert_eq!(
-        re.is_match(&mut onepass_cache, &data.haystack),
+        onepass.is_match(&mut onepass_cache, &data.haystack),
         baseline.is_match(&mut baseline_cache, &data.haystack)
     );
-    let found1 = re.find(&mut onepass_cache, &data.haystack);
+    let found1 = onepass.find(&mut onepass_cache, &data.haystack);
     let found2 = baseline.find(&mut baseline_cache, &data.haystack);
     if let Some(found1) = found1 {
         let found2 = found2.expect("Found in target, but not in baseline!");
@@ -55,8 +55,12 @@ fn do_fuzz(data: FuzzData) -> Corpus {
         assert_eq!(found1.end(), found2.end());
     }
 
-    let mut onepass_captures = re.create_captures();
-    re.captures(&mut onepass_cache, &data.haystack, &mut onepass_captures);
+    let mut onepass_captures = onepass.create_captures();
+    onepass.captures(
+        &mut onepass_cache,
+        &data.haystack,
+        &mut onepass_captures,
+    );
 
     let mut baseline_captures = baseline.create_captures();
     baseline.captures(
