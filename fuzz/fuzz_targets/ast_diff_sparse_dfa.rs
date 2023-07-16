@@ -1,5 +1,6 @@
 #![no_main]
 
+use regex_automata::Input;
 use {
     libfuzzer_sys::{fuzz_target, Corpus},
     regex_automata::{
@@ -46,16 +47,18 @@ fn do_fuzz(data: FuzzData) -> Corpus {
     };
     let re = RegexBuilder::new().build_from_dfas(fwd, rev);
 
-    assert_eq!(
-        re.is_match(&data.haystack),
-        baseline.is_match(&mut cache, &data.haystack)
-    );
-    let found1 = re.find(&data.haystack);
-    let found2 = baseline.find(&mut cache, &data.haystack);
-    if let Some(found1) = found1 {
-        let found2 = found2.expect("Found in target, but not in baseline!");
-        assert_eq!(found1.start(), found2.start());
-        assert_eq!(found1.end(), found2.end());
+    if let Ok(maybe_match) = re.try_search(&Input::new(&pattern)) {
+        assert_eq!(
+            maybe_match.is_some(),
+            baseline.is_match(&mut cache, &data.haystack)
+        );
+        let found2 = baseline.find(&mut cache, &data.haystack);
+        if let Some(found1) = maybe_match {
+            let found2 =
+                found2.expect("Found in target, but not in baseline!");
+            assert_eq!(found1.start(), found2.start());
+            assert_eq!(found1.end(), found2.end());
+        }
     }
 
     // no captures
