@@ -22,7 +22,7 @@ impl std::fmt::Debug for FuzzData {
     }
 }
 
-fuzz_target!(|data: FuzzData| -> Corpus {
+fn do_fuzz(data: FuzzData) -> Corpus {
     let _ = env_logger::try_init();
 
     let pattern = format!("{}", data.ast);
@@ -61,9 +61,11 @@ fuzz_target!(|data: FuzzData| -> Corpus {
                 assert_eq!(c1.start(), c2.start);
                 assert_eq!(c1.end(), c2.end);
             } else {
-                assert!(!c2.is_some(), "Matched in baseline, but not target!");
+                assert!(c2.is_none(), "Matched in baseline, but not target!");
             }
         }
     }
     Corpus::Keep
-});
+}
+
+fuzz_target!(|data: FuzzData| -> Corpus { do_fuzz(data) });
