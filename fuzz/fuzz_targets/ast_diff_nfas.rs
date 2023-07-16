@@ -61,11 +61,14 @@ fn do_fuzz(data: FuzzData) -> Corpus {
         }
     }
     let mut backtracker_captures = backtracker.create_captures();
-    if let Ok(()) = backtracker.try_captures(
-        &mut backtracker_cache,
-        &data.haystack,
-        &mut backtracker_captures,
-    ) {
+    if backtracker
+        .try_captures(
+            &mut backtracker_cache,
+            &data.haystack,
+            &mut backtracker_captures,
+        )
+        .is_ok()
+    {
         let mut baseline_captures = baseline.create_captures();
 
         baseline.captures(
