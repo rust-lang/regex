@@ -72,6 +72,10 @@ name = "ast_diff_default"
 path = "fuzz_targets/ast_diff_default.rs"
 
 [[bin]]
+name = "ast_diff_dense_dfa"
+path = "fuzz_targets/ast_diff_dense_dfa.rs"
+
+[[bin]]
 name = "ast_diff_nfas"
 path = "fuzz_targets/ast_diff_nfas.rs"
 

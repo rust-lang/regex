@@ -2,8 +2,10 @@
 
 use {
     libfuzzer_sys::{fuzz_target, Corpus},
-    regex::RegexBuilder,
-    regex_automata::nfa::thompson::{pikevm::PikeVM as NfaRegex, NFA},
+    regex_automata::{
+        dfa::{dense::DFA, regex::Builder as RegexBuilder},
+        nfa::thompson::{pikevm::PikeVM as NfaRegex, NFA},
+    },
     regex_syntax::ast::Ast,
 };
 
@@ -35,7 +37,8 @@ fn do_fuzz(data: FuzzData) -> Corpus {
     };
     let mut cache = baseline.create_cache();
 
-    let Ok(re) = RegexBuilder::new(&pattern).size_limit(1 << 20).build() else {
+    let config = DFA::config().dfa_size_limit(Some(1 << 20));
+    let Ok(re) = RegexBuilder::new().dense(config).build(&pattern) else {
         return Corpus::Reject;
     };
 
@@ -50,22 +53,9 @@ fn do_fuzz(data: FuzzData) -> Corpus {
         assert_eq!(found1.start(), found2.start());
         assert_eq!(found1.end(), found2.end());
     }
-    if let Some(captures) = re.captures(&data.haystack) {
-        let mut baseline_captures = baseline.create_captures();
 
-        baseline.captures(&mut cache, &data.haystack, &mut baseline_captures);
-        drop(cache);
-        assert_eq!(captures.len(), baseline_captures.group_len());
-        for (c1, c2) in captures.iter().zip(baseline_captures.iter()) {
-            if let Some(c1) = c1 {
-                let c2 = c2.expect("Matched in target, but not baseline!");
-                assert_eq!(c1.start(), c2.start);
-                assert_eq!(c1.end(), c2.end);
-            } else {
-                assert!(c2.is_none(), "Matched in baseline, but not target!");
-            }
-        }
-    }
+    // no captures
+
     Corpus::Keep
 }
 

@@ -31,13 +31,15 @@ fn do_fuzz(data: FuzzData) -> Corpus {
     let Ok(nfa) = NFA::compiler().configure(config).build(&pattern) else {
         return Corpus::Reject;
     };
-    let Ok(backtracker) = BoundedBacktracker::new_from_nfa(nfa.clone()) else {
-        return Corpus::Reject; };
-    let mut backtracker_cache = backtracker.create_cache();
-    let Ok(baseline) = PikeVM::new_from_nfa(nfa) else {
+    let Ok(baseline) = PikeVM::new_from_nfa(nfa.clone()) else {
         return Corpus::Reject;
     };
     let mut baseline_cache = baseline.create_cache();
+
+    let Ok(backtracker) = BoundedBacktracker::new_from_nfa(nfa) else {
+        return Corpus::Reject;
+    };
+    let mut backtracker_cache = backtracker.create_cache();
 
     if let Ok(backtracked) =
         backtracker.try_is_match(&mut backtracker_cache, &data.haystack)
