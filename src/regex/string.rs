@@ -2444,47 +2444,31 @@ use replacer_closure::*;
 /// assert_eq!(result, "[number with 4 digits],[number with 5 digits]");
 /// ```
 ///
-/// Note that the return type of the closure may depend on the lifetime of the
-/// reference that is passed as an argument to the closure. This requires the
-/// closure to be a function, unless [closure lifetime binders] are being used:
+/// The return type of the closure may depend on the lifetime of the reference
+/// that is passed as an argument to the closure. Unless [closure lifetime
+/// binders] are being used, the correct type of the closure must be known to
+/// the compiler, e.g. by coercing it through a helper function:
 ///
 /// [closure lifetime binders]: https://rust-lang.github.io/rfcs/3216-closure-lifetime-binder.html
-/// [`Cow`]: std::borrow::Cow
 ///
 /// ```
 /// use regex::{Captures, Regex, Replacer};
 /// use std::borrow::Cow;
 ///
-/// let re = Regex::new(r"[0-9]+").unwrap();
-/// fn prepend_odd<'a>(caps: &'a Captures<'_>) -> Cow<'a, str> {
-///     if caps[0].len() % 2 == 1 {
-///         Cow::Owned(format!("0{}", &caps[0]))
-///     } else {
-///         Cow::Borrowed(&caps[0])
-///     }
+/// fn coerce<F: for<'a> FnMut(&'a Captures<'_>) -> Cow<'a, str>>(f: F) -> F {
+///     f
 /// }
-/// let result = re.replace_all("1234,12345", prepend_odd);
-/// assert_eq!(result, "1234,012345");
-/// ```
-///
-/// The same example using closure lifetime binders:
-///
-/// ```ignore
-/// #![feature(closure_lifetime_binder)]
-///
-/// use regex::{Captures, Regex, Replacer};
-/// use std::borrow::Cow;
 ///
 /// let re = Regex::new(r"[0-9]+").unwrap();
 /// let result = re.replace_all(
 ///     "1234,12345",
-///     for<'a, 'b> |caps: &'a Captures<'b>| -> Cow<'a, str> {
+///     coerce(|caps| {
 ///         if caps[0].len() % 2 == 1 {
 ///             Cow::Owned(format!("0{}", &caps[0]))
 ///         } else {
 ///             Cow::Borrowed(&caps[0])
 ///         }
-///     },
+///     }),
 /// );
 /// assert_eq!(result, "1234,012345");
 /// ```
