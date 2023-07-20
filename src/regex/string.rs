@@ -2371,6 +2371,22 @@ impl<'c, 'h> ExactSizeIterator for SubCaptureMatches<'c, 'h> {}
 
 impl<'c, 'h> core::iter::FusedIterator for SubCaptureMatches<'c, 'h> {}
 
+/// Trait alias for `FnMut` with one argument, which allows adding a bound
+/// without specifying the closure's return type.
+pub trait GenericFnMut1Arg<Arg>
+where
+    Self: FnMut(Arg) -> <Self as GenericFnMut1Arg<Arg>>::Output
+{
+    /// Return type of the closure.
+    type Output;
+}
+
+impl<T: ?Sized, Arg, Ret> GenericFnMut1Arg<Arg> for T
+where T: FnMut(Arg) -> Ret,
+{
+    type Output = Ret;
+}
+
 /// A trait for types that can be used to replace matches in a haystack.
 ///
 /// In general, users of this crate shouldn't need to implement this trait,
@@ -2501,10 +2517,10 @@ impl<'a> Replacer for &'a Cow<'a, str> {
     }
 }
 
-impl<F, T> Replacer for F
+impl<F> Replacer for F
 where
-    F: FnMut(&Captures<'_>) -> T,
-    T: AsRef<str>,
+    F: for<'a> GenericFnMut1Arg<&'a Captures<'a>>,
+    for<'a> <F as GenericFnMut1Arg<&'a Captures<'a>>>::Output: AsRef<str>,
 {
     fn replace_append(&mut self, caps: &Captures<'_>, dst: &mut String) {
         dst.push_str((*self)(caps).as_ref());
