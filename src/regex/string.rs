@@ -2570,6 +2570,20 @@ impl<'a> Replacer for &'a Cow<'a, str> {
     }
 }
 
+/// Blanket implementation of `Replacer` for closures.
+///
+/// This implementation is basically the following, except that the return type
+/// `T` may optionally depend on lifetime `'a`.
+///
+/// ```ignore
+/// impl<F, T> Replacer for F
+/// where
+///     F: for<'a> FnMut(&a Captures<'_>) -> T,
+///     T: AsRef<str>, // `T` may also depend on `'a`, which cannot be expressed easily
+/// {
+///     /* … */
+/// }
+/// ```
 impl<F: for<'a> ReplacerClosure<'a>> Replacer for F {
     fn replace_append(&mut self, caps: &Captures<'_>, dst: &mut String) {
         dst.push_str((*self)(caps).as_ref());
