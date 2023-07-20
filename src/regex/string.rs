@@ -2371,21 +2371,22 @@ impl<'c, 'h> ExactSizeIterator for SubCaptureMatches<'c, 'h> {}
 
 impl<'c, 'h> core::iter::FusedIterator for SubCaptureMatches<'c, 'h> {}
 
-/// Trait alias for `FnMut` with one argument, which allows adding a bound
-/// without specifying the closure's return type.
-pub trait GenericFnMut1Arg<Arg>
+/// If a closure implements this for all `'a`, then it also implements
+/// [`Replacer`].
+pub trait ReplacerClosure<'a>
 where
-    Self: FnMut(Arg) -> <Self as GenericFnMut1Arg<Arg>>::Output,
+    Self: FnMut(&'a Captures<'a>) -> <Self as ReplacerClosure>::Output,
 {
-    /// Return type of the closure.
-    type Output;
+    /// Return type of the closure (may depend on lifetime `'a`).
+    type Output: AsRef<str>;
 }
 
-impl<T: ?Sized, Arg, Ret> GenericFnMut1Arg<Arg> for T
+impl<'a, F: ?Sized, O> ReplacerClosure<'a> for F
 where
-    T: FnMut(Arg) -> Ret,
+    F: FnMut(&'a Captures<'a>) -> O,
+    O: AsRef<str>,
 {
-    type Output = Ret;
+    type Output = O;
 }
 
 /// A trait for types that can be used to replace matches in a haystack.
@@ -2518,11 +2519,7 @@ impl<'a> Replacer for &'a Cow<'a, str> {
     }
 }
 
-impl<F> Replacer for F
-where
-    F: for<'a> GenericFnMut1Arg<&'a Captures<'a>>,
-    for<'a> <F as GenericFnMut1Arg<&'a Captures<'a>>>::Output: AsRef<str>,
-{
+impl<F: for<'a> ReplacerClosure<'a>> Replacer for F {
     fn replace_append(&mut self, caps: &Captures<'_>, dst: &mut String) {
         dst.push_str((*self)(caps).as_ref());
     }
