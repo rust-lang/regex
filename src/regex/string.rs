@@ -2375,14 +2375,15 @@ impl<'c, 'h> core::iter::FusedIterator for SubCaptureMatches<'c, 'h> {}
 /// without specifying the closure's return type.
 pub trait GenericFnMut1Arg<Arg>
 where
-    Self: FnMut(Arg) -> <Self as GenericFnMut1Arg<Arg>>::Output
+    Self: FnMut(Arg) -> <Self as GenericFnMut1Arg<Arg>>::Output,
 {
     /// Return type of the closure.
     type Output;
 }
 
 impl<T: ?Sized, Arg, Ret> GenericFnMut1Arg<Arg> for T
-where T: FnMut(Arg) -> Ret,
+where
+    T: FnMut(Arg) -> Ret,
 {
     type Output = Ret;
 }
