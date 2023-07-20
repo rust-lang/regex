@@ -2375,7 +2375,7 @@ impl<'c, 'h> core::iter::FusedIterator for SubCaptureMatches<'c, 'h> {}
 /// [`Replacer`].
 pub trait ReplacerClosure<'a>
 where
-    Self: FnMut(&'a Captures<'a>) -> <Self as ReplacerClosure>::Output,
+    Self: FnMut(&'a Captures<'_>) -> <Self as ReplacerClosure<'a>>::Output,
 {
     /// Return type of the closure (may depend on lifetime `'a`).
     type Output: AsRef<str>;
@@ -2383,7 +2383,7 @@ where
 
 impl<'a, F: ?Sized, O> ReplacerClosure<'a> for F
 where
-    F: FnMut(&'a Captures<'a>) -> O,
+    F: FnMut(&'a Captures<'_>) -> O,
     O: AsRef<str>,
 {
     type Output = O;
