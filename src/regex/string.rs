@@ -2469,7 +2469,7 @@ use replacer_closure::*;
 ///
 /// The same example using closure lifetime binders:
 ///
-/// ```
+/// ```ignore
 /// #![feature(closure_lifetime_binder)]
 ///
 /// use regex::{Captures, Regex, Replacer};
