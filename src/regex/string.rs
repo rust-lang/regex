@@ -2374,8 +2374,8 @@ impl<'c, 'h> core::iter::FusedIterator for SubCaptureMatches<'c, 'h> {}
 /// Contains helper trait for blanket implementation for [`Replacer`].
 mod replacer_closure {
     use super::*;
-    /// If a closure implements this for all `'a` and `'b`, then it also
-    /// implements [`Replacer`].
+    /// If a closure implements this for all `'a`, then it also implements
+    /// [`Replacer`].
     pub trait ReplacerClosure<'a>
     where
         Self: FnMut(&'a Captures<'_>) -> <Self as ReplacerClosure<'a>>::Output,
