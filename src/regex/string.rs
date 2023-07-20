@@ -2371,23 +2371,27 @@ impl<'c, 'h> ExactSizeIterator for SubCaptureMatches<'c, 'h> {}
 
 impl<'c, 'h> core::iter::FusedIterator for SubCaptureMatches<'c, 'h> {}
 
-/// If a closure implements this for all `'a`, then it also implements
-/// [`Replacer`].
-pub trait ReplacerClosure<'a>
-where
-    Self: FnMut(&'a Captures<'_>) -> <Self as ReplacerClosure<'a>>::Output,
-{
-    /// Return type of the closure (may depend on lifetime `'a`).
-    type Output: AsRef<str>;
+/// Contains helper trait for blanket implementation for [`Replacer`].
+mod replacer_closure {
+    use super::*;
+    /// If a closure implements this for all `'a` and `'b`, then it also
+    /// implements [`Replacer`].
+    pub trait ReplacerClosure<'a>
+    where
+        Self: FnMut(&'a Captures<'_>) -> <Self as ReplacerClosure<'a>>::Output,
+    {
+        /// Return type of the closure (may depend on lifetime `'a`).
+        type Output: AsRef<str>;
+    }
+    impl<'a, F: ?Sized, O> ReplacerClosure<'a> for F
+    where
+        F: FnMut(&'a Captures<'_>) -> O,
+        O: AsRef<str>,
+    {
+        type Output = O;
+    }
 }
-
-impl<'a, F: ?Sized, O> ReplacerClosure<'a> for F
-where
-    F: FnMut(&'a Captures<'_>) -> O,
-    O: AsRef<str>,
-{
-    type Output = O;
-}
+use replacer_closure::*;
 
 /// A trait for types that can be used to replace matches in a haystack.
 ///
@@ -2420,6 +2424,69 @@ where
 /// let re = Regex::new(r"(?<last>[^,\s]+),\s+(?<first>\S+)").unwrap();
 /// let result = re.replace("Springsteen, Bruce", NameSwapper);
 /// assert_eq!(result, "Bruce Springsteen");
+/// ```
+///
+/// # Implementation by closures
+///
+/// Closures that take an argument of type  `&'a Captures<'b>` for any `'a` and
+/// `'b: 'a` and which return a type `T: AsRef<str>` (that may depend on `'a`)
+/// implement the `Replacer` trait through a blanket implementation.
+///
+/// A simple example looks like this:
+///
+/// ```
+/// use regex::{Captures, Regex};
+///
+/// let re = Regex::new(r"[0-9]+").unwrap();
+/// let result = re.replace_all("1234,12345", |caps: &Captures<'_>| {
+///     format!("[number with {} digits]", caps[0].len())
+/// });
+/// assert_eq!(result, "[number with 4 digits],[number with 5 digits]");
+/// ```
+///
+/// Note that the return type of the closure may depend on the lifetime of the
+/// reference that is passed as an argument to the closure. This requires the
+/// closure to be a function, unless [closure lifetime binders] are being used:
+///
+/// [closure lifetime binders]: https://rust-lang.github.io/rfcs/3216-closure-lifetime-binder.html
+/// [`Cow`]: std::borrow::Cow
+///
+/// ```
+/// use regex::{Captures, Regex, Replacer};
+/// use std::borrow::Cow;
+///
+/// let re = Regex::new(r"[0-9]+").unwrap();
+/// fn prepend_odd<'a>(caps: &'a Captures<'_>) -> Cow<'a, str> {
+///     if caps[0].len() % 2 == 1 {
+///         Cow::Owned(format!("0{}", &caps[0]))
+///     } else {
+///         Cow::Borrowed(&caps[0])
+///     }
+/// }
+/// let result = re.replace_all("1234,12345", prepend_odd);
+/// assert_eq!(result, "1234,012345");
+/// ```
+///
+/// The same example using closure lifetime binders:
+///
+/// ```
+/// #![feature(closure_lifetime_binder)]
+///
+/// use regex::{Captures, Regex, Replacer};
+/// use std::borrow::Cow;
+///
+/// let re = Regex::new(r"[0-9]+").unwrap();
+/// let result = re.replace_all(
+///     "1234,12345",
+///     for<'a, 'b> |caps: &'a Captures<'b>| -> Cow<'a, str> {
+///         if caps[0].len() % 2 == 1 {
+///             Cow::Owned(format!("0{}", &caps[0]))
+///         } else {
+///             Cow::Borrowed(&caps[0])
+///         }
+///     },
+/// );
+/// assert_eq!(result, "1234,012345");
 /// ```
 pub trait Replacer {
     /// Appends possibly empty data to `dst` to replace the current match.
