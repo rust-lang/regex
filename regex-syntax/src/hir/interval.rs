@@ -351,7 +351,7 @@ impl<I: Interval> IntervalSet<I> {
         // and merge them if possible. Otherwise, we make it the
         // range as the last one.
         let mut newi = 0;
-        for oldi in 1..self.ranges.len() {    
+        for oldi in 1..self.ranges.len() {
             if let Some(union) = self.ranges[newi].union(&self.ranges[oldi]) {
                 self.ranges[newi] = union;
             } else {
