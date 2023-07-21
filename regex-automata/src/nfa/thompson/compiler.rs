@@ -1319,7 +1319,7 @@ impl Compiler {
         // compare and contrast performance of the Pike VM when the code below
         // is active vs the code above. Here's an example to try:
         //
-        //   regex-cli find nfa thompson pikevm -b @$smallishru '(?m)^\w{20}'
+        //   regex-cli find match pikevm -b -p '(?m)^\w{20}' -y '@$smallishru'
         //
         // With Unicode classes generated below, this search takes about 45s on
         // my machine. But with the compressed version above, the search takes
@@ -1338,7 +1338,7 @@ impl Compiler {
                     .map(|rng| self.c_range(rng.start, rng.end));
                 self.c_concat(it)
             });
-        self.c_alt(it)
+        self.c_alt_iter(it)
         */
     }
 
