@@ -2378,14 +2378,14 @@ mod replacer_closure {
     /// [`Replacer`].
     pub trait ReplacerClosure<'a>
     where
-        Self: FnMut(&'a Captures<'_>) -> <Self as ReplacerClosure<'a>>::Output,
+        Self: FnMut(&'a Captures<'a>) -> <Self as ReplacerClosure<'a>>::Output,
     {
         /// Return type of the closure (may depend on lifetime `'a`).
         type Output: AsRef<str>;
     }
     impl<'a, F: ?Sized, O> ReplacerClosure<'a> for F
     where
-        F: FnMut(&'a Captures<'_>) -> O,
+        F: FnMut(&'a Captures<'a>) -> O,
         O: AsRef<str>,
     {
         type Output = O;
@@ -2429,8 +2429,10 @@ use replacer_closure::*;
 /// # Implementation by closures
 ///
 /// Closures that take an argument of type  `&'a Captures<'b>` for any `'a` and
-/// `'b: 'a` and which return a type `T: AsRef<str>` (that may depend on `'a`)
-/// implement the `Replacer` trait through a blanket implementation.
+/// `'b: 'a` and which return a type `T: AsRef<str>` (that may depend on `'a`
+/// or `'b`) implement the `Replacer` trait through a [blanket implementation].
+///
+/// [blanket implementation]: Self#impl-Replacer-for-F
 ///
 /// A simple example looks like this:
 ///
@@ -2578,7 +2580,7 @@ impl<'a> Replacer for &'a Cow<'a, str> {
 /// ```ignore
 /// impl<F, T> Replacer for F
 /// where
-///     F: for<'a> FnMut(&a Captures<'_>) -> T,
+///     F: for<'a> FnMut(&'a Captures<'a>) -> T,
 ///     T: AsRef<str>, // `T` may also depend on `'a`, which cannot be expressed easily
 /// {
 ///     /* … */

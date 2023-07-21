@@ -141,3 +141,49 @@ fn dfa_handles_pathological_case() {
     };
     assert!(re.is_match(&text));
 }
+
+// Test if implementation of `Replacer` for closures covers any reasonable
+// lifetime combination in regard to the argument and return type.
+mod replacer_closure_lifetimes {
+    use regex::{Captures, Regex};
+    use std::borrow::Cow;
+    #[test]
+    fn reference_lifetime() {
+        fn coerce<F: for<'a> FnMut(&'a Captures<'_>) -> Cow<'a, str>>(
+            f: F,
+        ) -> F {
+            f
+        }
+        let s = Regex::new("x")
+            .unwrap()
+            .replace_all("x", coerce(|caps| Cow::Borrowed(&caps[0])));
+        assert_eq!(s, "x");
+    }
+    #[test]
+    fn parameter_lifetime() {
+        fn coerce<F: for<'b> FnMut(&Captures<'b>) -> Cow<'b, str>>(f: F) -> F {
+            f
+        }
+        let s = Regex::new("x").unwrap().replace_all(
+            "x",
+            coerce(|caps| Cow::Borrowed(caps.get(0).unwrap().as_str())),
+        );
+        assert_eq!(s, "x");
+    }
+    // Additionally demand that its sufficient if the closure accepts a single
+    // lifetime `'u` which is used both for the reference to and the lifetime
+    // argument of the `Captures` argument. Note that `Captures<'u>` is
+    // covariant over `'u`.
+    #[test]
+    fn unified_lifetime() {
+        fn coerce<F: for<'u> FnMut(&'u Captures<'u>) -> Cow<'u, str>>(
+            f: F,
+        ) -> F {
+            f
+        }
+        let s = Regex::new("x")
+            .unwrap()
+            .replace_all("x", coerce(|caps| Cow::Borrowed(&caps[0])));
+        assert_eq!(s, "x");
+    }
+}
