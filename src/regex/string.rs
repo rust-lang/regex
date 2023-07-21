@@ -2452,7 +2452,7 @@ use replacer_closure::*;
 /// [closure lifetime binders]: https://rust-lang.github.io/rfcs/3216-closure-lifetime-binder.html
 ///
 /// ```
-/// use regex::{Captures, Regex, Replacer};
+/// use regex::{Captures, Regex};
 /// use std::borrow::Cow;
 ///
 /// fn coerce<F: for<'a> FnMut(&'a Captures<'_>) -> Cow<'a, str>>(f: F) -> F {
