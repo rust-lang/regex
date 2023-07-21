@@ -347,12 +347,12 @@ impl<I: Interval> IntervalSet<I> {
         self.ranges.sort();
         assert!(!self.ranges.is_empty());
 
-        // We maintains the canonicalization results in-place at `0..newi`.
+        // We maintain the canonicalization results in-place at `0..newi`.
         // `newi` will keep track of the end of the canonicalized ranges.
         let mut newi = 0;
         for oldi in 1..self.ranges.len() {
             // The last new range gets merged with currnet old range when unionable.
-            // If not, we store it as the new range at the current `newi`.
+            // If not, we update `newi` and store it as a new range.
             if let Some(union) = self.ranges[newi].union(&self.ranges[oldi]) {
                 self.ranges[newi] = union;
             } else {
