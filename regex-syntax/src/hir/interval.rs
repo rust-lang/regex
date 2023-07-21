@@ -347,24 +347,19 @@ impl<I: Interval> IntervalSet<I> {
         self.ranges.sort();
         assert!(!self.ranges.is_empty());
 
-        // Is there a way to do this in-place with constant memory? I couldn't
-        // figure out a way to do it. So just append the canonicalization to
-        // the end of this range, and then drain it before we're done.
-        let drain_end = self.ranges.len();
-        for oldi in 0..drain_end {
-            // If we've added at least one new range, then check if we can
-            // merge this range in the previously added range.
-            if self.ranges.len() > drain_end {
-                let (last, rest) = self.ranges.split_last_mut().unwrap();
-                if let Some(union) = last.union(&rest[oldi]) {
-                    *last = union;
-                    continue;
-                }
+        // We consistently try to merge range with previous range
+        // and merge them if possible. Otherwise, we make it the
+        // range as the last one.
+        let mut newi = 0;
+        for oldi in 1..self.ranges.len() {    
+            if let Some(union) = self.ranges[newi].union(&self.ranges[oldi]) {
+                self.ranges[newi] = union;
+            } else {
+                newi += 1;
+                self.ranges[newi] = self.ranges[oldi];
             }
-            let range = self.ranges[oldi];
-            self.ranges.push(range);
         }
-        self.ranges.drain(..drain_end);
+        self.ranges.truncate(newi + 1);
     }
 
     /// Returns true if and only if this class is in a canonical ordering.
