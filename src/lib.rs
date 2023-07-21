@@ -665,8 +665,8 @@ a separate crate, [`regex-syntax`](https://docs.rs/regex-syntax).
 </pre>
 
 Any named character class may appear inside a bracketed `[...]` character
-class. For example, `[\p{Greek}[:digit:]]` matches any Greek or ASCII
-digit. `[\p{Greek}&&\pL]` matches Greek letters.
+class. For example, `[\p{Greek}[:digit:]]` matches any ASCII digit or any
+codepoint in the `Greek` script. `[\p{Greek}&&\pL]` matches Greek letters.
 
 Precedence in character classes, from most binding to least:
 
