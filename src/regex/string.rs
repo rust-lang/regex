@@ -2374,18 +2374,18 @@ impl<'c, 'h> core::iter::FusedIterator for SubCaptureMatches<'c, 'h> {}
 /// Contains helper trait for blanket implementation for [`Replacer`].
 mod replacer_closure {
     use super::*;
-    /// If a closure implements this for all `'a`, then it also implements
-    /// [`Replacer`].
-    pub trait ReplacerClosure<'a>
+    /// If a closure implements this for all `&'a Captures<'b>`, then it also
+    /// implements [`Replacer`].
+    pub trait ReplacerClosure<Arg>
     where
-        Self: FnMut(&'a Captures<'a>) -> <Self as ReplacerClosure<'a>>::Output,
+        Self: FnMut(Arg) -> <Self as ReplacerClosure<Arg>>::Output,
     {
-        /// Return type of the closure (may depend on lifetime `'a`).
+        /// Return type of the closure (may depend on lifetime `'a` or `'b`).
         type Output: AsRef<str>;
     }
-    impl<'a, F: ?Sized, O> ReplacerClosure<'a> for F
+    impl<'a, 'b, F, O> ReplacerClosure<&'a Captures<'b>> for F
     where
-        F: FnMut(&'a Captures<'a>) -> O,
+        F: ?Sized + FnMut(&'a Captures<'b>) -> O,
         O: AsRef<str>,
     {
         type Output = O;
@@ -2428,8 +2428,8 @@ use replacer_closure::*;
 ///
 /// # Implementation by closures
 ///
-/// Closures that take an argument of type  `&'a Captures<'b>` for any `'a` and
-/// `'b: 'a` and which return a type `T: AsRef<str>` (that may depend on `'a`
+/// Closures that take an argument of type  `&'a Captures<'b>` (for any `'a`
+/// and `'b`) and which return a type `T: AsRef<str>` (that may depend on `'a`
 /// or `'b`) implement the `Replacer` trait through a [blanket implementation].
 ///
 /// [blanket implementation]: Self#impl-Replacer-for-F
@@ -2575,18 +2575,18 @@ impl<'a> Replacer for &'a Cow<'a, str> {
 /// Blanket implementation of `Replacer` for closures.
 ///
 /// This implementation is basically the following, except that the return type
-/// `T` may optionally depend on lifetime `'a`.
+/// `T` may optionally depend on the lifetimes `'a` and `'b`.
 ///
 /// ```ignore
 /// impl<F, T> Replacer for F
 /// where
-///     F: for<'a> FnMut(&'a Captures<'a>) -> T,
-///     T: AsRef<str>, // `T` may also depend on `'a`, which cannot be expressed easily
+///     F: for<'a, 'b> FnMut(&'a Captures<'b>) -> T,
+///     T: AsRef<str>, // `T` may depend on `'a` or `'b`, which can't be expressed easily
 /// {
 ///     /* … */
 /// }
 /// ```
-impl<F: for<'a> ReplacerClosure<'a>> Replacer for F {
+impl<F: for<'a, 'b> ReplacerClosure<&'a Captures<'b>>> Replacer for F {
     fn replace_append(&mut self, caps: &Captures<'_>, dst: &mut String) {
         dst.push_str((*self)(caps).as_ref());
     }

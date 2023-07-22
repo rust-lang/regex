@@ -170,20 +170,4 @@ mod replacer_closure_lifetimes {
         );
         assert_eq!(s, "x");
     }
-    // Additionally demand that its sufficient if the closure accepts a single
-    // lifetime `'u` which is used both for the reference to and the lifetime
-    // argument of the `Captures` argument. Note that `Captures<'u>` is
-    // covariant over `'u`.
-    #[test]
-    fn unified_lifetime() {
-        fn coerce<F: for<'u> FnMut(&'u Captures<'u>) -> Cow<'u, str>>(
-            f: F,
-        ) -> F {
-            f
-        }
-        let s = Regex::new("x")
-            .unwrap()
-            .replace_all("x", coerce(|caps| Cow::Borrowed(&caps[0])));
-        assert_eq!(s, "x");
-    }
 }
