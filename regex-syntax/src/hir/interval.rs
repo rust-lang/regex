@@ -214,7 +214,8 @@ impl<I: Interval> IntervalSet<I> {
             // Only when `b` is not above `a`, `b` might apply to current
             // `a` range.
             while b < other.ranges.len()
-                && other.ranges[b].lower() <= self.ranges[a].upper() {
+                && other.ranges[b].lower() <= self.ranges[a].upper()
+            {
                 match self.ranges.pop().unwrap().difference(&other.ranges[b]) {
                     (Some(range1), None) | (None, Some(range1)) => {
                         self.ranges.push(range1);
@@ -265,17 +266,29 @@ impl<I: Interval> IntervalSet<I> {
         let mut b_range = Some(other.ranges[b]);
         for a in 0..drain_end {
             self.ranges.push(self.ranges[a]);
-            while b_range.is_some_and(|r| r.lower() <= self.ranges[a].upper()) {
-                let (range1, range2) = match self.ranges.pop().unwrap()
+            while b_range.is_some_and(|r| r.lower() <= self.ranges[a].upper())
+            {
+                let (range1, range2) = match self
+                    .ranges
+                    .pop()
+                    .unwrap()
                     .symmetric_difference(&b_range.as_ref().unwrap())
                 {
-                    (Some(range1), None) | (None, Some(range1)) => (Some(range1), None),
-                    (Some(range1), Some(range2)) => (Some(range1), Some(range2)),
-                    (None, None) => (None, None)
+                    (Some(range1), None) | (None, Some(range1)) => {
+                        (Some(range1), None)
+                    }
+                    (Some(range1), Some(range2)) => {
+                        (Some(range1), Some(range2))
+                    }
+                    (None, None) => (None, None),
                 };
                 if let Some(range) = range1 {
-                    if self.ranges.len() > drain_end && self.ranges.last().unwrap().is_contiguous(&range){
-                        self.ranges.last_mut().map(|last| *last = last.union(&range).unwrap());
+                    if self.ranges.len() > drain_end
+                        && self.ranges.last().unwrap().is_contiguous(&range)
+                    {
+                        self.ranges
+                            .last_mut()
+                            .map(|last| *last = last.union(&range).unwrap());
                     } else {
                         self.ranges.push(range);
                     }
@@ -283,9 +296,10 @@ impl<I: Interval> IntervalSet<I> {
                 if let Some(range) = range2 {
                     self.ranges.push(range);
                 }
-                
-                b_range = if self.ranges.len() > drain_end 
-                            && self.ranges.last().unwrap().upper() > self.ranges[a].upper()
+
+                b_range = if self.ranges.len() > drain_end
+                    && self.ranges.last().unwrap().upper()
+                        > self.ranges[a].upper()
                 {
                     Some(*self.ranges.last().unwrap())
                 } else {
@@ -295,15 +309,19 @@ impl<I: Interval> IntervalSet<I> {
             }
         }
         while let Some(range) = b_range {
-            if self.ranges.len() > drain_end && self.ranges.last().unwrap().is_contiguous(&range){
-                self.ranges.last_mut().map(|last| *last = last.union(&range).unwrap());
+            if self.ranges.len() > drain_end
+                && self.ranges.last().unwrap().is_contiguous(&range)
+            {
+                self.ranges
+                    .last_mut()
+                    .map(|last| *last = last.union(&range).unwrap());
             } else {
                 self.ranges.push(range);
             }
             b += 1;
             b_range = other.ranges.get(b).cloned();
         }
-        
+
         self.ranges.drain(..drain_end);
         self.folded = self.ranges.is_empty() || (self.folded && other.folded);
     }
@@ -325,21 +343,36 @@ impl<I: Interval> IntervalSet<I> {
         // invariant.
         if self.ranges[0].lower() > I::Bound::min_value() {
             let mut pre_upper = self.ranges[0].upper();
-            self.ranges[0] = I::create(I::Bound::min_value(), self.ranges[0].lower().decrement());
+            self.ranges[0] = I::create(
+                I::Bound::min_value(),
+                self.ranges[0].lower().decrement(),
+            );
             for i in 1..self.ranges.len() {
                 let lower = pre_upper.increment();
                 pre_upper = self.ranges[i].upper();
-                self.ranges[i] = I::create(lower, self.ranges[i].lower().decrement());
+                self.ranges[i] =
+                    I::create(lower, self.ranges[i].lower().decrement());
             }
             if pre_upper < I::Bound::max_value() {
-                self.ranges.push(I::create(pre_upper.increment(), I::Bound::max_value()));
+                self.ranges.push(I::create(
+                    pre_upper.increment(),
+                    I::Bound::max_value(),
+                ));
             }
         } else {
             for i in 1..self.ranges.len() {
-                self.ranges[i - 1] = I::create(self.ranges[i - 1].upper().increment(), self.ranges[i].lower().decrement());
+                self.ranges[i - 1] = I::create(
+                    self.ranges[i - 1].upper().increment(),
+                    self.ranges[i].lower().decrement(),
+                );
             }
             if self.ranges.last().unwrap().upper() < I::Bound::max_value() {
-                self.ranges.last_mut().map(|range| *range = I::create(range.upper().increment(), I::Bound::max_value()));
+                self.ranges.last_mut().map(|range| {
+                    *range = I::create(
+                        range.upper().increment(),
+                        I::Bound::max_value(),
+                    )
+                });
             } else {
                 self.ranges.pop();
             }
@@ -503,11 +536,13 @@ pub trait Interval:
         other: &Self,
     ) -> (Option<Self>, Option<Self>) {
         let union = match self.union(other) {
-            None => return if self.upper() < other.lower() {
-                (Some(self.clone()), Some(other.clone()))
-            } else {
-                (Some(other.clone()), Some(self.clone()))
-            },
+            None => {
+                return if self.upper() < other.lower() {
+                    (Some(self.clone()), Some(other.clone()))
+                } else {
+                    (Some(other.clone()), Some(self.clone()))
+                }
+            }
             Some(union) => union,
         };
         let intersection = match self.intersect(other) {
