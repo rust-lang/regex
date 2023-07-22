@@ -2428,7 +2428,7 @@ use replacer_closure::*;
 ///
 /// # Implementation by closures
 ///
-/// Closures that take an argument of type  `&'a Captures<'b>` (for any `'a`
+/// Closures that take an argument of type  `&'a Captures<'b>` (for all `'a`
 /// and `'b`) and which return a type `T: AsRef<str>` (that may depend on `'a`
 /// or `'b`) implement the `Replacer` trait through a [blanket implementation].
 ///
@@ -2447,33 +2447,27 @@ use replacer_closure::*;
 /// ```
 ///
 /// The return type of the closure may depend on the lifetime of the reference
-/// that is passed as an argument to the closure. Unless [closure lifetime
-/// binders] are being used, the correct type of the closure must be known to
-/// the compiler, e.g. by coercing it through a helper function:
-///
-/// [closure lifetime binders]: https://rust-lang.github.io/rfcs/3216-closure-lifetime-binder.html
+/// that is passed as an argument to the closure. Using a function, this can be
+/// expressed:
 ///
 /// ```
 /// use regex::{Captures, Regex};
 /// use std::borrow::Cow;
 ///
-/// fn coerce<F: for<'a> FnMut(&'a Captures<'_>) -> Cow<'a, str>>(f: F) -> F {
-///     f
-/// }
-///
 /// let re = Regex::new(r"[0-9]+").unwrap();
-/// let result = re.replace_all(
-///     "1234,12345",
-///     coerce(|caps| {
-///         if caps[0].len() % 2 == 1 {
-///             Cow::Owned(format!("0{}", &caps[0]))
-///         } else {
-///             Cow::Borrowed(&caps[0])
-///         }
-///     }),
-/// );
+/// fn func<'a, 'b>(caps: &'a Captures<'b>) -> Cow<'a, str> {
+///     if caps[0].len() % 2 == 1 {
+///         Cow::Owned(format!("0{}", &caps[0]))
+///     } else {
+///         Cow::Borrowed(&caps[0])
+///     }
+/// }
+/// let result = re.replace_all("1234,12345", func);
 /// assert_eq!(result, "1234,012345");
 /// ```
+///
+/// *Note:* Using a closure instead of a function in the last example can be
+/// more tricky and requires a coercing helper function as of yet.
 pub trait Replacer {
     /// Appends possibly empty data to `dst` to replace the current match.
     ///
