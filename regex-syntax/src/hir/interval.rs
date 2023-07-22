@@ -236,7 +236,7 @@ impl<I: Interval> IntervalSet<I> {
         }
 
         self.ranges.drain(..drain_end);
-        self.folded = self.folded && other.folded;
+        self.folded = self.ranges.is_empty() || (self.folded && other.folded);
     }
 
     /// Compute the symmetric difference of the two sets, in place.
