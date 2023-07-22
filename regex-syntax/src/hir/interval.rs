@@ -81,14 +81,44 @@ impl<I: Interval> IntervalSet<I> {
 
     /// Add a new interval to this set.
     pub fn push(&mut self, interval: I) {
-        // TODO: This could be faster. e.g., Push the interval such that
-        // it preserves canonicalization.
-        self.ranges.push(interval);
-        self.canonicalize();
         // We don't know whether the new interval added here is considered
         // case folded, so we conservatively assume that the entire set is
         // no longer case folded if it was previously.
         self.folded = false;
+
+        if self.ranges.is_empty() {
+            self.ranges.push(interval);
+            return;
+        }
+
+        // Find the first range that is not greater than the new interval.
+        // This is the first range that could possibly be unioned with the
+        // new interval.
+        let mut drain_end = self.ranges.len();
+        while drain_end > 0
+            && self.ranges[drain_end - 1].lower() > interval.upper()
+        {
+            drain_end -= 1;
+        }
+
+        // Try to union the new interval with old intervals backwards.
+        if drain_end > 0 && self.ranges[drain_end - 1].is_contiguous(&interval)
+        {
+            self.ranges[drain_end - 1] =
+                self.ranges[drain_end - 1].union(&interval).unwrap();
+            for i in 0..drain_end - 1 {
+                if let Some(union) =
+                    self.ranges[drain_end - 1].union(&self.ranges[i])
+                {
+                    self.ranges[drain_end - 1] = union;
+                } else {
+                    self.ranges.drain(i + 1..drain_end - 1);
+                    break;
+                }
+            }
+        } else {
+            self.ranges.insert(drain_end, interval);
+        }
     }
 
     /// Return an iterator over all intervals in this set.
