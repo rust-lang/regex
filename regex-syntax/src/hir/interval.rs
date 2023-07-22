@@ -247,11 +247,65 @@ impl<I: Interval> IntervalSet<I> {
     /// set. That is, the set will contain all elements in either set,
     /// but will not contain any elements that are in both sets.
     pub fn symmetric_difference(&mut self, other: &IntervalSet<I>) {
-        // TODO(burntsushi): Fix this so that it amortizes allocation.
-        let mut intersection = self.clone();
-        intersection.intersect(other);
-        self.union(other);
-        self.difference(&intersection);
+        if self.ranges.is_empty() {
+            self.ranges.extend(&other.ranges);
+            self.folded = other.folded;
+            return;
+        }
+        if other.ranges.is_empty() {
+            return;
+        }
+
+        // There should be a way to do this in-place with constant memory,
+        // but I couldn't figure out a simple way to do it. So just append
+        // the symmetric difference to the end of this range, and then drain
+        // it before we're done.
+        let drain_end = self.ranges.len();
+        let mut b = 0;
+        let mut b_range = Some(other.ranges[b]);
+        for a in 0..drain_end {
+            self.ranges.push(self.ranges[a]);
+            while b_range.is_some_and(|r| r.lower() <= self.ranges[a].upper()) {
+                let (range1, range2) = match self.ranges.pop().unwrap()
+                    .symmetric_difference(&b_range.as_ref().unwrap())
+                {
+                    (Some(range1), None) | (None, Some(range1)) => (Some(range1), None),
+                    (Some(range1), Some(range2)) => (Some(range1), Some(range2)),
+                    (None, None) => (None, None)
+                };
+                if let Some(range) = range1 {
+                    if self.ranges.len() > drain_end && self.ranges.last().unwrap().is_contiguous(&range){
+                        self.ranges.last_mut().map(|last| *last = last.union(&range).unwrap());
+                    } else {
+                        self.ranges.push(range);
+                    }
+                }
+                if let Some(range) = range2 {
+                    self.ranges.push(range);
+                }
+                
+                b_range = if self.ranges.len() > drain_end 
+                            && self.ranges.last().unwrap().upper() > self.ranges[a].upper()
+                {
+                    Some(*self.ranges.last().unwrap())
+                } else {
+                    b += 1;
+                    other.ranges.get(b).cloned()
+                };
+            }
+        }
+        while let Some(range) = b_range {
+            if self.ranges.len() > drain_end && self.ranges.last().unwrap().is_contiguous(&range){
+                self.ranges.last_mut().map(|last| *last = last.union(&range).unwrap());
+            } else {
+                self.ranges.push(range);
+            }
+            b += 1;
+            b_range = other.ranges.get(b).cloned();
+        }
+        
+        self.ranges.drain(..drain_end);
+        self.folded = self.ranges.is_empty() || (self.folded && other.folded);
     }
 
     /// Negate this interval set.
@@ -447,7 +501,11 @@ pub trait Interval:
         other: &Self,
     ) -> (Option<Self>, Option<Self>) {
         let union = match self.union(other) {
-            None => return (Some(self.clone()), Some(other.clone())),
+            None => return if self.upper() < other.lower() {
+                (Some(self.clone()), Some(other.clone()))
+            } else {
+                (Some(other.clone()), Some(self.clone()))
+            },
             Some(union) => union,
         };
         let intersection = match self.intersect(other) {
