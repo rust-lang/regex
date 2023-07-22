@@ -266,7 +266,8 @@ impl<I: Interval> IntervalSet<I> {
         let mut b_range = Some(other.ranges[b]);
         for a in 0..drain_end {
             self.ranges.push(self.ranges[a]);
-            while b_range.is_some_and(|r| r.lower() <= self.ranges[a].upper())
+            while b_range.is_some()
+                && b_range.unwrap().lower() <= self.ranges[a].upper()
             {
                 let (range1, range2) = match self
                     .ranges
