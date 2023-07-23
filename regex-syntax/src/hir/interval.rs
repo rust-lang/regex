@@ -97,6 +97,7 @@ impl<I: Interval> IntervalSet<I> {
         let mut drain_end = self.ranges.len();
         while drain_end > 0
             && self.ranges[drain_end - 1].lower() > interval.upper()
+            && !self.ranges[drain_end - 1].is_contiguous(&interval)
         {
             drain_end -= 1;
         }
@@ -106,7 +107,7 @@ impl<I: Interval> IntervalSet<I> {
         {
             self.ranges[drain_end - 1] =
                 self.ranges[drain_end - 1].union(&interval).unwrap();
-            for i in 0..drain_end - 1 {
+            for i in (0..drain_end - 1).rev() {
                 if let Some(union) =
                     self.ranges[drain_end - 1].union(&self.ranges[i])
                 {
