@@ -1230,8 +1230,8 @@ impl Builder {
             //
             // Test case:
             //
-            //   regex-cli find hybrid regex -w @conn.json.1000x.log \
-            //     '^#' '\b10\.55\.182\.100\b'
+            //   regex-cli debug dense dfa --unicode-word-boundary \
+            //   @conn.json.1000x.log '^#' '\b10\.55\.182\.100\b'
             if !quitset.is_empty() {
                 set.add_set(&quitset);
             }
