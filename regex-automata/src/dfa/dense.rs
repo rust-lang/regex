@@ -1230,8 +1230,8 @@ impl Builder {
             //
             // Test case:
             //
-            //   regex-cli debug dense dfa --unicode-word-boundary \
-            //   @conn.json.1000x.log '^#' '\b10\.55\.182\.100\b'
+            //   regex-cli find match dense --unicode-word-boundary \
+            //   -p '^#' -p '\b10\.55\.182\.100\b' -y @conn.json.1000x.log
             if !quitset.is_empty() {
                 set.add_set(&quitset);
             }
