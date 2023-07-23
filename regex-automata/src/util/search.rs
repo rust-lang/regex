@@ -246,7 +246,7 @@ impl<'h> Input<'h> {
     /// When a search is anchored (so that's [`Anchored::Yes`] or
     /// [`Anchored::Pattern`]), a match must begin at the start of a search.
     /// When a search is not anchored (that's [`Anchored::No`]), regex engines
-    /// will behave as if the pattern started with a `(?:s-u.)*?`. This prefix
+    /// will behave as if the pattern started with a `(?s-u:.)*?`. This prefix
     /// permits a match to appear anywhere.
     ///
     /// By default, the anchored mode is [`Anchored::No`].
