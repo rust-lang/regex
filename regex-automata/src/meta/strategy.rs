@@ -13,7 +13,7 @@ use crate::{
         regex::{Cache, RegexInfo},
         reverse_inner, wrappers,
     },
-    nfa::thompson::{self, NFA},
+    nfa::thompson::{self, WhichCaptures, NFA},
     util::{
         captures::{Captures, GroupInfo},
         look::LookMatcher,
@@ -452,7 +452,7 @@ impl Core {
             .utf8(info.config().get_utf8_empty())
             .nfa_size_limit(info.config().get_nfa_size_limit())
             .shrink(false)
-            .captures(true)
+            .which_captures(WhichCaptures::All)
             .look_matcher(lookm);
         let nfa = thompson::Compiler::new()
             .configure(thompson_config.clone())
@@ -499,7 +499,10 @@ impl Core {
                     // useful with capturing groups in reverse. And of course,
                     // the lazy DFA ignores capturing groups in all cases.
                     .configure(
-                        thompson_config.clone().captures(false).reverse(true),
+                        thompson_config
+                            .clone()
+                            .which_captures(WhichCaptures::None)
+                            .reverse(true),
                     )
                     .build_many_from_hir(hirs)
                     .map_err(BuildError::nfa)?;
@@ -1480,7 +1483,7 @@ impl ReverseInner {
             .utf8(core.info.config().get_utf8_empty())
             .nfa_size_limit(core.info.config().get_nfa_size_limit())
             .shrink(false)
-            .captures(false)
+            .which_captures(WhichCaptures::None)
             .look_matcher(lookm);
         let result = thompson::Compiler::new()
             .configure(thompson_config)

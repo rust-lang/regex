@@ -78,4 +78,4 @@ pub use self::{
     },
 };
 #[cfg(feature = "syntax")]
-pub use compiler::{Compiler, Config};
+pub use compiler::{Compiler, Config, WhichCaptures};
