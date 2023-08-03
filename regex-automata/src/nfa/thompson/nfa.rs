@@ -453,10 +453,10 @@ impl NFA {
     /// predict the anchored starting state.
     ///
     /// ```
-    /// use regex_automata::nfa::thompson::{NFA, State};
+    /// use regex_automata::nfa::thompson::{NFA, State, WhichCaptures};
     ///
     /// let nfa = NFA::compiler()
-    ///     .configure(NFA::config().captures(false))
+    ///     .configure(NFA::config().which_captures(WhichCaptures::None))
     ///     .build("a")?;
     /// let state = nfa.state(nfa.start_anchored());
     /// match *state {
@@ -711,7 +711,7 @@ impl NFA {
     /// or not.
     ///
     /// ```
-    /// use regex_automata::nfa::thompson::NFA;
+    /// use regex_automata::nfa::thompson::{NFA, WhichCaptures};
     ///
     /// // Obviously has capture states.
     /// let nfa = NFA::new("(a)")?;
@@ -733,7 +733,7 @@ impl NFA {
     /// // Notice that 'has_capture' is false here even when we have an
     /// // explicit capture group in the pattern.
     /// let nfa = NFA::compiler()
-    ///     .configure(NFA::config().captures(false))
+    ///     .configure(NFA::config().which_captures(WhichCaptures::None))
     ///     .build("(a)")?;
     /// assert!(!nfa.has_capture());
     ///
