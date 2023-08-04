@@ -100,12 +100,12 @@ Third, edit `src/main.rs`. Delete what's there and replace it with this:
 use regex::Regex;
 
 fn main() {
-    let re = Regex::new(r"Hello (?<name>\w+)!").unwrap();
-    let Some(caps) = re.captures("Hello Murphy!") else {
+    let re = Regex::new(r"Hello (?P<name>\w+)!").unwrap();
+    if let Some(caps) = re.captures("Hello Murphy!") {
+        println!("The name is: {}", &caps["name"]);
+    } else {
         println!("no match!");
-        return;
-    };
-    println!("The name is: {}", &caps["name"]);
+    }
 }
 ```
 
