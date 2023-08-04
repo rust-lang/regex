@@ -107,7 +107,7 @@ impl Builder {
             .clone()
             .match_kind(MatchKind::All)
             .utf8_empty(true)
-            .which_captures(WhichCaptures::Implicit);
+            .which_captures(WhichCaptures::None);
         let syntaxc = self.syntaxc.clone().utf8(true);
         let patterns = Arc::from(self.pats.as_slice());
         meta::Builder::new()
@@ -124,7 +124,7 @@ impl Builder {
             .clone()
             .match_kind(MatchKind::All)
             .utf8_empty(false)
-            .which_captures(WhichCaptures::Implicit);
+            .which_captures(WhichCaptures::None);
         let syntaxc = self.syntaxc.clone().utf8(false);
         let patterns = Arc::from(self.pats.as_slice());
         meta::Builder::new()
