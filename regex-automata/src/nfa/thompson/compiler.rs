@@ -1094,8 +1094,13 @@ impl Compiler {
         name: Option<&str>,
         expr: &Hir,
     ) -> Result<ThompsonRef, BuildError> {
-        if self.config.get_which_captures().is_none() {
-            return self.c(expr);
+        match self.config.get_which_captures() {
+            // No capture states means we always skip them.
+            WhichCaptures::None => return self.c(expr),
+            // Implicit captures states means we only add when index==0 since
+            // index==0 implies the group is implicit.
+            WhichCaptures::Implicit if index > 0 => return self.c(expr),
+            _ => {}
         }
 
         let start = self.add_capture_start(index, name)?;
@@ -1841,7 +1846,7 @@ mod tests {
 
     use crate::{
         nfa::thompson::{SparseTransitions, State, Transition, NFA},
-        util::primitives::{PatternID, StateID},
+        util::primitives::{PatternID, SmallIndex, StateID},
     };
 
     use super::*;
@@ -1900,6 +1905,15 @@ mod tests {
                 .map(|&id| sid(id))
                 .collect::<Vec<StateID>>()
                 .into_boxed_slice(),
+        }
+    }
+
+    fn s_cap(next: usize, pattern: usize, index: usize, slot: usize) -> State {
+        State::Capture {
+            next: sid(next),
+            pattern_id: pid(pattern),
+            group_index: SmallIndex::new(index).unwrap(),
+            slot: SmallIndex::new(slot).unwrap(),
         }
     }
 
@@ -2143,5 +2157,75 @@ mod tests {
         let nfa =
             NFA::compiler().configure(config).build_from_hir(&hir).unwrap();
         assert_eq!(nfa.states(), &[s_fail(), s_match(0)]);
+    }
+
+    #[test]
+    fn compile_captures_all() {
+        let nfa = NFA::compiler()
+            .configure(
+                NFA::config()
+                    .unanchored_prefix(false)
+                    .which_captures(WhichCaptures::All),
+            )
+            .build("a(b)c")
+            .unwrap();
+        assert_eq!(
+            nfa.states(),
+            &[
+                s_cap(1, 0, 0, 0),
+                s_byte(b'a', 2),
+                s_cap(3, 0, 1, 2),
+                s_byte(b'b', 4),
+                s_cap(5, 0, 1, 3),
+                s_byte(b'c', 6),
+                s_cap(7, 0, 0, 1),
+                s_match(0)
+            ]
+        );
+        let ginfo = nfa.group_info();
+        assert_eq!(2, ginfo.all_group_len());
+    }
+
+    #[test]
+    fn compile_captures_implicit() {
+        let nfa = NFA::compiler()
+            .configure(
+                NFA::config()
+                    .unanchored_prefix(false)
+                    .which_captures(WhichCaptures::Implicit),
+            )
+            .build("a(b)c")
+            .unwrap();
+        assert_eq!(
+            nfa.states(),
+            &[
+                s_cap(1, 0, 0, 0),
+                s_byte(b'a', 2),
+                s_byte(b'b', 3),
+                s_byte(b'c', 4),
+                s_cap(5, 0, 0, 1),
+                s_match(0)
+            ]
+        );
+        let ginfo = nfa.group_info();
+        assert_eq!(1, ginfo.all_group_len());
+    }
+
+    #[test]
+    fn compile_captures_none() {
+        let nfa = NFA::compiler()
+            .configure(
+                NFA::config()
+                    .unanchored_prefix(false)
+                    .which_captures(WhichCaptures::None),
+            )
+            .build("a(b)c")
+            .unwrap();
+        assert_eq!(
+            nfa.states(),
+            &[s_byte(b'a', 1), s_byte(b'b', 2), s_byte(b'c', 3), s_match(0)]
+        );
+        let ginfo = nfa.group_info();
+        assert_eq!(0, ginfo.all_group_len());
     }
 }
