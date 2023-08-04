@@ -300,15 +300,6 @@ impl Builder {
         &self,
         nfa: NFA,
     ) -> Result<BoundedBacktracker, BuildError> {
-        // If the NFA has no captures, then the backtracker doesn't work since
-        // it relies on them in order to report match locations. However, in
-        // the special case of an NFA with no patterns, it is allowed, since
-        // no matches can ever be produced. And importantly, an NFA with no
-        // patterns has no capturing groups anyway, so this is necessary to
-        // permit the backtracker to work with regexes with zero patterns.
-        if !nfa.has_capture() && nfa.pattern_len() > 0 {
-            return Err(BuildError::missing_captures());
-        }
         nfa.look_set_any().available().map_err(BuildError::word)?;
         Ok(BoundedBacktracker { config: self.config.clone(), nfa })
     }
@@ -954,8 +945,14 @@ impl BoundedBacktracker {
                 None => return Ok(None),
                 Some(pid) => pid,
             };
-            let start = slots[0].unwrap().get();
-            let end = slots[1].unwrap().get();
+            let start = match slots[0] {
+                None => return Ok(None),
+                Some(s) => s.get(),
+            };
+            let end = match slots[1] {
+                None => return Ok(None),
+                Some(s) => s.get(),
+            };
             return Ok(Some(Match::new(pid, Span { start, end })));
         }
         let ginfo = self.get_nfa().group_info();
@@ -965,8 +962,14 @@ impl BoundedBacktracker {
             None => return Ok(None),
             Some(pid) => pid,
         };
-        let start = slots[pid.as_usize() * 2].unwrap().get();
-        let end = slots[pid.as_usize() * 2 + 1].unwrap().get();
+        let start = match slots[pid.as_usize() * 2] {
+            None => return Ok(None),
+            Some(s) => s.get(),
+        };
+        let end = match slots[pid.as_usize() * 2 + 1] {
+            None => return Ok(None),
+            Some(s) => s.get(),
+        };
         Ok(Some(Match::new(pid, Span { start, end })))
     }
 

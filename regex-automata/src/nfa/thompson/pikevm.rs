@@ -275,15 +275,6 @@ impl Builder {
     /// construction of the NFA itself will of course be ignored, since the NFA
     /// given here is already built.
     pub fn build_from_nfa(&self, nfa: NFA) -> Result<PikeVM, BuildError> {
-        // If the NFA has no captures, then the PikeVM doesn't work since it
-        // relies on them in order to report match locations. However, in
-        // the special case of an NFA with no patterns, it is allowed, since
-        // no matches can ever be produced. And importantly, an NFA with no
-        // patterns has no capturing groups anyway, so this is necessary to
-        // permit the PikeVM to work with regexes with zero patterns.
-        if !nfa.has_capture() && nfa.pattern_len() > 0 {
-            return Err(BuildError::missing_captures());
-        }
         nfa.look_set_any().available().map_err(BuildError::word)?;
         Ok(PikeVM { config: self.config.clone(), nfa })
     }
@@ -828,16 +819,16 @@ impl PikeVM {
         if self.get_nfa().pattern_len() == 1 {
             let mut slots = [None, None];
             let pid = self.search_slots(cache, &input, &mut slots)?;
-            let start = slots[0].unwrap().get();
-            let end = slots[1].unwrap().get();
+            let start = slots[0]?.get();
+            let end = slots[1]?.get();
             return Some(Match::new(pid, Span { start, end }));
         }
         let ginfo = self.get_nfa().group_info();
         let slots_len = ginfo.implicit_slot_len();
         let mut slots = vec![None; slots_len];
         let pid = self.search_slots(cache, &input, &mut slots)?;
-        let start = slots[pid.as_usize() * 2].unwrap().get();
-        let end = slots[pid.as_usize() * 2 + 1].unwrap().get();
+        let start = slots[pid.as_usize() * 2]?.get();
+        let end = slots[pid.as_usize() * 2 + 1]?.get();
         Some(Match::new(pid, Span { start, end }))
     }
 
@@ -1123,15 +1114,15 @@ impl PikeVM {
         if self.get_nfa().pattern_len() == 1 {
             let mut enough = [None, None];
             let got = self.search_slots_imp(cache, input, &mut enough);
-            // This is OK because we know `enough_slots` is strictly bigger
-            // than `slots`, otherwise this special case isn't reached.
+            // This is OK because we know `enough` is strictly bigger than
+            // `slots`, otherwise this special case isn't reached.
             slots.copy_from_slice(&enough[..slots.len()]);
             return got;
         }
         let mut enough = vec![None; min];
         let got = self.search_slots_imp(cache, input, &mut enough);
-        // This is OK because we know `enough_slots` is strictly bigger than
-        // `slots`, otherwise this special case isn't reached.
+        // This is OK because we know `enough` is strictly bigger than `slots`,
+        // otherwise this special case isn't reached.
         slots.copy_from_slice(&enough[..slots.len()]);
         got
     }
@@ -2108,15 +2099,16 @@ impl SlotTable {
         // if a 'Captures' has fewer slots, e.g., none at all or only slots
         // for tracking the overall match instead of all slots for every
         // group.
-        self.slots_for_captures = nfa.group_info().slot_len();
+        self.slots_for_captures = core::cmp::max(
+            self.slots_per_state,
+            nfa.pattern_len().checked_mul(2).unwrap(),
+        );
         let len = nfa
             .states()
             .len()
-            // We add 1 so that our last row is always empty. We use it as
-            // "scratch" space for computing the epsilon closure off of the
-            // starting state.
-            .checked_add(1)
-            .and_then(|x| x.checked_mul(self.slots_per_state))
+            .checked_mul(self.slots_per_state)
+            // Add space to account for scratch space used during a search.
+            .and_then(|x| x.checked_add(self.slots_for_captures))
             // It seems like this could actually panic on legitimate inputs on
             // 32-bit targets, and very likely to panic on 16-bit. Should we
             // somehow convert this to an error? What about something similar
@@ -2170,7 +2162,7 @@ impl SlotTable {
     /// compute an epsilon closure outside of the user supplied regex, and thus
     /// never want it to have any capturing slots set.
     fn all_absent(&mut self) -> &mut [Option<NonMaxUsize>] {
-        let i = self.table.len() - self.slots_per_state;
+        let i = self.table.len() - self.slots_for_captures;
         &mut self.table[i..i + self.slots_for_captures]
     }
 }

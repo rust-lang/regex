@@ -316,8 +316,8 @@ impl Config {
     /// # Example
     ///
     /// This example demonstrates that some regex engines, like the Pike VM,
-    /// require capturing groups to be present in the NFA. Building a Pike VM
-    /// with an NFA without capturing groups will result in an error.
+    /// require capturing states to be present in the NFA to report match
+    /// offsets.
     ///
     /// (Note that since this method is deprecated, the example below uses
     /// [`Config::which_captures`] to disable capture states.)
@@ -329,10 +329,13 @@ impl Config {
     ///     WhichCaptures,
     /// };
     ///
-    /// let nfa = NFA::compiler()
-    ///     .configure(NFA::config().which_captures(WhichCaptures::None))
+    /// let re = PikeVM::builder()
+    ///     .thompson(NFA::config().which_captures(WhichCaptures::None))
     ///     .build(r"[a-z]+")?;
-    /// assert!(PikeVM::new_from_nfa(nfa).is_err());
+    /// let mut cache = re.create_cache();
+    ///
+    /// assert!(re.is_match(&mut cache, "abc"));
+    /// assert_eq!(None, re.find(&mut cache, "abc"));
     ///
     /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// ```
@@ -364,8 +367,8 @@ impl Config {
     /// # Example
     ///
     /// This example demonstrates that some regex engines, like the Pike VM,
-    /// require capturing groups to be present in the NFA. Building a Pike VM
-    /// with an NFA without capturing groups will result in an error.
+    /// require capturing states to be present in the NFA to report match
+    /// offsets.
     ///
     /// ```
     /// use regex_automata::nfa::thompson::{
@@ -374,10 +377,33 @@ impl Config {
     ///     WhichCaptures,
     /// };
     ///
-    /// let nfa = NFA::compiler()
-    ///     .configure(NFA::config().which_captures(WhichCaptures::None))
+    /// let re = PikeVM::builder()
+    ///     .thompson(NFA::config().which_captures(WhichCaptures::None))
     ///     .build(r"[a-z]+")?;
-    /// assert!(PikeVM::new_from_nfa(nfa).is_err());
+    /// let mut cache = re.create_cache();
+    ///
+    /// assert!(re.is_match(&mut cache, "abc"));
+    /// assert_eq!(None, re.find(&mut cache, "abc"));
+    ///
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
+    ///
+    /// The same applies to the bounded backtracker:
+    ///
+    /// ```
+    /// use regex_automata::nfa::thompson::{
+    ///     backtrack::BoundedBacktracker,
+    ///     NFA,
+    ///     WhichCaptures,
+    /// };
+    ///
+    /// let re = BoundedBacktracker::builder()
+    ///     .thompson(NFA::config().which_captures(WhichCaptures::None))
+    ///     .build(r"[a-z]+")?;
+    /// let mut cache = re.create_cache();
+    ///
+    /// assert!(re.try_is_match(&mut cache, "abc")?);
+    /// assert_eq!(None, re.try_find(&mut cache, "abc")?);
     ///
     /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// ```
