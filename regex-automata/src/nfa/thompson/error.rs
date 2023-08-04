@@ -68,9 +68,6 @@ enum BuildErrorKind {
         /// The invalid index that was given.
         index: u32,
     },
-    /// An error that occurs when one tries to build an NFA simulation (such as
-    /// the PikeVM) without any capturing groups.
-    MissingCaptures,
     /// An error that occurs when one tries to build a reverse NFA with
     /// captures enabled. Currently, this isn't supported, but we probably
     /// should support it at some point.
@@ -126,10 +123,6 @@ impl BuildError {
         BuildError { kind: BuildErrorKind::InvalidCaptureIndex { index } }
     }
 
-    pub(crate) fn missing_captures() -> BuildError {
-        BuildError { kind: BuildErrorKind::MissingCaptures }
-    }
-
     #[cfg(feature = "syntax")]
     pub(crate) fn unsupported_captures() -> BuildError {
         BuildError { kind: BuildErrorKind::UnsupportedCaptures }
@@ -180,11 +173,6 @@ impl core::fmt::Display for BuildError {
                 f,
                 "capture group index {} is invalid (too big or discontinuous)",
                 index,
-            ),
-            BuildErrorKind::MissingCaptures => write!(
-                f,
-                "operation requires the NFA to have capturing groups, \
-                 but the NFA given contains none",
             ),
             #[cfg(feature = "syntax")]
             BuildErrorKind::UnsupportedCaptures => write!(

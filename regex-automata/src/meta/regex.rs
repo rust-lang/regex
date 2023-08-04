@@ -2635,8 +2635,10 @@ impl Config {
     /// states. For example, using `WhichCaptures::Implicit` will behave as if
     /// all explicit capturing groups in the pattern were non-capturing.
     ///
-    /// Setting this to `WhichCaptures::None` may result in an error when
-    /// building a meta regex.
+    /// Setting this to `WhichCaptures::None` is usually not the right thing to
+    /// do. When no capture states are compiled, some regex engines (such as
+    /// the `PikeVM`) won't be able to report match offsets. This will manifest
+    /// as no match being found.
     ///
     /// # Example
     ///
