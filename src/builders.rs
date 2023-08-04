@@ -28,7 +28,9 @@ use alloc::{
     vec::Vec,
 };
 
-use regex_automata::{meta, util::syntax, MatchKind};
+use regex_automata::{
+    meta, nfa::thompson::WhichCaptures, util::syntax, MatchKind,
+};
 
 use crate::error::Error;
 
@@ -100,8 +102,12 @@ impl Builder {
     }
 
     fn build_many_string(&self) -> Result<crate::RegexSet, Error> {
-        let metac =
-            self.metac.clone().match_kind(MatchKind::All).utf8_empty(true);
+        let metac = self
+            .metac
+            .clone()
+            .match_kind(MatchKind::All)
+            .utf8_empty(true)
+            .which_captures(WhichCaptures::Implicit);
         let syntaxc = self.syntaxc.clone().utf8(true);
         let patterns = Arc::from(self.pats.as_slice());
         meta::Builder::new()
@@ -113,8 +119,12 @@ impl Builder {
     }
 
     fn build_many_bytes(&self) -> Result<crate::bytes::RegexSet, Error> {
-        let metac =
-            self.metac.clone().match_kind(MatchKind::All).utf8_empty(false);
+        let metac = self
+            .metac
+            .clone()
+            .match_kind(MatchKind::All)
+            .utf8_empty(false)
+            .which_captures(WhichCaptures::Implicit);
         let syntaxc = self.syntaxc.clone().utf8(false);
         let patterns = Arc::from(self.pats.as_slice());
         meta::Builder::new()
