@@ -16,6 +16,7 @@ use crate::{
         strategy::{self, Strategy},
         wrappers,
     },
+    nfa::thompson::WhichCaptures,
     util::{
         captures::{Captures, GroupInfo},
         iter,
@@ -2429,6 +2430,7 @@ pub struct Config {
     utf8_empty: Option<bool>,
     autopre: Option<bool>,
     pre: Option<Option<Prefilter>>,
+    which_captures: Option<WhichCaptures>,
     nfa_size_limit: Option<Option<usize>>,
     onepass_size_limit: Option<Option<usize>>,
     hybrid_cache_capacity: Option<usize>,
@@ -2617,6 +2619,75 @@ impl Config {
     /// ```
     pub fn prefilter(self, pre: Option<Prefilter>) -> Config {
         Config { pre: Some(pre), ..self }
+    }
+
+    /// Configures what kinds of groups are compiled as "capturing" in the
+    /// underlying regex engine.
+    ///
+    /// This is set to [`WhichCaptures::All`] by default. Callers may wish to
+    /// use [`WhichCaptures::Implicit`] in cases where one wants avoid the
+    /// overhead of capture states for explicit groups.
+    ///
+    /// Note that another approach to avoiding the overhead of capture groups
+    /// is by using non-capturing groups in the regex pattern. That is,
+    /// `(?:a)` instead of `(a)`. This option is useful when you can't control
+    /// the concrete syntax but know that you don't need the underlying capture
+    /// states. For example, using `WhichCaptures::Implicit` will behave as if
+    /// all explicit capturing groups in the pattern were non-capturing.
+    ///
+    /// Setting this to `WhichCaptures::None` may result in an error when
+    /// building a meta regex.
+    ///
+    /// # Example
+    ///
+    /// This example demonstrates how the results of capture groups can change
+    /// based on this option. First we show the default (all capture groups in
+    /// the pattern are capturing):
+    ///
+    /// ```
+    /// use regex_automata::{meta::Regex, Match, Span};
+    ///
+    /// let re = Regex::new(r"foo([0-9]+)bar")?;
+    /// let hay = "foo123bar";
+    ///
+    /// let mut caps = re.create_captures();
+    /// re.captures(hay, &mut caps);
+    /// assert_eq!(Some(Span::from(0..9)), caps.get_group(0));
+    /// assert_eq!(Some(Span::from(3..6)), caps.get_group(1));
+    ///
+    /// Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
+    ///
+    /// And now we show the behavior when we only include implicit capture
+    /// groups. In this case, we can only find the overall match span, but the
+    /// spans of any other explicit group don't exist because they are treated
+    /// as non-capturing. (In effect, when `WhichCaptures::Implicit` is used,
+    /// there is no real point in using [`Regex::captures`] since it will never
+    /// be able to report more information than [`Regex::find`].)
+    ///
+    /// ```
+    /// use regex_automata::{
+    ///     meta::Regex,
+    ///     nfa::thompson::WhichCaptures,
+    ///     Match,
+    ///     Span,
+    /// };
+    ///
+    /// let re = Regex::builder()
+    ///     .configure(Regex::config().which_captures(WhichCaptures::Implicit))
+    ///     .build(r"foo([0-9]+)bar")?;
+    /// let hay = "foo123bar";
+    ///
+    /// let mut caps = re.create_captures();
+    /// re.captures(hay, &mut caps);
+    /// assert_eq!(Some(Span::from(0..9)), caps.get_group(0));
+    /// assert_eq!(None, caps.get_group(1));
+    ///
+    /// Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
+    pub fn which_captures(mut self, which_captures: WhichCaptures) -> Config {
+        self.which_captures = Some(which_captures);
+        self
     }
 
     /// Sets the size limit, in bytes, to enforce on the construction of every
@@ -2983,6 +3054,14 @@ impl Config {
         self.pre.as_ref().unwrap_or(&None).as_ref()
     }
 
+    /// Returns the capture configuration, as set by
+    /// [`Config::which_captures`].
+    ///
+    /// If it was not explicitly set, then a default value is returned.
+    pub fn get_which_captures(&self) -> WhichCaptures {
+        self.which_captures.unwrap_or(WhichCaptures::All)
+    }
+
     /// Returns NFA size limit, as set by [`Config::nfa_size_limit`].
     ///
     /// If it was not explicitly set, then a default value is returned.
@@ -3126,6 +3205,7 @@ impl Config {
             utf8_empty: o.utf8_empty.or(self.utf8_empty),
             autopre: o.autopre.or(self.autopre),
             pre: o.pre.or_else(|| self.pre.clone()),
+            which_captures: o.which_captures.or(self.which_captures),
             nfa_size_limit: o.nfa_size_limit.or(self.nfa_size_limit),
             onepass_size_limit: o
                 .onepass_size_limit

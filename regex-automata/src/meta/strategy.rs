@@ -452,7 +452,7 @@ impl Core {
             .utf8(info.config().get_utf8_empty())
             .nfa_size_limit(info.config().get_nfa_size_limit())
             .shrink(false)
-            .which_captures(WhichCaptures::All)
+            .which_captures(info.config().get_which_captures())
             .look_matcher(lookm);
         let nfa = thompson::Compiler::new()
             .configure(thompson_config.clone())
