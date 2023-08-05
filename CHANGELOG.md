@@ -1,3 +1,16 @@
+1.9.2 (2023-08-05)
+==================
+This is a patch release that fixes another memory usage regression. This
+particular regression occurred only when using a `RegexSet`. In some cases,
+much more heap memory (by one or two orders of magnitude) was allocated than in
+versions prior to 1.9.0.
+
+Bug fixes:
+
+* [BUG #1059](https://github.com/rust-lang/regex/issues/1059):
+Fix a memory usage regression when using a `RegexSet`.
+
+
 1.9.1 (2023-07-07)
 ==================
 This is a patch release which fixes a memory usage regression. In the regex
