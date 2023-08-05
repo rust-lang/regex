@@ -17,7 +17,9 @@ use crate::{
         empty, iter,
         prefilter::Prefilter,
         primitives::{NonMaxUsize, PatternID, SmallIndex, StateID},
-        search::{Anchored, Input, Match, MatchKind, PatternSet, Span},
+        search::{
+            Anchored, HalfMatch, Input, Match, MatchKind, PatternSet, Span,
+        },
         sparse_set::SparseSet,
     },
 };
@@ -1094,7 +1096,8 @@ impl PikeVM {
     ) -> Option<PatternID> {
         let utf8empty = self.get_nfa().has_empty() && self.get_nfa().is_utf8();
         if !utf8empty {
-            return self.search_slots_imp(cache, input, slots);
+            let hm = self.search_slots_imp(cache, input, slots)?;
+            return Some(hm.pattern());
         }
         // There is an unfortunate special case where if the regex can
         // match the empty string and UTF-8 mode is enabled, the search
@@ -1109,7 +1112,8 @@ impl PikeVM {
         // this case.
         let min = self.get_nfa().group_info().implicit_slot_len();
         if slots.len() >= min {
-            return self.search_slots_imp(cache, input, slots);
+            let hm = self.search_slots_imp(cache, input, slots)?;
+            return Some(hm.pattern());
         }
         if self.get_nfa().pattern_len() == 1 {
             let mut enough = [None, None];
@@ -1117,14 +1121,14 @@ impl PikeVM {
             // This is OK because we know `enough` is strictly bigger than
             // `slots`, otherwise this special case isn't reached.
             slots.copy_from_slice(&enough[..slots.len()]);
-            return got;
+            return got.map(|hm| hm.pattern());
         }
         let mut enough = vec![None; min];
         let got = self.search_slots_imp(cache, input, &mut enough);
         // This is OK because we know `enough` is strictly bigger than `slots`,
         // otherwise this special case isn't reached.
         slots.copy_from_slice(&enough[..slots.len()]);
-        got
+        got.map(|hm| hm.pattern())
     }
 
     /// This is the actual implementation of `search_slots_imp` that
@@ -1137,30 +1141,17 @@ impl PikeVM {
         cache: &mut Cache,
         input: &Input<'_>,
         slots: &mut [Option<NonMaxUsize>],
-    ) -> Option<PatternID> {
+    ) -> Option<HalfMatch> {
         let utf8empty = self.get_nfa().has_empty() && self.get_nfa().is_utf8();
-        let (pid, end) = match self.search_imp(cache, input, slots) {
+        let hm = match self.search_imp(cache, input, slots) {
             None => return None,
-            Some(pid) if !utf8empty => return Some(pid),
-            Some(pid) => {
-                let slot_start = pid.as_usize() * 2;
-                let slot_end = slot_start + 1;
-                // OK because we know we have a match and we know our caller
-                // provided slots are big enough (which we make true above if
-                // the caller didn't). Namely, we're only here when 'utf8empty'
-                // is true, and when that's true, we require slots for every
-                // pattern.
-                (pid, slots[slot_end].unwrap().get())
-            }
+            Some(hm) if !utf8empty => return Some(hm),
+            Some(hm) => hm,
         };
-        empty::skip_splits_fwd(input, pid, end, |input| {
-            let pid = match self.search_imp(cache, input, slots) {
-                None => return Ok(None),
-                Some(pid) => pid,
-            };
-            let slot_start = pid.as_usize() * 2;
-            let slot_end = slot_start + 1;
-            Ok(Some((pid, slots[slot_end].unwrap().get())))
+        empty::skip_splits_fwd(input, hm, hm.offset(), |input| {
+            Ok(self
+                .search_imp(cache, input, slots)
+                .map(|hm| (hm, hm.offset())))
         })
         // OK because the PikeVM never errors.
         .unwrap()
@@ -1235,7 +1226,7 @@ impl PikeVM {
         cache: &mut Cache,
         input: &Input<'_>,
         slots: &mut [Option<NonMaxUsize>],
-    ) -> Option<PatternID> {
+    ) -> Option<HalfMatch> {
         cache.setup_search(slots.len());
         if input.is_done() {
             return None;
@@ -1264,7 +1255,7 @@ impl PikeVM {
         let pre =
             if anchored { None } else { self.get_config().get_prefilter() };
         let Cache { ref mut stack, ref mut curr, ref mut next } = cache;
-        let mut pid = None;
+        let mut hm = None;
         // Yes, our search doesn't end at input.end(), but includes it. This
         // is necessary because matches are delayed by one byte, just like
         // how the DFA engines work. The delay is used to handle look-behind
@@ -1283,7 +1274,7 @@ impl PikeVM {
             if curr.set.is_empty() {
                 // We have a match and we haven't been instructed to continue
                 // on even after finding a match, so we can quit.
-                if pid.is_some() && !allmatches {
+                if hm.is_some() && !allmatches {
                     break;
                 }
                 // If we're running an anchored search and we've advanced
@@ -1353,7 +1344,7 @@ impl PikeVM {
             // search. If we re-computed it at every position, we would be
             // simulating an unanchored search when we were tasked to perform
             // an anchored search.
-            if (!pid.is_some() || allmatches)
+            if (!hm.is_some() || allmatches)
                 && (!anchored || at == input.start())
             {
                 // Since we are adding to the 'curr' active states and since
@@ -1372,14 +1363,15 @@ impl PikeVM {
                 let slots = next.slot_table.all_absent();
                 self.epsilon_closure(stack, slots, curr, input, at, start_id);
             }
-            if let Some(x) = self.nexts(stack, curr, next, input, at, slots) {
-                pid = Some(x);
+            if let Some(pid) = self.nexts(stack, curr, next, input, at, slots)
+            {
+                hm = Some(HalfMatch::new(pid, at));
             }
             // Unless the caller asked us to return early, we need to mush on
             // to see if we can extend our match. (But note that 'nexts' will
             // quit right after seeing a match when match_kind==LeftmostFirst,
             // as is consistent with leftmost-first match priority.)
-            if input.get_earliest() && pid.is_some() {
+            if input.get_earliest() && hm.is_some() {
                 break;
             }
             core::mem::swap(curr, next);
@@ -1387,7 +1379,7 @@ impl PikeVM {
             at += 1;
         }
         instrument!(|c| c.eprint(&self.nfa));
-        pid
+        hm
     }
 
     /// The implementation for the 'which_overlapping_matches' API. Basically,
