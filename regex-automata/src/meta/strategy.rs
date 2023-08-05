@@ -58,6 +58,8 @@ pub(super) trait Strategy:
         input: &Input<'_>,
     ) -> Option<HalfMatch>;
 
+    fn is_match(&self, cache: &mut Cache, input: &Input<'_>) -> bool;
+
     fn search_slots(
         &self,
         cache: &mut Cache,
@@ -399,6 +401,10 @@ impl<P: PrefilterI> Strategy for Pre<P> {
         self.search(cache, input).map(|m| HalfMatch::new(m.pattern(), m.end()))
     }
 
+    fn is_match(&self, cache: &mut Cache, input: &Input<'_>) -> bool {
+        self.search(cache, input).is_some()
+    }
+
     fn search_slots(
         &self,
         cache: &mut Cache,
@@ -623,6 +629,29 @@ impl Core {
         }
     }
 
+    fn is_match_nofail(&self, cache: &mut Cache, input: &Input<'_>) -> bool {
+        if let Some(ref e) = self.onepass.get(input) {
+            trace!(
+                "using OnePass for is-match search at {:?}",
+                input.get_span()
+            );
+            e.search_slots(&mut cache.onepass, input, &mut []).is_some()
+        } else if let Some(ref e) = self.backtrack.get(input) {
+            trace!(
+                "using BoundedBacktracker for is-match search at {:?}",
+                input.get_span()
+            );
+            e.is_match(&mut cache.backtrack, input)
+        } else {
+            trace!(
+                "using PikeVM for is-match search at {:?}",
+                input.get_span()
+            );
+            let e = self.pikevm.get();
+            e.is_match(&mut cache.pikevm, input)
+        }
+    }
+
     fn is_capture_search_needed(&self, slots_len: usize) -> bool {
         slots_len > self.nfa.group_info().implicit_slot_len()
     }
@@ -703,7 +732,7 @@ impl Strategy for Core {
         // The main difference with 'search' is that if we're using a DFA, we
         // can use a single forward scan without needing to run the reverse
         // DFA.
-        return if let Some(e) = self.dfa.get(input) {
+        if let Some(e) = self.dfa.get(input) {
             trace!("using full DFA for half search at {:?}", input.get_span());
             match e.try_search_half_fwd(input) {
                 Ok(x) => x,
@@ -723,7 +752,38 @@ impl Strategy for Core {
             }
         } else {
             self.search_half_nofail(cache, input)
-        };
+        }
+    }
+
+    #[cfg_attr(feature = "perf-inline", inline(always))]
+    fn is_match(&self, cache: &mut Cache, input: &Input<'_>) -> bool {
+        if let Some(e) = self.dfa.get(input) {
+            trace!(
+                "using full DFA for is-match search at {:?}",
+                input.get_span()
+            );
+            match e.try_search_half_fwd(input) {
+                Ok(x) => x.is_some(),
+                Err(_err) => {
+                    trace!("full DFA half search failed: {}", _err);
+                    self.is_match_nofail(cache, input)
+                }
+            }
+        } else if let Some(e) = self.hybrid.get(input) {
+            trace!(
+                "using lazy DFA for is-match search at {:?}",
+                input.get_span()
+            );
+            match e.try_search_half_fwd(&mut cache.hybrid, input) {
+                Ok(x) => x.is_some(),
+                Err(_err) => {
+                    trace!("lazy DFA half search failed: {}", _err);
+                    self.is_match_nofail(cache, input)
+                }
+            }
+        } else {
+            self.is_match_nofail(cache, input)
+        }
     }
 
     #[cfg_attr(feature = "perf-inline", inline(always))]
@@ -980,6 +1040,21 @@ impl Strategy for ReverseAnchored {
                 // match can occur: input.end().
                 Some(HalfMatch::new(hm.pattern(), input.end()))
             }
+        }
+    }
+
+    #[cfg_attr(feature = "perf-inline", inline(always))]
+    fn is_match(&self, cache: &mut Cache, input: &Input<'_>) -> bool {
+        if input.get_anchored().is_anchored() {
+            return self.core.is_match(cache, input);
+        }
+        match self.try_search_half_anchored_rev(cache, input) {
+            Err(_err) => {
+                trace!("fast reverse anchored search failed: {}", _err);
+                self.core.is_match_nofail(cache, input)
+            }
+            Ok(None) => false,
+            Ok(Some(_)) => true,
         }
     }
 
@@ -1332,6 +1407,28 @@ impl Strategy for ReverseSuffix {
                     Ok(Some(hm_end)) => Some(hm_end),
                 }
             }
+        }
+    }
+
+    #[cfg_attr(feature = "perf-inline", inline(always))]
+    fn is_match(&self, cache: &mut Cache, input: &Input<'_>) -> bool {
+        if input.get_anchored().is_anchored() {
+            return self.core.is_match(cache, input);
+        }
+        match self.try_search_half_start(cache, input) {
+            Err(RetryError::Quadratic(_err)) => {
+                trace!("reverse suffix half optimization failed: {}", _err);
+                self.core.is_match_nofail(cache, input)
+            }
+            Err(RetryError::Fail(_err)) => {
+                trace!(
+                    "reverse suffix reverse fast half search failed: {}",
+                    _err
+                );
+                self.core.is_match_nofail(cache, input)
+            }
+            Ok(None) => false,
+            Ok(Some(_)) => true,
         }
     }
 
@@ -1714,6 +1811,25 @@ impl Strategy for ReverseInner {
             }
             Ok(None) => None,
             Ok(Some(m)) => Some(HalfMatch::new(m.pattern(), m.end())),
+        }
+    }
+
+    #[cfg_attr(feature = "perf-inline", inline(always))]
+    fn is_match(&self, cache: &mut Cache, input: &Input<'_>) -> bool {
+        if input.get_anchored().is_anchored() {
+            return self.core.is_match(cache, input);
+        }
+        match self.try_search_full(cache, input) {
+            Err(RetryError::Quadratic(_err)) => {
+                trace!("reverse inner half optimization failed: {}", _err);
+                self.core.is_match_nofail(cache, input)
+            }
+            Err(RetryError::Fail(_err)) => {
+                trace!("reverse inner fast half search failed: {}", _err);
+                self.core.is_match_nofail(cache, input)
+            }
+            Ok(None) => false,
+            Ok(Some(_)) => true,
         }
     }
 
