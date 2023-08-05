@@ -173,7 +173,7 @@ optional = true
 # For the actual regex engines.
 [dependencies.regex-automata]
 path = "regex-automata"
-version = "0.3.1"
+version = "0.3.5"
 default-features = false
 features = ["alloc", "syntax", "meta", "nfa-pikevm"]
 
