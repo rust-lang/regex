@@ -1,3 +1,18 @@
+1.9.3 (2023-08-05)
+==================
+This is a patch release that fixes a bug where some searches could result in
+incorrect match offsets being reported. It is difficult to characterize the
+types of regexes susceptible to this bug. They generally involve patterns
+that contain no prefix or suffix literals, but have an inner literal along with
+a regex prefix that can conditionally match.
+
+Bug fixes:
+
+* [BUG #1060](https://github.com/rust-lang/regex/issues/1060):
+Fix a bug with the reverse inner literal optimization reporting incorrect match
+offsets.
+
+
 1.9.2 (2023-08-05)
 ==================
 This is a patch release that fixes another memory usage regression. This
