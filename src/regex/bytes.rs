@@ -1162,8 +1162,8 @@ impl Regex {
     /// To create a `CaptureLocations` value, use the
     /// [`Regex::capture_locations`] method.
     ///
-    /// This also the overall match if one was found. When a match is found,
-    /// its offsets are also always stored in `locs` at index `0`.
+    /// This also returns the overall match if one was found. When a match is
+    /// found, its offsets are also always stored in `locs` at index `0`.
     ///
     /// # Example
     ///
