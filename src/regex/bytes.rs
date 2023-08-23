@@ -1154,7 +1154,7 @@ impl Regex {
     ///
     /// A [`CaptureLocations`] stores the same byte offsets as a [`Captures`],
     /// but does *not* store a reference to the haystack. This makes its API
-    /// a bit lower level and less convenience. But in exchange, callers
+    /// a bit lower level and less convenient. But in exchange, callers
     /// may allocate their own `CaptureLocations` and reuse it for multiple
     /// searches. This may be helpful if allocating a `Captures` shows up in a
     /// profile as too costly.
