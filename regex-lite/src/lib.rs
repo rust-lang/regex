@@ -107,7 +107,7 @@ fn main() {
 }
 ```
 
-Foruth, run it with `cargo run`:
+Fourth, run it with `cargo run`:
 
 ```text
 $ cargo run
