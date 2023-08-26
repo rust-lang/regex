@@ -383,7 +383,7 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
 
     /// Return a reference to the pattern being parsed.
     fn pattern(&self) -> &str {
-        self.pattern.borrow()
+        self.pattern
     }
 
     /// Create a new error with the given span and error type.
