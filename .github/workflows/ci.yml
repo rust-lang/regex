@@ -54,10 +54,14 @@ jobs:
           os: ubuntu-latest
           rust: stable
           target: i686-unknown-linux-gnu
-        - build: stable-mips
+        - build: stable-powerpc64
           os: ubuntu-latest
           rust: stable
-          target: mips64-unknown-linux-gnuabi64
+          target: powerpc64-unknown-linux-gnu
+        - build: stable-s390x
+          os: ubuntu-latest
+          rust: stable
+          target: s390x-unknown-linux-gnu
         - build: beta
           os: ubuntu-latest
           rust: beta
