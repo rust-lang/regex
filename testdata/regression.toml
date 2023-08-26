@@ -756,3 +756,29 @@ name = "reverse-inner-short"
 regex = '(?:([0-9][0-9][0-9]):)?([0-9][0-9]):([0-9][0-9])'
 haystack = '102:12:39'
 matches = [[[0, 9], [0, 3], [4, 6], [7, 9]]]
+
+# This regression test was found via the RegexSet APIs. It triggered a
+# particular code path where a regex was compiled with 'All' match semantics
+# (to support overlapping search), but got funneled down into a standard
+# leftmost search when calling 'is_match'. This is fine on its own, but the
+# leftmost search will use a prefilter and that's where this went awry.
+#
+# Namely, since 'All' semantics were used, the aho-corasick prefilter was
+# incorrectly compiled with 'Standard' semantics. This was wrong because
+# 'Standard' immediately attempts to report a match at every position, even if
+# that would mean reporting a match past the leftmost match before reporting
+# the leftmost match. This breaks the prefilter contract of never having false
+# negatives and leads overall to the engine not finding a match.
+#
+# See: https://github.com/rust-lang/regex/issues/1070
+[[test]]
+name = "prefilter-with-aho-corasick-standard-semantics"
+regex = '(?m)^ *v [0-9]'
+haystack = 'v 0'
+matches = [
+  { id = 0, spans = [[0, 3]] },
+]
+match-kind = "all"
+search-kind = "overlapping"
+unicode = true
+utf8 = true
