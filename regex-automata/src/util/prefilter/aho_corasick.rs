@@ -22,11 +22,20 @@ impl AhoCorasick {
         }
         #[cfg(feature = "perf-literal-multisubstring")]
         {
+            // We used to use `aho_corasick::MatchKind::Standard` here when
+            // `kind` was `MatchKind::All`, but this is not correct. The
+            // "standard" Aho-Corasick match semantics are to report a match
+            // immediately as soon as it is seen, but `All` isn't like that.
+            // In particular, with "standard" semantics, given the needles
+            // "abc" and "b" and the haystack "abc," it would report a match
+            // at offset 1 before a match at offset 0. This is never what we
+            // want in the context of the regex engine, regardless of whether
+            // we have leftmost-first or 'all' semantics. Namely, we always
+            // want the leftmost match.
             let ac_match_kind = match kind {
-                MatchKind::LeftmostFirst => {
+                MatchKind::LeftmostFirst | MatchKind::All => {
                     aho_corasick::MatchKind::LeftmostFirst
                 }
-                MatchKind::All => aho_corasick::MatchKind::Standard,
             };
             // This is kind of just an arbitrary number, but basically, if we
             // have a small enough set of literals, then we try to use the VERY

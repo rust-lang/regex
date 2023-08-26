@@ -195,15 +195,6 @@ impl Prefilter {
     ///     Some(Span::from(6..9)),
     ///     pre.find(hay.as_bytes(), Span::from(0..hay.len())),
     /// );
-    /// // Now we put 'samwise' back before 'sam', but change the match
-    /// // semantics to 'All'. In this case, there is no preference
-    /// // order semantics and the first match detected is returned.
-    /// let pre = Prefilter::new(MatchKind::All, &["samwise", "sam"])
-    ///     .expect("a prefilter");
-    /// assert_eq!(
-    ///     Some(Span::from(6..9)),
-    ///     pre.find(hay.as_bytes(), Span::from(0..hay.len())),
-    /// );
     ///
     /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// ```
