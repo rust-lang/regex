@@ -96,12 +96,6 @@ jobs:
         cd "$dir"
         curl -LO "https://github.com/cross-rs/cross/releases/download/$CROSS_VERSION/cross-x86_64-unknown-linux-musl.tar.gz"
         tar xf cross-x86_64-unknown-linux-musl.tar.gz
-
-        # We used to install 'cross' from master, but it kept failing. So now
-        # we build from a known-good version until 'cross' becomes more stable
-        # or we find an alternative. Notably, between v0.2.1 and current
-        # master (2022-06-14), the number of Cross's dependencies has doubled.
-        # cargo install --bins --git https://github.com/rust-embedded/cross --tag v0.2.1
         echo "CARGO=cross" >> $GITHUB_ENV
         echo "TARGET=--target ${{ matrix.target }}" >> $GITHUB_ENV
     - name: Show command used for Cargo
