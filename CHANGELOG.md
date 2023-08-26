@@ -1,3 +1,15 @@
+1.9.4 (2023-08-26)
+==================
+This is a patch release that fixes a bug where `RegexSet::is_match(..)` could
+incorrectly return false (even when `RegexSet::matches(..).matched_any()`
+returns true).
+
+Bug fixes:
+
+* [BUG #1070](https://github.com/rust-lang/regex/issues/1070):
+Fix a bug where a prefilter was incorrectly configured for a `RegexSet`.
+
+
 1.9.3 (2023-08-05)
 ==================
 This is a patch release that fixes a bug where some searches could result in
