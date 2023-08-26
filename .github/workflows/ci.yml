@@ -81,7 +81,7 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v3
     - name: Install Rust
-      uses: dtolnay/rust-toolchain@v1
+      uses: dtolnay/rust-toolchain@master
       with:
         toolchain: ${{ matrix.rust }}
     - name: Install and configure Cross
@@ -139,7 +139,7 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v3
     - name: Install Rust
-      uses: dtolnay/rust-toolchain@v1
+      uses: dtolnay/rust-toolchain@master
       with:
         toolchain: 1.60.0
     - name: Basic build
@@ -160,7 +160,7 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v3
     - name: Install Rust
-      uses: dtolnay/rust-toolchain@v1
+      uses: dtolnay/rust-toolchain@master
       with:
         toolchain: stable
     - name: Run full test suite
@@ -173,7 +173,7 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v3
     - name: Install Rust
-      uses: dtolnay/rust-toolchain@v1
+      uses: dtolnay/rust-toolchain@master
       with:
         toolchain: stable
     - name: Run full test suite
@@ -186,7 +186,7 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v3
     - name: Install Rust
-      uses: dtolnay/rust-toolchain@v1
+      uses: dtolnay/rust-toolchain@master
       with:
         toolchain: stable
     - name: Run full test suite
@@ -199,7 +199,7 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v3
     - name: Install Rust
-      uses: dtolnay/rust-toolchain@v1
+      uses: dtolnay/rust-toolchain@master
       with:
         toolchain: stable
     - name: Run full test suite
@@ -214,7 +214,7 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v3
     - name: Install Rust
-      uses: dtolnay/rust-toolchain@v1
+      uses: dtolnay/rust-toolchain@master
       with:
         # We use nightly here so that we can use miri I guess?
         # It caught me by surprise that miri seems to only be
@@ -231,7 +231,7 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v3
     - name: Install Rust
-      uses: dtolnay/rust-toolchain@v1
+      uses: dtolnay/rust-toolchain@master
       with:
         toolchain: stable
         components: rustfmt
