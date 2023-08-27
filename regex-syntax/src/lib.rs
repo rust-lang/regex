@@ -116,14 +116,74 @@
 //! from the total set of valid regular expressions. Enabling or disabling a
 //! feature will never modify the match semantics of a regular expression.
 //!
+//! Another feature that can be enabled is `look-ahead-and-behind`, which allows
+//! this crate to recognize look-ahead and look-behind expressions:
+//!
+//! ```
+//! # #[cfg(feature = "look-ahead-and-behind")]
+//! # fn test() -> Result<(), Box<dyn std::error::Error>> {
+//! # use regex_syntax::{
+//! #     hir::{Hir, LookBehind},
+//! #     parse
+//! # };
+//! let hir = parse("(?<=a)")?;
+//! assert_eq!(
+//!     hir,
+//!     Hir::look_behind(LookBehind {
+//!         negate: false,
+//!         sub: Box::new(Hir::literal("a".as_bytes()))
+//!     })
+//! );
+//! # Ok::<(), Box<dyn std::error::Error>>(())
+//! # }
+//! # #[cfg(feature = "look-ahead-and-behind")]
+//! # test();
+//! ```
+//!
+//! This feature also doesn't allow look-aheads and look-behinds that could be
+//! followed/preceeded by something else:
+//!
+//! ```
+//! # #[cfg(feature = "look-ahead-and-behind")]
+//! # fn test() -> Result<(), Box<dyn std::error::Error>> {
+//! # use regex_syntax::{
+//! #     hir::{Hir, LookBehind},
+//! #     parse
+//! # };
+//! let result = parse("(start 1|((((?!a)|start 2))))(end)");
+//! assert!(result.is_err());
+//! # Ok::<(), Box<dyn std::error::Error>>(())
+//! # }
+//! # #[cfg(feature = "look-ahead-and-behind")]
+//! # test();
+//! ```
+//!
+//! The algorithm that determines this can distinguish what actually follows/preceedes
+//! a given look-around, and what is merely an alternation that does not.
+//!
+//! ```
+//! # #[cfg(feature = "look-ahead-and-behind")]
+//! # fn test() -> Result<(), Box<dyn std::error::Error>> {
+//! # use regex_syntax::{
+//! #     hir::{Hir, LookBehind},
+//! #     parse
+//! # };
+//! let no_prob = parse("start(?=end)|(?<!alt start)alt end");
+//! assert!(no_prob.is_ok());
+//! # Ok::<(), Box<dyn std::error::Error>>(())
+//! # }
+//! # #[cfg(feature = "look-ahead-and-behind")]
+//! # test();
+//! ```
+//!
 //! The following features are available:
 //!
-//! **std** -
+//! * **std** -
 //! Enables support for the standard library. This feature is enabled by
 //! default. When disabled, only `core` and `alloc` are used. Otherwise,
 //! enabling `std` generally just enables `std::error::Error` trait impls for
 //! the various error types.
-//! **unicode** -
+//! * **unicode** -
 //! Enables all Unicode features. This feature is enabled by default, and will
 //! always cover all Unicode features, even if more are added in the future.
 //! **unicode-age** -
@@ -131,39 +191,42 @@
 //! [Unicode `Age` property](https://www.unicode.org/reports/tr44/tr44-24.html#Character_Age).
 //! This makes it possible to use classes like `\p{Age:6.0}` to refer to all
 //! codepoints first introduced in Unicode 6.0
-//! **unicode-bool** -
+//! * **unicode-bool** -
 //! Provide the data for numerous Unicode boolean properties. The full list
 //! is not included here, but contains properties like `Alphabetic`, `Emoji`,
 //! `Lowercase`, `Math`, `Uppercase` and `White_Space`.
-//! **unicode-case** -
+//! * **unicode-case** -
 //! Provide the data for case insensitive matching using
 //! [Unicode's "simple loose matches" specification](https://www.unicode.org/reports/tr18/#Simple_Loose_Matches).
-//! **unicode-gencat** -
+//! * **unicode-gencat** -
 //! Provide the data for
 //! [Unicode general categories](https://www.unicode.org/reports/tr44/tr44-24.html#General_Category_Values).
 //! This includes, but is not limited to, `Decimal_Number`, `Letter`,
 //! `Math_Symbol`, `Number` and `Punctuation`.
-//! **unicode-perl** -
+//! * **unicode-perl** -
 //! Provide the data for supporting the Unicode-aware Perl character classes,
 //! corresponding to `\w`, `\s` and `\d`. This is also necessary for using
 //! Unicode-aware word boundary assertions. Note that if this feature is
 //! disabled, the `\s` and `\d` character classes are still available if the
 //! `unicode-bool` and `unicode-gencat` features are enabled, respectively.
-//! **unicode-script** -
+//! * **unicode-script** -
 //! Provide the data for
 //! [Unicode scripts and script extensions](https://www.unicode.org/reports/tr24/).
 //! This includes, but is not limited to, `Arabic`, `Cyrillic`, `Hebrew`,
 //! `Latin` and `Thai`.
-//! **unicode-segment** -
+//! * **unicode-segment** -
 //! Provide the data necessary to provide the properties used to implement the
 //! [Unicode text segmentation algorithms](https://www.unicode.org/reports/tr29/).
 //! This enables using classes like `\p{gcb=Extend}`, `\p{wb=Katakana}` and
 //! `\p{sb=ATerm}`.
-//! **arbitrary** -
+//! * **arbitrary** -
 //! Enabling this feature introduces a public dependency on the
 //! [`arbitrary`](https://crates.io/crates/arbitrary)
 //! crate. Namely, it implements the `Arbitrary` trait from that crate for the
 //! [`Ast`](crate::ast::Ast) type. This feature is disabled by default.
+//! * **look-ahead-and-behind** -
+//! Enabling this feature allows `regex-syntax` to recognize look-ahead (`(?=a)`,
+//! `(?!a)`) and look-behind (`(?<=a)`, `(?<!a)`) expressions.
 
 #![no_std]
 #![forbid(unsafe_code)]
@@ -275,8 +338,8 @@ pub fn escape_into(text: &str, buf: &mut String) {
 /// ```
 pub fn is_meta_character(c: char) -> bool {
     match c {
-        '\\' | '.' | '+' | '*' | '?' | '(' | ')' | '|' | '[' | ']' | '{' | '}' | '^' | '$'
-        | '#' | '&' | '-' | '~' => true,
+        '\\' | '.' | '+' | '*' | '?' | '(' | ')' | '|' | '[' | ']' | '{'
+        | '}' | '^' | '$' | '#' | '&' | '-' | '~' => true,
         _ => false,
     }
 }
@@ -376,7 +439,9 @@ pub fn is_word_character(c: char) -> bool {
 ///
 /// If the `unicode-perl` feature is not enabled, then this function always
 /// returns an error.
-pub fn try_is_word_character(c: char) -> core::result::Result<bool, UnicodeWordError> {
+pub fn try_is_word_character(
+    c: char,
+) -> core::result::Result<bool, UnicodeWordError> {
     unicode::is_word_character(c)
 }
 

@@ -64,6 +64,11 @@ or all of these data tables. If a regular expression attempts to use Unicode
 data that is not available, then an error will occur when translating the `Ast`
 to the `Hir`.
 
+There are also look-aheads and look-behinds (`(?=a)` and `(?<=a)`), which this
+crate supports, but are not supported by `regex`, so they are disabled by
+default. One can enable them in their own projects by adding the feature
+"look-ahead-and-behind" to the enabled features of `regex-syntax`.
+
 The full set of features one can disable are
 [in the "Crate features" section of the documentation](https://docs.rs/regex-syntax/*/#crate-features).
 
