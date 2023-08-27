@@ -21,7 +21,7 @@ bench = false
 default = ["std", "syntax", "perf", "unicode", "meta", "nfa", "dfa", "hybrid"]
 std = ["regex-syntax?/std", "memchr?/std", "aho-corasick?/std", "alloc"]
 alloc = []
-logging = ["dep:log", "aho-corasick?/logging"]
+logging = ["dep:log", "aho-corasick?/logging", "memchr?/logging"]
 
 syntax = ["dep:regex-syntax", "alloc"]
 
@@ -84,7 +84,7 @@ internal-instrument-pikevm = ["logging", "std"]
 [dependencies]
 aho-corasick = { version = "1.0.0", optional = true, default-features = false }
 log = { version = "0.4.14", optional = true }
-memchr = { version = "2.5.0", optional = true, default-features = false }
+memchr = { version = "2.6.0", optional = true, default-features = false }
 regex-syntax = { path = "../regex-syntax", version = "0.7.4", optional = true, default-features = false }
 
 [dev-dependencies]
