@@ -1030,7 +1030,7 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
         NestLimiter::new(self).check(&ast)?;
         Ok(ast::WithComments {
             ast,
-            comments: std::mem::take(
+            comments: core::mem::take(
                 &mut *self.parser().comments.borrow_mut(),
             ),
         })
@@ -1235,21 +1235,29 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
         }
 
         #[cfg(feature = "look-ahead-and-behind")]
-        if let Some(negate) = self
-            .bump_if("?=")
-            .then_some(false)
-            .or_else(|| self.bump_if("?!").then_some(true))
-        {
+        if let Some(negate) = {
+            if self.bump_if("?=") {
+                Some(false)
+            } else if self.bump_if("?!") {
+                Some(true)
+            } else {
+                None
+            }
+        } {
             return Ok(Either::Right(ast::Group {
                 span: open_span,
                 kind: ast::GroupKind::LookAhead { negate },
                 ast: Box::new(Ast::Empty(self.span())),
             }));
-        } else if let Some(negate) = self
-            .bump_if("?<=")
-            .then_some(false)
-            .or_else(|| self.bump_if("?<!").then_some(true))
-        {
+        } else if let Some(negate) = {
+            if self.bump_if("?<=") {
+                Some(false)
+            } else if self.bump_if("?<!") {
+                Some(true)
+            } else {
+                None
+            }
+        } {
             if let Some(span) = (!concat.asts.is_empty())
                 .then(|| *concat.clone().into_ast().span())
                 .or_else(|| {
@@ -1273,11 +1281,17 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
             }
         }
 
-        if let Some(starts_with_p) = self
-            .bump_if("?P<")
-            .then_some(true)
-            .or_else(|| self.bump_if("?<").then_some(false))
-        {
+        let starts_with_p = {
+            if self.bump_if("?P<") {
+                Some(true)
+            } else if self.bump_if("?<") {
+                Some(false)
+            } else {
+                None
+            }
+        };
+
+        if let Some(starts_with_p) = starts_with_p {
             let capture_index = self.next_capture_index(open_span)?;
             let name = self.parse_capture_name(capture_index)?;
             Ok(Either::Right(ast::Group {
