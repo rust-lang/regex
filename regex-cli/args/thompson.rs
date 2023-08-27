@@ -28,7 +28,11 @@ impl Config {
     pub fn reversed(&self) -> Config {
         // Reverse DFAs require that captures are disabled. In practice, there
         // is no current use case for a reverse NFA with capture groups.
-        let thompson = self.thompson.clone().reverse(true).captures(false);
+        let thompson = self
+            .thompson
+            .clone()
+            .reverse(true)
+            .which_captures(thompson::WhichCaptures::None);
         Config { thompson }
     }
 
@@ -67,7 +71,10 @@ impl Configurable for Config {
                 self.thompson = self.thompson.clone().shrink(true);
             }
             Arg::Long("no-captures") => {
-                self.thompson = self.thompson.clone().captures(false);
+                self.thompson = self
+                    .thompson
+                    .clone()
+                    .which_captures(thompson::WhichCaptures::None);
             }
             Arg::Long("line-terminator") => {
                 let byte: flags::OneByte =
