@@ -206,13 +206,13 @@ impl<W: fmt::Write> Writer<W> {
                 self.fmt_flags(flags)?;
                 self.wtr.write_str(":")
             }
-            #[cfg(feature="look-ahead-and-behind")]
+            #[cfg(feature = "look-ahead-and-behind")]
             LookAhead { negate } => {
                 self.wtr.write_str("(?")?;
                 let end = if negate { "!" } else { "=" };
                 self.wtr.write_str(end)
             }
-            #[cfg(feature="look-ahead-and-behind")]
+            #[cfg(feature = "look-ahead-and-behind")]
             LookBehind { negate } => {
                 self.wtr.write_str("(?<")?;
                 let end = if negate { "!" } else { "=" };

@@ -51,7 +51,11 @@ impl<'a> core::fmt::Debug for Bytes<'a> {
             match ch {
                 '\0' => write!(f, "\\0")?,
                 // ASCII control characters except \0, \n, \r, \t
-                '\x01'..='\x08' | '\x0b' | '\x0c' | '\x0e'..='\x19' | '\x7f' => {
+                '\x01'..='\x08'
+                | '\x0b'
+                | '\x0c'
+                | '\x0e'..='\x19'
+                | '\x7f' => {
                     write!(f, "\\x{:02x}", u32::from(ch))?;
                 }
                 _ => write!(f, "{}", ch.escape_debug())?,
