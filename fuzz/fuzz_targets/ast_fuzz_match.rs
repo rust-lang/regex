@@ -25,11 +25,12 @@ fuzz_target!(|data: FuzzData| -> Corpus {
     let _ = env_logger::try_init();
 
     let pattern = format!("{}", data.ast);
-    let Ok(re) = RegexBuilder::new(&pattern).size_limit(1<<20).build() else {
+    let Ok(re) = RegexBuilder::new(&pattern).size_limit(1 << 20).build()
+    else {
         return Corpus::Reject;
     };
-    re.is_match(&data.haystack);
-    re.find(&data.haystack);
-    re.captures(&data.haystack).map_or(0, |c| c.len());
+    let _ = re.is_match(&data.haystack);
+    let _ = re.find(&data.haystack);
+    let _ = re.captures(&data.haystack).map_or(0, |c| c.len());
     Corpus::Keep
 });
