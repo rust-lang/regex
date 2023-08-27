@@ -1,6 +1,4 @@
-/*!
-This module provides a regular expression printer for `Ast`.
-*/
+//! This module provides a regular expression printer for `Ast`.
 
 use core::fmt;
 
@@ -64,23 +62,29 @@ impl Printer {
     }
 }
 
+impl Default for Printer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[derive(Debug)]
 struct Writer<W> {
     wtr: W,
 }
 
 impl<W: fmt::Write> Visitor for Writer<W> {
-    type Output = ();
     type Err = fmt::Error;
+    type Output = ();
 
     fn finish(self) -> fmt::Result {
         Ok(())
     }
 
     fn visit_pre(&mut self, ast: &Ast) -> fmt::Result {
-        match *ast {
-            Ast::Group(ref x) => self.fmt_group_pre(x),
-            Ast::Class(ast::Class::Bracketed(ref x)) => {
+        match ast {
+            Ast::Group(x) => self.fmt_group_pre(x),
+            Ast::Class(ast::Class::Bracketed(x)) => {
                 self.fmt_class_bracketed_pre(x)
             }
             _ => Ok(()),
@@ -90,19 +94,19 @@ impl<W: fmt::Write> Visitor for Writer<W> {
     fn visit_post(&mut self, ast: &Ast) -> fmt::Result {
         use crate::ast::Class;
 
-        match *ast {
+        match ast {
             Ast::Empty(_) => Ok(()),
-            Ast::Flags(ref x) => self.fmt_set_flags(x),
-            Ast::Literal(ref x) => self.fmt_literal(x),
+            Ast::Flags(x) => self.fmt_set_flags(x),
+            Ast::Literal(x) => self.fmt_literal(x),
             Ast::Dot(_) => self.wtr.write_str("."),
-            Ast::Assertion(ref x) => self.fmt_assertion(x),
-            Ast::Class(Class::Perl(ref x)) => self.fmt_class_perl(x),
-            Ast::Class(Class::Unicode(ref x)) => self.fmt_class_unicode(x),
-            Ast::Class(Class::Bracketed(ref x)) => {
+            Ast::Assertion(x) => self.fmt_assertion(x),
+            Ast::Class(Class::Perl(x)) => self.fmt_class_perl(x),
+            Ast::Class(Class::Unicode(x)) => self.fmt_class_unicode(x),
+            Ast::Class(Class::Bracketed(x)) => {
                 self.fmt_class_bracketed_post(x)
             }
-            Ast::Repetition(ref x) => self.fmt_repetition(x),
-            Ast::Group(ref x) => self.fmt_group_post(x),
+            Ast::Repetition(x) => self.fmt_repetition(x),
+            Ast::Group(_) => self.fmt_group_post(),
             Ast::Alternation(_) => Ok(()),
             Ast::Concat(_) => Ok(()),
         }
@@ -156,30 +160,6 @@ impl<W: fmt::Write> Visitor for Writer<W> {
 }
 
 impl<W: fmt::Write> Writer<W> {
-    fn fmt_group_pre(&mut self, ast: &ast::Group) -> fmt::Result {
-        use crate::ast::GroupKind::*;
-        match ast.kind {
-            CaptureIndex(_) => self.wtr.write_str("("),
-            CaptureName { ref name, starts_with_p } => {
-                let start = if starts_with_p { "(?P<" } else { "(?<" };
-                self.wtr.write_str(start)?;
-                self.wtr.write_str(&name.name)?;
-                self.wtr.write_str(">")?;
-                Ok(())
-            }
-            NonCapturing(ref flags) => {
-                self.wtr.write_str("(?")?;
-                self.fmt_flags(flags)?;
-                self.wtr.write_str(":")?;
-                Ok(())
-            }
-        }
-    }
-
-    fn fmt_group_post(&mut self, _ast: &ast::Group) -> fmt::Result {
-        self.wtr.write_str(")")
-    }
-
     fn fmt_repetition(&mut self, ast: &ast::Repetition) -> fmt::Result {
         use crate::ast::RepetitionKind::*;
         match ast.op.kind {
@@ -209,6 +189,40 @@ impl<W: fmt::Write> Writer<W> {
             AtLeast(x) => write!(self.wtr, "{{{},}}", x),
             Bounded(x, y) => write!(self.wtr, "{{{},{}}}", x, y),
         }
+    }
+
+    fn fmt_group_pre(&mut self, ast: &ast::Group) -> fmt::Result {
+        use crate::ast::GroupKind::*;
+        match ast.kind {
+            CaptureIndex(_) => self.wtr.write_str("("),
+            CaptureName { ref name, starts_with_p } => {
+                let start = if starts_with_p { "(?P<" } else { "(?<" };
+                self.wtr.write_str(start)?;
+                self.wtr.write_str(&name.name)?;
+                self.wtr.write_str(">")
+            }
+            NonCapturing(ref flags) => {
+                self.wtr.write_str("(?")?;
+                self.fmt_flags(flags)?;
+                self.wtr.write_str(":")
+            }
+            #[cfg(feature="look-ahead-and-behind")]
+            LookAhead { negate } => {
+                self.wtr.write_str("(?")?;
+                let end = if negate { "!" } else { "=" };
+                self.wtr.write_str(end)
+            }
+            #[cfg(feature="look-ahead-and-behind")]
+            LookBehind { negate } => {
+                self.wtr.write_str("(?<")?;
+                let end = if negate { "!" } else { "=" };
+                self.wtr.write_str(end)
+            }
+        }
+    }
+
+    fn fmt_group_post(&mut self) -> fmt::Result {
+        self.wtr.write_str(")")
     }
 
     fn fmt_literal(&mut self, ast: &ast::Literal) -> fmt::Result {
@@ -374,8 +388,7 @@ impl<W: fmt::Write> Writer<W> {
     }
 
     fn fmt_class_unicode(&mut self, ast: &ast::ClassUnicode) -> fmt::Result {
-        use crate::ast::ClassUnicodeKind::*;
-        use crate::ast::ClassUnicodeOpKind::*;
+        use crate::ast::{ClassUnicodeKind::*, ClassUnicodeOpKind::*};
 
         if ast.negated {
             self.wtr.write_str(r"\P")?;
@@ -402,9 +415,8 @@ impl<W: fmt::Write> Writer<W> {
 mod tests {
     use alloc::string::String;
 
-    use crate::ast::parse::ParserBuilder;
-
     use super::*;
+    use crate::ast::parse::ParserBuilder;
 
     fn roundtrip(given: &str) {
         roundtrip_with(|b| b, given);

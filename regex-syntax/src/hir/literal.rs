@@ -1,59 +1,57 @@
-/*!
-Provides literal extraction from `Hir` expressions.
-
-An [`Extractor`] pulls literals out of [`Hir`] expressions and returns a
-[`Seq`] of [`Literal`]s.
-
-The purpose of literal extraction is generally to provide avenues for
-optimizing regex searches. The main idea is that substring searches can be an
-order of magnitude faster than a regex search. Therefore, if one can execute
-a substring search to find candidate match locations and only run the regex
-search at those locations, then it is possible for huge improvements in
-performance to be realized.
-
-With that said, literal optimizations are generally a black art because even
-though substring search is generally faster, if the number of candidates
-produced is high, then it can create a lot of overhead by ping-ponging between
-the substring search and the regex search.
-
-Here are some heuristics that might be used to help increase the chances of
-effective literal optimizations:
-
-* Stick to small [`Seq`]s. If you search for too many literals, it's likely
-to lead to substring search that is only a little faster than a regex search,
-and thus the overhead of using literal optimizations in the first place might
-make things slower overall.
-* The literals in your [`Seq`] shouldn't be too short. In general, longer is
-better. A sequence corresponding to single bytes that occur frequently in the
-haystack, for example, is probably a bad literal optimization because it's
-likely to produce many false positive candidates. Longer literals are less
-likely to match, and thus probably produce fewer false positives.
-* If it's possible to estimate the approximate frequency of each byte according
-to some pre-computed background distribution, it is possible to compute a score
-of how "good" a `Seq` is. If a `Seq` isn't good enough, you might consider
-skipping the literal optimization and just use the regex engine.
-
-(It should be noted that there are always pathological cases that can make
-any kind of literal optimization be a net slower result. This is why it
-might be a good idea to be conservative, or to even provide a means for
-literal optimizations to be dynamically disabled if they are determined to be
-ineffective according to some measure.)
-
-You're encouraged to explore the methods on [`Seq`], which permit shrinking
-the size of sequences in a preference-order preserving fashion.
-
-Finally, note that it isn't strictly necessary to use an [`Extractor`]. Namely,
-an `Extractor` only uses public APIs of the [`Seq`] and [`Literal`] types,
-so it is possible to implement your own extractor. For example, for n-grams
-or "inner" literals (i.e., not prefix or suffix literals). The `Extractor`
-is mostly responsible for the case analysis over `Hir` expressions. Much of
-the "trickier" parts are how to combine literal sequences, and that is all
-implemented on [`Seq`].
-*/
-
-use core::{cmp, mem, num::NonZeroUsize};
+//! Provides literal extraction from `Hir` expressions.
+//!
+//! An [`Extractor`] pulls literals out of [`Hir`] expressions and returns a
+//! [`Seq`] of [`Literal`]s.
+//!
+//! The purpose of literal extraction is generally to provide avenues for
+//! optimizing regex searches. The main idea is that substring searches can be
+//! an order of magnitude faster than a regex search. Therefore, if one can
+//! execute a substring search to find candidate match locations and only run
+//! the regex search at those locations, then it is possible for huge
+//! improvements in performance to be realized.
+//!
+//! With that said, literal optimizations are generally a black art because even
+//! though substring search is generally faster, if the number of candidates
+//! produced is high, then it can create a lot of overhead by ping-ponging
+//! between the substring search and the regex search.
+//!
+//! Here are some heuristics that might be used to help increase the chances of
+//! effective literal optimizations:
+//!
+//! Stick to small [`Seq`]s. If you search for too many literals, it's likely
+//! to lead to substring search that is only a little faster than a regex
+//! search, and thus the overhead of using literal optimizations in the first
+//! place might make things slower overall.
+//! The literals in your [`Seq`] shouldn't be too short. In general, longer is
+//! better. A sequence corresponding to single bytes that occur frequently in
+//! the haystack, for example, is probably a bad literal optimization because
+//! it's likely to produce many false positive candidates. Longer literals are
+//! less likely to match, and thus probably produce fewer false positives.
+//! If it's possible to estimate the approximate frequency of each byte
+//! according to some pre-computed background distribution, it is possible to
+//! compute a score of how "good" a `Seq` is. If a `Seq` isn't good enough, you
+//! might consider skipping the literal optimization and just use the regex
+//! engine.
+//!
+//! (It should be noted that there are always pathological cases that can make
+//! any kind of literal optimization be a net slower result. This is why it
+//! might be a good idea to be conservative, or to even provide a means for
+//! literal optimizations to be dynamically disabled if they are determined to
+//! be ineffective according to some measure.)
+//!
+//! You're encouraged to explore the methods on [`Seq`], which permit shrinking
+//! the size of sequences in a preference-order preserving fashion.
+//!
+//! Finally, note that it isn't strictly necessary to use an [`Extractor`].
+//! Namely, an `Extractor` only uses public APIs of the [`Seq`] and [`Literal`]
+//! types, so it is possible to implement your own extractor. For example, for
+//! n-grams or "inner" literals (i.e., not prefix or suffix literals). The
+//! `Extractor` is mostly responsible for the case analysis over `Hir`
+//! expressions. Much of the "trickier" parts are how to combine literal
+//! sequences, and that is all implemented on [`Seq`].
 
 use alloc::{vec, vec::Vec};
+use core::{cmp, mem, num::NonZeroUsize};
 
 use crate::hir::{self, Hir};
 
@@ -101,7 +99,10 @@ use crate::hir::{self, Hir};
 /// This shows how to extract prefixes:
 ///
 /// ```
-/// use regex_syntax::{hir::literal::{Extractor, Literal, Seq}, parse};
+/// use regex_syntax::{
+///     hir::literal::{Extractor, Literal, Seq},
+///     parse,
+/// };
 ///
 /// let hir = parse(r"(a|b|c)(x|y|z)[A-Z]+foo")?;
 /// let got = Extractor::new().extract(&hir);
@@ -127,7 +128,7 @@ use crate::hir::{self, Hir};
 ///
 /// ```
 /// use regex_syntax::{
-///     hir::literal::{Extractor, ExtractKind, Literal, Seq},
+///     hir::literal::{ExtractKind, Extractor, Literal, Seq},
 ///     parse,
 /// };
 ///
@@ -135,10 +136,8 @@ use crate::hir::{self, Hir};
 /// let got = Extractor::new().kind(ExtractKind::Suffix).extract(&hir);
 /// // Since 'foo' gets to a match state, it is considered exact. But 'bar'
 /// // does not because of the '[A-Z]+', and thus is marked inexact.
-/// let expected = Seq::from_iter([
-///     Literal::exact("foo"),
-///     Literal::inexact("bar"),
-/// ]);
+/// let expected =
+///     Seq::from_iter([Literal::exact("foo"), Literal::inexact("bar")]);
 /// assert_eq!(expected, got);
 ///
 /// # Ok::<(), Box<dyn std::error::Error>>(())
@@ -171,25 +170,27 @@ impl Extractor {
     pub fn extract(&self, hir: &Hir) -> Seq {
         use crate::hir::HirKind::*;
 
-        match *hir.kind() {
+        match hir.kind() {
             Empty | Look(_) => Seq::singleton(self::Literal::exact(vec![])),
-            Literal(hir::Literal(ref bytes)) => {
+            Literal(hir::Literal(bytes)) => {
                 let mut seq =
                     Seq::singleton(self::Literal::exact(bytes.to_vec()));
                 self.enforce_literal_len(&mut seq);
                 seq
             }
-            Class(hir::Class::Unicode(ref cls)) => {
-                self.extract_class_unicode(cls)
-            }
-            Class(hir::Class::Bytes(ref cls)) => self.extract_class_bytes(cls),
-            Repetition(ref rep) => self.extract_repetition(rep),
-            Capture(hir::Capture { ref sub, .. }) => self.extract(sub),
-            Concat(ref hirs) => match self.kind {
+            Class(hir::Class::Unicode(cls)) => self.extract_class_unicode(cls),
+            Class(hir::Class::Bytes(cls)) => self.extract_class_bytes(cls),
+            Repetition(rep) => self.extract_repetition(rep),
+            Capture(hir::Capture { sub, .. }) => self.extract(sub),
+            #[cfg(feature = "look-ahead-and-behind")]
+            LookAhead(hir::LookAhead { sub, .. }) => self.extract(sub),
+            #[cfg(feature = "look-ahead-and-behind")]
+            LookBehind(hir::LookBehind { sub, .. }) => self.extract(sub),
+            Concat(hirs) => match self.kind {
                 ExtractKind::Prefix => self.extract_concat(hirs.iter()),
                 ExtractKind::Suffix => self.extract_concat(hirs.iter().rev()),
             },
-            Alternation(ref hirs) => {
+            Alternation(hirs) => {
                 // Unlike concat, we always union starting from the beginning,
                 // since the beginning corresponds to the highest preference,
                 // which doesn't change based on forwards vs reverse.
@@ -231,18 +232,19 @@ impl Extractor {
     ///
     /// # Example
     ///
-    /// This example shows how this limit can be lowered to decrease the tolerance
-    /// for character classes being turned into literal sequences.
+    /// This example shows how this limit can be lowered to decrease the
+    /// tolerance for character classes being turned into literal sequences.
     ///
     /// ```
-    /// use regex_syntax::{hir::literal::{Extractor, Seq}, parse};
+    /// use regex_syntax::{
+    ///     hir::literal::{Extractor, Seq},
+    ///     parse,
+    /// };
     ///
     /// let hir = parse(r"[0-9]")?;
     ///
     /// let got = Extractor::new().extract(&hir);
-    /// let expected = Seq::new([
-    ///     "0", "1", "2", "3", "4", "5", "6", "7", "8", "9",
-    /// ]);
+    /// let expected = Seq::new(["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"]);
     /// assert_eq!(expected, got);
     ///
     /// // Now let's shrink the limit and see how that changes things.
@@ -272,7 +274,10 @@ impl Extractor {
     /// This shows how to decrease the limit and compares it with the default.
     ///
     /// ```
-    /// use regex_syntax::{hir::literal::{Extractor, Literal, Seq}, parse};
+    /// use regex_syntax::{
+    ///     hir::literal::{Extractor, Literal, Seq},
+    ///     parse,
+    /// };
     ///
     /// let hir = parse(r"(abc){8}")?;
     ///
@@ -282,9 +287,7 @@ impl Extractor {
     ///
     /// // Now let's shrink the limit and see how that changes things.
     /// let got = Extractor::new().limit_repeat(4).extract(&hir);
-    /// let expected = Seq::from_iter([
-    ///     Literal::inexact("abcabcabcabc"),
-    /// ]);
+    /// let expected = Seq::from_iter([Literal::inexact("abcabcabcabc")]);
     /// assert_eq!(expected, got);
     ///
     /// # Ok::<(), Box<dyn std::error::Error>>(())
@@ -309,7 +312,10 @@ impl Extractor {
     /// This shows how to decrease the limit and compares it with the default.
     ///
     /// ```
-    /// use regex_syntax::{hir::literal::{Extractor, Literal, Seq}, parse};
+    /// use regex_syntax::{
+    ///     hir::literal::{Extractor, Literal, Seq},
+    ///     parse,
+    /// };
     ///
     /// let hir = parse(r"(abc){2}{2}{2}")?;
     ///
@@ -319,9 +325,7 @@ impl Extractor {
     ///
     /// // Now let's shrink the limit and see how that changes things.
     /// let got = Extractor::new().limit_literal_len(14).extract(&hir);
-    /// let expected = Seq::from_iter([
-    ///     Literal::inexact("abcabcabcabcab"),
-    /// ]);
+    /// let expected = Seq::from_iter([Literal::inexact("abcabcabcabcab")]);
     /// assert_eq!(expected, got);
     ///
     /// # Ok::<(), Box<dyn std::error::Error>>(())
@@ -351,16 +355,17 @@ impl Extractor {
     /// sequence returned.
     ///
     /// ```
-    /// use regex_syntax::{hir::literal::{Extractor, Literal, Seq}, parse};
+    /// use regex_syntax::{
+    ///     hir::literal::{Extractor, Literal, Seq},
+    ///     parse,
+    /// };
     ///
     /// let hir = parse(r"[ab]{2}{2}")?;
     ///
     /// let got = Extractor::new().extract(&hir);
     /// let expected = Seq::new([
-    ///     "aaaa", "aaab", "aaba", "aabb",
-    ///     "abaa", "abab", "abba", "abbb",
-    ///     "baaa", "baab", "baba", "babb",
-    ///     "bbaa", "bbab", "bbba", "bbbb",
+    ///     "aaaa", "aaab", "aaba", "aabb", "abaa", "abab", "abba", "abbb", "baaa",
+    ///     "baab", "baba", "babb", "bbaa", "bbab", "bbba", "bbbb",
     /// ]);
     /// assert_eq!(expected, got);
     ///
@@ -660,12 +665,6 @@ impl ExtractKind {
     }
 }
 
-impl Default for ExtractKind {
-    fn default() -> ExtractKind {
-        ExtractKind::Prefix
-    }
-}
-
 /// A sequence of literals.
 ///
 /// A `Seq` is very much like a set in that it represents a union of its
@@ -875,14 +874,10 @@ impl Seq {
     /// ```
     /// use regex_syntax::hir::literal::{Literal, Seq};
     ///
-    /// let mut seq1 = Seq::from_iter([
-    ///     Literal::exact("foo"),
-    ///     Literal::inexact("bar"),
-    /// ]);
-    /// let mut seq2 = Seq::from_iter([
-    ///     Literal::inexact("quux"),
-    ///     Literal::exact("baz"),
-    /// ]);
+    /// let mut seq1 =
+    ///     Seq::from_iter([Literal::exact("foo"), Literal::inexact("bar")]);
+    /// let mut seq2 =
+    ///     Seq::from_iter([Literal::inexact("quux"), Literal::exact("baz")]);
     /// seq1.cross_forward(&mut seq2);
     ///
     /// // The literals are pulled out of seq2.
@@ -902,19 +897,15 @@ impl Seq {
     /// ```
     /// use regex_syntax::hir::literal::{Literal, Seq};
     ///
-    /// let mut seq1 = Seq::from_iter([
-    ///     Literal::exact("foo"),
-    ///     Literal::inexact("bar"),
-    /// ]);
+    /// let mut seq1 =
+    ///     Seq::from_iter([Literal::exact("foo"), Literal::inexact("bar")]);
     /// let mut seq2 = Seq::infinite();
     /// seq1.cross_forward(&mut seq2);
     ///
     /// // When seq2 is infinite, cross product doesn't add anything, but
     /// // ensures all members of seq1 are inexact.
-    /// let expected = Seq::from_iter([
-    ///     Literal::inexact("foo"),
-    ///     Literal::inexact("bar"),
-    /// ]);
+    /// let expected =
+    ///     Seq::from_iter([Literal::inexact("foo"), Literal::inexact("bar")]);
     /// assert_eq!(expected, seq1);
     /// ```
     ///
@@ -944,10 +935,8 @@ impl Seq {
     /// use regex_syntax::hir::literal::{Literal, Seq};
     ///
     /// let mut seq1 = Seq::infinite();
-    /// let mut seq2 = Seq::from_iter([
-    ///     Literal::exact("foo"),
-    ///     Literal::inexact("bar"),
-    /// ]);
+    /// let mut seq2 =
+    ///     Seq::from_iter([Literal::exact("foo"), Literal::inexact("bar")]);
     /// seq1.cross_forward(&mut seq2);
     ///
     /// // seq1 remains unchanged.
@@ -972,7 +961,7 @@ impl Seq {
                     selflit.len() + otherlit.len(),
                 ));
                 newlit.extend(&selflit);
-                newlit.extend(&otherlit);
+                newlit.extend(otherlit);
                 if !otherlit.is_exact() {
                     newlit.make_inexact();
                 }
@@ -1014,14 +1003,10 @@ impl Seq {
     /// ```
     /// use regex_syntax::hir::literal::{Literal, Seq};
     ///
-    /// let mut seq1 = Seq::from_iter([
-    ///     Literal::exact("foo"),
-    ///     Literal::inexact("bar"),
-    /// ]);
-    /// let mut seq2 = Seq::from_iter([
-    ///     Literal::inexact("quux"),
-    ///     Literal::exact("baz"),
-    /// ]);
+    /// let mut seq1 =
+    ///     Seq::from_iter([Literal::exact("foo"), Literal::inexact("bar")]);
+    /// let mut seq2 =
+    ///     Seq::from_iter([Literal::inexact("quux"), Literal::exact("baz")]);
     /// seq1.cross_reverse(&mut seq2);
     ///
     /// // The literals are pulled out of seq2.
@@ -1041,19 +1026,15 @@ impl Seq {
     /// ```
     /// use regex_syntax::hir::literal::{Literal, Seq};
     ///
-    /// let mut seq1 = Seq::from_iter([
-    ///     Literal::exact("foo"),
-    ///     Literal::inexact("bar"),
-    /// ]);
+    /// let mut seq1 =
+    ///     Seq::from_iter([Literal::exact("foo"), Literal::inexact("bar")]);
     /// let mut seq2 = Seq::infinite();
     /// seq1.cross_reverse(&mut seq2);
     ///
     /// // When seq2 is infinite, cross product doesn't add anything, but
     /// // ensures all members of seq1 are inexact.
-    /// let expected = Seq::from_iter([
-    ///     Literal::inexact("foo"),
-    ///     Literal::inexact("bar"),
-    /// ]);
+    /// let expected =
+    ///     Seq::from_iter([Literal::inexact("foo"), Literal::inexact("bar")]);
     /// assert_eq!(expected, seq1);
     /// ```
     ///
@@ -1083,10 +1064,8 @@ impl Seq {
     /// use regex_syntax::hir::literal::{Literal, Seq};
     ///
     /// let mut seq1 = Seq::infinite();
-    /// let mut seq2 = Seq::from_iter([
-    ///     Literal::exact("foo"),
-    ///     Literal::inexact("bar"),
-    /// ]);
+    /// let mut seq2 =
+    ///     Seq::from_iter([Literal::exact("foo"), Literal::inexact("bar")]);
     /// seq1.cross_reverse(&mut seq2);
     ///
     /// // seq1 remains unchanged.
@@ -1123,7 +1102,7 @@ impl Seq {
                     otherlit.len() + selflit.len(),
                 ));
                 newlit.extend(&otherlit);
-                newlit.extend(&selflit);
+                newlit.extend(selflit);
                 if !otherlit.is_exact() {
                     newlit.make_inexact();
                 }
@@ -1329,10 +1308,8 @@ impl Seq {
     /// ```
     /// use regex_syntax::hir::literal::{Literal, Seq};
     ///
-    /// let mut seq = Seq::from_iter([
-    ///     Literal::exact("foo"),
-    ///     Literal::inexact("foo"),
-    /// ]);
+    /// let mut seq =
+    ///     Seq::from_iter([Literal::exact("foo"), Literal::inexact("foo")]);
     /// seq.dedup();
     ///
     /// assert_eq!(Seq::from_iter([Literal::inexact("foo")]), seq);
@@ -1633,7 +1610,7 @@ impl Seq {
             None => return None,
             Some(ref lits) => lits,
         };
-        if lits.len() == 0 {
+        if lits.is_empty() {
             return None;
         }
         let base = lits[0].as_bytes();
@@ -1686,7 +1663,7 @@ impl Seq {
             None => return None,
             Some(ref lits) => lits,
         };
-        if lits.len() == 0 {
+        if lits.is_empty() {
             return None;
         }
         let base = lits[0].as_bytes();
@@ -1750,23 +1727,21 @@ impl Seq {
     /// compatible releases.
     ///
     /// ```
-    /// use regex_syntax::hir::literal::{Seq, Literal};
+    /// use regex_syntax::hir::literal::{Literal, Seq};
     ///
-    /// let mut seq = Seq::new(&[
-    ///     "samantha",
-    ///     "sam",
-    ///     "samwise",
-    ///     "frodo",
-    /// ]);
+    /// let mut seq = Seq::new(&["samantha", "sam", "samwise", "frodo"]);
     /// seq.optimize_for_prefix_by_preference();
-    /// assert_eq!(Seq::from_iter([
-    ///     Literal::exact("samantha"),
-    ///     // Kept exact even though 'samwise' got pruned
-    ///     // because optimization assumes literal extraction
-    ///     // has finished.
-    ///     Literal::exact("sam"),
-    ///     Literal::exact("frodo"),
-    /// ]), seq);
+    /// assert_eq!(
+    ///     Seq::from_iter([
+    ///         Literal::exact("samantha"),
+    ///         // Kept exact even though 'samwise' got pruned
+    ///         // because optimization assumes literal extraction
+    ///         // has finished.
+    ///         Literal::exact("sam"),
+    ///         Literal::exact("frodo"),
+    ///     ]),
+    ///     seq
+    /// );
     /// ```
     ///
     /// # Example: optimization may make the sequence infinite
@@ -1776,17 +1751,14 @@ impl Seq {
     /// disabling its use as a prefilter.
     ///
     /// ```
-    /// use regex_syntax::hir::literal::{Seq, Literal};
+    /// use regex_syntax::hir::literal::{Literal, Seq};
     ///
     /// let mut seq = Seq::new(&[
     ///     "samantha",
     ///     // An empty string matches at every position,
     ///     // thus rendering the prefilter completely
     ///     // ineffective.
-    ///     "",
-    ///     "sam",
-    ///     "samwise",
-    ///     "frodo",
+    ///     "", "sam", "samwise", "frodo",
     /// ]);
     /// seq.optimize_for_prefix_by_preference();
     /// assert!(!seq.is_finite());
@@ -1804,14 +1776,9 @@ impl Seq {
     /// one is an ASCII space:
     ///
     /// ```
-    /// use regex_syntax::hir::literal::{Seq, Literal};
+    /// use regex_syntax::hir::literal::{Literal, Seq};
     ///
-    /// let mut seq = Seq::new(&[
-    ///     "samantha",
-    ///     " ",
-    ///     "sam",
-    ///     "frodo",
-    /// ]);
+    /// let mut seq = Seq::new(&["samantha", " ", "sam", "frodo"]);
     /// seq.optimize_for_prefix_by_preference();
     /// assert!(seq.is_finite());
     /// ```
@@ -1881,7 +1848,7 @@ impl Seq {
             // false positive rate.
             if prefix
                 && origlen > 1
-                && fix.len() >= 1
+                && !fix.is_empty()
                 && fix.len() <= 3
                 && rank(fix[0]) < 200
             {
@@ -2004,7 +1971,6 @@ impl Seq {
             // Teddy), then also don't use it and rely on the exact sequence.
             if self.len().map_or(true, |len| len > 64) {
                 *self = exact;
-                return;
             }
         }
     }
@@ -2890,7 +2856,7 @@ mod tests {
 
     #[test]
     fn huge() {
-        let pat = r#"(?-u)
+        let pat = r"(?-u)
         2(?:
           [45]\d{3}|
           7(?:
@@ -3175,7 +3141,7 @@ mod tests {
             [24]1
           )\d{2}
         )\d{3}
-        "#;
+        ";
         // TODO: This is a good candidate of a seq of literals that could be
         // shrunk quite a bit and still be very productive with respect to
         // literal optimizations.

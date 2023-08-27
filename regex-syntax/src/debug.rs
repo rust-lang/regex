@@ -15,7 +15,7 @@ impl core::fmt::Debug for Byte {
         let mut len = 0;
         for (i, mut b) in core::ascii::escape_default(self.0).enumerate() {
             // capitalize \xab to \xAB
-            if i >= 2 && b'a' <= b && b <= b'f' {
+            if i >= 2 && (b'a'..=b'f').contains(&b) {
                 b -= 32;
             }
             bytes[len] = b;
@@ -51,16 +51,10 @@ impl<'a> core::fmt::Debug for Bytes<'a> {
             match ch {
                 '\0' => write!(f, "\\0")?,
                 // ASCII control characters except \0, \n, \r, \t
-                '\x01'..='\x08'
-                | '\x0b'
-                | '\x0c'
-                | '\x0e'..='\x19'
-                | '\x7f' => {
+                '\x01'..='\x08' | '\x0b' | '\x0c' | '\x0e'..='\x19' | '\x7f' => {
                     write!(f, "\\x{:02x}", u32::from(ch))?;
                 }
-                '\n' | '\r' | '\t' | _ => {
-                    write!(f, "{}", ch.escape_debug())?;
-                }
+                _ => write!(f, "{}", ch.escape_debug())?,
             }
         }
         write!(f, "\"")?;
@@ -76,10 +70,10 @@ impl<'a> core::fmt::Debug for Bytes<'a> {
 /// This returns `None` if and only if `bytes` is empty.
 pub(crate) fn utf8_decode(bytes: &[u8]) -> Option<Result<char, u8>> {
     fn len(byte: u8) -> Option<usize> {
-        if byte <= 0x7F {
-            return Some(1);
+        if byte <= 0x7f {
+            Some(1)
         } else if byte & 0b1100_0000 == 0b1000_0000 {
-            return None;
+            None
         } else if byte <= 0b1101_1111 {
             Some(2)
         } else if byte <= 0b1110_1111 {

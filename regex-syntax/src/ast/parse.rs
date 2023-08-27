@@ -1,18 +1,14 @@
-/*!
-This module provides a regular expression parser.
-*/
-
-use core::{
-    borrow::Borrow,
-    cell::{Cell, RefCell},
-    mem,
-};
+//! This module provides a regular expression parser.
 
 use alloc::{
     boxed::Box,
     string::{String, ToString},
     vec,
     vec::Vec,
+};
+use core::{
+    borrow::Borrow,
+    cell::{Cell, RefCell},
 };
 
 use crate::{
@@ -53,11 +49,11 @@ impl Primitive {
     /// Convert this primitive into a proper AST.
     fn into_ast(self) -> Ast {
         match self {
-            Primitive::Literal(lit) => Ast::Literal(lit),
-            Primitive::Assertion(assert) => Ast::Assertion(assert),
-            Primitive::Dot(span) => Ast::Dot(span),
-            Primitive::Perl(cls) => Ast::Class(ast::Class::Perl(cls)),
-            Primitive::Unicode(cls) => Ast::Class(ast::Class::Unicode(cls)),
+            Primitive::Literal(x) => Ast::Literal(x),
+            Primitive::Assertion(x) => Ast::Assertion(x),
+            Primitive::Dot(x) => Ast::Dot(x),
+            Primitive::Perl(x) => Ast::Class(ast::Class::Perl(x)),
+            Primitive::Unicode(x) => Ast::Class(ast::Class::Unicode(x)),
         }
     }
 
@@ -73,9 +69,9 @@ impl Primitive {
         use crate::ast::ClassSetItem;
 
         match self {
-            Literal(lit) => Ok(ClassSetItem::Literal(lit)),
-            Perl(cls) => Ok(ClassSetItem::Perl(cls)),
-            Unicode(cls) => Ok(ClassSetItem::Unicode(cls)),
+            Literal(x) => Ok(ClassSetItem::Literal(x)),
+            Perl(x) => Ok(ClassSetItem::Perl(x)),
+            Unicode(x) => Ok(ClassSetItem::Unicode(x)),
             x => Err(p.error(*x.span(), ast::ErrorKind::ClassEscapeInvalid)),
         }
     }
@@ -93,7 +89,7 @@ impl Primitive {
         use self::Primitive::*;
 
         match self {
-            Literal(lit) => Ok(lit),
+            Literal(x) => Ok(x),
             x => Err(p.error(*x.span(), ast::ErrorKind::ClassRangeLiteral)),
         }
     }
@@ -101,7 +97,7 @@ impl Primitive {
 
 /// Returns true if the given character is a hexadecimal digit.
 fn is_hex(c: char) -> bool {
-    ('0' <= c && c <= '9') || ('a' <= c && c <= 'f') || ('A' <= c && c <= 'F')
+    c.is_ascii_digit() || ('a'..='f').contains(&c) || ('A'..='F').contains(&c)
 }
 
 /// Returns true if the given character is a valid in a capture group name.
@@ -302,6 +298,19 @@ enum GroupState {
     Alternation(ast::Alternation),
 }
 
+impl GroupState {
+    /// Returns the group span, if [`self`] is [`GroupState::Group`].
+    #[cfg(feature = "look-ahead-and-behind")]
+    fn group_span(&self) -> Option<Span> {
+        match self {
+            Self::Group { concat, .. } if !concat.asts.is_empty() => {
+                Some(*concat.clone().into_ast().span())
+            }
+            Self::Group { .. } | Self::Alternation(_) => None,
+        }
+    }
+}
+
 /// ClassState represents a single stack frame while parsing character classes.
 /// Each frame records the state up to an intersection, difference, symmetric
 /// difference or nested class.
@@ -367,6 +376,12 @@ impl Parser {
         self.comments.borrow_mut().clear();
         self.stack_group.borrow_mut().clear();
         self.stack_class.borrow_mut().clear();
+    }
+}
+
+impl Default for Parser {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -510,6 +525,7 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
     ///
     /// This should only be called immediately after parsing the opening of
     /// a group or a set of flags.
+    #[cfg(not(feature = "look-ahead-and-behind"))]
     fn is_lookaround_prefix(&self) -> bool {
         self.bump_if("?=")
             || self.bump_if("?!")
@@ -684,7 +700,7 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
     #[inline(never)]
     fn push_group(&self, mut concat: ast::Concat) -> Result<ast::Concat> {
         assert_eq!(self.char(), '(');
-        match self.parse_group()? {
+        match self.parse_group(&concat)? {
             Either::Left(set) => {
                 let ignore = set.flags.flag_state(ast::Flag::IgnoreWhitespace);
                 if let Some(v) = ignore {
@@ -723,7 +739,7 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
     /// If no such group could be popped, then an unopened group error is
     /// returned.
     #[inline(never)]
-    fn pop_group(&self, mut group_concat: ast::Concat) -> Result<ast::Concat> {
+    fn pop_group(&self, mut concat: ast::Concat) -> Result<ast::Concat> {
         use self::GroupState::*;
 
         assert_eq!(self.char(), ')');
@@ -751,17 +767,25 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
             }
         };
         self.parser().ignore_whitespace.set(ignore_whitespace);
-        group_concat.span.end = self.pos();
+        concat.span.end = self.pos();
         self.bump();
         group.span.end = self.pos();
+
+        #[cfg(feature = "look-ahead-and-behind")]
+        if prior_concat.asts.iter().any(Ast::concats_look_ahead) {
+            return Err(
+                self.error(group.span, ast::ErrorKind::LookAheadBeforeEnd)
+            );
+        }
+
         match alt {
             Some(mut alt) => {
-                alt.span.end = group_concat.span.end;
-                alt.asts.push(group_concat.into_ast());
+                alt.span.end = concat.span.end;
+                alt.asts.push(concat.into_ast());
                 group.ast = Box::new(alt.into_ast());
             }
             None => {
-                group.ast = Box::new(group_concat.into_ast());
+                group.ast = Box::new(concat.into_ast());
             }
         }
         prior_concat.asts.push(Ast::Group(group));
@@ -860,12 +884,10 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
             None => {
                 // We can never observe an empty stack:
                 //
-                // 1) We are guaranteed to start with a non-empty stack since
-                //    the character class parser is only initiated when it sees
-                //    a `[`.
-                // 2) If we ever observe an empty stack while popping after
-                //    seeing a `]`, then we signal the character class parser
-                //    to terminate.
+                // 1) We are guaranteed to start with a non-empty stack since the character
+                //    class parser is only initiated when it sees a `[`.
+                // 2) If we ever observe an empty stack while popping after seeing a `]`, then
+                //    we signal the character class parser to terminate.
                 panic!("unexpected empty character class stack")
             }
             Some(ClassState::Op { .. }) => {
@@ -975,7 +997,7 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
                 ')' => concat = self.pop_group(concat)?,
                 '|' => concat = self.push_alternate(concat)?,
                 '[' => {
-                    let class = self.parse_set_class()?;
+                    let class = self.parse_set_class(&concat)?;
                     concat.asts.push(Ast::Class(class));
                 }
                 '?' => {
@@ -999,16 +1021,17 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
                 '{' => {
                     concat = self.parse_counted_repetition(concat)?;
                 }
-                _ => concat.asts.push(self.parse_primitive()?.into_ast()),
+                _ => {
+                    concat.asts.push(self.parse_primitive(&concat)?.into_ast())
+                }
             }
         }
         let ast = self.pop_group_end(concat)?;
         NestLimiter::new(self).check(&ast)?;
         Ok(ast::WithComments {
             ast,
-            comments: mem::replace(
+            comments: std::mem::take(
                 &mut *self.parser().comments.borrow_mut(),
-                vec![],
             ),
         })
     }
@@ -1048,7 +1071,7 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
             Ast::Empty(_) | Ast::Flags(_) => {
                 return Err(
                     self.error(self.span(), ast::ErrorKind::RepetitionMissing)
-                )
+                );
             }
             _ => {}
         }
@@ -1100,7 +1123,7 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
             Ast::Empty(_) | Ast::Flags(_) => {
                 return Err(
                     self.error(self.span(), ast::ErrorKind::RepetitionMissing)
-                )
+                );
             }
             _ => {}
         }
@@ -1190,23 +1213,71 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
     /// If a capture name is given and it is incorrectly specified, then a
     /// corresponding error is returned.
     #[inline(never)]
-    fn parse_group(&self) -> Result<Either<ast::SetFlags, ast::Group>> {
+    // concat is only used when look-ahead and look-behind are enabled.
+    #[allow(unused_variables)]
+    fn parse_group(
+        &self,
+        concat: &ast::Concat,
+    ) -> Result<Either<ast::SetFlags, ast::Group>> {
         assert_eq!(self.char(), '(');
         let open_span = self.span_char();
         self.bump();
         self.bump_space();
+
+        let inner_span = self.span();
+
+        #[cfg(not(feature = "look-ahead-and-behind"))]
         if self.is_lookaround_prefix() {
             return Err(self.error(
                 Span::new(open_span.start, self.span().end),
                 ast::ErrorKind::UnsupportedLookAround,
             ));
         }
-        let inner_span = self.span();
-        let mut starts_with_p = true;
-        if self.bump_if("?P<") || {
-            starts_with_p = false;
-            self.bump_if("?<")
-        } {
+
+        #[cfg(feature = "look-ahead-and-behind")]
+        if let Some(negate) = self
+            .bump_if("?=")
+            .then_some(false)
+            .or_else(|| self.bump_if("?!").then_some(true))
+        {
+            return Ok(Either::Right(ast::Group {
+                span: open_span,
+                kind: ast::GroupKind::LookAhead { negate },
+                ast: Box::new(Ast::Empty(self.span())),
+            }));
+        } else if let Some(negate) = self
+            .bump_if("?<=")
+            .then_some(false)
+            .or_else(|| self.bump_if("?<!").then_some(true))
+        {
+            if let Some(span) = (!concat.asts.is_empty())
+                .then(|| *concat.clone().into_ast().span())
+                .or_else(|| {
+                    self.parser()
+                        .stack_group
+                        .borrow()
+                        .iter()
+                        .rev()
+                        .find_map(|state| state.group_span())
+                })
+            {
+                return Err(
+                    self.error(span, ast::ErrorKind::LookBehindAfterStart)
+                );
+            } else {
+                return Ok(Either::Right(ast::Group {
+                    span: open_span,
+                    kind: ast::GroupKind::LookBehind { negate },
+                    ast: Box::new(Ast::Empty(self.span())),
+                }));
+            }
+        }
+
+        if let Some(starts_with_p) = self
+            .bump_if("?P<")
+            .then_some(true)
+            .or_else(|| self.bump_if("?<").then_some(false))
+        {
             let capture_index = self.next_capture_index(open_span)?;
             let name = self.parse_capture_name(capture_index)?;
             Ok(Either::Right(ast::Group {
@@ -1400,7 +1471,14 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
     ///
     /// This advances the parser to the first character immediately following
     /// the primitive.
-    fn parse_primitive(&self) -> Result<Primitive> {
+    // concat is only used when look-ahead and look-behind are enabled.
+    #[allow(unused_variables)]
+    fn parse_primitive(&self, concat: &ast::Concat) -> Result<Primitive> {
+        #[cfg(feature = "look-ahead-and-behind")]
+        if concat.asts.iter().any(Ast::concats_look_ahead) {
+            return Err(self
+                .error(self.span_char(), ast::ErrorKind::LookAheadBeforeEnd));
+        }
         match self.char() {
             '\\' => self.parse_escape(),
             '.' => {
@@ -1729,7 +1807,7 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
         if digits.is_empty() {
             return Err(self.error(span, ast::ErrorKind::DecimalEmpty));
         }
-        match u32::from_str_radix(digits, 10).ok() {
+        match digits.parse::<u32>().ok() {
             Some(n) => Ok(n),
             None => Err(self.error(span, ast::ErrorKind::DecimalInvalid)),
         }
@@ -1743,7 +1821,9 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
     /// is successful, then the parser is advanced to the position immediately
     /// following the closing `]`.
     #[inline(never)]
-    fn parse_set_class(&self) -> Result<ast::Class> {
+    // concat is only used when look-ahead and look-behind are enabled.
+    #[allow(unused_variables)]
+    fn parse_set_class(&self, concat: &ast::Concat) -> Result<ast::Class> {
         assert_eq!(self.char(), '[');
 
         let mut union =
@@ -1753,49 +1833,56 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
             if self.is_eof() {
                 return Err(self.unclosed_class_error());
             }
-            match self.char() {
-                '[' => {
-                    // If we've already parsed the opening bracket, then
-                    // attempt to treat this as the beginning of an ASCII
-                    // class. If ASCII class parsing fails, then the parser
-                    // backs up to `[`.
-                    if !self.parser().stack_class.borrow().is_empty() {
-                        if let Some(cls) = self.maybe_parse_ascii_class() {
-                            union.push(ast::ClassSetItem::Ascii(cls));
-                            continue;
+            if self.bump_if("&&") {
+                union = self.push_class_op(
+                    ast::ClassSetBinaryOpKind::Intersection,
+                    union,
+                );
+            } else if self.bump_if("--") {
+                union = self.push_class_op(
+                    ast::ClassSetBinaryOpKind::Difference,
+                    union,
+                );
+            } else if self.bump_if("~~") {
+                union = self.push_class_op(
+                    ast::ClassSetBinaryOpKind::SymmetricDifference,
+                    union,
+                );
+            } else {
+                match self.char() {
+                    '[' => {
+                        // If we've already parsed the opening bracket, then
+                        // attempt to treat this as the beginning of an ASCII
+                        // class. If ASCII class parsing fails, then the parser
+                        // backs up to `[`.
+                        if !self.parser().stack_class.borrow().is_empty() {
+                            if let Some(cls) = self.maybe_parse_ascii_class() {
+                                union.push(ast::ClassSetItem::Ascii(cls));
+                                continue;
+                            }
                         }
+                        union = self.push_class_open(union)?;
                     }
-                    union = self.push_class_open(union)?;
-                }
-                ']' => match self.pop_class(union)? {
-                    Either::Left(nested_union) => {
-                        union = nested_union;
+                    ']' => match self.pop_class(union)? {
+                        Either::Left(nested_union) => {
+                            union = nested_union;
+                        }
+                        Either::Right(class) => {
+                            #[cfg(feature = "look-ahead-and-behind")]
+                            if concat.asts.iter().any(Ast::concats_look_ahead)
+                            {
+                                return Err(self.error(
+                                    *class.span(),
+                                    ast::ErrorKind::LookAheadBeforeEnd,
+                                ));
+                            }
+
+                            return Ok(class);
+                        }
+                    },
+                    _ => {
+                        union.push(self.parse_set_class_range()?);
                     }
-                    Either::Right(class) => return Ok(class),
-                },
-                '&' if self.peek() == Some('&') => {
-                    assert!(self.bump_if("&&"));
-                    union = self.push_class_op(
-                        ast::ClassSetBinaryOpKind::Intersection,
-                        union,
-                    );
-                }
-                '-' if self.peek() == Some('-') => {
-                    assert!(self.bump_if("--"));
-                    union = self.push_class_op(
-                        ast::ClassSetBinaryOpKind::Difference,
-                        union,
-                    );
-                }
-                '~' if self.peek() == Some('~') => {
-                    assert!(self.bump_if("~~"));
-                    union = self.push_class_op(
-                        ast::ClassSetBinaryOpKind::SymmetricDifference,
-                        union,
-                    );
-                }
-                _ => {
-                    union.push(self.parse_set_class_range()?);
                 }
             }
         }
@@ -2151,17 +2238,13 @@ impl<'p, 's, P: Borrow<Parser>> NestLimiter<'p, 's, P> {
 
     fn increment_depth(&mut self, span: &Span) -> Result<()> {
         let new = self.depth.checked_add(1).ok_or_else(|| {
-            self.p.error(
-                span.clone(),
-                ast::ErrorKind::NestLimitExceeded(u32::MAX),
-            )
+            self.p.error(*span, ast::ErrorKind::NestLimitExceeded(u32::MAX))
         })?;
         let limit = self.p.parser().nest_limit;
         if new > limit {
-            return Err(self.p.error(
-                span.clone(),
-                ast::ErrorKind::NestLimitExceeded(limit),
-            ));
+            return Err(self
+                .p
+                .error(*span, ast::ErrorKind::NestLimitExceeded(limit)));
         }
         self.depth = new;
         Ok(())
@@ -2175,15 +2258,15 @@ impl<'p, 's, P: Borrow<Parser>> NestLimiter<'p, 's, P> {
 }
 
 impl<'p, 's, P: Borrow<Parser>> ast::Visitor for NestLimiter<'p, 's, P> {
-    type Output = ();
     type Err = ast::Error;
+    type Output = ();
 
     fn finish(self) -> Result<()> {
         Ok(())
     }
 
     fn visit_pre(&mut self, ast: &Ast) -> Result<()> {
-        let span = match *ast {
+        let span = match ast {
             Ast::Empty(_)
             | Ast::Flags(_)
             | Ast::Literal(_)
@@ -2194,11 +2277,11 @@ impl<'p, 's, P: Borrow<Parser>> ast::Visitor for NestLimiter<'p, 's, P> {
                 // These are all base cases, so we don't increment depth.
                 return Ok(());
             }
-            Ast::Class(ast::Class::Bracketed(ref x)) => &x.span,
-            Ast::Repetition(ref x) => &x.span,
-            Ast::Group(ref x) => &x.span,
-            Ast::Alternation(ref x) => &x.span,
-            Ast::Concat(ref x) => &x.span,
+            Ast::Class(ast::Class::Bracketed(class)) => &class.span,
+            Ast::Repetition(repetition) => &repetition.span,
+            Ast::Group(group) => &group.span,
+            Ast::Alternation(alternation) => &alternation.span,
+            Ast::Concat(concat) => &concat.span,
         };
         self.increment_depth(span)
     }
@@ -2304,13 +2387,11 @@ fn specialize_err<T>(
 
 #[cfg(test)]
 mod tests {
+    use alloc::format;
     use core::ops::Range;
 
-    use alloc::format;
-
-    use crate::ast::{self, Ast, Position, Span};
-
     use super::*;
+    use crate::ast::{self, Ast, Position, Span};
 
     // Our own assert_eq, which has slightly better formatting (but honestly
     // still kind of crappy).
@@ -2320,8 +2401,8 @@ mod tests {
                 (left_val, right_val) => {
                     if !(*left_val == *right_val) {
                         panic!(
-                            "assertion failed: `(left == right)`\n\n\
-                             left:  `{:?}`\nright: `{:?}`\n\n",
+                            "assertion failed: `(left == right)`\n\nleft:  `{:?}`\nright: \
+                             `{:?}`\n\n",
                             left_val, right_val
                         )
                     }
@@ -3571,6 +3652,7 @@ bar
     }
 
     #[test]
+    #[cfg(not(feature = "look-ahead-and-behind"))]
     fn parse_unsupported_lookaround() {
         assert_eq!(
             parser(r"(?=a)").parse().unwrap_err(),
@@ -4074,6 +4156,107 @@ bar
     }
 
     #[test]
+    #[cfg(feature = "look-ahead-and-behind")]
+    fn parse_look_around() {
+        assert_eq!(
+            parser("(?=a)").parse(),
+            Ok(Ast::Group(ast::Group {
+                span: span(0..5),
+                kind: ast::GroupKind::LookAhead { negate: false },
+                ast: Box::new(lit('a', 3)),
+            }))
+        );
+
+        assert_eq!(
+            parser("(?!a)").parse(),
+            Ok(Ast::Group(ast::Group {
+                span: span(0..5),
+                kind: ast::GroupKind::LookAhead { negate: true },
+                ast: Box::new(lit('a', 3)),
+            }))
+        );
+
+        assert_eq!(
+            parser("(?<=a)").parse(),
+            Ok(Ast::Group(ast::Group {
+                span: span(0..6),
+                kind: ast::GroupKind::LookBehind { negate: false },
+                ast: Box::new(lit('a', 4)),
+            }))
+        );
+
+        assert_eq!(
+            parser("(?<!a)").parse(),
+            Ok(Ast::Group(ast::Group {
+                span: span(0..6),
+                kind: ast::GroupKind::LookBehind { negate: true },
+                ast: Box::new(lit('a', 4)),
+            }))
+        );
+    }
+
+    #[test]
+    #[cfg(feature = "look-ahead-and-behind")]
+    fn parse_middle_lookaround() {
+        assert_eq!(
+            parser(r"(?=a)(aft)").parse().unwrap_err(),
+            TestError {
+                span: span(5..10),
+                kind: ast::ErrorKind::LookAheadBeforeEnd,
+            }
+        );
+        assert_eq!(
+            parser(r"(?!a)(aft)").parse().unwrap_err(),
+            TestError {
+                span: span(5..10),
+                kind: ast::ErrorKind::LookAheadBeforeEnd,
+            }
+        );
+        assert_eq!(
+            parser(r"(alt1|(?=a)|alt2)(aft)").parse().unwrap_err(),
+            TestError {
+                span: span(17..22),
+                kind: ast::ErrorKind::LookAheadBeforeEnd,
+            }
+        );
+        assert_eq!(
+            parser(r"(((((?=a))))|alt)(aft)").parse().unwrap_err(),
+            TestError {
+                span: span(17..22),
+                kind: ast::ErrorKind::LookAheadBeforeEnd,
+            }
+        );
+        assert_eq!(
+            parser(r"(bef)(?<=a)").parse().unwrap_err(),
+            TestError {
+                span: span(0..5),
+                kind: ast::ErrorKind::LookBehindAfterStart,
+            }
+        );
+        assert_eq!(
+            parser(r"(bef)(?<!a)").parse().unwrap_err(),
+            TestError {
+                span: span(0..5),
+                kind: ast::ErrorKind::LookBehindAfterStart,
+            }
+        );
+        assert_eq!(
+            parser(r"(bef)(alt1|(?<=a)|alt2)").parse().unwrap_err(),
+            TestError {
+                span: span(0..5),
+                kind: ast::ErrorKind::LookBehindAfterStart,
+            }
+        );
+        assert_eq!(
+            parser(r"(bef)(alt|((((?<!a)))))").parse().unwrap_err(),
+            TestError {
+                span: span(0..5),
+                kind: ast::ErrorKind::LookBehindAfterStart,
+            }
+        );
+    }
+
+    #[test]
     fn parse_flags() {
         assert_eq!(
             parser("i:").parse_flags(),
@@ -4287,19 +4470,20 @@ bar
 
     #[test]
     fn parse_primitive_non_escape() {
+        let concat = ast::Concat::default();
         assert_eq!(
-            parser(r".").parse_primitive(),
+            parser(r".").parse_primitive(&concat),
             Ok(Primitive::Dot(span(0..1)))
         );
         assert_eq!(
-            parser(r"^").parse_primitive(),
+            parser(r"^").parse_primitive(&concat),
             Ok(Primitive::Assertion(ast::Assertion {
                 span: span(0..1),
                 kind: ast::AssertionKind::StartLine,
             }))
         );
         assert_eq!(
-            parser(r"$").parse_primitive(),
+            parser(r"$").parse_primitive(&concat),
             Ok(Primitive::Assertion(ast::Assertion {
                 span: span(0..1),
                 kind: ast::AssertionKind::EndLine,
@@ -4307,7 +4491,7 @@ bar
         );
 
         assert_eq!(
-            parser(r"a").parse_primitive(),
+            parser(r"a").parse_primitive(&concat),
             Ok(Primitive::Literal(ast::Literal {
                 span: span(0..1),
                 kind: ast::LiteralKind::Verbatim,
@@ -4315,7 +4499,7 @@ bar
             }))
         );
         assert_eq!(
-            parser(r"|").parse_primitive(),
+            parser(r"|").parse_primitive(&concat),
             Ok(Primitive::Literal(ast::Literal {
                 span: span(0..1),
                 kind: ast::LiteralKind::Verbatim,
@@ -4323,7 +4507,7 @@ bar
             }))
         );
         assert_eq!(
-            parser(r"☃").parse_primitive(),
+            parser(r"☃").parse_primitive(&concat),
             Ok(Primitive::Literal(ast::Literal {
                 span: span_range("☃", 0..3),
                 kind: ast::LiteralKind::Verbatim,
@@ -4334,8 +4518,9 @@ bar
 
     #[test]
     fn parse_escape() {
+        let concat = ast::Concat::default();
         assert_eq!(
-            parser(r"\|").parse_primitive(),
+            parser(r"\|").parse_primitive(&concat),
             Ok(Primitive::Literal(ast::Literal {
                 span: span(0..2),
                 kind: ast::LiteralKind::Meta,
@@ -4352,7 +4537,7 @@ bar
         ];
         for &(pat, c, ref kind) in specials {
             assert_eq!(
-                parser(pat).parse_primitive(),
+                parser(pat).parse_primitive(&concat),
                 Ok(Primitive::Literal(ast::Literal {
                     span: span(0..2),
                     kind: ast::LiteralKind::Special(kind.clone()),
@@ -4361,28 +4546,28 @@ bar
             );
         }
         assert_eq!(
-            parser(r"\A").parse_primitive(),
+            parser(r"\A").parse_primitive(&concat),
             Ok(Primitive::Assertion(ast::Assertion {
                 span: span(0..2),
                 kind: ast::AssertionKind::StartText,
             }))
         );
         assert_eq!(
-            parser(r"\z").parse_primitive(),
+            parser(r"\z").parse_primitive(&concat),
             Ok(Primitive::Assertion(ast::Assertion {
                 span: span(0..2),
                 kind: ast::AssertionKind::EndText,
             }))
         );
         assert_eq!(
-            parser(r"\b").parse_primitive(),
+            parser(r"\b").parse_primitive(&concat),
             Ok(Primitive::Assertion(ast::Assertion {
                 span: span(0..2),
                 kind: ast::AssertionKind::WordBoundary,
             }))
         );
         assert_eq!(
-            parser(r"\B").parse_primitive(),
+            parser(r"\B").parse_primitive(&concat),
             Ok(Primitive::Assertion(ast::Assertion {
                 span: span(0..2),
                 kind: ast::AssertionKind::NotWordBoundary,
@@ -4393,7 +4578,7 @@ bar
         for c in ['!', '@', '%', '"', '\'', '/', ' '] {
             let pat = format!(r"\{}", c);
             assert_eq!(
-                parser(&pat).parse_primitive(),
+                parser(&pat).parse_primitive(&concat),
                 Ok(Primitive::Literal(ast::Literal {
                     span: span(0..2),
                     kind: ast::LiteralKind::Superfluous,

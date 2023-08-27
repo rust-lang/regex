@@ -112,14 +112,13 @@ impl<'e, E: core::fmt::Display> core::fmt::Display for Formatter<'e, E> {
                 }
                 writeln!(f, "{}", notes.join("\n"))?;
             }
-            write!(f, "error: {}", self.err)?;
+            write!(f, "error: {}", self.err)
         } else {
             writeln!(f, "regex parse error:")?;
             let notated = Spans::from_formatter(self).notate();
             write!(f, "{}", notated)?;
-            write!(f, "error: {}", self.err)?;
+            write!(f, "error: {}", self.err)
         }
-        Ok(())
     }
 }
 
@@ -153,9 +152,7 @@ struct Spans<'p> {
 
 impl<'p> Spans<'p> {
     /// Build a sequence of spans from a formatter.
-    fn from_formatter<'e, E: core::fmt::Display>(
-        fmter: &'p Formatter<'e, E>,
-    ) -> Spans<'p> {
+    fn from_formatter<'e, E: core::fmt::Display>(fmter: &'p Formatter<'e, E>) -> Spans<'p> {
         let mut line_count = fmter.pattern.lines().count();
         // If the pattern ends with a `\n` literal, then our line count is
         // off by one, since a span can occur immediately after the last `\n`,
@@ -163,17 +160,20 @@ impl<'p> Spans<'p> {
         if fmter.pattern.ends_with('\n') {
             line_count += 1;
         }
-        let line_number_width =
-            if line_count <= 1 { 0 } else { line_count.to_string().len() };
+        let line_number_width = if line_count <= 1 {
+            0
+        } else {
+            line_count.to_string().len()
+        };
         let mut spans = Spans {
-            pattern: &fmter.pattern,
+            pattern: fmter.pattern,
             line_number_width,
             by_line: vec![vec![]; line_count],
             multi_line: vec![],
         };
-        spans.add(fmter.span.clone());
+        spans.add(*fmter.span);
         if let Some(span) = fmter.aux_span {
-            spans.add(span.clone());
+            spans.add(*span);
         }
         spans
     }
@@ -226,16 +226,13 @@ impl<'p> Spans<'p> {
         for _ in 0..self.line_number_padding() {
             notes.push(' ');
         }
-        let mut pos = 0;
         for span in spans {
-            for _ in pos..(span.start.column - 1) {
+            for _ in 0..(span.start.column - 1) {
                 notes.push(' ');
-                pos += 1;
             }
             let note_len = span.end.column.saturating_sub(span.start.column);
             for _ in 0..core::cmp::max(1, note_len) {
                 notes.push('^');
-                pos += 1;
             }
         }
         Some(notes)

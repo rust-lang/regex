@@ -1,10 +1,7 @@
-/*!
-Defines an abstract syntax for regular expressions.
-*/
-
-use core::cmp::Ordering;
+//! Defines an abstract syntax for regular expressions.
 
 use alloc::{boxed::Box, string::String, vec, vec::Vec};
+use core::cmp::Ordering;
 
 pub use crate::ast::visitor::{visit, Visitor};
 
@@ -19,7 +16,7 @@ mod visitor;
 /// an AST is constructed without error for `\p{Quux}`, but `Quux` is not a
 /// valid Unicode property name. That particular error is reported when
 /// translating an AST to the high-level intermediate representation (`HIR`).
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct Error {
     /// The kind of error.
@@ -121,6 +118,7 @@ pub enum ErrorKind {
         /// The position of the original negation operator. The error position
         /// points to the duplicate negation operator.
         original: Span,
+        // TODO: Get rid of this and implement backreferences.
     },
     /// Expected a flag but got EOF, e.g., `(?`.
     FlagUnexpectedEof,
@@ -174,7 +172,18 @@ pub enum ErrorKind {
     /// not necessarily limited to, `(?=re)`, `(?!re)`, `(?<=re)` and
     /// `(?<!re)`. Note that all of these syntaxes are otherwise invalid; this
     /// error is used to improve the user experience.
+    #[cfg(not(feature = "look-ahead-and-behind"))]
     UnsupportedLookAround,
+    /// This happens if a look-ahead (`(?=)` or `(?!)`) was placed in a
+    /// position where anything (including an [`Ast::Empty`]), might succeed it.
+    /// This includes patterns that can match on nothing, like `a*` or `a?`.
+    #[cfg(feature = "look-ahead-and-behind")]
+    LookAheadBeforeEnd,
+    /// This happens if a look-behind (`(?<=)` or `(?<!)`) was placed in a
+    /// position where anything (including an [`Ast::Empty`]), might preceed it.
+    /// This includes patterns that can match on nothing, like `a*` or `a?`.
+    #[cfg(feature = "look-ahead-and-behind")]
+    LookBehindAfterStart,
 }
 
 #[cfg(feature = "std")]
@@ -186,14 +195,23 @@ impl core::fmt::Display for Error {
     }
 }
 
+impl core::fmt::Debug for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        use crate::error::Formatter;
+        <Formatter<ErrorKind> as core::fmt::Display>::fmt(
+            &Formatter::from(self),
+            f,
+        )
+    }
+}
+
 impl core::fmt::Display for ErrorKind {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         use self::ErrorKind::*;
         match *self {
             CaptureLimitExceeded => write!(
                 f,
-                "exceeded the maximum number of \
-                 capturing groups ({})",
+                "exceeded the maximum number of capturing groups ({})",
                 u32::MAX
             ),
             ClassEscapeInvalid => {
@@ -201,8 +219,7 @@ impl core::fmt::Display for ErrorKind {
             }
             ClassRangeInvalid => write!(
                 f,
-                "invalid character class range, \
-                 the start must be <= the end"
+                "invalid character class range, the start must be <= the end"
             ),
             ClassRangeLiteral => {
                 write!(f, "invalid range boundary, must be a literal")
@@ -217,8 +234,7 @@ impl core::fmt::Display for ErrorKind {
             EscapeHexInvalidDigit => write!(f, "invalid hexadecimal digit"),
             EscapeUnexpectedEof => write!(
                 f,
-                "incomplete escape sequence, \
-                 reached end of pattern prematurely"
+                "incomplete escape sequence, reached end of pattern prematurely"
             ),
             EscapeUnrecognized => write!(f, "unrecognized escape sequence"),
             FlagDanglingNegation => {
@@ -242,14 +258,12 @@ impl core::fmt::Display for ErrorKind {
             GroupUnopened => write!(f, "unopened group"),
             NestLimitExceeded(limit) => write!(
                 f,
-                "exceed the maximum number of \
-                 nested parentheses/brackets ({})",
+                "exceed the maximum number of nested parentheses/brackets ({})",
                 limit
             ),
             RepetitionCountInvalid => write!(
                 f,
-                "invalid repetition count range, \
-                 the start must be <= the end"
+                "invalid repetition count range, the start must be <= the end"
             ),
             RepetitionCountDecimalEmpty => {
                 write!(f, "repetition quantifier expects a valid decimal")
@@ -266,11 +280,16 @@ impl core::fmt::Display for ErrorKind {
             UnsupportedBackreference => {
                 write!(f, "backreferences are not supported")
             }
+
+            #[cfg(not(feature = "look-ahead-and-behind"))]
             UnsupportedLookAround => write!(
                 f,
-                "look-around, including look-ahead and look-behind, \
-                 is not supported"
+                "if you want to use look-ahead and look-behind expressions, enable the feature \"look-ahead-and-behind\""
             ),
+            #[cfg(feature = "look-ahead-and-behind")]
+            LookAheadBeforeEnd => write!(f, "look-ahead is not last in the concatenation"),
+            #[cfg(feature = "look-ahead-and-behind")]
+            LookBehindAfterStart => write!(f, "look-behind is not first in the concatenation"),
         }
     }
 }
@@ -279,7 +298,7 @@ impl core::fmt::Display for ErrorKind {
 ///
 /// All span positions are absolute byte offsets that can be used on the
 /// original regular expression that was parsed.
-#[derive(Clone, Copy, Eq, PartialEq)]
+#[derive(Default, Clone, Copy, Eq, PartialEq)]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct Span {
     /// The start byte offset.
@@ -310,7 +329,7 @@ impl PartialOrd for Span {
 ///
 /// A position encodes one half of a span, and include the byte offset, line
 /// number and column number.
-#[derive(Clone, Copy, Eq, PartialEq)]
+#[derive(Default, Clone, Copy, Eq, PartialEq)]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct Position {
     /// The absolute offset of this position, starting at `0` from the
@@ -442,8 +461,8 @@ pub enum Ast {
     Dot(Span),
     /// A single zero-width assertion.
     Assertion(Assertion),
-    /// A single character class. This includes all forms of character classes
-    /// except for `.`. e.g., `\d`, `\pN`, `[a-z]` and `[[:alpha:]]`.
+    /// A look ahead assertion. Only to be used at the end of a regular
+    /// expression.
     Class(Class),
     /// A repetition operator applied to an arbitrary regular expression.
     Repetition(Repetition),
@@ -458,24 +477,40 @@ pub enum Ast {
 impl Ast {
     /// Return the span of this abstract syntax tree.
     pub fn span(&self) -> &Span {
-        match *self {
-            Ast::Empty(ref span) => span,
-            Ast::Flags(ref x) => &x.span,
-            Ast::Literal(ref x) => &x.span,
-            Ast::Dot(ref span) => span,
-            Ast::Assertion(ref x) => &x.span,
-            Ast::Class(ref x) => x.span(),
-            Ast::Repetition(ref x) => &x.span,
-            Ast::Group(ref x) => &x.span,
-            Ast::Alternation(ref x) => &x.span,
-            Ast::Concat(ref x) => &x.span,
+        match self {
+            Ast::Empty(span) => span,
+            Ast::Flags(x) => &x.span,
+            Ast::Literal(x) => &x.span,
+            Ast::Dot(span) => span,
+            Ast::Assertion(x) => &x.span,
+            Ast::Class(x) => x.span(),
+            Ast::Repetition(x) => &x.span,
+            Ast::Group(x) => &x.span,
+            Ast::Alternation(x) => &x.span,
+            Ast::Concat(x) => &x.span,
         }
     }
 
     /// Return true if and only if this Ast is empty.
     pub fn is_empty(&self) -> bool {
-        match *self {
-            Ast::Empty(_) => true,
+        matches!(*self, Ast::Empty(_))
+    }
+
+    /// Returns `true` if this is a look-ahead or a group that recursively
+    /// contains a look-ahead.
+    #[cfg(feature = "look-ahead-and-behind")]
+    pub fn concats_look_ahead(&self) -> bool {
+        match self {
+            Ast::Group(Group {
+                kind: GroupKind::LookAhead { .. }, ..
+            }) => true,
+            Ast::Group(group) => group.ast.concats_look_ahead(),
+            Ast::Concat(concat) => {
+                concat.asts.iter().any(Ast::concats_look_ahead)
+            }
+            Ast::Alternation(concat) => {
+                concat.asts.iter().any(Ast::concats_look_ahead)
+            }
             _ => false,
         }
     }
@@ -483,7 +518,7 @@ impl Ast {
     /// Returns true if and only if this AST has any (including possibly empty)
     /// subexpressions.
     fn has_subexprs(&self) -> bool {
-        match *self {
+        match self {
             Ast::Empty(_)
             | Ast::Flags(_)
             | Ast::Literal(_)
@@ -539,7 +574,7 @@ impl Alternation {
 }
 
 /// A concatenation of regular expressions.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Default, Clone, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct Concat {
     /// The span of this concatenation.
@@ -1020,10 +1055,7 @@ pub enum ClassUnicodeOpKind {
 impl ClassUnicodeOpKind {
     /// Whether the op is an equality op or not.
     pub fn is_equal(&self) -> bool {
-        match *self {
-            ClassUnicodeOpKind::Equal | ClassUnicodeOpKind::Colon => true,
-            _ => false,
-        }
+        matches!(*self, ClassUnicodeOpKind::Equal | ClassUnicodeOpKind::Colon)
     }
 }
 
@@ -1073,10 +1105,7 @@ impl ClassSet {
 
     /// Return true if and only if this class set is empty.
     fn is_empty(&self) -> bool {
-        match *self {
-            ClassSet::Item(ClassSetItem::Empty(_)) => true,
-            _ => false,
-        }
+        matches!(*self, ClassSet::Item(ClassSetItem::Empty(_)))
     }
 }
 
@@ -1251,6 +1280,29 @@ pub enum AssertionKind {
     NotWordBoundary,
 }
 
+/// A look ahead assertion, only to be used at the end of a regular expression.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LookAhead {
+    /// The span of this operation.
+    pub span: Span,
+    /// Wether this is `(?=)` or `(?!)`.
+    pub negate: bool,
+    /// The regular expression to look ahead.
+    pub ast: Box<Ast>,
+}
+
+/// A look behind assertion, only to be used at the start of a regular
+/// expression.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LookBehind {
+    /// The span of this operation.
+    pub span: Span,
+    /// Wether this is `(?<=)` or `(?<!)`.
+    pub negate: bool,
+    /// The regular expression to look behind.
+    pub ast: Box<Ast>,
+}
+
 /// A repetition operation applied to a regular expression.
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
@@ -1308,10 +1360,7 @@ impl RepetitionRange {
     /// The only case where a repetition range is invalid is if it is bounded
     /// and its start is greater than its end.
     pub fn is_valid(&self) -> bool {
-        match *self {
-            RepetitionRange::Bounded(s, e) if s > e => false,
-            _ => true,
-        }
+        !matches!(*self, RepetitionRange::Bounded(s, e) if s > e)
     }
 }
 
@@ -1347,6 +1396,10 @@ impl Group {
         match self.kind {
             GroupKind::CaptureIndex(_) | GroupKind::CaptureName { .. } => true,
             GroupKind::NonCapturing(_) => false,
+            #[cfg(feature = "look-ahead-and-behind")]
+            GroupKind::LookAhead { .. } | GroupKind::LookBehind { .. } => {
+                false
+            }
         }
     }
 
@@ -1358,6 +1411,8 @@ impl Group {
             GroupKind::CaptureIndex(i) => Some(i),
             GroupKind::CaptureName { ref name, .. } => Some(name.index),
             GroupKind::NonCapturing(_) => None,
+            #[cfg(feature = "look-ahead-and-behind")]
+            GroupKind::LookAhead { .. } | GroupKind::LookBehind { .. } => None,
         }
     }
 }
@@ -1370,13 +1425,26 @@ pub enum GroupKind {
     CaptureIndex(u32),
     /// `(?<name>a)` or `(?P<name>a)`
     CaptureName {
-        /// True if the `?P<` syntax is used and false if the `?<` syntax is used.
+        /// True if the `?P<` syntax is used and false if the `?<` syntax is
+        /// used.
         starts_with_p: bool,
         /// The capture name.
         name: CaptureName,
     },
     /// `(?:a)` and `(?i:a)`
     NonCapturing(Flags),
+    /// `(?=a)` and (?!a)`
+    #[cfg(feature = "look-ahead-and-behind")]
+    LookAhead {
+        /// Indicates wether this look-ahead should be negated or not.
+        negate: bool,
+    },
+    /// `(?<a)` and (?<!a)`
+    #[cfg(feature = "look-ahead-and-behind")]
+    LookBehind {
+        /// Indicates wether this look-behind should be negated or not.
+        negate: bool,
+    },
 }
 
 /// A capture name.
@@ -1511,10 +1579,7 @@ pub enum FlagsItemKind {
 impl FlagsItemKind {
     /// Returns true if and only if this item is a negation operator.
     pub fn is_negation(&self) -> bool {
-        match *self {
-            FlagsItemKind::Negation => true,
-            _ => false,
-        }
+        matches!(*self, FlagsItemKind::Negation)
     }
 }
 
@@ -1544,7 +1609,7 @@ impl Drop for Ast {
     fn drop(&mut self) {
         use core::mem;
 
-        match *self {
+        match self {
             Ast::Empty(_)
             | Ast::Flags(_)
             | Ast::Literal(_)
@@ -1552,10 +1617,10 @@ impl Drop for Ast {
             | Ast::Assertion(_)
             // Classes are recursive, so they get their own Drop impl.
             | Ast::Class(_) => return,
-            Ast::Repetition(ref x) if !x.ast.has_subexprs() => return,
-            Ast::Group(ref x) if !x.ast.has_subexprs() => return,
-            Ast::Alternation(ref x) if x.asts.is_empty() => return,
-            Ast::Concat(ref x) if x.asts.is_empty() => return,
+            Ast::Repetition(repetition) if !repetition.ast.has_subexprs() => return,
+            Ast::Group(group) if !group.ast.has_subexprs() => return,
+            Ast::Alternation(alternation) if alternation.asts.is_empty() => return,
+            Ast::Concat(concat) if concat.asts.is_empty() => return,
             _ => {}
         }
 
@@ -1571,17 +1636,17 @@ impl Drop for Ast {
                 | Ast::Assertion(_)
                 // Classes are recursive, so they get their own Drop impl.
                 | Ast::Class(_) => {}
-                Ast::Repetition(ref mut x) => {
-                    stack.push(mem::replace(&mut x.ast, empty_ast()));
+                Ast::Repetition(ref mut repetition) => {
+                    stack.push(mem::replace(&mut repetition.ast, empty_ast()));
                 }
-                Ast::Group(ref mut x) => {
-                    stack.push(mem::replace(&mut x.ast, empty_ast()));
+                Ast::Group(ref mut group) => {
+                    stack.push(mem::replace(&mut group.ast, empty_ast()));
                 }
-                Ast::Alternation(ref mut x) => {
-                    stack.extend(x.asts.drain(..));
+                Ast::Alternation(ref mut alternation) => {
+                    stack.append(&mut alternation.asts);
                 }
-                Ast::Concat(ref mut x) => {
-                    stack.extend(x.asts.drain(..));
+                Ast::Concat(ref mut concat) => {
+                    stack.append(&mut concat.asts);
                 }
             }
         }

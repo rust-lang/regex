@@ -1,6 +1,4 @@
-/*!
-This module provides a regular expression printer for `Hir`.
-*/
+//! This module provides a regular expression printer for `Hir`.
 
 use core::fmt;
 
@@ -54,7 +52,7 @@ impl PrinterBuilder {
 /// library could provide a constructor from this HIR explicitly, but that
 /// creates an unnecessary public coupling between the regex library and this
 /// specific HIR representation.)
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Printer {
     _priv: (),
 }
@@ -80,26 +78,26 @@ struct Writer<W> {
 }
 
 impl<W: fmt::Write> Visitor for Writer<W> {
-    type Output = ();
     type Err = fmt::Error;
+    type Output = ();
 
     fn finish(self) -> fmt::Result {
         Ok(())
     }
 
     fn visit_pre(&mut self, hir: &Hir) -> fmt::Result {
-        match *hir.kind() {
+        match hir.kind() {
             HirKind::Empty => {
                 // Technically an empty sub-expression could be "printed" by
                 // just ignoring it, but in practice, you could have a
                 // repetition operator attached to an empty expression, and you
                 // really need something in the concrete syntax to make that
                 // work as you'd expect.
-                self.wtr.write_str(r"(?:)")?;
+                self.wtr.write_str(r"(?:)")
             }
             // Repetition operators are strictly suffix oriented.
-            HirKind::Repetition(_) => {}
-            HirKind::Literal(hir::Literal(ref bytes)) => {
+            HirKind::Repetition(_) => Ok(()),
+            HirKind::Literal(hir::Literal(bytes)) => {
                 // See the comment on the 'Concat' and 'Alternation' case below
                 // for why we put parens here. Literals are, conceptually,
                 // a special case of concatenation where each element is a
@@ -130,8 +128,9 @@ impl<W: fmt::Write> Visitor for Writer<W> {
                 if len > 1 {
                     self.wtr.write_str(r")")?;
                 }
+                Ok(())
             }
-            HirKind::Class(hir::Class::Unicode(ref cls)) => {
+            HirKind::Class(hir::Class::Unicode(cls)) => {
                 if cls.ranges().is_empty() {
                     return self.wtr.write_str("[a&&b]");
                 }
@@ -150,9 +149,9 @@ impl<W: fmt::Write> Visitor for Writer<W> {
                         self.write_literal_char(range.end())?;
                     }
                 }
-                self.wtr.write_str("]")?;
+                self.wtr.write_str("]")
             }
-            HirKind::Class(hir::Class::Bytes(ref cls)) => {
+            HirKind::Class(hir::Class::Bytes(cls)) => {
                 if cls.ranges().is_empty() {
                     return self.wtr.write_str("[a&&b]");
                 }
@@ -169,44 +168,35 @@ impl<W: fmt::Write> Visitor for Writer<W> {
                         self.write_literal_class_byte(range.end())?;
                     }
                 }
-                self.wtr.write_str("])")?;
+                self.wtr.write_str("])")
             }
-            HirKind::Look(ref look) => match *look {
-                hir::Look::Start => {
-                    self.wtr.write_str(r"\A")?;
-                }
-                hir::Look::End => {
-                    self.wtr.write_str(r"\z")?;
-                }
-                hir::Look::StartLF => {
-                    self.wtr.write_str("(?m:^)")?;
-                }
-                hir::Look::EndLF => {
-                    self.wtr.write_str("(?m:$)")?;
-                }
-                hir::Look::StartCRLF => {
-                    self.wtr.write_str("(?mR:^)")?;
-                }
-                hir::Look::EndCRLF => {
-                    self.wtr.write_str("(?mR:$)")?;
-                }
-                hir::Look::WordAscii => {
-                    self.wtr.write_str(r"(?-u:\b)")?;
-                }
-                hir::Look::WordAsciiNegate => {
-                    self.wtr.write_str(r"(?-u:\B)")?;
-                }
-                hir::Look::WordUnicode => {
-                    self.wtr.write_str(r"\b")?;
-                }
-                hir::Look::WordUnicodeNegate => {
-                    self.wtr.write_str(r"\B")?;
-                }
+            HirKind::Look(look) => match *look {
+                hir::Look::Start => self.wtr.write_str(r"\A"),
+                hir::Look::End => self.wtr.write_str(r"\z"),
+                hir::Look::StartLF => self.wtr.write_str("(?m:^)"),
+                hir::Look::EndLF => self.wtr.write_str("(?m:$)"),
+                hir::Look::StartCRLF => self.wtr.write_str("(?mR:^)"),
+                hir::Look::EndCRLF => self.wtr.write_str("(?mR:$)"),
+                hir::Look::WordAscii => self.wtr.write_str(r"(?-u:\b)"),
+                hir::Look::WordAsciiNegate => self.wtr.write_str(r"(?-u:\B)"),
+                hir::Look::WordUnicode => self.wtr.write_str(r"\b"),
+                hir::Look::WordUnicodeNegate => self.wtr.write_str(r"\B"),
             },
-            HirKind::Capture(hir::Capture { ref name, .. }) => {
-                self.wtr.write_str("(")?;
-                if let Some(ref name) = *name {
-                    write!(self.wtr, "?P<{}>", name)?;
+            HirKind::Capture(hir::Capture { name, .. }) => match name {
+                Some(name) => write!(self.wtr, "(?P<{}>", name),
+                None => self.wtr.write_str("("),
+            },
+            #[cfg(feature = "look-ahead-and-behind")]
+            HirKind::LookAhead(hir::LookAhead { negate, .. }) => match *negate
+            {
+                true => self.wtr.write_str("(?!"),
+                false => self.wtr.write_str("(?="),
+            },
+            #[cfg(feature = "look-ahead-and-behind")]
+            HirKind::LookBehind(hir::LookBehind { negate, .. }) => {
+                match *negate {
+                    true => self.wtr.write_str("(?<!"),
+                    false => self.wtr.write_str("(?<="),
                 }
             }
             // Why do this? Wrapping concats and alts in non-capturing groups
@@ -223,57 +213,40 @@ impl<W: fmt::Write> Visitor for Writer<W> {
             // its construction forbids it from doing so. Therefore, inserting
             // extra groups where they aren't necessary is perfectly okay.
             HirKind::Concat(_) | HirKind::Alternation(_) => {
-                self.wtr.write_str(r"(?:")?;
+                self.wtr.write_str(r"(?:")
             }
         }
-        Ok(())
     }
 
     fn visit_post(&mut self, hir: &Hir) -> fmt::Result {
-        match *hir.kind() {
+        match hir.kind() {
             // Handled during visit_pre
             HirKind::Empty
             | HirKind::Literal(_)
             | HirKind::Class(_)
-            | HirKind::Look(_) => {}
-            HirKind::Repetition(ref x) => {
+            | HirKind::Look(_) => Ok(()),
+            HirKind::Repetition(x) => {
+                let greed = if x.greedy { "" } else { "?" };
                 match (x.min, x.max) {
-                    (0, Some(1)) => {
-                        self.wtr.write_str("?")?;
-                    }
-                    (0, None) => {
-                        self.wtr.write_str("*")?;
-                    }
-                    (1, None) => {
-                        self.wtr.write_str("+")?;
-                    }
-                    (1, Some(1)) => {
-                        // 'a{1}' and 'a{1}?' are exactly equivalent to 'a'.
-                        return Ok(());
-                    }
-                    (m, None) => {
-                        write!(self.wtr, "{{{},}}", m)?;
-                    }
-                    (m, Some(n)) if m == n => {
-                        write!(self.wtr, "{{{}}}", m)?;
-                        // a{m} and a{m}? are always exactly equivalent.
-                        return Ok(());
-                    }
-                    (m, Some(n)) => {
-                        write!(self.wtr, "{{{},{}}}", m, n)?;
-                    }
-                }
-                if !x.greedy {
-                    self.wtr.write_str("?")?;
+                    (0, Some(1)) => write!(self.wtr, "?{greed}"),
+                    (0, None) => write!(self.wtr, "*{greed}"),
+                    (1, None) => write!(self.wtr, "+{greed}"),
+                    // 'a{1}' and 'a{1}?' are exactly equivalent to 'a'.
+                    (1, Some(1)) => Ok(()),
+                    (m, None) => write!(self.wtr, "{{{m},}}"),
+                    // a{m} and a{m}? are always exactly equivalent.
+                    (m, Some(n)) if m == n => write!(self.wtr, "{{{m}}}"),
+                    (m, Some(n)) => write!(self.wtr, "{{{m},{n}}}{greed}"),
                 }
             }
             HirKind::Capture(_)
             | HirKind::Concat(_)
-            | HirKind::Alternation(_) => {
-                self.wtr.write_str(r")")?;
+            | HirKind::Alternation(_) => self.wtr.write_str(r")"),
+            #[cfg(feature = "look-ahead-and-behind")]
+            HirKind::LookAhead(_) | HirKind::LookBehind(_) => {
+                self.wtr.write_str(r")")
             }
         }
-        Ok(())
     }
 
     fn visit_alternation_in(&mut self) -> fmt::Result {
@@ -290,7 +263,7 @@ impl<W: fmt::Write> Writer<W> {
     }
 
     fn write_literal_byte(&mut self, b: u8) -> fmt::Result {
-        if b <= 0x7F && !b.is_ascii_control() && !b.is_ascii_whitespace() {
+        if b <= 0x7f && !b.is_ascii_control() && !b.is_ascii_whitespace() {
             self.write_literal_char(char::try_from(b).unwrap())
         } else {
             write!(self.wtr, "(?-u:\\x{:02X})", b)
@@ -298,7 +271,7 @@ impl<W: fmt::Write> Writer<W> {
     }
 
     fn write_literal_class_byte(&mut self, b: u8) -> fmt::Result {
-        if b <= 0x7F && !b.is_ascii_control() && !b.is_ascii_whitespace() {
+        if b <= 0x7f && !b.is_ascii_control() && !b.is_ascii_whitespace() {
             self.write_literal_char(char::try_from(b).unwrap())
         } else {
             write!(self.wtr, "\\x{:02X}", b)
@@ -313,9 +286,8 @@ mod tests {
         string::{String, ToString},
     };
 
-    use crate::ParserBuilder;
-
     use super::*;
+    use crate::ParserBuilder;
 
     fn roundtrip(given: &str, expected: &str) {
         roundtrip_with(|b| b, given, expected);

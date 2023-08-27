@@ -335,7 +335,7 @@ impl<'a> HeapVisitor<'a> {
                 // If this is a union or a binary op, then we might have
                 // additional inductive steps to process.
                 if let Some(x) = self.pop_class(frame) {
-                    if let ClassFrame::BinaryRHS { ref op, .. } = x {
+                    if let ClassFrame::BinaryRHS { op, .. } = x {
                         visitor.visit_class_set_binary_op_in(op)?;
                     }
                     ast = x.child();
@@ -386,8 +386,8 @@ impl<'a> HeapVisitor<'a> {
     /// Build a stack frame for the given class node if one is needed (which
     /// occurs if and only if there are child nodes). Otherwise, return None.
     fn induct_class(&self, ast: &ClassInduct<'a>) -> Option<ClassFrame<'a>> {
-        match *ast {
-            ClassInduct::Item(&ast::ClassSetItem::Bracketed(ref x)) => {
+        match ast {
+            ClassInduct::Item(ast::ClassSetItem::Bracketed(x)) => {
                 match x.kind {
                     ast::ClassSet::Item(ref item) => {
                         Some(ClassFrame::Union { head: item, tail: &[] })
@@ -397,7 +397,7 @@ impl<'a> HeapVisitor<'a> {
                     }
                 }
             }
-            ClassInduct::Item(&ast::ClassSetItem::Union(ref x)) => {
+            ClassInduct::Item(ast::ClassSetItem::Union(x)) => {
                 if x.items.is_empty() {
                     None
                 } else {
@@ -454,15 +454,11 @@ impl<'a> ClassFrame<'a> {
     /// Perform the next inductive step on this frame and return the next
     /// child class node to visit.
     fn child(&self) -> ClassInduct<'a> {
-        match *self {
+        match self {
             ClassFrame::Union { head, .. } => ClassInduct::Item(head),
             ClassFrame::Binary { op, .. } => ClassInduct::BinaryOp(op),
-            ClassFrame::BinaryLHS { ref lhs, .. } => {
-                ClassInduct::from_set(lhs)
-            }
-            ClassFrame::BinaryRHS { ref rhs, .. } => {
-                ClassInduct::from_set(rhs)
-            }
+            ClassFrame::BinaryLHS { lhs, .. } => ClassInduct::from_set(lhs),
+            ClassFrame::BinaryRHS { rhs, .. } => ClassInduct::from_set(rhs),
         }
     }
 }

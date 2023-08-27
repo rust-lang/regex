@@ -1,10 +1,7 @@
-/*!
-Defines a translator that converts an `Ast` to an `Hir`.
-*/
-
-use core::cell::{Cell, RefCell};
+//! Defines a translator that converts an `Ast` to an `Hir`.
 
 use alloc::{boxed::Box, string::ToString, vec, vec::Vec};
+use core::cell::{Cell, RefCell};
 
 use crate::{
     ast::{self, Ast, Span, Visitor},
@@ -143,7 +140,7 @@ impl TranslatorBuilder {
 ///
 /// A `Translator` can be configured in more detail via a
 /// [`TranslatorBuilder`].
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct Translator {
     /// Our call stack, but on the heap.
     stack: RefCell<Vec<HirFrame>>,
@@ -205,7 +202,8 @@ enum HirFrame {
     /// If `utf8` is enabled (the default), then a byte character is only
     /// permitted to match ASCII text.
     ClassBytes(hir::ClassBytes),
-    /// This is pushed whenever a repetition is observed. After visiting every
+    /// This is pushed
+    /// whenever a repetition is observed. After visiting every
     /// sub-expression in the repetition, the translator's stack is expected to
     /// have this sentinel at the top.
     ///
@@ -254,7 +252,22 @@ impl HirFrame {
         match self {
             HirFrame::Expr(expr) => expr,
             HirFrame::Literal(lit) => Hir::literal(lit),
-            _ => panic!("tried to unwrap expr from HirFrame, got: {:?}", self),
+            _ => unreachable!(
+                "expected expr or literal from HirFrame, got: {:?}",
+                self
+            ),
+        }
+    }
+
+    /// Assert that the current stack frame is a Unicode class expression and
+    /// return it.
+    fn unwrap_class_bytes(self) -> hir::ClassBytes {
+        match self {
+            HirFrame::ClassBytes(cls) => cls,
+            _ => unreachable!(
+                "expected byte class from HirFrame, got: {:?}",
+                self
+            ),
         }
     }
 
@@ -263,22 +276,8 @@ impl HirFrame {
     fn unwrap_class_unicode(self) -> hir::ClassUnicode {
         match self {
             HirFrame::ClassUnicode(cls) => cls,
-            _ => panic!(
-                "tried to unwrap Unicode class \
-                 from HirFrame, got: {:?}",
-                self
-            ),
-        }
-    }
-
-    /// Assert that the current stack frame is a byte class expression and
-    /// return it.
-    fn unwrap_class_bytes(self) -> hir::ClassBytes {
-        match self {
-            HirFrame::ClassBytes(cls) => cls,
-            _ => panic!(
-                "tried to unwrap byte class \
-                 from HirFrame, got: {:?}",
+            _ => unreachable!(
+                "expected Unicode class from HirFrame, got: {:?}",
                 self
             ),
         }
@@ -289,12 +288,10 @@ impl HirFrame {
     fn unwrap_repetition(self) {
         match self {
             HirFrame::Repetition => {}
-            _ => {
-                panic!(
-                    "tried to unwrap repetition from HirFrame, got: {:?}",
-                    self
-                )
-            }
+            _ => unreachable!(
+                "expected repetition from HirFrame, got: {:?}",
+                self
+            ),
         }
     }
 
@@ -304,9 +301,7 @@ impl HirFrame {
     fn unwrap_group(self) -> Flags {
         match self {
             HirFrame::Group { old_flags } => old_flags,
-            _ => {
-                panic!("tried to unwrap group from HirFrame, got: {:?}", self)
-            }
+            _ => unreachable!("expected group from HirFrame, got: {:?}", self),
         }
     }
 
@@ -315,19 +310,17 @@ impl HirFrame {
     fn unwrap_alternation_pipe(self) {
         match self {
             HirFrame::AlternationBranch => {}
-            _ => {
-                panic!(
-                    "tried to unwrap alt pipe from HirFrame, got: {:?}",
-                    self
-                )
-            }
+            _ => unreachable!(
+                "tried to unwrap alt pipe from HirFrame, got: {:?}",
+                self
+            ),
         }
     }
 }
 
 impl<'t, 'p> Visitor for TranslatorI<'t, 'p> {
-    type Output = Hir;
     type Err = Error;
+    type Output = Hir;
 
     fn finish(self) -> Result<Hir> {
         // ... otherwise, we should have exactly one HIR on the stack.
@@ -369,11 +362,11 @@ impl<'t, 'p> Visitor for TranslatorI<'t, 'p> {
     }
 
     fn visit_post(&mut self, ast: &Ast) -> Result<()> {
-        match *ast {
+        match ast {
             Ast::Empty(_) => {
                 self.push(HirFrame::Expr(Hir::empty()));
             }
-            Ast::Flags(ref x) => {
+            Ast::Flags(x) => {
                 self.set_flags(&x.flags);
                 // Flags in the AST are generally considered directives and
                 // not actual sub-expressions. However, they can be used in
@@ -386,29 +379,27 @@ impl<'t, 'p> Visitor for TranslatorI<'t, 'p> {
                 // consistency sake.
                 self.push(HirFrame::Expr(Hir::empty()));
             }
-            Ast::Literal(ref x) => {
-                match self.ast_literal_to_scalar(x)? {
-                    Either::Right(byte) => self.push_byte(byte),
-                    Either::Left(ch) => {
-                        if !self.flags().unicode() && ch.len_utf8() > 1 {
-                            return Err(self
-                                .error(x.span, ErrorKind::UnicodeNotAllowed));
-                        }
-                        match self.case_fold_char(x.span, ch)? {
-                            None => self.push_char(ch),
-                            Some(expr) => self.push(HirFrame::Expr(expr)),
-                        }
+            Ast::Literal(x) => match self.ast_literal_to_scalar(x)? {
+                Either::Right(byte) => self.push_byte(byte),
+                Either::Left(ch) => {
+                    if !self.flags().unicode() && ch.len_utf8() > 1 {
+                        return Err(
+                            self.error(x.span, ErrorKind::UnicodeNotAllowed)
+                        );
+                    }
+                    match self.case_fold_char(x.span, ch)? {
+                        None => self.push_char(ch),
+                        Some(expr) => self.push(HirFrame::Expr(expr)),
                     }
                 }
-                // self.push(HirFrame::Expr(self.hir_literal(x)?));
-            }
+            },
             Ast::Dot(span) => {
-                self.push(HirFrame::Expr(self.hir_dot(span)?));
+                self.push(HirFrame::Expr(self.hir_dot(*span)?));
             }
-            Ast::Assertion(ref x) => {
+            Ast::Assertion(x) => {
                 self.push(HirFrame::Expr(self.hir_assertion(x)?));
             }
-            Ast::Class(ast::Class::Perl(ref x)) => {
+            Ast::Class(ast::Class::Perl(x)) => {
                 if self.flags().unicode() {
                     let cls = self.hir_perl_unicode_class(x)?;
                     let hcls = hir::Class::Unicode(cls);
@@ -419,11 +410,11 @@ impl<'t, 'p> Visitor for TranslatorI<'t, 'p> {
                     self.push(HirFrame::Expr(Hir::class(hcls)));
                 }
             }
-            Ast::Class(ast::Class::Unicode(ref x)) => {
-                let cls = hir::Class::Unicode(self.hir_unicode_class(x)?);
-                self.push(HirFrame::Expr(Hir::class(cls)));
+            Ast::Class(ast::Class::Unicode(x)) => {
+                let class = hir::Class::Unicode(self.hir_unicode_class(x)?);
+                self.push(HirFrame::Expr(Hir::class(class)));
             }
-            Ast::Class(ast::Class::Bracketed(ref ast)) => {
+            Ast::Class(ast::Class::Bracketed(ast)) => {
                 if self.flags().unicode() {
                     let mut cls = self.pop().unwrap().unwrap_class_unicode();
                     self.unicode_fold_and_negate(
@@ -444,16 +435,16 @@ impl<'t, 'p> Visitor for TranslatorI<'t, 'p> {
                     self.push(HirFrame::Expr(expr));
                 }
             }
-            Ast::Repetition(ref x) => {
+            Ast::Repetition(x) => {
                 let expr = self.pop().unwrap().unwrap_expr();
                 self.pop().unwrap().unwrap_repetition();
                 self.push(HirFrame::Expr(self.hir_repetition(x, expr)));
             }
-            Ast::Group(ref x) => {
+            Ast::Group(x) => {
                 let expr = self.pop().unwrap().unwrap_expr();
                 let old_flags = self.pop().unwrap().unwrap_group();
                 self.trans().flags.set(old_flags);
-                self.push(HirFrame::Expr(self.hir_capture(x, expr)));
+                self.push(HirFrame::Expr(self.hir_group(x, expr)));
             }
             Ast::Concat(_) => {
                 let mut exprs = vec![];
@@ -487,19 +478,14 @@ impl<'t, 'p> Visitor for TranslatorI<'t, 'p> {
         &mut self,
         ast: &ast::ClassSetItem,
     ) -> Result<()> {
-        match *ast {
-            ast::ClassSetItem::Bracketed(_) => {
-                if self.flags().unicode() {
-                    let cls = hir::ClassUnicode::empty();
-                    self.push(HirFrame::ClassUnicode(cls));
-                } else {
-                    let cls = hir::ClassBytes::empty();
-                    self.push(HirFrame::ClassBytes(cls));
-                }
+        if let ast::ClassSetItem::Bracketed(_) = *ast {
+            if self.flags().unicode() {
+                let cls = hir::ClassUnicode::empty();
+                self.push(HirFrame::ClassUnicode(cls));
+            } else {
+                let cls = hir::ClassBytes::empty();
+                self.push(HirFrame::ClassBytes(cls));
             }
-            // We needn't handle the Union case here since the visitor will
-            // do it for us.
-            _ => {}
         }
         Ok(())
     }
@@ -639,13 +625,13 @@ impl<'t, 'p> Visitor for TranslatorI<'t, 'p> {
             if self.flags().case_insensitive() {
                 rhs.try_case_fold_simple().map_err(|_| {
                     self.error(
-                        op.rhs.span().clone(),
+                        *op.rhs.span(),
                         ErrorKind::UnicodeCaseUnavailable,
                     )
                 })?;
                 lhs.try_case_fold_simple().map_err(|_| {
                     self.error(
-                        op.lhs.span().clone(),
+                        *op.lhs.span(),
                         ErrorKind::UnicodeCaseUnavailable,
                     )
                 })?;
@@ -697,7 +683,7 @@ impl<'t, 'p> TranslatorI<'t, 'p> {
 
     /// Return a reference to the underlying translator.
     fn trans(&self) -> &Translator {
-        &self.trans
+        self.trans
     }
 
     /// Push the given frame on to the call stack.
@@ -714,7 +700,7 @@ impl<'t, 'p> TranslatorI<'t, 'p> {
         let mut buf = [0; 4];
         let bytes = ch.encode_utf8(&mut buf).as_bytes();
         let mut stack = self.trans().stack.borrow_mut();
-        if let Some(HirFrame::Literal(ref mut literal)) = stack.last_mut() {
+        if let Some(HirFrame::Literal(literal)) = stack.last_mut() {
             literal.extend_from_slice(bytes);
         } else {
             stack.push(HirFrame::Literal(bytes.to_vec()));
@@ -842,7 +828,7 @@ impl<'t, 'p> TranslatorI<'t, 'p> {
             None => return Ok(Either::Left(lit.c)),
             Some(byte) => byte,
         };
-        if byte <= 0x7F {
+        if byte <= 0x7f {
             return Ok(Either::Left(char::try_from(byte).unwrap()));
         }
         if self.trans().utf8 {
@@ -906,25 +892,21 @@ impl<'t, 'p> TranslatorI<'t, 'p> {
             } else {
                 hir::Dot::AnyByte
             }
-        } else {
-            if flags.unicode() {
-                if flags.crlf() {
-                    hir::Dot::AnyCharExceptCRLF
-                } else {
-                    if !lineterm.is_ascii() {
-                        return Err(
-                            self.error(span, ErrorKind::InvalidLineTerminator)
-                        );
-                    }
-                    hir::Dot::AnyCharExcept(char::from(lineterm))
-                }
+        } else if flags.unicode() {
+            if flags.crlf() {
+                hir::Dot::AnyCharExceptCRLF
             } else {
-                if flags.crlf() {
-                    hir::Dot::AnyByteExceptCRLF
-                } else {
-                    hir::Dot::AnyByteExcept(lineterm)
+                if !lineterm.is_ascii() {
+                    return Err(
+                        self.error(span, ErrorKind::InvalidLineTerminator)
+                    );
                 }
+                hir::Dot::AnyCharExcept(char::from(lineterm))
             }
+        } else if flags.crlf() {
+            hir::Dot::AnyByteExceptCRLF
+        } else {
+            hir::Dot::AnyByteExcept(lineterm)
         };
         Ok(Hir::dot(dot))
     }
@@ -967,11 +949,25 @@ impl<'t, 'p> TranslatorI<'t, 'p> {
         })
     }
 
-    fn hir_capture(&self, group: &ast::Group, expr: Hir) -> Hir {
+    fn hir_group(&self, group: &ast::Group, expr: Hir) -> Hir {
         let (index, name) = match group.kind {
             ast::GroupKind::CaptureIndex(index) => (index, None),
             ast::GroupKind::CaptureName { ref name, .. } => {
                 (name.index, Some(name.name.clone().into_boxed_str()))
+            }
+            #[cfg(feature = "look-ahead-and-behind")]
+            ast::GroupKind::LookAhead { negate } => {
+                return Hir::look_ahead(hir::LookAhead {
+                    negate,
+                    sub: Box::new(expr),
+                });
+            }
+            #[cfg(feature = "look-ahead-and-behind")]
+            ast::GroupKind::LookBehind { negate } => {
+                return Hir::look_behind(hir::LookBehind {
+                    negate,
+                    sub: Box::new(expr),
+                });
             }
             // The HIR doesn't need to use non-capturing groups, since the way
             // in which the data type is defined handles this automatically.
@@ -1121,7 +1117,7 @@ impl<'t, 'p> TranslatorI<'t, 'p> {
         result: core::result::Result<hir::ClassUnicode, unicode::Error>,
     ) -> Result<hir::ClassUnicode> {
         result.map_err(|err| {
-            let sp = span.clone();
+            let sp = *span;
             match err {
                 unicode::Error::PropertyNotFound => {
                     self.error(sp, ErrorKind::UnicodePropertyNotFound)
@@ -1148,7 +1144,7 @@ impl<'t, 'p> TranslatorI<'t, 'p> {
         // Unicode scalar value.
         if self.flags().case_insensitive() {
             class.try_case_fold_simple().map_err(|_| {
-                self.error(span.clone(), ErrorKind::UnicodeCaseUnavailable)
+                self.error(*span, ErrorKind::UnicodeCaseUnavailable)
             })?;
         }
         if negated {
@@ -1174,7 +1170,7 @@ impl<'t, 'p> TranslatorI<'t, 'p> {
             class.negate();
         }
         if self.trans().utf8 && !class.is_ascii() {
-            return Err(self.error(span.clone(), ErrorKind::InvalidUtf8));
+            return Err(self.error(*span, ErrorKind::InvalidUtf8));
         }
         Ok(())
     }
@@ -1186,7 +1182,7 @@ impl<'t, 'p> TranslatorI<'t, 'p> {
             Either::Right(byte) => Ok(byte),
             Either::Left(ch) => {
                 let cp = u32::from(ch);
-                if cp <= 0x7F {
+                if cp <= 0x7f {
                     Ok(u8::try_from(cp).unwrap())
                 } else {
                     // We can't feasibly support Unicode in
@@ -1339,13 +1335,12 @@ fn ascii_class_as_chars(
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use crate::{
         ast::{self, parse::ParserBuilder, Ast, Position, Span},
         hir::{self, Hir, HirKind, Look, Properties},
         unicode::{self, ClassQuery},
     };
-
-    use super::*;
 
     // We create these errors to compare with real hir::Errors in the tests.
     // We define equality between TestError and hir::Error to disregard the
@@ -2238,7 +2233,7 @@ mod tests {
             t_bytes("(?-u)[[:alnum:][:^ascii:]]"),
             hir_union(
                 hir_ascii_bclass(&ast::ClassAsciiKind::Alnum),
-                hir_bclass(&[(0x80, 0xFF)]),
+                hir_bclass(&[(0x80, 0xff)]),
             ),
         );
     }

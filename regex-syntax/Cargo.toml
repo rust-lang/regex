@@ -1,7 +1,7 @@
 [package]
 name = "regex-syntax"
 version = "0.7.5"  #:version
-authors = ["The Rust Project Developers", "Andrew Gallant <jamslam@gmail.com>"]
+authors = ["Andrew Gallant <jamslam@gmail.com>", "Mateus Yoshiaki <ahoyiski@gmail.com>"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/rust-lang/regex/tree/master/regex-syntax"
 documentation = "https://docs.rs/regex-syntax"
@@ -33,6 +33,8 @@ unicode-gencat = []
 unicode-perl = []
 unicode-script = []
 unicode-segment = []
+
+look-ahead-and-behind = []
 
 [dependencies]
 arbitrary = { version = "1.3.0", features = ["derive"], optional = true }

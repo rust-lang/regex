@@ -1,23 +1,20 @@
-/*!
-Defines a high-level intermediate (HIR) representation for regular expressions.
-
-The HIR is represented by the [`Hir`] type, and it principally constructed via
-[translation](translate) from an [`Ast`](crate::ast::Ast). Alternatively, users
-may use the smart constructors defined on `Hir` to build their own by hand. The
-smart constructors simultaneously simplify and "optimize" the HIR, and are also
-the same routines used by translation.
-
-Most regex engines only have an HIR like this, and usually construct it
-directly from the concrete syntax. This crate however first parses the
-concrete syntax into an `Ast`, and only then creates the HIR from the `Ast`,
-as mentioned above. It's done this way to facilitate better error reporting,
-and to have a structured representation of a regex that faithfully represents
-its concrete syntax. Namely, while an `Hir` value can be converted back to an
-equivalent regex pattern string, it is unlikely to look like the original due
-to its simplified structure.
-*/
-
-use core::{char, cmp};
+//! Defines a high-level intermediate (HIR) representation for regular
+//! expressions.
+//!
+//! The HIR is represented by the [`Hir`] type, and it principally constructed
+//! via [translation](translate) from an [`Ast`](crate::ast::Ast).
+//! Alternatively, users may use the smart constructors defined on `Hir` to
+//! build their own by hand. The smart constructors simultaneously simplify and
+//! "optimize" the HIR, and are also the same routines used by translation.
+//!
+//! Most regex engines only have an HIR like this, and usually construct it
+//! directly from the concrete syntax. This crate however first parses the
+//! concrete syntax into an `Ast`, and only then creates the HIR from the `Ast`,
+//! as mentioned above. It's done this way to facilitate better error reporting,
+//! and to have a structured representation of a regex that faithfully
+//! represents its concrete syntax. Namely, while an `Hir` value can be
+//! converted back to an equivalent regex pattern string, it is unlikely to look
+//! like the original due to its simplified structure.
 
 use alloc::{
     boxed::Box,
@@ -26,13 +23,13 @@ use alloc::{
     vec,
     vec::Vec,
 };
+use core::{char, cmp};
 
 use crate::{
     ast::Span,
     hir::interval::{Interval, IntervalSet, IntervalSetIter},
     unicode,
 };
-
 pub use crate::{
     hir::visitor::{visit, Visitor},
     unicode::CaseFoldError,
@@ -127,12 +124,11 @@ impl core::fmt::Display for ErrorKind {
             UnicodePropertyNotFound => "Unicode property not found",
             UnicodePropertyValueNotFound => "Unicode property value not found",
             UnicodePerlClassNotFound => {
-                "Unicode-aware Perl class not found \
-                 (make sure the unicode-perl feature is enabled)"
+                "Unicode-aware Perl class not found (make sure the unicode-perl feature is enabled)"
             }
             UnicodeCaseUnavailable => {
-                "Unicode-aware case insensitivity matching is not available \
-                 (make sure the unicode-case feature is enabled)"
+                "Unicode-aware case insensitivity matching is not available (make sure the \
+                 unicode-case feature is enabled)"
             }
         };
         f.write_str(msg)
@@ -306,7 +302,7 @@ impl Hir {
     /// use regex_syntax::hir::{Hir, HirKind, Literal};
     ///
     /// let literals = vec![
-    ///     Hir::literal([0xE2]),
+    ///     Hir::literal([0xe2]),
     ///     Hir::literal([0x98]),
     ///     Hir::literal([0x83]),
     /// ];
@@ -391,6 +387,22 @@ impl Hir {
     pub fn capture(capture: Capture) -> Hir {
         let props = Properties::capture(&capture);
         Hir { kind: HirKind::Capture(capture), props }
+    }
+
+    /// Creates a look-ahead HIR expression.
+    #[inline]
+    #[cfg(feature = "look-ahead-and-behind")]
+    pub fn look_ahead(look_ahead: LookAhead) -> Hir {
+        let props = Properties::look_ahead(&look_ahead);
+        Hir { kind: HirKind::LookAhead(look_ahead), props }
+    }
+
+    /// Creates a look-behind HIR expression.
+    #[inline]
+    #[cfg(feature = "look-ahead-and-behind")]
+    pub fn look_behind(look_behind: LookBehind) -> Hir {
+        let props = Properties::look_behind(&look_behind);
+        Hir { kind: HirKind::LookBehind(look_behind), props }
     }
 
     /// Returns the concatenation of the given expressions.
@@ -502,7 +514,7 @@ impl Hir {
     /// simplified.
     ///
     /// ```
-    /// use regex_syntax::hir::{Hir, Class, ClassUnicode, ClassUnicodeRange};
+    /// use regex_syntax::hir::{Class, ClassUnicode, ClassUnicodeRange, Hir};
     ///
     /// let hir = Hir::alternation(vec![
     ///     Hir::literal([b'a']),
@@ -522,7 +534,7 @@ impl Hir {
     /// out.
     ///
     /// ```
-    /// use regex_syntax::hir::{Hir, Class, ClassUnicode, ClassUnicodeRange};
+    /// use regex_syntax::hir::{Class, ClassUnicode, ClassUnicodeRange, Hir};
     ///
     /// let hir = Hir::alternation(vec![
     ///     Hir::concat(vec![
@@ -631,12 +643,13 @@ impl Hir {
     /// HIR value. It is just an abbreviation for a common character class.
     ///
     /// ```
-    /// use regex_syntax::hir::{Hir, Dot, Class, ClassBytes, ClassBytesRange};
+    /// use regex_syntax::hir::{Class, ClassBytes, ClassBytesRange, Dot, Hir};
     ///
     /// let hir = Hir::dot(Dot::AnyByte);
-    /// let expected = Hir::class(Class::Bytes(ClassBytes::new([
-    ///     ClassBytesRange::new(0x00, 0xFF),
-    /// ])));
+    /// let expected =
+    ///     Hir::class(Class::Bytes(ClassBytes::new([ClassBytesRange::new(
+    ///         0x00, 0xff,
+    ///     )])));
     /// assert_eq!(expected, hir);
     /// ```
     #[inline]
@@ -737,6 +750,12 @@ pub enum HirKind {
     /// Alternations are guaranteed by `Hir`'s smart constructors to always
     /// have at least two sub-expressions.
     Alternation(Vec<Hir>),
+    /// A look-ahead expression, which contains a sub-expression.
+    #[cfg(feature = "look-ahead-and-behind")]
+    LookAhead(LookAhead),
+    /// A look-behind expression, which contains a sub-expression.
+    #[cfg(feature = "look-ahead-and-behind")]
+    LookBehind(LookBehind),
 }
 
 impl HirKind {
@@ -744,15 +763,19 @@ impl HirKind {
     pub fn subs(&self) -> &[Hir] {
         use core::slice::from_ref;
 
-        match *self {
+        match self {
             HirKind::Empty
             | HirKind::Literal(_)
             | HirKind::Class(_)
             | HirKind::Look(_) => &[],
-            HirKind::Repetition(Repetition { ref sub, .. }) => from_ref(sub),
-            HirKind::Capture(Capture { ref sub, .. }) => from_ref(sub),
-            HirKind::Concat(ref subs) => subs,
-            HirKind::Alternation(ref subs) => subs,
+            HirKind::Repetition(Repetition { sub, .. }) => from_ref(sub),
+            HirKind::Capture(Capture { sub, .. }) => from_ref(sub),
+            HirKind::Concat(subs) => subs,
+            HirKind::Alternation(subs) => subs,
+            #[cfg(feature = "look-ahead-and-behind")]
+            HirKind::LookAhead(LookAhead { sub, .. }) => from_ref(sub),
+            #[cfg(feature = "look-ahead-and-behind")]
+            HirKind::LookBehind(LookBehind { sub, .. }) => from_ref(sub),
         }
     }
 }
@@ -881,11 +904,10 @@ impl Class {
     /// A character class can match invalid UTF-8 only when the following
     /// conditions are met:
     ///
-    /// 1. The translator was configured to permit generating an expression
-    ///    that can match invalid UTF-8. (By default, this is disabled.)
+    /// 1. The translator was configured to permit generating an expression that
+    ///    can match invalid UTF-8. (By default, this is disabled.)
     /// 2. Unicode mode (via the `u` flag) was disabled either in the concrete
-    ///    syntax or in the parser builder. By default, Unicode mode is
-    ///    enabled.
+    ///    syntax or in the parser builder. By default, Unicode mode is enabled.
     pub fn is_utf8(&self) -> bool {
         match *self {
             Class::Unicode(_) => true,
@@ -1253,14 +1275,17 @@ impl Interval for ClassUnicodeRange {
     fn lower(&self) -> char {
         self.start
     }
+
     #[inline]
     fn upper(&self) -> char {
         self.end
     }
+
     #[inline]
     fn set_lower(&mut self, bound: char) {
         self.start = bound;
     }
+
     #[inline]
     fn set_upper(&mut self, bound: char) {
         self.end = bound;
@@ -1323,6 +1348,12 @@ impl ClassUnicodeRange {
         // 16-bit targets. For example, this would imply that '.' and '\p{any}'
         // would be impossible to build.)
         usize::try_from(diff).expect("char class len fits in usize")
+    }
+
+    /// Returns `true` if the number of codepoints in this range is 0.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
     }
 }
 
@@ -1420,7 +1451,7 @@ impl ClassBytes {
     /// nothing or only ASCII bytes. Stated differently, this returns false
     /// if and only if this class contains a non-ASCII byte.
     pub fn is_ascii(&self) -> bool {
-        self.set.intervals().last().map_or(true, |r| r.end <= 0x7F)
+        self.set.intervals().last().map_or(true, |r| r.end <= 0x7f)
     }
 
     /// Returns the length, in bytes, of the smallest string matched by this
@@ -1510,14 +1541,17 @@ impl Interval for ClassBytesRange {
     fn lower(&self) -> u8 {
         self.start
     }
+
     #[inline]
     fn upper(&self) -> u8 {
         self.end
     }
+
     #[inline]
     fn set_lower(&mut self, bound: u8) {
         self.start = bound;
     }
+
     #[inline]
     fn set_upper(&mut self, bound: u8) {
         self.end = bound;
@@ -1576,6 +1610,12 @@ impl ClassBytesRange {
         usize::from(self.end.checked_sub(self.start).unwrap())
             .checked_add(1)
             .unwrap()
+    }
+
+    /// Returns `true` if the number of bytes in this range is 0.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
     }
 }
 
@@ -1727,6 +1767,34 @@ pub struct Capture {
     pub sub: Box<Hir>,
 }
 
+/// The high-level intermediate representation of a look-ahead expression.
+///
+/// The expression may be positive (`(?=expr)`), or it may be negative
+/// (`(?!expr)`), determining if the matching of the subexpression enables or
+/// disqualifies the whole match.
+#[cfg(feature = "look-ahead-and-behind")]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LookAhead {
+    /// Wether to enable or disqualify the whole match upon matching.
+    pub negate: bool,
+    /// The expression inside the look-ahead, which may be empty.
+    pub sub: Box<Hir>,
+}
+
+/// The high-level intermediate representation of a look-behind expression.
+///
+/// The expression may be positive (`(?<=expr)`), or it may be negative
+/// (`(?<!expr)`), determining if the matching of the subexpression enables or
+/// disqualifies the whole match.
+#[cfg(feature = "look-ahead-and-behind")]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LookBehind {
+    /// Wether to enable or disqualify the whole match upon matching.
+    pub negate: bool,
+    /// The expression inside the look-behind, which may be empty.
+    pub sub: Box<Hir>,
+}
+
 /// The high-level intermediate representation of a repetition operator.
 ///
 /// A repetition operator permits the repetition of an arbitrary
@@ -1836,23 +1904,25 @@ impl Drop for Hir {
     fn drop(&mut self) {
         use core::mem;
 
-        match *self.kind() {
+        match self.kind() {
             HirKind::Empty
             | HirKind::Literal(_)
             | HirKind::Class(_)
             | HirKind::Look(_) => return,
-            HirKind::Capture(ref x) if x.sub.kind.subs().is_empty() => return,
-            HirKind::Repetition(ref x) if x.sub.kind.subs().is_empty() => {
-                return
-            }
-            HirKind::Concat(ref x) if x.is_empty() => return,
-            HirKind::Alternation(ref x) if x.is_empty() => return,
+            HirKind::Capture(x) if x.sub.kind.subs().is_empty() => return,
+            HirKind::Repetition(x) if x.sub.kind.subs().is_empty() => return,
+            HirKind::Concat(x) if x.is_empty() => return,
+            HirKind::Alternation(x) if x.is_empty() => return,
+            #[cfg(feature = "look-ahead-and-behind")]
+            HirKind::LookAhead(x) if x.sub.kind.subs().is_empty() => return,
+            #[cfg(feature = "look-ahead-and-behind")]
+            HirKind::LookBehind(x) if x.sub.kind.subs().is_empty() => return,
             _ => {}
         }
 
         let mut stack = vec![mem::replace(self, Hir::empty())];
         while let Some(mut expr) = stack.pop() {
-            match expr.kind {
+            match &mut expr.kind {
                 HirKind::Empty
                 | HirKind::Literal(_)
                 | HirKind::Class(_)
@@ -1863,11 +1933,15 @@ impl Drop for Hir {
                 HirKind::Repetition(ref mut x) => {
                     stack.push(mem::replace(&mut x.sub, Hir::empty()));
                 }
-                HirKind::Concat(ref mut x) => {
-                    stack.extend(x.drain(..));
+                HirKind::Concat(ref mut x) => stack.append(x),
+                HirKind::Alternation(ref mut x) => stack.append(x),
+                #[cfg(feature = "look-ahead-and-behind")]
+                HirKind::LookAhead(ref mut x) => {
+                    stack.push(mem::replace(&mut x.sub, Hir::empty()));
                 }
-                HirKind::Alternation(ref mut x) => {
-                    stack.extend(x.drain(..));
+                #[cfg(feature = "look-ahead-and-behind")]
+                HirKind::LookBehind(ref mut x) => {
+                    stack.push(mem::replace(&mut x.sub, Hir::empty()));
                 }
             }
         }
@@ -2014,7 +2088,7 @@ impl Properties {
     /// This code example shows the UTF-8 property of a variety of patterns.
     ///
     /// ```
-    /// use regex_syntax::{ParserBuilder, parse};
+    /// use regex_syntax::{parse, ParserBuilder};
     ///
     /// // Examples of 'is_utf8() == true'.
     /// assert!(parse(r"a")?.properties().is_utf8());
@@ -2035,9 +2109,8 @@ impl Properties {
     /// // The only way to do this is to force the parser
     /// // to permit invalid UTF-8, otherwise all of these
     /// // would fail to parse!
-    /// let parse = |pattern| {
-    ///     ParserBuilder::new().utf8(false).build().parse(pattern)
-    /// };
+    /// let parse =
+    ///     |pattern| ParserBuilder::new().utf8(false).build().parse(pattern);
     /// assert!(!parse(r"(?-u)[^a]")?.properties().is_utf8());
     /// assert!(!parse(r"(?-u).")?.properties().is_utf8());
     /// assert!(!parse(r"(?-u)\W")?.properties().is_utf8());
@@ -2106,9 +2179,7 @@ impl Properties {
     /// use regex_syntax::parse;
     ///
     /// let len = |pattern| {
-    ///     parse(pattern).map(|h| {
-    ///         h.properties().static_explicit_captures_len()
-    ///     })
+    ///     parse(pattern).map(|h| h.properties().static_explicit_captures_len())
     /// };
     ///
     /// assert_eq!(Some(0), len("a")?);
@@ -2190,10 +2261,10 @@ impl Properties {
     /// assert_eq!(Some(4), hir3.properties().maximum_len());
     ///
     /// let unioned = Properties::union([
-    ///		hir1.properties(),
-    ///		hir2.properties(),
-    ///		hir3.properties(),
-    ///	]);
+    ///     hir1.properties(),
+    ///     hir2.properties(),
+    ///     hir3.properties(),
+    /// ]);
     /// assert_eq!(None, unioned.minimum_len());
     /// assert_eq!(None, unioned.maximum_len());
     ///
@@ -2220,10 +2291,10 @@ impl Properties {
     /// assert_eq!(Some(4), hir3.properties().maximum_len());
     ///
     /// let unioned = Properties::union([
-    ///		hir1.properties(),
-    ///		hir2.properties(),
-    ///		hir3.properties(),
-    ///	]);
+    ///     hir1.properties(),
+    ///     hir2.properties(),
+    ///     hir3.properties(),
+    /// ]);
     /// assert_eq!(Some(1), unioned.minimum_len());
     /// assert_eq!(None, unioned.maximum_len());
     ///
@@ -2489,6 +2560,32 @@ impl Properties {
         }))
     }
 
+    /// Create a new set of HIR properties for a look-ahead.
+    #[cfg(feature = "look-ahead-and-behind")]
+    fn look_ahead(look_ahead: &LookAhead) -> Properties {
+        let p = look_ahead.sub.properties();
+        Properties(Box::new(PropertiesI {
+            explicit_captures_len: 0,
+            static_explicit_captures_len: None,
+            literal: false,
+            alternation_literal: false,
+            ..*p.0.clone()
+        }))
+    }
+
+    /// Create a new set of HIR properties for a look-behind.
+    #[cfg(feature = "look-ahead-and-behind")]
+    fn look_behind(look_ahead: &LookBehind) -> Properties {
+        let p = look_ahead.sub.properties();
+        Properties(Box::new(PropertiesI {
+            explicit_captures_len: 0,
+            static_explicit_captures_len: None,
+            literal: false,
+            alternation_literal: false,
+            ..*p.0.clone()
+        }))
+    }
+
     /// Create a new set of HIR properties for a concatenation.
     fn concat(concat: &[Hir]) -> Properties {
         // The base case is an empty concatenation, which matches the empty
@@ -2522,7 +2619,7 @@ impl Properties {
                 .and_then(|len1| {
                     Some((len1, props.static_explicit_captures_len?))
                 })
-                .and_then(|(len1, len2)| Some(len1.saturating_add(len2)));
+                .map(|(len1, len2)| len1.saturating_add(len2));
             props.literal = props.literal && p.is_literal();
             props.alternation_literal =
                 props.alternation_literal && p.is_alternation_literal();

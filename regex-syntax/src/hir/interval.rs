@@ -455,7 +455,7 @@ pub trait Interval:
             return (None, None);
         }
         if self.is_intersection_empty(other) {
-            return (Some(self.clone()), None);
+            return (Some(*self), None);
         }
         let add_lower = other.lower() > self.lower();
         let add_upper = other.upper() < self.upper();
@@ -486,11 +486,11 @@ pub trait Interval:
         other: &Self,
     ) -> (Option<Self>, Option<Self>) {
         let union = match self.union(other) {
-            None => return (Some(self.clone()), Some(other.clone())),
+            None => return (Some(*self), Some(*other)),
             Some(union) => union,
         };
         let intersection = match self.intersect(other) {
-            None => return (Some(self.clone()), Some(other.clone())),
+            None => return (Some(*self), Some(*other)),
             Some(intersection) => intersection,
         };
         union.difference(&intersection)
