@@ -1,3 +1,42 @@
+1.9.5 (2023-09-02)
+==================
+This is a patch release that hopefully mostly fixes a performance bug that
+occurs when sharing a regex across multiple threads.
+
+Issue [#934](https://github.com/rust-lang/regex/issues/934)
+explains this in more detail. It is [also noted in the crate
+documentation](https://docs.rs/regex/latest/regex/#sharing-a-regex-across-threads-can-result-in-contention).
+The bug can appear when sharing a regex across multiple threads simultaneously,
+as might be the case when using a regex from a `OnceLock`, `lazy_static` or
+similar primitive. Usually high contention only results when using many threads
+to execute searches on small haystacks.
+
+One can avoid the contention problem entirely through one of two methods.
+The first is to use lower level APIs from `regex-automata` that require passing
+state explicitly, such as [`meta::Regex::search_with`](https://docs.rs/regex-automata/latest/regex_automata/meta/struct.Regex.html#method.search_with).
+The second is to clone a regex and send it to other threads explicitly. This
+will not use any additional memory usage compared to sharing the regex. The
+only downside of this approach is that it may be less convenient, for example,
+it won't work with things like `OnceLock` or `lazy_static` or `once_cell`.
+
+With that said, as of this release, the contention performance problems have
+been greatly reduced. This was achieved by changing the free-list so that it
+was sharded across threads, and that ensuring each sharded mutex occupies a
+single cache line to mitigate false sharing. So while contention may still
+impact performance in some cases, it should be a lot better now.
+
+Because of the changes to how the free-list works, please report any issues you
+find with this release. That not only includes search time regressions but also
+significant regressions in memory usage. Reporting improvements is also welcome
+as well! If possible, provide a reproduction.
+
+Bug fixes:
+
+* [BUG #934](https://github.com/rust-lang/regex/issues/934):
+Fix a performance bug where high contention on a single regex led to massive
+slow downs.
+
+
 1.9.4 (2023-08-26)
 ==================
 This is a patch release that fixes a bug where `RegexSet::is_match(..)` could
