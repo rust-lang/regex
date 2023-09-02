@@ -87,6 +87,8 @@ needing to re-create the scratch space for every search, which could wind up
 being quite expensive.
 */
 
+use core::panic::{RefUnwindSafe, UnwindSafe};
+
 /// A thread safe pool that works in an `alloc`-only context.
 ///
 /// Getting a value out comes with a guard. When that guard is dropped, the
@@ -158,6 +160,19 @@ impl<T, F> Pool<T, F> {
     /// the pool when necessary.
     pub fn new(create: F) -> Pool<T, F> {
         Pool(alloc::boxed::Box::new(inner::Pool::new(create)))
+    }
+
+    /// TODO
+    pub fn set_clone(
+        &mut self,
+        clone: impl Fn(&T) -> T
+            + Send
+            + Sync
+            + UnwindSafe
+            + RefUnwindSafe
+            + 'static,
+    ) {
+        self.0.set_clone(clone);
     }
 }
 
@@ -232,7 +247,7 @@ mod inner {
     use core::{
         cell::UnsafeCell,
         panic::{RefUnwindSafe, UnwindSafe},
-        sync::atomic::{AtomicUsize, Ordering},
+        sync::atomic::{AtomicPtr, AtomicUsize, Ordering},
     };
 
     use alloc::{boxed::Box, vec, vec::Vec};
@@ -360,6 +375,10 @@ mod inner {
     #[repr(C, align(64))]
     struct CacheLine<T>(T);
 
+    type Cloner<T> = Box<
+        dyn Fn(&T) -> T + Send + Sync + UnwindSafe + RefUnwindSafe + 'static,
+    >;
+
     /// A thread safe pool utilizing std-only features.
     ///
     /// The main difference between this and the simplistic alloc-only pool is
@@ -371,6 +390,7 @@ mod inner {
         /// A function to create more T values when stack is empty and a caller
         /// has requested a T.
         create: F,
+        clone: Option<Cloner<T>>,
         /// Multiple stacks of T values to hand out. These are used when a Pool
         /// is accessed by a thread that didn't create it.
         ///
@@ -393,6 +413,7 @@ mod inner {
         /// This is set to None when a Pool is first created, and set to Some
         /// once the first thread calls Pool::get.
         owner_val: UnsafeCell<Option<T>>,
+        clone_from: AtomicPtr<T>,
     }
 
     // SAFETY: Since we want to use a Pool from multiple threads simultaneously
@@ -456,13 +477,27 @@ mod inner {
             // 'Pool::new' method as 'const' too. (The alloc-only Pool::new
             // is already 'const', so that should "just work" too.) The only
             // thing we're waiting for is Mutex::new to be const.
+            let clone = None;
             let mut stacks = Vec::with_capacity(MAX_POOL_STACKS);
             for _ in 0..stacks.capacity() {
                 stacks.push(CacheLine(Mutex::new(vec![])));
             }
             let owner = AtomicUsize::new(THREAD_ID_UNOWNED);
             let owner_val = UnsafeCell::new(None); // init'd on first access
-            Pool { create, stacks, owner, owner_val }
+            let clone_from = AtomicPtr::new(core::ptr::null_mut());
+            Pool { create, clone, stacks, owner, owner_val, clone_from }
+        }
+
+        pub(super) fn set_clone(
+            &mut self,
+            clone: impl Fn(&T) -> T
+                + Send
+                + Sync
+                + UnwindSafe
+                + RefUnwindSafe
+                + 'static,
+        ) {
+            self.clone = Some(Box::new(clone));
         }
     }
 
@@ -549,14 +584,40 @@ mod inner {
                 // Unlock the mutex guarding the stack before creating a fresh
                 // value since we no longer need the stack.
                 drop(stack);
-                let value = Box::new((self.create)());
-                return self.guard_stack(value);
+                if let Some(new) = self.get_cloned() {
+                    return self.guard_stack(new);
+                }
+                let new = Box::new((self.create)());
+                return self.guard_stack(new);
+            }
+            // Before just creating a new value (since we couldn't get quick
+            // access to an existing one), we should try and see if we have an
+            // existing value we can clone from. This may wind up being cheaper
+            // than creating new values from scratch. For example, if the value
+            // has a lazy DFA cache, then this might clone an existing portion
+            // of a previously computed transition table. Cloning that will
+            // avoid needing to re-compute that transition table.
+            if let Some(new) = self.get_cloned() {
+                // We're careful to return a transient stack because we
+                // don't want to keep growing our stacks just because there
+                // is high contention.
+                return self.guard_stack_transient(new);
             }
             // We're only here if we could get access to our stack, so just
             // create a new value. This seems like it could be wasteful, but
             // waiting for exclusive access to a stack when there's high
             // contention is brutal for perf.
             self.guard_stack_transient(Box::new((self.create)()))
+        }
+
+        fn get_cloned(&self) -> Option<Box<T>> {
+            let clone = self.clone.as_ref()?;
+            let clone_from = self.clone_from.load(Ordering::Acquire);
+            if clone_from.is_null() {
+                return None;
+            }
+            let clone_from = unsafe { &*clone_from };
+            Some(Box::new(clone(clone_from)))
         }
 
         /// Puts a value back into the pool. Callers don't need to call this.
@@ -584,6 +645,41 @@ mod inner {
                 stack.push(value);
                 return;
             }
+            // At this point, we couldn't acquire a lock to push our value
+            // back into a stack to be reused. But! If the caller set a cloner,
+            // and a base clone-from value hasn't been set yet, then we can
+            // do so now.
+            if self.clone.is_some() {
+                // If there's already a value to clone from, then we'll just
+                // drop this value.
+                if !self.clone_from.load(Ordering::Acquire).is_null() {
+                    return;
+                }
+                // Try to atomically swap in this value. Another thread might
+                // try this at the same time. It doesn't matter who wins, but
+                // we need to know whether we fail or not so that we can drop
+                // this value if we fail.
+                let new_clone_from = Box::into_raw(value);
+                let result = self.clone_from.compare_exchange(
+                    core::ptr::null_mut(),
+                    new_clone_from,
+                    Ordering::AcqRel,
+                    Ordering::Acquire,
+                );
+                // If we succeeded, then we're done and the Pool now owns the
+                // clone_from value and is responsible for dropping it.
+                if result.is_ok() {
+                    return;
+                }
+                // We've got to drop it if we failed.
+                //
+                // SAFETY: This is okay because `new_clone_from` did not get
+                // stored in `self.clone_from` and it was created above via
+                // `Box::into_raw`.
+                unsafe {
+                    drop(Box::from_raw(new_clone_from));
+                }
+            }
         }
 
         /// Create a guard that represents the special owned T.
@@ -601,6 +697,24 @@ mod inner {
         /// into the pool.
         fn guard_stack_transient(&self, value: Box<T>) -> PoolGuard<'_, T, F> {
             PoolGuard { pool: self, value: Ok(value), discard: true }
+        }
+    }
+
+    impl<T, F> Drop for Pool<T, F> {
+        fn drop(&mut self) {
+            let clone_from = core::mem::replace(
+                self.clone_from.get_mut(),
+                core::ptr::null_mut(),
+            );
+            if !clone_from.is_null() {
+                // SAFETY: Since we acessed `self.clone_from` mutably, we're
+                // guaranteed to be the only trying to drop it. Also, it was
+                // created via `Box::into_raw` so that the `Box::from_raw` is
+                // OK.
+                unsafe {
+                    drop(Box::from_raw(clone_from));
+                }
+            }
         }
     }
 

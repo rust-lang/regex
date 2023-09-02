@@ -1902,7 +1902,9 @@ impl Clone for Regex {
         let pool = {
             let strat = Arc::clone(&imp.strat);
             let create: CachePoolFn = Box::new(move || strat.create_cache());
-            Pool::new(create)
+            let mut pool = Pool::new(create);
+            pool.set_clone(Cache::clone);
+            pool
         };
         Regex { imp, pool }
     }
@@ -3554,7 +3556,9 @@ impl Builder {
         let pool = {
             let strat = Arc::clone(&strat);
             let create: CachePoolFn = Box::new(move || strat.create_cache());
-            Pool::new(create)
+            let mut pool = Pool::new(create);
+            pool.set_clone(Cache::clone);
+            pool
         };
         Ok(Regex { imp: Arc::new(RegexI { strat, info }), pool })
     }
