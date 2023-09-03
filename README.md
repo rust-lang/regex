@@ -219,6 +219,77 @@ The full set of features one can disable are
 [in the "Crate features" section of the documentation](https://docs.rs/regex/1.*/#crate-features).
 
 
+### Performance
+
+One of the goals of this crate is for the regex engine to be "fast." What that
+is a somewhat nebulous goal, it is usually interpreted in one of two ways.
+First, it means that all searches take worst case `O(m * n)` time, where
+`m` is proportional to `len(regex)` and `n` is proportional to `len(haystack)`.
+Second, it means that even aside from the time complexity constraint, regex
+searches are "fast" in practice.
+
+While the first interpretation is pretty unambiguous, the second one remains
+nebulous. While nebulous, it guides this crate's architecture and the sorts of
+the trade offs it makes. For example, here are some general architectural
+statements that follow as a result of the goal to be "fast":
+
+* When given the choice between faster regex searches and faster Rust compile
+times, this crate will generally choose faster regex searches.
+* When given the choice between faster regex searches and faster regex compile
+times, this crate will generally choose faster regex searches. That is, it is
+generally acceptable for `Regex::new` to get a little slower if it means that
+searches get faster. (This is a somewhat delicate balance to strike, because
+the speed of `Regex::new` needs to remain somewhat reasonable. But this is why
+one should avoid re-compiling the same regex over and over again.)
+* When given the choice between faster regex searches and simpler API
+design, this crate will generally choose faster regex searches. For example,
+if one didn't care about performance, we could like get rid of both of
+the `Regex::is_match` and `Regex::find` APIs and instead just rely on
+`Regex::captures`.
+
+There are perhaps more ways that being "fast" influences things.
+
+While this repository used to provide its own benchmark suite, it has since
+been moved to [rebar](https://github.com/BurntSushi/rebar). The benchmarks are
+quite extensive, and there are many more than what is shown in rebar's README
+(which is just limited to a "curated" set meant to compare performance between
+regex engines). To run all of this crate's benchmarks, first start by cloning
+and installing `rebar`:
+
+```text
+$ git clone https://github.com/BurntSushi/rebar
+$ cd rebar
+$ cargo install --path ./
+```
+
+Then build the benchmark harness for just this crate:
+
+```text
+$ rebar build -e '^rust/regex$'
+```
+
+Run all benchmarks for this crate as tests (each benchmark is executed once to
+ensure it works):
+
+```text
+$ rebar measure -e '^rust/regex$' -t
+```
+
+Record measurements for all benchmarks and save them to a CSV file:
+
+```text
+$ rebar measure -e '^rust/regex$' | tee results.csv
+```
+
+Explore benchmark timings:
+
+```text
+$ rebar cmp results.csv
+```
+
+See the `rebar` documentation for more details on how it works and how to
+compare results with other regex engines.
+
 ### Minimum Rust version policy
 
 This crate's minimum supported `rustc` version is `1.60.0`.
