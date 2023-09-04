@@ -233,8 +233,6 @@ nebulous. While nebulous, it guides this crate's architecture and the sorts of
 the trade offs it makes. For example, here are some general architectural
 statements that follow as a result of the goal to be "fast":
 
-* When given the choice between faster regex searches and faster Rust compile
-times, this crate will generally choose faster regex searches.
 * When given the choice between faster regex searches and faster regex compile
 times, this crate will generally choose faster regex searches. That is, it is
 generally acceptable for `Regex::new` to get a little slower if it means that
