@@ -69,7 +69,7 @@ ffi_fn! {
                 // error message. In this case, just show as much as we can.
                 let nul = err.nul_position();
                 let msg = err.into_vec();
-                CString::new(msg[0..nul].to_owned()).unwrap()
+                CString::new(&msg[0..nul]).unwrap()
             }
         };
         let p = cmsg.as_ptr();
