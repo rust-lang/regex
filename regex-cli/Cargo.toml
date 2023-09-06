@@ -1,0 +1,35 @@
+[package]
+name = "regex-cli"
+version = "0.1.0"  #:version
+authors = ["The Rust Project Developers", "Andrew Gallant <jamslam@gmail.com>"]
+description = """
+A command line tool for debugging, ad hoc benchmarking and generating regular
+expressions.
+"""
+repository = "https://github.com/rust-lang/regex/tree/master/regex-cli"
+keywords = ["regex", "cli", "debug", "nfa", "dfa"]
+license = "MIT OR Apache-2.0"
+categories = ["text-processing"]
+autotests = false
+edition = "2021"
+
+[[bin]]
+name = "regex-cli"
+path = "main.rs"
+
+[features]
+default = []
+instrument = ["regex-automata/internal-instrument"]
+
+[dependencies]
+anyhow = "1.0.28"
+bstr = { version = "1.4.0", default-features = false, features = ["std"] }
+lexopt = "0.3.0"
+log = { version = "0.4.17", features = ["std"] }
+memmap2 = "0.5.10"
+regex = { version = "1.9.0", path = ".." }
+regex-automata = { version = "0.3.0", path = "../regex-automata", features = ["logging"] }
+regex-lite = { version = "0.1.0", path = "../regex-lite" }
+regex-syntax = { version = "0.7.3", path = "../regex-syntax" }
+tabwriter = { version = "1.2.1", features = ["ansi_formatting"] }
+textwrap = { version = "0.16.0", default-features = false }

@@ -1,28 +1,71 @@
-cargo-features = ['named-profiles']
-
 [package]
 name = "regex-fuzz"
 version = "0.0.0"
-authors = ["David Korczynski <david@adalogics.com>"]
+authors = [
+  "The Rust Project Developers",
+  "David Korczynski <david@adalogics.com>",
+  "Addison Crump <me@addisoncrump.info>",
+  "Andrew Gallant <jamslam@gmail.com>",
+]
 publish = false
-edition = "2018"
+edition = "2021"
 
 [package.metadata]
 cargo-fuzz = true
 
 [dependencies]
-libfuzzer-sys = "0.4.1"
+arbitrary = { version = "1.3.0", features = ["derive"] }
+libfuzzer-sys = { version = "0.4.1", features = ["arbitrary-derive"] }
+regex = { path = "..", features = ["logging"] }
+regex-automata = { path = "../regex-automata", features = ["logging"] }
+regex-lite = { path = "../regex-lite" }
+regex-syntax = { path = "../regex-syntax", features = ["arbitrary"] }
 
-[dependencies.regex]
-path = ".."
+[dependencies.env_logger]
+# Note that this is currently using an older version because of the dependency
+# tree explosion that happened in 0.10.
+version = "0.9.3"
+default-features = false
+features = ["atty", "humantime", "termcolor"]
 
 # Prevent this from interfering with workspaces
 [workspace]
 members = ["."]
 
+# NOTE: If you add a new fuzzer below, please make sure to add it to the
+# oss-fuzz-build.sh script, otherwise it won't get run in OSS-fuzz.
+
 [[bin]]
 name = "fuzz_regex_match"
 path = "fuzz_targets/fuzz_regex_match.rs"
+
+[[bin]]
+name = "fuzz_regex_lite_match"
+path = "fuzz_targets/fuzz_regex_lite_match.rs"
+
+[[bin]]
+name = "fuzz_regex_automata_deserialize_dense_dfa"
+path = "fuzz_targets/fuzz_regex_automata_deserialize_dense_dfa.rs"
+
+[[bin]]
+name = "fuzz_regex_automata_deserialize_sparse_dfa"
+path = "fuzz_targets/fuzz_regex_automata_deserialize_sparse_dfa.rs"
+
+[[bin]]
+name = "ast_roundtrip"
+path = "fuzz_targets/ast_roundtrip.rs"
+
+[[bin]]
+name = "ast_fuzz_match"
+path = "fuzz_targets/ast_fuzz_match.rs"
+
+[[bin]]
+name = "ast_fuzz_regex"
+path = "fuzz_targets/ast_fuzz_regex.rs"
+
+[[bin]]
+name = "ast_fuzz_match_bytes"
+path = "fuzz_targets/ast_fuzz_match_bytes.rs"
 
 [profile.release]
 opt-level = 3
