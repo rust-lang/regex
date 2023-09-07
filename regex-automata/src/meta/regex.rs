@@ -2706,7 +2706,7 @@ impl Config {
     /// you're compiling untrusted patterns.
     ///
     /// Note that this limit is applied to _each_ NFA built, and if any of
-    /// them excceed the limit, then construction will fail. This limit does
+    /// them exceed the limit, then construction will fail. This limit does
     /// _not_ correspond to the total memory used by all NFAs in the meta regex
     /// engine.
     ///
