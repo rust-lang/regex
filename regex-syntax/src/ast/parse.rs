@@ -1149,14 +1149,17 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
             if self.char() != '}' {
                 let count_start = match count_start {
                     Ok(c) => c,
-                    Err(err) if err.kind == ast::ErrorKind::RepetitionCountDecimalEmpty => {
+                    Err(err)
+                        if err.kind
+                            == ast::ErrorKind::RepetitionCountDecimalEmpty =>
+                    {
                         if self.parser().empty_min_range {
                             0
                         } else {
                             return Err(err);
                         }
-                    },
-                    err => err?
+                    }
+                    err => err?,
                 };
                 let count_end = specialize_err(
                     self.parse_decimal(),
@@ -1170,7 +1173,6 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
         } else {
             ast::RepetitionRange::Exactly(count_start?)
         };
-
 
         if self.is_eof() || self.char() != '}' {
             return Err(self.error(
