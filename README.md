@@ -233,10 +233,10 @@ nebulous. While nebulous, it guides this crate's architecture and the sorts of
 the trade offs it makes. For example, here are some general architectural
 statements that follow as a result of the goal to be "fast":
 
-* When given the choice between faster regex searches and faster Rust compile
-times, this crate will generally choose faster regex searches.
-* When given the choice between faster regex searches and faster regex compile
-times, this crate will generally choose faster regex searches. That is, it is
+* When given the choice between faster regex searches and faster _Rust compile
+times_, this crate will generally choose faster regex searches.
+* When given the choice between faster regex searches and faster _regex compile
+times_, this crate will generally choose faster regex searches. That is, it is
 generally acceptable for `Regex::new` to get a little slower if it means that
 searches get faster. (This is a somewhat delicate balance to strike, because
 the speed of `Regex::new` needs to remain somewhat reasonable. But this is why
