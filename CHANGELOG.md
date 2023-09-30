@@ -1,3 +1,14 @@
+1.9.6 (2023-09-30)
+==================
+This is a patch release that fixes a panic that can occur when the default
+regex size limit is increased to a large number.
+
+* [BUG aa4e4c71](https://github.com/rust-lang/regex/commit/aa4e4c7120b0090ce0624e3c42a2ed06dd8b918a):
+Fix a bug where computing the maximum haystack length for the bounded
+backtracker could result underflow and thus provoke a panic later in a search
+due to a broken invariant.
+
+
 1.9.5 (2023-09-02)
 ==================
 This is a patch release that hopefully mostly fixes a performance bug that
