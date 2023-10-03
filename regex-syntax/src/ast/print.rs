@@ -80,27 +80,21 @@ impl<W: fmt::Write> Visitor for Writer<W> {
     fn visit_pre(&mut self, ast: &Ast) -> fmt::Result {
         match *ast.0 {
             AstKind::Group(ref x) => self.fmt_group_pre(x),
-            AstKind::Class(ast::Class::Bracketed(ref x)) => {
-                self.fmt_class_bracketed_pre(x)
-            }
+            AstKind::ClassBracketed(ref x) => self.fmt_class_bracketed_pre(x),
             _ => Ok(()),
         }
     }
 
     fn visit_post(&mut self, ast: &Ast) -> fmt::Result {
-        use crate::ast::Class;
-
         match *ast.0 {
             AstKind::Empty(_) => Ok(()),
             AstKind::Flags(ref x) => self.fmt_set_flags(x),
             AstKind::Literal(ref x) => self.fmt_literal(x),
             AstKind::Dot(_) => self.wtr.write_str("."),
             AstKind::Assertion(ref x) => self.fmt_assertion(x),
-            AstKind::Class(Class::Perl(ref x)) => self.fmt_class_perl(x),
-            AstKind::Class(Class::Unicode(ref x)) => self.fmt_class_unicode(x),
-            AstKind::Class(Class::Bracketed(ref x)) => {
-                self.fmt_class_bracketed_post(x)
-            }
+            AstKind::ClassPerl(ref x) => self.fmt_class_perl(x),
+            AstKind::ClassUnicode(ref x) => self.fmt_class_unicode(x),
+            AstKind::ClassBracketed(ref x) => self.fmt_class_bracketed_post(x),
             AstKind::Repetition(ref x) => self.fmt_repetition(x),
             AstKind::Group(ref x) => self.fmt_group_post(x),
             AstKind::Alternation(_) => Ok(()),

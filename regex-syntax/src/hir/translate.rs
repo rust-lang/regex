@@ -337,7 +337,7 @@ impl<'t, 'p> Visitor for TranslatorI<'t, 'p> {
 
     fn visit_pre(&mut self, ast: &Ast) -> Result<()> {
         match *ast.0 {
-            AstKind::Class(ast::Class::Bracketed(_)) => {
+            AstKind::ClassBracketed(_) => {
                 if self.flags().unicode() {
                     let cls = hir::ClassUnicode::empty();
                     self.push(HirFrame::ClassUnicode(cls));
@@ -386,29 +386,27 @@ impl<'t, 'p> Visitor for TranslatorI<'t, 'p> {
                 // consistency sake.
                 self.push(HirFrame::Expr(Hir::empty()));
             }
-            AstKind::Literal(ref x) => {
-                match self.ast_literal_to_scalar(x)? {
-                    Either::Right(byte) => self.push_byte(byte),
-                    Either::Left(ch) => {
-                        if !self.flags().unicode() && ch.len_utf8() > 1 {
-                            return Err(self
-                                .error(x.span, ErrorKind::UnicodeNotAllowed));
-                        }
-                        match self.case_fold_char(x.span, ch)? {
-                            None => self.push_char(ch),
-                            Some(expr) => self.push(HirFrame::Expr(expr)),
-                        }
+            AstKind::Literal(ref x) => match self.ast_literal_to_scalar(x)? {
+                Either::Right(byte) => self.push_byte(byte),
+                Either::Left(ch) => {
+                    if !self.flags().unicode() && ch.len_utf8() > 1 {
+                        return Err(
+                            self.error(x.span, ErrorKind::UnicodeNotAllowed)
+                        );
+                    }
+                    match self.case_fold_char(x.span, ch)? {
+                        None => self.push_char(ch),
+                        Some(expr) => self.push(HirFrame::Expr(expr)),
                     }
                 }
-                // self.push(HirFrame::Expr(self.hir_literal(x)?));
-            }
-            AstKind::Dot(span) => {
-                self.push(HirFrame::Expr(self.hir_dot(span)?));
+            },
+            AstKind::Dot(ref span) => {
+                self.push(HirFrame::Expr(self.hir_dot(**span)?));
             }
             AstKind::Assertion(ref x) => {
                 self.push(HirFrame::Expr(self.hir_assertion(x)?));
             }
-            AstKind::Class(ast::Class::Perl(ref x)) => {
+            AstKind::ClassPerl(ref x) => {
                 if self.flags().unicode() {
                     let cls = self.hir_perl_unicode_class(x)?;
                     let hcls = hir::Class::Unicode(cls);
@@ -419,11 +417,11 @@ impl<'t, 'p> Visitor for TranslatorI<'t, 'p> {
                     self.push(HirFrame::Expr(Hir::class(hcls)));
                 }
             }
-            AstKind::Class(ast::Class::Unicode(ref x)) => {
+            AstKind::ClassUnicode(ref x) => {
                 let cls = hir::Class::Unicode(self.hir_unicode_class(x)?);
                 self.push(HirFrame::Expr(Hir::class(cls)));
             }
-            AstKind::Class(ast::Class::Bracketed(ref ast)) => {
+            AstKind::ClassBracketed(ref ast) => {
                 if self.flags().unicode() {
                     let mut cls = self.pop().unwrap().unwrap_class_unicode();
                     self.unicode_fold_and_negate(
