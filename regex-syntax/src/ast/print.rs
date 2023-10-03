@@ -7,7 +7,7 @@ use core::fmt;
 use crate::ast::{
     self,
     visitor::{self, Visitor},
-    Ast,
+    Ast, AstKind,
 };
 
 /// A builder for constructing a printer.
@@ -78,9 +78,9 @@ impl<W: fmt::Write> Visitor for Writer<W> {
     }
 
     fn visit_pre(&mut self, ast: &Ast) -> fmt::Result {
-        match *ast {
-            Ast::Group(ref x) => self.fmt_group_pre(x),
-            Ast::Class(ast::Class::Bracketed(ref x)) => {
+        match *ast.0 {
+            AstKind::Group(ref x) => self.fmt_group_pre(x),
+            AstKind::Class(ast::Class::Bracketed(ref x)) => {
                 self.fmt_class_bracketed_pre(x)
             }
             _ => Ok(()),
@@ -90,21 +90,21 @@ impl<W: fmt::Write> Visitor for Writer<W> {
     fn visit_post(&mut self, ast: &Ast) -> fmt::Result {
         use crate::ast::Class;
 
-        match *ast {
-            Ast::Empty(_) => Ok(()),
-            Ast::Flags(ref x) => self.fmt_set_flags(x),
-            Ast::Literal(ref x) => self.fmt_literal(x),
-            Ast::Dot(_) => self.wtr.write_str("."),
-            Ast::Assertion(ref x) => self.fmt_assertion(x),
-            Ast::Class(Class::Perl(ref x)) => self.fmt_class_perl(x),
-            Ast::Class(Class::Unicode(ref x)) => self.fmt_class_unicode(x),
-            Ast::Class(Class::Bracketed(ref x)) => {
+        match *ast.0 {
+            AstKind::Empty(_) => Ok(()),
+            AstKind::Flags(ref x) => self.fmt_set_flags(x),
+            AstKind::Literal(ref x) => self.fmt_literal(x),
+            AstKind::Dot(_) => self.wtr.write_str("."),
+            AstKind::Assertion(ref x) => self.fmt_assertion(x),
+            AstKind::Class(Class::Perl(ref x)) => self.fmt_class_perl(x),
+            AstKind::Class(Class::Unicode(ref x)) => self.fmt_class_unicode(x),
+            AstKind::Class(Class::Bracketed(ref x)) => {
                 self.fmt_class_bracketed_post(x)
             }
-            Ast::Repetition(ref x) => self.fmt_repetition(x),
-            Ast::Group(ref x) => self.fmt_group_post(x),
-            Ast::Alternation(_) => Ok(()),
-            Ast::Concat(_) => Ok(()),
+            AstKind::Repetition(ref x) => self.fmt_repetition(x),
+            AstKind::Group(ref x) => self.fmt_group_post(x),
+            AstKind::Alternation(_) => Ok(()),
+            AstKind::Concat(_) => Ok(()),
         }
     }
 

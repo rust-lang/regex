@@ -429,9 +429,19 @@ pub struct Comment {
 ///
 /// This type defines its own destructor that uses constant stack space and
 /// heap space proportional to the size of the `Ast`.
+///
+/// This type boxes the actual kind of the AST element so that an `Ast` value
+/// itself has a very small size. This in turn makes things like `Vec<Ast>` use
+/// a lot less memory than it might otherwise, which is particularly beneficial
+/// for representing long concatenations or alternations.
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
-pub enum Ast {
+pub struct Ast(pub Box<AstKind>);
+
+/// The kind of an abstract syntax element.
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
+pub enum AstKind {
     /// An empty regex that matches everything.
     Empty(Span),
     /// A set of flags, e.g., `(?is)`.
@@ -456,26 +466,76 @@ pub enum Ast {
 }
 
 impl Ast {
+    /// Create an "empty" AST item.
+    pub fn empty(span: Span) -> Ast {
+        Ast(Box::new(AstKind::Empty(span)))
+    }
+
+    /// Create a "flags" AST item.
+    pub fn flags(e: SetFlags) -> Ast {
+        Ast(Box::new(AstKind::Flags(e)))
+    }
+
+    /// Create a "literal" AST item.
+    pub fn literal(e: Literal) -> Ast {
+        Ast(Box::new(AstKind::Literal(e)))
+    }
+
+    /// Create a "dot" AST item.
+    pub fn dot(span: Span) -> Ast {
+        Ast(Box::new(AstKind::Dot(span)))
+    }
+
+    /// Create a "assertion" AST item.
+    pub fn assertion(e: Assertion) -> Ast {
+        Ast(Box::new(AstKind::Assertion(e)))
+    }
+
+    /// Create a "class" AST item.
+    pub fn class(e: Class) -> Ast {
+        Ast(Box::new(AstKind::Class(e)))
+    }
+
+    /// Create a "repetition" AST item.
+    pub fn repetition(e: Repetition) -> Ast {
+        Ast(Box::new(AstKind::Repetition(e)))
+    }
+
+    /// Create a "group" AST item.
+    pub fn group(e: Group) -> Ast {
+        Ast(Box::new(AstKind::Group(e)))
+    }
+
+    /// Create a "alternation" AST item.
+    pub fn alternation(e: Alternation) -> Ast {
+        Ast(Box::new(AstKind::Alternation(e)))
+    }
+
+    /// Create a "concat" AST item.
+    pub fn concat(e: Concat) -> Ast {
+        Ast(Box::new(AstKind::Concat(e)))
+    }
+
     /// Return the span of this abstract syntax tree.
     pub fn span(&self) -> &Span {
-        match *self {
-            Ast::Empty(ref span) => span,
-            Ast::Flags(ref x) => &x.span,
-            Ast::Literal(ref x) => &x.span,
-            Ast::Dot(ref span) => span,
-            Ast::Assertion(ref x) => &x.span,
-            Ast::Class(ref x) => x.span(),
-            Ast::Repetition(ref x) => &x.span,
-            Ast::Group(ref x) => &x.span,
-            Ast::Alternation(ref x) => &x.span,
-            Ast::Concat(ref x) => &x.span,
+        match *self.0 {
+            AstKind::Empty(ref span) => span,
+            AstKind::Flags(ref x) => &x.span,
+            AstKind::Literal(ref x) => &x.span,
+            AstKind::Dot(ref span) => span,
+            AstKind::Assertion(ref x) => &x.span,
+            AstKind::Class(ref x) => x.span(),
+            AstKind::Repetition(ref x) => &x.span,
+            AstKind::Group(ref x) => &x.span,
+            AstKind::Alternation(ref x) => &x.span,
+            AstKind::Concat(ref x) => &x.span,
         }
     }
 
     /// Return true if and only if this Ast is empty.
     pub fn is_empty(&self) -> bool {
-        match *self {
-            Ast::Empty(_) => true,
+        match *self.0 {
+            AstKind::Empty(_) => true,
             _ => false,
         }
     }
@@ -483,17 +543,17 @@ impl Ast {
     /// Returns true if and only if this AST has any (including possibly empty)
     /// subexpressions.
     fn has_subexprs(&self) -> bool {
-        match *self {
-            Ast::Empty(_)
-            | Ast::Flags(_)
-            | Ast::Literal(_)
-            | Ast::Dot(_)
-            | Ast::Assertion(_) => false,
-            Ast::Class(_)
-            | Ast::Repetition(_)
-            | Ast::Group(_)
-            | Ast::Alternation(_)
-            | Ast::Concat(_) => true,
+        match *self.0 {
+            AstKind::Empty(_)
+            | AstKind::Flags(_)
+            | AstKind::Literal(_)
+            | AstKind::Dot(_)
+            | AstKind::Assertion(_) => false,
+            AstKind::Class(_)
+            | AstKind::Repetition(_)
+            | AstKind::Group(_)
+            | AstKind::Alternation(_)
+            | AstKind::Concat(_) => true,
         }
     }
 }
@@ -526,14 +586,14 @@ pub struct Alternation {
 impl Alternation {
     /// Return this alternation as an AST.
     ///
-    /// If this alternation contains zero ASTs, then Ast::Empty is
-    /// returned. If this alternation contains exactly 1 AST, then the
-    /// corresponding AST is returned. Otherwise, Ast::Alternation is returned.
+    /// If this alternation contains zero ASTs, then `Ast::empty` is returned.
+    /// If this alternation contains exactly 1 AST, then the corresponding AST
+    /// is returned. Otherwise, `Ast::alternation` is returned.
     pub fn into_ast(mut self) -> Ast {
         match self.asts.len() {
-            0 => Ast::Empty(self.span),
+            0 => Ast::empty(self.span),
             1 => self.asts.pop().unwrap(),
-            _ => Ast::Alternation(self),
+            _ => Ast::alternation(self),
         }
     }
 }
@@ -551,14 +611,14 @@ pub struct Concat {
 impl Concat {
     /// Return this concatenation as an AST.
     ///
-    /// If this concatenation contains zero ASTs, then Ast::Empty is
-    /// returned. If this concatenation contains exactly 1 AST, then the
-    /// corresponding AST is returned. Otherwise, Ast::Concat is returned.
+    /// If this alternation contains zero ASTs, then `Ast::empty` is returned.
+    /// If this alternation contains exactly 1 AST, then the corresponding AST
+    /// is returned. Otherwise, `Ast::concat` is returned.
     pub fn into_ast(mut self) -> Ast {
         match self.asts.len() {
-            0 => Ast::Empty(self.span),
+            0 => Ast::empty(self.span),
             1 => self.asts.pop().unwrap(),
-            _ => Ast::Concat(self),
+            _ => Ast::concat(self),
         }
     }
 }
@@ -1544,43 +1604,43 @@ impl Drop for Ast {
     fn drop(&mut self) {
         use core::mem;
 
-        match *self {
-            Ast::Empty(_)
-            | Ast::Flags(_)
-            | Ast::Literal(_)
-            | Ast::Dot(_)
-            | Ast::Assertion(_)
+        match *self.0 {
+            AstKind::Empty(_)
+            | AstKind::Flags(_)
+            | AstKind::Literal(_)
+            | AstKind::Dot(_)
+            | AstKind::Assertion(_)
             // Classes are recursive, so they get their own Drop impl.
-            | Ast::Class(_) => return,
-            Ast::Repetition(ref x) if !x.ast.has_subexprs() => return,
-            Ast::Group(ref x) if !x.ast.has_subexprs() => return,
-            Ast::Alternation(ref x) if x.asts.is_empty() => return,
-            Ast::Concat(ref x) if x.asts.is_empty() => return,
+            | AstKind::Class(_) => return,
+            AstKind::Repetition(ref x) if !x.ast.has_subexprs() => return,
+            AstKind::Group(ref x) if !x.ast.has_subexprs() => return,
+            AstKind::Alternation(ref x) if x.asts.is_empty() => return,
+            AstKind::Concat(ref x) if x.asts.is_empty() => return,
             _ => {}
         }
 
         let empty_span = || Span::splat(Position::new(0, 0, 0));
-        let empty_ast = || Ast::Empty(empty_span());
+        let empty_ast = || Ast::empty(empty_span());
         let mut stack = vec![mem::replace(self, empty_ast())];
         while let Some(mut ast) = stack.pop() {
-            match ast {
-                Ast::Empty(_)
-                | Ast::Flags(_)
-                | Ast::Literal(_)
-                | Ast::Dot(_)
-                | Ast::Assertion(_)
+            match *ast.0 {
+                AstKind::Empty(_)
+                | AstKind::Flags(_)
+                | AstKind::Literal(_)
+                | AstKind::Dot(_)
+                | AstKind::Assertion(_)
                 // Classes are recursive, so they get their own Drop impl.
-                | Ast::Class(_) => {}
-                Ast::Repetition(ref mut x) => {
+                | AstKind::Class(_) => {}
+                AstKind::Repetition(ref mut x) => {
                     stack.push(mem::replace(&mut x.ast, empty_ast()));
                 }
-                Ast::Group(ref mut x) => {
+                AstKind::Group(ref mut x) => {
                     stack.push(mem::replace(&mut x.ast, empty_ast()));
                 }
-                Ast::Alternation(ref mut x) => {
+                AstKind::Alternation(ref mut x) => {
                     stack.extend(x.asts.drain(..));
                 }
-                Ast::Concat(ref mut x) => {
+                AstKind::Concat(ref mut x) => {
                     stack.extend(x.asts.drain(..));
                 }
             }
@@ -1663,9 +1723,9 @@ mod tests {
 
         let run = || {
             let span = || Span::splat(Position::new(0, 0, 0));
-            let mut ast = Ast::Empty(span());
+            let mut ast = Ast::empty(span());
             for i in 0..200 {
-                ast = Ast::Group(Group {
+                ast = Ast::group(Group {
                     span: span(),
                     kind: GroupKind::CaptureIndex(i),
                     ast: Box::new(ast),
