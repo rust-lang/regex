@@ -7,7 +7,7 @@ use core::fmt;
 use crate::ast::{
     self,
     visitor::{self, Visitor},
-    Ast, AstKind,
+    Ast,
 };
 
 /// A builder for constructing a printer.
@@ -78,27 +78,27 @@ impl<W: fmt::Write> Visitor for Writer<W> {
     }
 
     fn visit_pre(&mut self, ast: &Ast) -> fmt::Result {
-        match *ast.0 {
-            AstKind::Group(ref x) => self.fmt_group_pre(x),
-            AstKind::ClassBracketed(ref x) => self.fmt_class_bracketed_pre(x),
+        match *ast {
+            Ast::Group(ref x) => self.fmt_group_pre(x),
+            Ast::ClassBracketed(ref x) => self.fmt_class_bracketed_pre(x),
             _ => Ok(()),
         }
     }
 
     fn visit_post(&mut self, ast: &Ast) -> fmt::Result {
-        match *ast.0 {
-            AstKind::Empty(_) => Ok(()),
-            AstKind::Flags(ref x) => self.fmt_set_flags(x),
-            AstKind::Literal(ref x) => self.fmt_literal(x),
-            AstKind::Dot(_) => self.wtr.write_str("."),
-            AstKind::Assertion(ref x) => self.fmt_assertion(x),
-            AstKind::ClassPerl(ref x) => self.fmt_class_perl(x),
-            AstKind::ClassUnicode(ref x) => self.fmt_class_unicode(x),
-            AstKind::ClassBracketed(ref x) => self.fmt_class_bracketed_post(x),
-            AstKind::Repetition(ref x) => self.fmt_repetition(x),
-            AstKind::Group(ref x) => self.fmt_group_post(x),
-            AstKind::Alternation(_) => Ok(()),
-            AstKind::Concat(_) => Ok(()),
+        match *ast {
+            Ast::Empty(_) => Ok(()),
+            Ast::Flags(ref x) => self.fmt_set_flags(x),
+            Ast::Literal(ref x) => self.fmt_literal(x),
+            Ast::Dot(_) => self.wtr.write_str("."),
+            Ast::Assertion(ref x) => self.fmt_assertion(x),
+            Ast::ClassPerl(ref x) => self.fmt_class_perl(x),
+            Ast::ClassUnicode(ref x) => self.fmt_class_unicode(x),
+            Ast::ClassBracketed(ref x) => self.fmt_class_bracketed_post(x),
+            Ast::Repetition(ref x) => self.fmt_repetition(x),
+            Ast::Group(ref x) => self.fmt_group_post(x),
+            Ast::Alternation(_) => Ok(()),
+            Ast::Concat(_) => Ok(()),
         }
     }
 

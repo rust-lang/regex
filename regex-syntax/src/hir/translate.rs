@@ -7,7 +7,7 @@ use core::cell::{Cell, RefCell};
 use alloc::{boxed::Box, string::ToString, vec, vec::Vec};
 
 use crate::{
-    ast::{self, Ast, AstKind, Span, Visitor},
+    ast::{self, Ast, Span, Visitor},
     either::Either,
     hir::{self, Error, ErrorKind, Hir, HirKind},
     unicode::{self, ClassQuery},
@@ -336,8 +336,8 @@ impl<'t, 'p> Visitor for TranslatorI<'t, 'p> {
     }
 
     fn visit_pre(&mut self, ast: &Ast) -> Result<()> {
-        match *ast.0 {
-            AstKind::ClassBracketed(_) => {
+        match *ast {
+            Ast::ClassBracketed(_) => {
                 if self.flags().unicode() {
                     let cls = hir::ClassUnicode::empty();
                     self.push(HirFrame::ClassUnicode(cls));
@@ -346,20 +346,20 @@ impl<'t, 'p> Visitor for TranslatorI<'t, 'p> {
                     self.push(HirFrame::ClassBytes(cls));
                 }
             }
-            AstKind::Repetition(_) => self.push(HirFrame::Repetition),
-            AstKind::Group(ref x) => {
+            Ast::Repetition(_) => self.push(HirFrame::Repetition),
+            Ast::Group(ref x) => {
                 let old_flags = x
                     .flags()
                     .map(|ast| self.set_flags(ast))
                     .unwrap_or_else(|| self.flags());
                 self.push(HirFrame::Group { old_flags });
             }
-            AstKind::Concat(ref x) if x.asts.is_empty() => {}
-            AstKind::Concat(_) => {
+            Ast::Concat(ref x) if x.asts.is_empty() => {}
+            Ast::Concat(_) => {
                 self.push(HirFrame::Concat);
             }
-            AstKind::Alternation(ref x) if x.asts.is_empty() => {}
-            AstKind::Alternation(_) => {
+            Ast::Alternation(ref x) if x.asts.is_empty() => {}
+            Ast::Alternation(_) => {
                 self.push(HirFrame::Alternation);
                 self.push(HirFrame::AlternationBranch);
             }
@@ -369,11 +369,11 @@ impl<'t, 'p> Visitor for TranslatorI<'t, 'p> {
     }
 
     fn visit_post(&mut self, ast: &Ast) -> Result<()> {
-        match *ast.0 {
-            AstKind::Empty(_) => {
+        match *ast {
+            Ast::Empty(_) => {
                 self.push(HirFrame::Expr(Hir::empty()));
             }
-            AstKind::Flags(ref x) => {
+            Ast::Flags(ref x) => {
                 self.set_flags(&x.flags);
                 // Flags in the AST are generally considered directives and
                 // not actual sub-expressions. However, they can be used in
@@ -386,7 +386,7 @@ impl<'t, 'p> Visitor for TranslatorI<'t, 'p> {
                 // consistency sake.
                 self.push(HirFrame::Expr(Hir::empty()));
             }
-            AstKind::Literal(ref x) => match self.ast_literal_to_scalar(x)? {
+            Ast::Literal(ref x) => match self.ast_literal_to_scalar(x)? {
                 Either::Right(byte) => self.push_byte(byte),
                 Either::Left(ch) => {
                     if !self.flags().unicode() && ch.len_utf8() > 1 {
@@ -400,13 +400,13 @@ impl<'t, 'p> Visitor for TranslatorI<'t, 'p> {
                     }
                 }
             },
-            AstKind::Dot(ref span) => {
+            Ast::Dot(ref span) => {
                 self.push(HirFrame::Expr(self.hir_dot(**span)?));
             }
-            AstKind::Assertion(ref x) => {
+            Ast::Assertion(ref x) => {
                 self.push(HirFrame::Expr(self.hir_assertion(x)?));
             }
-            AstKind::ClassPerl(ref x) => {
+            Ast::ClassPerl(ref x) => {
                 if self.flags().unicode() {
                     let cls = self.hir_perl_unicode_class(x)?;
                     let hcls = hir::Class::Unicode(cls);
@@ -417,11 +417,11 @@ impl<'t, 'p> Visitor for TranslatorI<'t, 'p> {
                     self.push(HirFrame::Expr(Hir::class(hcls)));
                 }
             }
-            AstKind::ClassUnicode(ref x) => {
+            Ast::ClassUnicode(ref x) => {
                 let cls = hir::Class::Unicode(self.hir_unicode_class(x)?);
                 self.push(HirFrame::Expr(Hir::class(cls)));
             }
-            AstKind::ClassBracketed(ref ast) => {
+            Ast::ClassBracketed(ref ast) => {
                 if self.flags().unicode() {
                     let mut cls = self.pop().unwrap().unwrap_class_unicode();
                     self.unicode_fold_and_negate(
@@ -442,18 +442,18 @@ impl<'t, 'p> Visitor for TranslatorI<'t, 'p> {
                     self.push(HirFrame::Expr(expr));
                 }
             }
-            AstKind::Repetition(ref x) => {
+            Ast::Repetition(ref x) => {
                 let expr = self.pop().unwrap().unwrap_expr();
                 self.pop().unwrap().unwrap_repetition();
                 self.push(HirFrame::Expr(self.hir_repetition(x, expr)));
             }
-            AstKind::Group(ref x) => {
+            Ast::Group(ref x) => {
                 let expr = self.pop().unwrap().unwrap_expr();
                 let old_flags = self.pop().unwrap().unwrap_group();
                 self.trans().flags.set(old_flags);
                 self.push(HirFrame::Expr(self.hir_capture(x, expr)));
             }
-            AstKind::Concat(_) => {
+            Ast::Concat(_) => {
                 let mut exprs = vec![];
                 while let Some(expr) = self.pop_concat_expr() {
                     if !matches!(*expr.kind(), HirKind::Empty) {
@@ -463,7 +463,7 @@ impl<'t, 'p> Visitor for TranslatorI<'t, 'p> {
                 exprs.reverse();
                 self.push(HirFrame::Expr(Hir::concat(exprs)));
             }
-            AstKind::Alternation(_) => {
+            Ast::Alternation(_) => {
                 let mut exprs = vec![];
                 while let Some(expr) = self.pop_alt_expr() {
                     self.pop().unwrap().unwrap_alternation_pipe();

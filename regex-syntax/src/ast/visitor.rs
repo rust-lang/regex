@@ -1,6 +1,6 @@
 use alloc::{vec, vec::Vec};
 
-use crate::ast::{self, Ast, AstKind};
+use crate::ast::{self, Ast};
 
 /// A trait for visiting an abstract syntax tree (AST) in depth first order.
 ///
@@ -263,19 +263,19 @@ impl<'a> HeapVisitor<'a> {
         ast: &'a Ast,
         visitor: &mut V,
     ) -> Result<Option<Frame<'a>>, V::Err> {
-        Ok(match *ast.0 {
-            AstKind::ClassBracketed(ref x) => {
+        Ok(match *ast {
+            Ast::ClassBracketed(ref x) => {
                 self.visit_class(x, visitor)?;
                 None
             }
-            AstKind::Repetition(ref x) => Some(Frame::Repetition(x)),
-            AstKind::Group(ref x) => Some(Frame::Group(x)),
-            AstKind::Concat(ref x) if x.asts.is_empty() => None,
-            AstKind::Concat(ref x) => {
+            Ast::Repetition(ref x) => Some(Frame::Repetition(x)),
+            Ast::Group(ref x) => Some(Frame::Group(x)),
+            Ast::Concat(ref x) if x.asts.is_empty() => None,
+            Ast::Concat(ref x) => {
                 Some(Frame::Concat { head: &x.asts[0], tail: &x.asts[1..] })
             }
-            AstKind::Alternation(ref x) if x.asts.is_empty() => None,
-            AstKind::Alternation(ref x) => Some(Frame::Alternation {
+            Ast::Alternation(ref x) if x.asts.is_empty() => None,
+            Ast::Alternation(ref x) => Some(Frame::Alternation {
                 head: &x.asts[0],
                 tail: &x.asts[1..],
             }),

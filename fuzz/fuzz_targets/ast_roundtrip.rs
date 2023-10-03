@@ -3,7 +3,7 @@
 use {
     libfuzzer_sys::{fuzz_target, Corpus},
     regex_syntax::ast::{
-        parse::Parser, visit, Ast, Flag, Group, GroupKind, SetFlags, Visitor,
+        parse::Parser, visit, Ast, Flag, Flags, GroupKind, Visitor,
     },
 };
 
@@ -32,16 +32,17 @@ impl Visitor for VerboseVisitor {
     }
 
     fn visit_pre(&mut self, ast: &Ast) -> Result<Self::Output, Self::Err> {
+        let reject_flags = |flags: &Flags| {
+            flags.flag_state(Flag::IgnoreWhitespace).unwrap_or(false)
+        };
         match ast {
-            Ast::Flags(SetFlags { flags, .. })
-            | Ast::Group(Group {
-                kind: GroupKind::NonCapturing(flags), ..
-            }) if flags
-                .flag_state(Flag::IgnoreWhitespace)
-                .unwrap_or(false) =>
-            {
-                Err(())
-            }
+            Ast::Flags(x) if reject_flags(&x.flags) => return Err(()),
+            Ast::Group(x) => match x.kind {
+                GroupKind::NonCapturing(ref flags) if reject_flags(flags) => {
+                    return Err(())
+                }
+                _ => Ok(()),
+            },
             _ => Ok(()),
         }
     }
