@@ -1,3 +1,11 @@
+TBD
+===
+
+* [BUG #1046](https://github.com/rust-lang/regex/issues/1046):
+Fix a bug that could result in incorrect match spans when using a Unicode word
+boundary and searching non-ASCII strings.
+
+
 1.9.6 (2023-09-30)
 ==================
 This is a patch release that fixes a panic that can occur when the default
