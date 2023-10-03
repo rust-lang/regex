@@ -184,8 +184,8 @@ impl Look {
 pub struct LookSet {
     /// The underlying representation this set is exposed to make it possible
     /// to store it somewhere efficiently. The representation is that
-    /// of a bitset, where each assertion occupies bit `i` where `i =
-    /// Look::as_repr()`.
+    /// of a bitset, where each assertion occupies bit `i` where
+    /// `i = Look::as_repr()`.
     ///
     /// Note that users of this internal representation must permit the full
     /// range of `u16` values to be represented. For example, even if the
