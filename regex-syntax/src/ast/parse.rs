@@ -56,8 +56,8 @@ impl Primitive {
             Primitive::Literal(lit) => Ast::literal(lit),
             Primitive::Assertion(assert) => Ast::assertion(assert),
             Primitive::Dot(span) => Ast::dot(span),
-            Primitive::Perl(cls) => Ast::class(ast::Class::Perl(cls)),
-            Primitive::Unicode(cls) => Ast::class(ast::Class::Unicode(cls)),
+            Primitive::Perl(cls) => Ast::class_perl(cls),
+            Primitive::Unicode(cls) => Ast::class_unicode(cls),
         }
     }
 
@@ -850,7 +850,7 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
     fn pop_class(
         &self,
         nested_union: ast::ClassSetUnion,
-    ) -> Result<Either<ast::ClassSetUnion, ast::Class>> {
+    ) -> Result<Either<ast::ClassSetUnion, ast::ClassBracketed>> {
         assert_eq!(self.char(), ']');
 
         let item = ast::ClassSet::Item(nested_union.into_item());
@@ -882,7 +882,7 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
                 set.span.end = self.pos();
                 set.kind = prevset;
                 if stack.is_empty() {
-                    Ok(Either::Right(ast::Class::Bracketed(set)))
+                    Ok(Either::Right(set))
                 } else {
                     union.push(ast::ClassSetItem::Bracketed(Box::new(set)));
                     Ok(Either::Left(union))
@@ -976,7 +976,7 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
                 '|' => concat = self.push_alternate(concat)?,
                 '[' => {
                     let class = self.parse_set_class()?;
-                    concat.asts.push(Ast::class(class));
+                    concat.asts.push(Ast::class_bracketed(class));
                 }
                 '?' => {
                     concat = self.parse_uncounted_repetition(
@@ -1743,7 +1743,7 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
     /// is successful, then the parser is advanced to the position immediately
     /// following the closing `]`.
     #[inline(never)]
-    fn parse_set_class(&self) -> Result<ast::Class> {
+    fn parse_set_class(&self) -> Result<ast::ClassBracketed> {
         assert_eq!(self.char(), '[');
 
         let mut union =
@@ -2189,12 +2189,12 @@ impl<'p, 's, P: Borrow<Parser>> ast::Visitor for NestLimiter<'p, 's, P> {
             | AstKind::Literal(_)
             | AstKind::Dot(_)
             | AstKind::Assertion(_)
-            | AstKind::Class(ast::Class::Unicode(_))
-            | AstKind::Class(ast::Class::Perl(_)) => {
+            | AstKind::ClassUnicode(_)
+            | AstKind::ClassPerl(_) => {
                 // These are all base cases, so we don't increment depth.
                 return Ok(());
             }
-            AstKind::Class(ast::Class::Bracketed(ref x)) => &x.span,
+            AstKind::ClassBracketed(ref x) => &x.span,
             AstKind::Repetition(ref x) => &x.span,
             AstKind::Group(ref x) => &x.span,
             AstKind::Alternation(ref x) => &x.span,
@@ -2210,12 +2210,12 @@ impl<'p, 's, P: Borrow<Parser>> ast::Visitor for NestLimiter<'p, 's, P> {
             | AstKind::Literal(_)
             | AstKind::Dot(_)
             | AstKind::Assertion(_)
-            | AstKind::Class(ast::Class::Unicode(_))
-            | AstKind::Class(ast::Class::Perl(_)) => {
+            | AstKind::ClassUnicode(_)
+            | AstKind::ClassPerl(_) => {
                 // These are all base cases, so we don't decrement depth.
                 Ok(())
             }
-            AstKind::Class(ast::Class::Bracketed(_))
+            AstKind::ClassBracketed(_)
             | AstKind::Repetition(_)
             | AstKind::Group(_)
             | AstKind::Alternation(_)
@@ -2606,7 +2606,7 @@ mod tests {
         );
         assert_eq!(
             parser_nest_limit("[a]", 1).parse(),
-            Ok(Ast::class(ast::Class::Bracketed(ast::ClassBracketed {
+            Ok(Ast::class_bracketed(ast::ClassBracketed {
                 span: span(0..3),
                 negated: false,
                 kind: ast::ClassSet::Item(ast::ClassSetItem::Literal(
@@ -2616,7 +2616,7 @@ mod tests {
                         c: 'a',
                     }
                 )),
-            })))
+            }))
         );
         assert_eq!(
             parser_nest_limit("[ab]", 1).parse().unwrap_err(),
@@ -4965,15 +4965,15 @@ bar
 
         assert_eq!(
             parser("[[:alnum:]]").parse(),
-            Ok(Ast::class(ast::Class::Bracketed(ast::ClassBracketed {
+            Ok(Ast::class_bracketed(ast::ClassBracketed {
                 span: span(0..11),
                 negated: false,
                 kind: itemset(item_ascii(alnum(span(1..10), false))),
-            })))
+            }))
         );
         assert_eq!(
             parser("[[[:alnum:]]]").parse(),
-            Ok(Ast::class(ast::Class::Bracketed(ast::ClassBracketed {
+            Ok(Ast::class_bracketed(ast::ClassBracketed {
                 span: span(0..13),
                 negated: false,
                 kind: itemset(item_bracket(ast::ClassBracketed {
@@ -4981,11 +4981,11 @@ bar
                     negated: false,
                     kind: itemset(item_ascii(alnum(span(2..11), false))),
                 })),
-            })))
+            }))
         );
         assert_eq!(
             parser("[[:alnum:]&&[:lower:]]").parse(),
-            Ok(Ast::class(ast::Class::Bracketed(ast::ClassBracketed {
+            Ok(Ast::class_bracketed(ast::ClassBracketed {
                 span: span(0..22),
                 negated: false,
                 kind: intersection(
@@ -4993,11 +4993,11 @@ bar
                     itemset(item_ascii(alnum(span(1..10), false))),
                     itemset(item_ascii(lower(span(12..21), false))),
                 ),
-            })))
+            }))
         );
         assert_eq!(
             parser("[[:alnum:]--[:lower:]]").parse(),
-            Ok(Ast::class(ast::Class::Bracketed(ast::ClassBracketed {
+            Ok(Ast::class_bracketed(ast::ClassBracketed {
                 span: span(0..22),
                 negated: false,
                 kind: difference(
@@ -5005,11 +5005,11 @@ bar
                     itemset(item_ascii(alnum(span(1..10), false))),
                     itemset(item_ascii(lower(span(12..21), false))),
                 ),
-            })))
+            }))
         );
         assert_eq!(
             parser("[[:alnum:]~~[:lower:]]").parse(),
-            Ok(Ast::class(ast::Class::Bracketed(ast::ClassBracketed {
+            Ok(Ast::class_bracketed(ast::ClassBracketed {
                 span: span(0..22),
                 negated: false,
                 kind: symdifference(
@@ -5017,20 +5017,20 @@ bar
                     itemset(item_ascii(alnum(span(1..10), false))),
                     itemset(item_ascii(lower(span(12..21), false))),
                 ),
-            })))
+            }))
         );
 
         assert_eq!(
             parser("[a]").parse(),
-            Ok(Ast::class(ast::Class::Bracketed(ast::ClassBracketed {
+            Ok(Ast::class_bracketed(ast::ClassBracketed {
                 span: span(0..3),
                 negated: false,
                 kind: itemset(lit(span(1..2), 'a')),
-            })))
+            }))
         );
         assert_eq!(
             parser(r"[a\]]").parse(),
-            Ok(Ast::class(ast::Class::Bracketed(ast::ClassBracketed {
+            Ok(Ast::class_bracketed(ast::ClassBracketed {
                 span: span(0..5),
                 negated: false,
                 kind: union(
@@ -5044,11 +5044,11 @@ bar
                         }),
                     ]
                 ),
-            })))
+            }))
         );
         assert_eq!(
             parser(r"[a\-z]").parse(),
-            Ok(Ast::class(ast::Class::Bracketed(ast::ClassBracketed {
+            Ok(Ast::class_bracketed(ast::ClassBracketed {
                 span: span(0..6),
                 negated: false,
                 kind: union(
@@ -5063,44 +5063,44 @@ bar
                         lit(span(4..5), 'z'),
                     ]
                 ),
-            })))
+            }))
         );
         assert_eq!(
             parser("[ab]").parse(),
-            Ok(Ast::class(ast::Class::Bracketed(ast::ClassBracketed {
+            Ok(Ast::class_bracketed(ast::ClassBracketed {
                 span: span(0..4),
                 negated: false,
                 kind: union(
                     span(1..3),
                     vec![lit(span(1..2), 'a'), lit(span(2..3), 'b'),]
                 ),
-            })))
+            }))
         );
         assert_eq!(
             parser("[a-]").parse(),
-            Ok(Ast::class(ast::Class::Bracketed(ast::ClassBracketed {
+            Ok(Ast::class_bracketed(ast::ClassBracketed {
                 span: span(0..4),
                 negated: false,
                 kind: union(
                     span(1..3),
                     vec![lit(span(1..2), 'a'), lit(span(2..3), '-'),]
                 ),
-            })))
+            }))
         );
         assert_eq!(
             parser("[-a]").parse(),
-            Ok(Ast::class(ast::Class::Bracketed(ast::ClassBracketed {
+            Ok(Ast::class_bracketed(ast::ClassBracketed {
                 span: span(0..4),
                 negated: false,
                 kind: union(
                     span(1..3),
                     vec![lit(span(1..2), '-'), lit(span(2..3), 'a'),]
                 ),
-            })))
+            }))
         );
         assert_eq!(
             parser(r"[\pL]").parse(),
-            Ok(Ast::class(ast::Class::Bracketed(ast::ClassBracketed {
+            Ok(Ast::class_bracketed(ast::ClassBracketed {
                 span: span(0..5),
                 negated: false,
                 kind: itemset(item_unicode(ast::ClassUnicode {
@@ -5108,11 +5108,11 @@ bar
                     negated: false,
                     kind: ast::ClassUnicodeKind::OneLetter('L'),
                 })),
-            })))
+            }))
         );
         assert_eq!(
             parser(r"[\w]").parse(),
-            Ok(Ast::class(ast::Class::Bracketed(ast::ClassBracketed {
+            Ok(Ast::class_bracketed(ast::ClassBracketed {
                 span: span(0..4),
                 negated: false,
                 kind: itemset(item_perl(ast::ClassPerl {
@@ -5120,11 +5120,11 @@ bar
                     kind: ast::ClassPerlKind::Word,
                     negated: false,
                 })),
-            })))
+            }))
         );
         assert_eq!(
             parser(r"[a\wz]").parse(),
-            Ok(Ast::class(ast::Class::Bracketed(ast::ClassBracketed {
+            Ok(Ast::class_bracketed(ast::ClassBracketed {
                 span: span(0..6),
                 negated: false,
                 kind: union(
@@ -5139,20 +5139,20 @@ bar
                         lit(span(4..5), 'z'),
                     ]
                 ),
-            })))
+            }))
         );
 
         assert_eq!(
             parser("[a-z]").parse(),
-            Ok(Ast::class(ast::Class::Bracketed(ast::ClassBracketed {
+            Ok(Ast::class_bracketed(ast::ClassBracketed {
                 span: span(0..5),
                 negated: false,
                 kind: itemset(range(span(1..4), 'a', 'z')),
-            })))
+            }))
         );
         assert_eq!(
             parser("[a-cx-z]").parse(),
-            Ok(Ast::class(ast::Class::Bracketed(ast::ClassBracketed {
+            Ok(Ast::class_bracketed(ast::ClassBracketed {
                 span: span(0..8),
                 negated: false,
                 kind: union(
@@ -5162,11 +5162,11 @@ bar
                         range(span(4..7), 'x', 'z'),
                     ]
                 ),
-            })))
+            }))
         );
         assert_eq!(
             parser(r"[\w&&a-cx-z]").parse(),
-            Ok(Ast::class(ast::Class::Bracketed(ast::ClassBracketed {
+            Ok(Ast::class_bracketed(ast::ClassBracketed {
                 span: span(0..12),
                 negated: false,
                 kind: intersection(
@@ -5184,11 +5184,11 @@ bar
                         ]
                     ),
                 ),
-            })))
+            }))
         );
         assert_eq!(
             parser(r"[a-cx-z&&\w]").parse(),
-            Ok(Ast::class(ast::Class::Bracketed(ast::ClassBracketed {
+            Ok(Ast::class_bracketed(ast::ClassBracketed {
                 span: span(0..12),
                 negated: false,
                 kind: intersection(
@@ -5206,11 +5206,11 @@ bar
                         negated: false,
                     })),
                 ),
-            })))
+            }))
         );
         assert_eq!(
             parser(r"[a--b--c]").parse(),
-            Ok(Ast::class(ast::Class::Bracketed(ast::ClassBracketed {
+            Ok(Ast::class_bracketed(ast::ClassBracketed {
                 span: span(0..9),
                 negated: false,
                 kind: difference(
@@ -5222,11 +5222,11 @@ bar
                     ),
                     itemset(lit(span(7..8), 'c')),
                 ),
-            })))
+            }))
         );
         assert_eq!(
             parser(r"[a~~b~~c]").parse(),
-            Ok(Ast::class(ast::Class::Bracketed(ast::ClassBracketed {
+            Ok(Ast::class_bracketed(ast::ClassBracketed {
                 span: span(0..9),
                 negated: false,
                 kind: symdifference(
@@ -5238,11 +5238,11 @@ bar
                     ),
                     itemset(lit(span(7..8), 'c')),
                 ),
-            })))
+            }))
         );
         assert_eq!(
             parser(r"[\^&&^]").parse(),
-            Ok(Ast::class(ast::Class::Bracketed(ast::ClassBracketed {
+            Ok(Ast::class_bracketed(ast::ClassBracketed {
                 span: span(0..7),
                 negated: false,
                 kind: intersection(
@@ -5254,11 +5254,11 @@ bar
                     })),
                     itemset(lit(span(5..6), '^')),
                 ),
-            })))
+            }))
         );
         assert_eq!(
             parser(r"[\&&&&]").parse(),
-            Ok(Ast::class(ast::Class::Bracketed(ast::ClassBracketed {
+            Ok(Ast::class_bracketed(ast::ClassBracketed {
                 span: span(0..7),
                 negated: false,
                 kind: intersection(
@@ -5270,11 +5270,11 @@ bar
                     })),
                     itemset(lit(span(5..6), '&')),
                 ),
-            })))
+            }))
         );
         assert_eq!(
             parser(r"[&&&&]").parse(),
-            Ok(Ast::class(ast::Class::Bracketed(ast::ClassBracketed {
+            Ok(Ast::class_bracketed(ast::ClassBracketed {
                 span: span(0..6),
                 negated: false,
                 kind: intersection(
@@ -5286,13 +5286,13 @@ bar
                     ),
                     itemset(empty(span(5..5))),
                 ),
-            })))
+            }))
         );
 
         let pat = "[☃-⛄]";
         assert_eq!(
             parser(pat).parse(),
-            Ok(Ast::class(ast::Class::Bracketed(ast::ClassBracketed {
+            Ok(Ast::class_bracketed(ast::ClassBracketed {
                 span: span_range(pat, 0..9),
                 negated: false,
                 kind: itemset(ast::ClassSetItem::Range(ast::ClassSetRange {
@@ -5308,20 +5308,20 @@ bar
                         c: '⛄',
                     },
                 })),
-            })))
+            }))
         );
 
         assert_eq!(
             parser(r"[]]").parse(),
-            Ok(Ast::class(ast::Class::Bracketed(ast::ClassBracketed {
+            Ok(Ast::class_bracketed(ast::ClassBracketed {
                 span: span(0..3),
                 negated: false,
                 kind: itemset(lit(span(1..2), ']')),
-            })))
+            }))
         );
         assert_eq!(
             parser(r"[]\[]").parse(),
-            Ok(Ast::class(ast::Class::Bracketed(ast::ClassBracketed {
+            Ok(Ast::class_bracketed(ast::ClassBracketed {
                 span: span(0..5),
                 negated: false,
                 kind: union(
@@ -5335,14 +5335,14 @@ bar
                         }),
                     ]
                 ),
-            })))
+            }))
         );
         assert_eq!(
             parser(r"[\[]]").parse(),
             Ok(concat(
                 0..5,
                 vec![
-                    Ast::class(ast::Class::Bracketed(ast::ClassBracketed {
+                    Ast::class_bracketed(ast::ClassBracketed {
                         span: span(0..4),
                         negated: false,
                         kind: itemset(ast::ClassSetItem::Literal(
@@ -5352,7 +5352,7 @@ bar
                                 c: '[',
                             }
                         )),
-                    })),
+                    }),
                     Ast::literal(ast::Literal {
                         span: span(4..5),
                         kind: ast::LiteralKind::Verbatim,
@@ -5917,11 +5917,11 @@ bar
             Ok(Ast::concat(ast::Concat {
                 span: span(0..4),
                 asts: vec![
-                    Ast::class(ast::Class::Unicode(ast::ClassUnicode {
+                    Ast::class_unicode(ast::ClassUnicode {
                         span: span(0..3),
                         negated: false,
                         kind: ast::ClassUnicodeKind::OneLetter('N'),
-                    })),
+                    }),
                     Ast::literal(ast::Literal {
                         span: span(3..4),
                         kind: ast::LiteralKind::Verbatim,
@@ -5935,11 +5935,11 @@ bar
             Ok(Ast::concat(ast::Concat {
                 span: span(0..10),
                 asts: vec![
-                    Ast::class(ast::Class::Unicode(ast::ClassUnicode {
+                    Ast::class_unicode(ast::ClassUnicode {
                         span: span(0..9),
                         negated: false,
                         kind: ast::ClassUnicodeKind::Named(s("Greek")),
-                    })),
+                    }),
                     Ast::literal(ast::Literal {
                         span: span(9..10),
                         kind: ast::LiteralKind::Verbatim,
@@ -6017,22 +6017,22 @@ bar
 
         assert_eq!(
             parser(r"\d").parse(),
-            Ok(Ast::class(ast::Class::Perl(ast::ClassPerl {
+            Ok(Ast::class_perl(ast::ClassPerl {
                 span: span(0..2),
                 kind: ast::ClassPerlKind::Digit,
                 negated: false,
-            })))
+            }))
         );
         assert_eq!(
             parser(r"\dz").parse(),
             Ok(Ast::concat(ast::Concat {
                 span: span(0..3),
                 asts: vec![
-                    Ast::class(ast::Class::Perl(ast::ClassPerl {
+                    Ast::class_perl(ast::ClassPerl {
                         span: span(0..2),
                         kind: ast::ClassPerlKind::Digit,
                         negated: false,
-                    })),
+                    }),
                     Ast::literal(ast::Literal {
                         span: span(2..3),
                         kind: ast::LiteralKind::Verbatim,

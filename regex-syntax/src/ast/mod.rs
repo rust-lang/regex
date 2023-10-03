@@ -443,77 +443,92 @@ pub struct Ast(pub Box<AstKind>);
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum AstKind {
     /// An empty regex that matches everything.
-    Empty(Span),
+    Empty(Box<Span>),
     /// A set of flags, e.g., `(?is)`.
-    Flags(SetFlags),
+    Flags(Box<SetFlags>),
     /// A single character literal, which includes escape sequences.
-    Literal(Literal),
+    Literal(Box<Literal>),
     /// The "any character" class.
-    Dot(Span),
+    Dot(Box<Span>),
     /// A single zero-width assertion.
-    Assertion(Assertion),
-    /// A single character class. This includes all forms of character classes
-    /// except for `.`. e.g., `\d`, `\pN`, `[a-z]` and `[[:alpha:]]`.
-    Class(Class),
+    Assertion(Box<Assertion>),
+    /// A single Unicode character class, e.g., `\pL` or `\p{Greek}`.
+    ClassUnicode(Box<ClassUnicode>),
+    /// A single perl character class, e.g., `\d` or `\W`.
+    ClassPerl(Box<ClassPerl>),
+    /// A single bracketed character class set, which may contain zero or more
+    /// character ranges and/or zero or more nested classes. e.g.,
+    /// `[a-zA-Z\pL]`.
+    ClassBracketed(Box<ClassBracketed>),
     /// A repetition operator applied to an arbitrary regular expression.
-    Repetition(Repetition),
+    Repetition(Box<Repetition>),
     /// A grouped regular expression.
-    Group(Group),
+    Group(Box<Group>),
     /// An alternation of regular expressions.
-    Alternation(Alternation),
+    Alternation(Box<Alternation>),
     /// A concatenation of regular expressions.
-    Concat(Concat),
+    Concat(Box<Concat>),
 }
 
 impl Ast {
     /// Create an "empty" AST item.
     pub fn empty(span: Span) -> Ast {
-        Ast(Box::new(AstKind::Empty(span)))
+        Ast(Box::new(AstKind::Empty(Box::new(span))))
     }
 
     /// Create a "flags" AST item.
     pub fn flags(e: SetFlags) -> Ast {
-        Ast(Box::new(AstKind::Flags(e)))
+        Ast(Box::new(AstKind::Flags(Box::new(e))))
     }
 
     /// Create a "literal" AST item.
     pub fn literal(e: Literal) -> Ast {
-        Ast(Box::new(AstKind::Literal(e)))
+        Ast(Box::new(AstKind::Literal(Box::new(e))))
     }
 
     /// Create a "dot" AST item.
     pub fn dot(span: Span) -> Ast {
-        Ast(Box::new(AstKind::Dot(span)))
+        Ast(Box::new(AstKind::Dot(Box::new(span))))
     }
 
     /// Create a "assertion" AST item.
     pub fn assertion(e: Assertion) -> Ast {
-        Ast(Box::new(AstKind::Assertion(e)))
+        Ast(Box::new(AstKind::Assertion(Box::new(e))))
     }
 
-    /// Create a "class" AST item.
-    pub fn class(e: Class) -> Ast {
-        Ast(Box::new(AstKind::Class(e)))
+    /// Create a "Unicode class" AST item.
+    pub fn class_unicode(e: ClassUnicode) -> Ast {
+        Ast(Box::new(AstKind::ClassUnicode(Box::new(e))))
+    }
+
+    /// Create a "Perl class" AST item.
+    pub fn class_perl(e: ClassPerl) -> Ast {
+        Ast(Box::new(AstKind::ClassPerl(Box::new(e))))
+    }
+
+    /// Create a "bracketed class" AST item.
+    pub fn class_bracketed(e: ClassBracketed) -> Ast {
+        Ast(Box::new(AstKind::ClassBracketed(Box::new(e))))
     }
 
     /// Create a "repetition" AST item.
     pub fn repetition(e: Repetition) -> Ast {
-        Ast(Box::new(AstKind::Repetition(e)))
+        Ast(Box::new(AstKind::Repetition(Box::new(e))))
     }
 
     /// Create a "group" AST item.
     pub fn group(e: Group) -> Ast {
-        Ast(Box::new(AstKind::Group(e)))
+        Ast(Box::new(AstKind::Group(Box::new(e))))
     }
 
     /// Create a "alternation" AST item.
     pub fn alternation(e: Alternation) -> Ast {
-        Ast(Box::new(AstKind::Alternation(e)))
+        Ast(Box::new(AstKind::Alternation(Box::new(e))))
     }
 
     /// Create a "concat" AST item.
     pub fn concat(e: Concat) -> Ast {
-        Ast(Box::new(AstKind::Concat(e)))
+        Ast(Box::new(AstKind::Concat(Box::new(e))))
     }
 
     /// Return the span of this abstract syntax tree.
@@ -524,7 +539,9 @@ impl Ast {
             AstKind::Literal(ref x) => &x.span,
             AstKind::Dot(ref span) => span,
             AstKind::Assertion(ref x) => &x.span,
-            AstKind::Class(ref x) => x.span(),
+            AstKind::ClassUnicode(ref x) => &x.span,
+            AstKind::ClassPerl(ref x) => &x.span,
+            AstKind::ClassBracketed(ref x) => &x.span,
             AstKind::Repetition(ref x) => &x.span,
             AstKind::Group(ref x) => &x.span,
             AstKind::Alternation(ref x) => &x.span,
@@ -548,8 +565,10 @@ impl Ast {
             | AstKind::Flags(_)
             | AstKind::Literal(_)
             | AstKind::Dot(_)
-            | AstKind::Assertion(_) => false,
-            AstKind::Class(_)
+            | AstKind::Assertion(_)
+            | AstKind::ClassUnicode(_)
+            | AstKind::ClassPerl(_) => false,
+            AstKind::ClassBracketed(_)
             | AstKind::Repetition(_)
             | AstKind::Group(_)
             | AstKind::Alternation(_)
@@ -731,31 +750,6 @@ impl HexLiteralKind {
             HexLiteralKind::X => 2,
             HexLiteralKind::UnicodeShort => 4,
             HexLiteralKind::UnicodeLong => 8,
-        }
-    }
-}
-
-/// A single character class expression.
-#[derive(Clone, Debug, Eq, PartialEq)]
-#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
-pub enum Class {
-    /// A Unicode character class, e.g., `\pL` or `\p{Greek}`.
-    Unicode(ClassUnicode),
-    /// A perl character class, e.g., `\d` or `\W`.
-    Perl(ClassPerl),
-    /// A bracketed character class set, which may contain zero or more
-    /// character ranges and/or zero or more nested classes. e.g.,
-    /// `[a-zA-Z\pL]`.
-    Bracketed(ClassBracketed),
-}
-
-impl Class {
-    /// Return the span of this character class.
-    pub fn span(&self) -> &Span {
-        match *self {
-            Class::Perl(ref x) => &x.span,
-            Class::Unicode(ref x) => &x.span,
-            Class::Bracketed(ref x) => &x.span,
         }
     }
 }
@@ -1610,8 +1604,10 @@ impl Drop for Ast {
             | AstKind::Literal(_)
             | AstKind::Dot(_)
             | AstKind::Assertion(_)
-            // Classes are recursive, so they get their own Drop impl.
-            | AstKind::Class(_) => return,
+            | AstKind::ClassUnicode(_)
+            | AstKind::ClassPerl(_)
+            // Bracketed classes are recursive, they get their own Drop impl.
+            | AstKind::ClassBracketed(_) => return,
             AstKind::Repetition(ref x) if !x.ast.has_subexprs() => return,
             AstKind::Group(ref x) if !x.ast.has_subexprs() => return,
             AstKind::Alternation(ref x) if x.asts.is_empty() => return,
@@ -1629,8 +1625,11 @@ impl Drop for Ast {
                 | AstKind::Literal(_)
                 | AstKind::Dot(_)
                 | AstKind::Assertion(_)
-                // Classes are recursive, so they get their own Drop impl.
-                | AstKind::Class(_) => {}
+                | AstKind::ClassUnicode(_)
+                | AstKind::ClassPerl(_)
+                // Bracketed classes are recursive, so they get their own Drop
+                // impl.
+                | AstKind::ClassBracketed(_) => {}
                 AstKind::Repetition(ref mut x) => {
                     stack.push(mem::replace(&mut x.ast, empty_ast()));
                 }
@@ -1753,5 +1752,43 @@ mod tests {
             .unwrap()
             .join()
             .unwrap();
+    }
+
+    // This tests that our `Ast` has a reasonable size. This isn't a hard rule
+    // and it can be increased if given a good enough reason. But this test
+    // exists because the size of `Ast` was at one point over 200 bytes on a
+    // 64-bit target. Wow.
+    #[test]
+    fn ast_size() {
+        std::dbg!(core::mem::size_of::<Span>());
+        std::dbg!(core::mem::size_of::<SetFlags>());
+        std::dbg!(core::mem::size_of::<Literal>());
+        std::dbg!(core::mem::size_of::<Span>());
+        std::dbg!(core::mem::size_of::<Assertion>());
+        std::dbg!(core::mem::size_of::<ClassUnicode>());
+        std::dbg!(core::mem::size_of::<ClassPerl>());
+        std::dbg!(core::mem::size_of::<ClassBracketed>());
+        std::dbg!(core::mem::size_of::<Repetition>());
+        std::dbg!(core::mem::size_of::<Group>());
+        std::dbg!(core::mem::size_of::<Alternation>());
+        std::dbg!(core::mem::size_of::<Concat>());
+
+        let max = core::mem::size_of::<usize>();
+        let size = core::mem::size_of::<Ast>();
+        assert!(
+            size <= max,
+            "Ast size of {} bytes is bigger than suggested max {}",
+            size,
+            max
+        );
+
+        let max = 2 * core::mem::size_of::<usize>();
+        let size = core::mem::size_of::<AstKind>();
+        assert!(
+            size <= max,
+            "AstKind size of {} bytes is bigger than suggested max {}",
+            size,
+            max
+        );
     }
 }
