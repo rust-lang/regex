@@ -429,19 +429,9 @@ pub struct Comment {
 ///
 /// This type defines its own destructor that uses constant stack space and
 /// heap space proportional to the size of the `Ast`.
-///
-/// This type boxes the actual kind of the AST element so that an `Ast` value
-/// itself has a very small size. This in turn makes things like `Vec<Ast>` use
-/// a lot less memory than it might otherwise, which is particularly beneficial
-/// for representing long concatenations or alternations.
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
-pub struct Ast(pub Box<AstKind>);
-
-/// The kind of an abstract syntax element.
-#[derive(Clone, Debug, Eq, PartialEq)]
-#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
-pub enum AstKind {
+pub enum Ast {
     /// An empty regex that matches everything.
     Empty(Box<Span>),
     /// A set of flags, e.g., `(?is)`.
@@ -473,86 +463,86 @@ pub enum AstKind {
 impl Ast {
     /// Create an "empty" AST item.
     pub fn empty(span: Span) -> Ast {
-        Ast(Box::new(AstKind::Empty(Box::new(span))))
+        Ast::Empty(Box::new(span))
     }
 
     /// Create a "flags" AST item.
     pub fn flags(e: SetFlags) -> Ast {
-        Ast(Box::new(AstKind::Flags(Box::new(e))))
+        Ast::Flags(Box::new(e))
     }
 
     /// Create a "literal" AST item.
     pub fn literal(e: Literal) -> Ast {
-        Ast(Box::new(AstKind::Literal(Box::new(e))))
+        Ast::Literal(Box::new(e))
     }
 
     /// Create a "dot" AST item.
     pub fn dot(span: Span) -> Ast {
-        Ast(Box::new(AstKind::Dot(Box::new(span))))
+        Ast::Dot(Box::new(span))
     }
 
     /// Create a "assertion" AST item.
     pub fn assertion(e: Assertion) -> Ast {
-        Ast(Box::new(AstKind::Assertion(Box::new(e))))
+        Ast::Assertion(Box::new(e))
     }
 
     /// Create a "Unicode class" AST item.
     pub fn class_unicode(e: ClassUnicode) -> Ast {
-        Ast(Box::new(AstKind::ClassUnicode(Box::new(e))))
+        Ast::ClassUnicode(Box::new(e))
     }
 
     /// Create a "Perl class" AST item.
     pub fn class_perl(e: ClassPerl) -> Ast {
-        Ast(Box::new(AstKind::ClassPerl(Box::new(e))))
+        Ast::ClassPerl(Box::new(e))
     }
 
     /// Create a "bracketed class" AST item.
     pub fn class_bracketed(e: ClassBracketed) -> Ast {
-        Ast(Box::new(AstKind::ClassBracketed(Box::new(e))))
+        Ast::ClassBracketed(Box::new(e))
     }
 
     /// Create a "repetition" AST item.
     pub fn repetition(e: Repetition) -> Ast {
-        Ast(Box::new(AstKind::Repetition(Box::new(e))))
+        Ast::Repetition(Box::new(e))
     }
 
     /// Create a "group" AST item.
     pub fn group(e: Group) -> Ast {
-        Ast(Box::new(AstKind::Group(Box::new(e))))
+        Ast::Group(Box::new(e))
     }
 
     /// Create a "alternation" AST item.
     pub fn alternation(e: Alternation) -> Ast {
-        Ast(Box::new(AstKind::Alternation(Box::new(e))))
+        Ast::Alternation(Box::new(e))
     }
 
     /// Create a "concat" AST item.
     pub fn concat(e: Concat) -> Ast {
-        Ast(Box::new(AstKind::Concat(Box::new(e))))
+        Ast::Concat(Box::new(e))
     }
 
     /// Return the span of this abstract syntax tree.
     pub fn span(&self) -> &Span {
-        match *self.0 {
-            AstKind::Empty(ref span) => span,
-            AstKind::Flags(ref x) => &x.span,
-            AstKind::Literal(ref x) => &x.span,
-            AstKind::Dot(ref span) => span,
-            AstKind::Assertion(ref x) => &x.span,
-            AstKind::ClassUnicode(ref x) => &x.span,
-            AstKind::ClassPerl(ref x) => &x.span,
-            AstKind::ClassBracketed(ref x) => &x.span,
-            AstKind::Repetition(ref x) => &x.span,
-            AstKind::Group(ref x) => &x.span,
-            AstKind::Alternation(ref x) => &x.span,
-            AstKind::Concat(ref x) => &x.span,
+        match *self {
+            Ast::Empty(ref span) => span,
+            Ast::Flags(ref x) => &x.span,
+            Ast::Literal(ref x) => &x.span,
+            Ast::Dot(ref span) => span,
+            Ast::Assertion(ref x) => &x.span,
+            Ast::ClassUnicode(ref x) => &x.span,
+            Ast::ClassPerl(ref x) => &x.span,
+            Ast::ClassBracketed(ref x) => &x.span,
+            Ast::Repetition(ref x) => &x.span,
+            Ast::Group(ref x) => &x.span,
+            Ast::Alternation(ref x) => &x.span,
+            Ast::Concat(ref x) => &x.span,
         }
     }
 
     /// Return true if and only if this Ast is empty.
     pub fn is_empty(&self) -> bool {
-        match *self.0 {
-            AstKind::Empty(_) => true,
+        match *self {
+            Ast::Empty(_) => true,
             _ => false,
         }
     }
@@ -560,19 +550,19 @@ impl Ast {
     /// Returns true if and only if this AST has any (including possibly empty)
     /// subexpressions.
     fn has_subexprs(&self) -> bool {
-        match *self.0 {
-            AstKind::Empty(_)
-            | AstKind::Flags(_)
-            | AstKind::Literal(_)
-            | AstKind::Dot(_)
-            | AstKind::Assertion(_)
-            | AstKind::ClassUnicode(_)
-            | AstKind::ClassPerl(_) => false,
-            AstKind::ClassBracketed(_)
-            | AstKind::Repetition(_)
-            | AstKind::Group(_)
-            | AstKind::Alternation(_)
-            | AstKind::Concat(_) => true,
+        match *self {
+            Ast::Empty(_)
+            | Ast::Flags(_)
+            | Ast::Literal(_)
+            | Ast::Dot(_)
+            | Ast::Assertion(_)
+            | Ast::ClassUnicode(_)
+            | Ast::ClassPerl(_) => false,
+            Ast::ClassBracketed(_)
+            | Ast::Repetition(_)
+            | Ast::Group(_)
+            | Ast::Alternation(_)
+            | Ast::Concat(_) => true,
         }
     }
 }
@@ -1598,20 +1588,20 @@ impl Drop for Ast {
     fn drop(&mut self) {
         use core::mem;
 
-        match *self.0 {
-            AstKind::Empty(_)
-            | AstKind::Flags(_)
-            | AstKind::Literal(_)
-            | AstKind::Dot(_)
-            | AstKind::Assertion(_)
-            | AstKind::ClassUnicode(_)
-            | AstKind::ClassPerl(_)
+        match *self {
+            Ast::Empty(_)
+            | Ast::Flags(_)
+            | Ast::Literal(_)
+            | Ast::Dot(_)
+            | Ast::Assertion(_)
+            | Ast::ClassUnicode(_)
+            | Ast::ClassPerl(_)
             // Bracketed classes are recursive, they get their own Drop impl.
-            | AstKind::ClassBracketed(_) => return,
-            AstKind::Repetition(ref x) if !x.ast.has_subexprs() => return,
-            AstKind::Group(ref x) if !x.ast.has_subexprs() => return,
-            AstKind::Alternation(ref x) if x.asts.is_empty() => return,
-            AstKind::Concat(ref x) if x.asts.is_empty() => return,
+            | Ast::ClassBracketed(_) => return,
+            Ast::Repetition(ref x) if !x.ast.has_subexprs() => return,
+            Ast::Group(ref x) if !x.ast.has_subexprs() => return,
+            Ast::Alternation(ref x) if x.asts.is_empty() => return,
+            Ast::Concat(ref x) if x.asts.is_empty() => return,
             _ => {}
         }
 
@@ -1619,27 +1609,27 @@ impl Drop for Ast {
         let empty_ast = || Ast::empty(empty_span());
         let mut stack = vec![mem::replace(self, empty_ast())];
         while let Some(mut ast) = stack.pop() {
-            match *ast.0 {
-                AstKind::Empty(_)
-                | AstKind::Flags(_)
-                | AstKind::Literal(_)
-                | AstKind::Dot(_)
-                | AstKind::Assertion(_)
-                | AstKind::ClassUnicode(_)
-                | AstKind::ClassPerl(_)
+            match ast {
+                Ast::Empty(_)
+                | Ast::Flags(_)
+                | Ast::Literal(_)
+                | Ast::Dot(_)
+                | Ast::Assertion(_)
+                | Ast::ClassUnicode(_)
+                | Ast::ClassPerl(_)
                 // Bracketed classes are recursive, so they get their own Drop
                 // impl.
-                | AstKind::ClassBracketed(_) => {}
-                AstKind::Repetition(ref mut x) => {
+                | Ast::ClassBracketed(_) => {}
+                Ast::Repetition(ref mut x) => {
                     stack.push(mem::replace(&mut x.ast, empty_ast()));
                 }
-                AstKind::Group(ref mut x) => {
+                Ast::Group(ref mut x) => {
                     stack.push(mem::replace(&mut x.ast, empty_ast()));
                 }
-                AstKind::Alternation(ref mut x) => {
+                Ast::Alternation(ref mut x) => {
                     stack.extend(x.asts.drain(..));
                 }
-                AstKind::Concat(ref mut x) => {
+                Ast::Concat(ref mut x) => {
                     stack.extend(x.asts.drain(..));
                 }
             }
@@ -1760,33 +1750,11 @@ mod tests {
     // 64-bit target. Wow.
     #[test]
     fn ast_size() {
-        std::dbg!(core::mem::size_of::<Span>());
-        std::dbg!(core::mem::size_of::<SetFlags>());
-        std::dbg!(core::mem::size_of::<Literal>());
-        std::dbg!(core::mem::size_of::<Span>());
-        std::dbg!(core::mem::size_of::<Assertion>());
-        std::dbg!(core::mem::size_of::<ClassUnicode>());
-        std::dbg!(core::mem::size_of::<ClassPerl>());
-        std::dbg!(core::mem::size_of::<ClassBracketed>());
-        std::dbg!(core::mem::size_of::<Repetition>());
-        std::dbg!(core::mem::size_of::<Group>());
-        std::dbg!(core::mem::size_of::<Alternation>());
-        std::dbg!(core::mem::size_of::<Concat>());
-
-        let max = core::mem::size_of::<usize>();
+        let max = 2 * core::mem::size_of::<usize>();
         let size = core::mem::size_of::<Ast>();
         assert!(
             size <= max,
             "Ast size of {} bytes is bigger than suggested max {}",
-            size,
-            max
-        );
-
-        let max = 2 * core::mem::size_of::<usize>();
-        let size = core::mem::size_of::<AstKind>();
-        assert!(
-            size <= max,
-            "AstKind size of {} bytes is bigger than suggested max {}",
             size,
             max
         );

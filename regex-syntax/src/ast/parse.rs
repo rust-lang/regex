@@ -16,7 +16,7 @@ use alloc::{
 };
 
 use crate::{
-    ast::{self, Ast, AstKind, Position, Span},
+    ast::{self, Ast, Position, Span},
     either::Either,
     is_escapeable_character, is_meta_character,
 };
@@ -1044,8 +1044,8 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
                 )
             }
         };
-        match *ast.0 {
-            AstKind::Empty(_) | AstKind::Flags(_) => {
+        match ast {
+            Ast::Empty(_) | Ast::Flags(_) => {
                 return Err(
                     self.error(self.span(), ast::ErrorKind::RepetitionMissing)
                 )
@@ -1096,8 +1096,8 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
                 )
             }
         };
-        match *ast.0 {
-            AstKind::Empty(_) | AstKind::Flags(_) => {
+        match ast {
+            Ast::Empty(_) | Ast::Flags(_) => {
                 return Err(
                     self.error(self.span(), ast::ErrorKind::RepetitionMissing)
                 )
@@ -2183,43 +2183,43 @@ impl<'p, 's, P: Borrow<Parser>> ast::Visitor for NestLimiter<'p, 's, P> {
     }
 
     fn visit_pre(&mut self, ast: &Ast) -> Result<()> {
-        let span = match *ast.0 {
-            AstKind::Empty(_)
-            | AstKind::Flags(_)
-            | AstKind::Literal(_)
-            | AstKind::Dot(_)
-            | AstKind::Assertion(_)
-            | AstKind::ClassUnicode(_)
-            | AstKind::ClassPerl(_) => {
+        let span = match *ast {
+            Ast::Empty(_)
+            | Ast::Flags(_)
+            | Ast::Literal(_)
+            | Ast::Dot(_)
+            | Ast::Assertion(_)
+            | Ast::ClassUnicode(_)
+            | Ast::ClassPerl(_) => {
                 // These are all base cases, so we don't increment depth.
                 return Ok(());
             }
-            AstKind::ClassBracketed(ref x) => &x.span,
-            AstKind::Repetition(ref x) => &x.span,
-            AstKind::Group(ref x) => &x.span,
-            AstKind::Alternation(ref x) => &x.span,
-            AstKind::Concat(ref x) => &x.span,
+            Ast::ClassBracketed(ref x) => &x.span,
+            Ast::Repetition(ref x) => &x.span,
+            Ast::Group(ref x) => &x.span,
+            Ast::Alternation(ref x) => &x.span,
+            Ast::Concat(ref x) => &x.span,
         };
         self.increment_depth(span)
     }
 
     fn visit_post(&mut self, ast: &Ast) -> Result<()> {
-        match *ast.0 {
-            AstKind::Empty(_)
-            | AstKind::Flags(_)
-            | AstKind::Literal(_)
-            | AstKind::Dot(_)
-            | AstKind::Assertion(_)
-            | AstKind::ClassUnicode(_)
-            | AstKind::ClassPerl(_) => {
+        match *ast {
+            Ast::Empty(_)
+            | Ast::Flags(_)
+            | Ast::Literal(_)
+            | Ast::Dot(_)
+            | Ast::Assertion(_)
+            | Ast::ClassUnicode(_)
+            | Ast::ClassPerl(_) => {
                 // These are all base cases, so we don't decrement depth.
                 Ok(())
             }
-            AstKind::ClassBracketed(_)
-            | AstKind::Repetition(_)
-            | AstKind::Group(_)
-            | AstKind::Alternation(_)
-            | AstKind::Concat(_) => {
+            Ast::ClassBracketed(_)
+            | Ast::Repetition(_)
+            | Ast::Group(_)
+            | Ast::Alternation(_)
+            | Ast::Concat(_) => {
                 self.decrement_depth();
                 Ok(())
             }
