@@ -892,6 +892,14 @@ impl Regex {
     ) -> SplitN<'r, 'h> {
         SplitN { splits: self.split(input), limit }
     }
+
+    /// TODO: add docs
+    pub fn split_inclusive<'r, 'h, I: Into<Input<'h>>>(
+        &'r self,
+        input: I,
+    ) -> SplitInclusive<'r, 'h> {
+        SplitInclusive { finder: self.find_iter(input), last: 0, span_to_yield: None }
+    }
 }
 
 /// Lower level search routines that give more control.
@@ -2278,6 +2286,58 @@ impl<'r, 'h> Iterator for SplitN<'r, 'h> {
 
 impl<'r, 'h> core::iter::FusedIterator for SplitN<'r, 'h> {}
 
+/// TODO: add docs
+#[derive(Debug)]
+pub struct SplitInclusive<'r, 'h> {
+    finder: FindMatches<'r, 'h>,
+    last: usize,
+    span_to_yield: Option<Span>,
+}
+
+impl<'r, 'h> SplitInclusive<'r, 'h> {
+    /// Returns the current `Input` associated with this iterator.
+    ///
+    /// The `start` position on the given `Input` may change during iteration,
+    /// but all other values are guaranteed to remain invariant.
+    #[inline]
+    pub fn input<'s>(&'s self) -> &'s Input<'h> {
+        self.finder.input()
+    }
+}
+
+impl<'r, 'h> Iterator for SplitInclusive<'r, 'h> {
+    type Item = Span;
+
+    fn next(&mut self) -> Option<Span> {
+        if let Some(span) = self.span_to_yield {
+            self.span_to_yield = None;
+            return Some(span)
+        }
+
+        match self.finder.next() {
+            None => {
+                let len = self.input().haystack().len();
+                if self.last > len {
+                    None
+                } else {
+                    let span = Span::from(self.last..len);
+                    self.last = len + 1; // Next call will return None
+                    Some(span)
+                }
+            },
+            Some(m) => {
+                let span = Span::from(self.last..m.start());  // return this right now
+                self.span_to_yield = Some(Span::from(m.start()..m.end()));  // next call will return this
+
+                self.last = m.end();
+                Some(span)
+            }
+        }
+    }
+}
+
+impl<'r, 'h> core::iter::FusedIterator for SplitInclusive<'r, 'h> {}
+
 /// Represents mutable scratch space used by regex engines during a search.
 ///
 /// Most of the regex engines in this crate require some kind of
@@ -3645,5 +3705,48 @@ mod tests {
 
         let re = Regex::new(r"[a-zA-Z]+ing").unwrap();
         assert_eq!(1, re.find_iter("tingling").count());
+    }
+
+    #[test]
+    fn split_inclusive() {
+        let arr = [
+            (
+                r"(x)",
+                "1x2",
+                vec!["1", "x", "2"],
+            ),
+            (
+                r"([^\d]+)",
+                "1-2",
+                vec!["1", "-", "2"],
+            ),
+            (
+                r"(\s+)",
+                "this  is a \n\ntest",
+                vec!["this", "  ", "is", " ", "a", " \n\n", "test"],
+            ),
+            (
+                r"([^0-9a-zA-Z_])",
+                " C# is great! (not actually) :)",
+                vec!["", " ", "C", "#", "", " ", "is", " ", "great", "!", "", " ", "", "(", "not", " ", "actually", ")", "", " ", "", ":", "", ")", ""],
+            ),
+            (
+                r"([a-zA-Z](?:[a-zA-Z']*[a-zA-Z])?)",
+                r#"He said, "I'd like to eat cake!""#,
+                vec!["", "He", " ", "said", r#", ""#, "I'd", " ", "like", " ", "to", " ", "eat", " ", "cake", r#"!""#],
+            ),
+        ];
+        for (pattern, text, expected_output) in arr {
+            let mut out: Vec<_> = Regex::new(pattern).unwrap()
+                .split_inclusive(text)
+                .map(|span| &text[span])
+                .collect();
+
+            assert_eq!(out, expected_output, "Regex: {}, Input: {}", pattern, text);
+
+            // make sure that we can get the original string, from the splitted string by
+            // concatenating it
+            assert_eq!(out.join(""), text);
+        }
     }
 }
