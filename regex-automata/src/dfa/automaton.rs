@@ -1132,7 +1132,7 @@ pub unsafe trait Automaton {
     /// // implementation defined.
     /// //
     /// // N.B. We get '3' by inspecting the state machine using 'regex-cli'.
-    /// // e.g., try `regex-cli debug dfa dense '[^abc]+a' -BbUC`.
+    /// // e.g., try `regex-cli debug dense dfa -p '[^abc]+a' -BbUC`.
     /// let id = StateID::new(3 * dfa.stride()).unwrap();
     /// let accelerator = dfa.accelerator(id);
     /// // The `[^abc]+` sub-expression permits [a, b, c] to be accelerated.

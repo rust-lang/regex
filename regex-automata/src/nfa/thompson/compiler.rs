@@ -1466,7 +1466,7 @@ impl Compiler {
         // compare and contrast performance of the Pike VM when the code below
         // is active vs the code above. Here's an example to try:
         //
-        //   regex-cli find match pikevm -b -p '(?m)^\w{20}' -y '@$smallishru'
+        //   regex-cli find match pikevm -b -p '(?m)^\w{20}' non-ascii-file
         //
         // With Unicode classes generated below, this search takes about 45s on
         // my machine. But with the compressed version above, the search takes

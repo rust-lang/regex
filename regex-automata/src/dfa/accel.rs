@@ -6,15 +6,16 @@
 // non-Unicode regexes. For example, consider '(?-u)[^a]+a'. We can look at its
 // DFA with regex-cli:
 //
-//     $ regex-cli debug dfa dense '(?-u)[^a]+a' -BbC
-//     dense::DFA(
+//     $ regex-cli debug dense dfa -p '(?-u)[^a]+a' -BbC --no-table
 //     D 000000:
 //     Q 000001:
 //      *000002:
-//     A 000003: \x00-` => 3, a => 5, b-\xFF => 3
-//      >000004: \x00-` => 3, a => 4, b-\xFF => 3
-//       000005: \x00-\xFF => 2, EOI => 2
-//     )
+//     A 000003: \x00-` => 3, a => 8, b-\xFF => 3
+//     A 000004: \x00-` => 4, a => 7, b-\xFF => 4
+//       000005: \x00-` => 4, b-\xFF => 4
+//       000006: \x00-` => 3, a => 6, b-\xFF => 3
+//       000007: \x00-\xFF => 2, EOI => 2
+//       000008: \x00-\xFF => 2, EOI => 2
 //
 // In particular, state 3 is accelerated (shown via the 'A' indicator) since
 // the only way to leave that state once entered is to see an 'a' byte. If
