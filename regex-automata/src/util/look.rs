@@ -1024,7 +1024,9 @@ impl core::fmt::Display for UnicodeWordBoundaryError {
 // There are perhaps other choices as well. Why did I stop at these 4? Because
 // I wanted to preserve my sanity. I suspect I'll wind up adding the lazy DFA
 // approach eventually, as the benefits of the DFA approach are somewhat
-// compelling. The 'boundary-words-holmes' benchmark tests this:
+// compelling. The 'boundary-words-holmes' benchmark tests this. (Note that
+// the commands below no longer work. If necessary, we should re-capitulate
+// the benchmark from whole cloth in rebar.)
 //
 //   $ regex-cli bench measure -f boundary-words-holmes -e pikevm > dfa.csv
 //

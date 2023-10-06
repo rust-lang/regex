@@ -2103,8 +2103,10 @@ impl<'i, 'c> Lazy<'i, 'c> {
     /// Here's an example that justifies 'inline(never)'
     ///
     /// ```ignore
-    /// regex-cli find hybrid dfa \
-    ///   @all-codepoints-utf8-100x '\pL{100}' --cache-capacity 10000000
+    /// regex-cli find match hybrid \
+    ///   --cache-capacity 100000000 \
+    ///   -p '\pL{100}'
+    ///   all-codepoints-utf8-100x
     /// ```
     ///
     /// Where 'all-codepoints-utf8-100x' is the UTF-8 encoding of every
@@ -3830,8 +3832,8 @@ impl Config {
             //
             // Test case:
             //
-            //   regex-cli find hybrid regex -w @conn.json.1000x.log \
-            //     '^#' '\b10\.55\.182\.100\b'
+            //   regex-cli find match hybrid --unicode-word-boundary \
+            //     -p '^#' -p '\b10\.55\.182\.100\b' -y @conn.json.1000x.log
             if !quit.is_empty() {
                 set.add_set(&quit);
             }
