@@ -30,7 +30,7 @@ use crate::{
 use crate::{
     dfa::{
         accel::Accels,
-        automaton::{fmt_state_indicator, Automaton},
+        automaton::{fmt_state_indicator, Automaton, StartError},
         special::Special,
         start::StartKind,
         DEAD,
@@ -40,8 +40,8 @@ use crate::{
         int::{Pointer, Usize},
         prefilter::Prefilter,
         primitives::{PatternID, StateID},
-        search::{Anchored, Input, MatchError},
-        start::{Start, StartByteMap},
+        search::Anchored,
+        start::{self, Start, StartByteMap},
         wire::{self, DeserializeError, Endian, SerializeError},
     },
 };
@@ -2885,31 +2885,33 @@ impl OwnedDFA {
     fn set_universal_starts(&mut self) {
         assert_eq!(6, Start::len(), "expected 6 start configurations");
 
-        let start_id = |dfa: &mut OwnedDFA, inp: &Input<'_>, start: Start| {
+        let start_id = |dfa: &mut OwnedDFA,
+                        anchored: Anchored,
+                        start: Start| {
             // This OK because we only call 'start' under conditions
             // in which we know it will succeed.
-            dfa.st.start(inp, start).expect("valid Input configuration")
+            dfa.st.start(anchored, start).expect("valid Input configuration")
         };
         if self.start_kind().has_unanchored() {
-            let inp = Input::new("").anchored(Anchored::No);
-            let sid = start_id(self, &inp, Start::NonWordByte);
-            if sid == start_id(self, &inp, Start::WordByte)
-                && sid == start_id(self, &inp, Start::Text)
-                && sid == start_id(self, &inp, Start::LineLF)
-                && sid == start_id(self, &inp, Start::LineCR)
-                && sid == start_id(self, &inp, Start::CustomLineTerminator)
+            let anchor = Anchored::No;
+            let sid = start_id(self, anchor, Start::NonWordByte);
+            if sid == start_id(self, anchor, Start::WordByte)
+                && sid == start_id(self, anchor, Start::Text)
+                && sid == start_id(self, anchor, Start::LineLF)
+                && sid == start_id(self, anchor, Start::LineCR)
+                && sid == start_id(self, anchor, Start::CustomLineTerminator)
             {
                 self.st.universal_start_unanchored = Some(sid);
             }
         }
         if self.start_kind().has_anchored() {
-            let inp = Input::new("").anchored(Anchored::Yes);
-            let sid = start_id(self, &inp, Start::NonWordByte);
-            if sid == start_id(self, &inp, Start::WordByte)
-                && sid == start_id(self, &inp, Start::Text)
-                && sid == start_id(self, &inp, Start::LineLF)
-                && sid == start_id(self, &inp, Start::LineCR)
-                && sid == start_id(self, &inp, Start::CustomLineTerminator)
+            let anchor = Anchored::Yes;
+            let sid = start_id(self, anchor, Start::NonWordByte);
+            if sid == start_id(self, anchor, Start::WordByte)
+                && sid == start_id(self, anchor, Start::Text)
+                && sid == start_id(self, anchor, Start::LineLF)
+                && sid == start_id(self, anchor, Start::LineCR)
+                && sid == start_id(self, anchor, Start::CustomLineTerminator)
             {
                 self.st.universal_start_anchored = Some(sid);
             }
@@ -3216,35 +3218,21 @@ unsafe impl<T: AsRef<[u32]>> Automaton for DFA<T> {
     }
 
     #[cfg_attr(feature = "perf-inline", inline(always))]
-    fn start_state_forward(
+    fn start_state(
         &self,
-        input: &Input<'_>,
-    ) -> Result<StateID, MatchError> {
-        if !self.quitset.is_empty() && input.start() > 0 {
-            let offset = input.start() - 1;
-            let byte = input.haystack()[offset];
-            if self.quitset.contains(byte) {
-                return Err(MatchError::quit(byte, offset));
+        config: &start::Config,
+    ) -> Result<StateID, StartError> {
+        let anchored = config.get_anchored();
+        let start = match config.get_look_behind() {
+            None => Start::Text,
+            Some(byte) => {
+                if !self.quitset.is_empty() && self.quitset.contains(byte) {
+                    return Err(StartError::quit(byte));
+                }
+                self.st.start_map.get(byte)
             }
-        }
-        let start = self.st.start_map.fwd(&input);
-        self.st.start(input, start)
-    }
-
-    #[cfg_attr(feature = "perf-inline", inline(always))]
-    fn start_state_reverse(
-        &self,
-        input: &Input<'_>,
-    ) -> Result<StateID, MatchError> {
-        if !self.quitset.is_empty() && input.end() < input.haystack().len() {
-            let offset = input.end();
-            let byte = input.haystack()[offset];
-            if self.quitset.contains(byte) {
-                return Err(MatchError::quit(byte, offset));
-            }
-        }
-        let start = self.st.start_map.rev(&input);
-        self.st.start(input, start)
+        };
+        self.st.start(anchored, start)
     }
 
     #[cfg_attr(feature = "perf-inline", inline(always))]
@@ -4180,28 +4168,27 @@ impl<T: AsRef<[u32]>> StartTable<T> {
     #[cfg_attr(feature = "perf-inline", inline(always))]
     fn start(
         &self,
-        input: &Input<'_>,
+        anchored: Anchored,
         start: Start,
-    ) -> Result<StateID, MatchError> {
+    ) -> Result<StateID, StartError> {
         let start_index = start.as_usize();
-        let mode = input.get_anchored();
-        let index = match mode {
+        let index = match anchored {
             Anchored::No => {
                 if !self.kind.has_unanchored() {
-                    return Err(MatchError::unsupported_anchored(mode));
+                    return Err(StartError::unsupported_anchored(anchored));
                 }
                 start_index
             }
             Anchored::Yes => {
                 if !self.kind.has_anchored() {
-                    return Err(MatchError::unsupported_anchored(mode));
+                    return Err(StartError::unsupported_anchored(anchored));
                 }
                 self.stride + start_index
             }
             Anchored::Pattern(pid) => {
                 let len = match self.pattern_len {
                     None => {
-                        return Err(MatchError::unsupported_anchored(mode))
+                        return Err(StartError::unsupported_anchored(anchored))
                     }
                     Some(len) => len,
                 };
@@ -5086,6 +5073,8 @@ impl core::fmt::Display for BuildError {
 
 #[cfg(all(test, feature = "syntax", feature = "dfa-build"))]
 mod tests {
+    use crate::{Input, MatchError};
+
     use super::*;
 
     #[test]

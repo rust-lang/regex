@@ -52,7 +52,7 @@ use alloc::{vec, vec::Vec};
 use crate::dfa::dense::{self, BuildError};
 use crate::{
     dfa::{
-        automaton::{fmt_state_indicator, Automaton},
+        automaton::{fmt_state_indicator, Automaton, StartError},
         dense::Flags,
         special::Special,
         StartKind, DEAD,
@@ -63,8 +63,8 @@ use crate::{
         int::{Pointer, Usize, U16, U32},
         prefilter::Prefilter,
         primitives::{PatternID, StateID},
-        search::{Anchored, Input, MatchError},
-        start::{Start, StartByteMap},
+        search::Anchored,
+        start::{self, Start, StartByteMap},
         wire::{self, DeserializeError, Endian, SerializeError},
     },
 };
@@ -1207,35 +1207,21 @@ unsafe impl<T: AsRef<[u8]>> Automaton for DFA<T> {
     }
 
     #[inline]
-    fn start_state_forward(
+    fn start_state(
         &self,
-        input: &Input<'_>,
-    ) -> Result<StateID, MatchError> {
-        if !self.quitset.is_empty() && input.start() > 0 {
-            let offset = input.start() - 1;
-            let byte = input.haystack()[offset];
-            if self.quitset.contains(byte) {
-                return Err(MatchError::quit(byte, offset));
+        config: &start::Config,
+    ) -> Result<StateID, StartError> {
+        let anchored = config.get_anchored();
+        let start = match config.get_look_behind() {
+            None => Start::Text,
+            Some(byte) => {
+                if !self.quitset.is_empty() && self.quitset.contains(byte) {
+                    return Err(StartError::quit(byte));
+                }
+                self.st.start_map.get(byte)
             }
-        }
-        let start = self.st.start_map.fwd(&input);
-        self.st.start(input, start)
-    }
-
-    #[inline]
-    fn start_state_reverse(
-        &self,
-        input: &Input<'_>,
-    ) -> Result<StateID, MatchError> {
-        if !self.quitset.is_empty() && input.end() < input.haystack().len() {
-            let offset = input.end();
-            let byte = input.haystack()[offset];
-            if self.quitset.contains(byte) {
-                return Err(MatchError::quit(byte, offset));
-            }
-        }
-        let start = self.st.start_map.rev(&input);
-        self.st.start(input, start)
+        };
+        self.st.start(anchored, start)
     }
 
     #[inline]
@@ -2145,28 +2131,27 @@ impl<T: AsRef<[u8]>> StartTable<T> {
     /// panics.
     fn start(
         &self,
-        input: &Input<'_>,
+        anchored: Anchored,
         start: Start,
-    ) -> Result<StateID, MatchError> {
+    ) -> Result<StateID, StartError> {
         let start_index = start.as_usize();
-        let mode = input.get_anchored();
-        let index = match mode {
+        let index = match anchored {
             Anchored::No => {
                 if !self.kind.has_unanchored() {
-                    return Err(MatchError::unsupported_anchored(mode));
+                    return Err(StartError::unsupported_anchored(anchored));
                 }
                 start_index
             }
             Anchored::Yes => {
                 if !self.kind.has_anchored() {
-                    return Err(MatchError::unsupported_anchored(mode));
+                    return Err(StartError::unsupported_anchored(anchored));
                 }
                 self.stride + start_index
             }
             Anchored::Pattern(pid) => {
                 let len = match self.pattern_len {
                     None => {
-                        return Err(MatchError::unsupported_anchored(mode))
+                        return Err(StartError::unsupported_anchored(anchored))
                     }
                     Some(len) => len,
                 };
