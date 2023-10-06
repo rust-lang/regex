@@ -3737,9 +3737,9 @@ mod tests {
             ),
         ];
         for (pattern, text, expected_output) in arr {
-            let mut out: Vec<_> = Regex::new(pattern).unwrap()
+            let out: Vec<_> = Regex::new(pattern).unwrap()
                 .split_inclusive(text)
-                .map(|span| &text[span])
+                .map(|sp| &text[sp])
                 .collect();
 
             assert_eq!(out, expected_output, "Regex: {}, Input: {}", pattern, text);
