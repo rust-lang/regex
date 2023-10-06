@@ -3717,7 +3717,7 @@ mod tests {
             (r"(x)", "1x2", vec!["1", "x", "2"]),
             (r"([^0-9]+)", "1-2", vec!["1", "-", "2"]),
             (
-                r"(\s+)",
+                r"([\r\n\t\f\v ]+)", // equivalent to r"(\s+)"
                 "this  is a \n\ntest",
                 vec!["this", "  ", "is", " ", "a", " \n\n", "test"],
             ),
