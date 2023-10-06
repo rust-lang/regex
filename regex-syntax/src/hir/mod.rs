@@ -797,12 +797,17 @@ impl core::fmt::Debug for Literal {
 /// The high-level intermediate representation of a character class.
 ///
 /// A character class corresponds to a set of characters. A character is either
-/// defined by a Unicode scalar value or a byte. Unicode characters are used
-/// by default, while bytes are used when Unicode mode (via the `u` flag) is
-/// disabled.
+/// defined by a Unicode scalar value or a byte.
 ///
 /// A character class, regardless of its character type, is represented by a
 /// sequence of non-overlapping non-adjacent ranges of characters.
+///
+/// There are no guarantees about which class variant is used. Generally
+/// speaking, the Unicode variat is used whenever a class needs to contain
+/// non-ASCII Unicode scalar values. But the Unicode variant can be used even
+/// when Unicode mode is disabled. For example, at the time of writing, the
+/// regex `(?-u:a|\xc2\xa0)` will compile down to HIR for the Unicode class
+/// `[a\u00A0]` due to optimizations.
 ///
 /// Note that `Bytes` variant may be produced even when it exclusively matches
 /// valid UTF-8. This is because a `Bytes` variant represents an intention by
@@ -1326,8 +1331,9 @@ impl ClassUnicodeRange {
     }
 }
 
-/// A set of characters represented by arbitrary bytes (where one byte
-/// corresponds to one character).
+/// A set of characters represented by arbitrary bytes.
+///
+/// Each byte corresponds to one character.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ClassBytes {
     set: IntervalSet<ClassBytesRange>,

@@ -4,6 +4,9 @@ TBD
 * [BUG #1046](https://github.com/rust-lang/regex/issues/1046):
 Fix a bug that could result in incorrect match spans when using a Unicode word
 boundary and searching non-ASCII strings.
+* [BUG(regex-syntax) #1088](https://github.com/rust-lang/regex/issues/1088):
+Remove guarantees in the API that connect the `u` flag with a specific HIR
+representation.
 
 
 1.9.6 (2023-09-30)
