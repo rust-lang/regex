@@ -66,8 +66,9 @@ const VERSION: u32 = 2;
 ///
 /// The default configuration guarantees that a search will never return
 /// a "quit" error, although it is possible for a search to fail if
-/// [`Config::starts_for_each_pattern`] wasn't enabled (which it is not by
-/// default) and an [`Anchored::Pattern`] mode is requested via [`Input`].
+/// [`Config::starts_for_each_pattern`] wasn't enabled (which it is
+/// not by default) and an [`Anchored::Pattern`] mode is requested via
+/// [`Input`](crate::Input).
 #[cfg(feature = "dfa-build")]
 #[derive(Clone, Debug, Default)]
 pub struct Config {
@@ -113,8 +114,7 @@ impl Config {
     /// make searching slower than it otherwise would be if the transitions
     /// that leave accelerated states are traversed frequently.
     ///
-    /// See [`Automaton::accelerator`](crate::dfa::Automaton::accelerator) for
-    /// an example.
+    /// See [`Automaton::accelerator`] for an example.
     ///
     /// This is enabled by default.
     pub fn accelerate(mut self, yes: bool) -> Config {

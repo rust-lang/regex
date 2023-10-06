@@ -3,13 +3,12 @@ Types and routines specific to sparse DFAs.
 
 This module is the home of [`sparse::DFA`](DFA).
 
-Unlike the [`dense`](super::dense) module, this module does not contain a
-builder or configuration specific for sparse DFAs. Instead, the intended
-way to build a sparse DFA is either by using a default configuration with
-its constructor [`sparse::DFA::new`](DFA::new), or by first configuring the
-construction of a dense DFA with [`dense::Builder`](super::dense::Builder)
-and then calling [`dense::DFA::to_sparse`](super::dense::DFA::to_sparse). For
-example, this configures a sparse DFA to do an overlapping search:
+Unlike the [`dense`] module, this module does not contain a builder or
+configuration specific for sparse DFAs. Instead, the intended way to build a
+sparse DFA is either by using a default configuration with its constructor
+[`sparse::DFA::new`](DFA::new), or by first configuring the construction of a
+dense DFA with [`dense::Builder`] and then calling [`dense::DFA::to_sparse`].
+For example, this configures a sparse DFA to do an overlapping search:
 
 ```
 use regex_automata::{
@@ -74,18 +73,17 @@ const VERSION: u32 = 2;
 
 /// A sparse deterministic finite automaton (DFA) with variable sized states.
 ///
-/// In contrast to a [dense::DFA](crate::dfa::dense::DFA), a sparse DFA uses
-/// a more space efficient representation for its transitions. Consequently,
-/// sparse DFAs may use much less memory than dense DFAs, but this comes at a
-/// price. In particular, reading the more space efficient transitions takes
-/// more work, and consequently, searching using a sparse DFA is typically
-/// slower than a dense DFA.
+/// In contrast to a [dense::DFA], a sparse DFA uses a more space efficient
+/// representation for its transitions. Consequently, sparse DFAs may use much
+/// less memory than dense DFAs, but this comes at a price. In particular,
+/// reading the more space efficient transitions takes more work, and
+/// consequently, searching using a sparse DFA is typically slower than a dense
+/// DFA.
 ///
 /// A sparse DFA can be built using the default configuration via the
-/// [`DFA::new`] constructor. Otherwise, one can configure various aspects
-/// of a dense DFA via [`dense::Builder`](crate::dfa::dense::Builder),
-/// and then convert a dense DFA to a sparse DFA using
-/// [`dense::DFA::to_sparse`](crate::dfa::dense::DFA::to_sparse).
+/// [`DFA::new`] constructor. Otherwise, one can configure various aspects of a
+/// dense DFA via [`dense::Builder`], and then convert a dense DFA to a sparse
+/// DFA using [`dense::DFA::to_sparse`].
 ///
 /// In general, a sparse DFA supports all the same search operations as a dense
 /// DFA.
@@ -140,11 +138,9 @@ impl DFA<Vec<u8>> {
     /// Parse the given regular expression using a default configuration and
     /// return the corresponding sparse DFA.
     ///
-    /// If you want a non-default configuration, then use
-    /// the [`dense::Builder`](crate::dfa::dense::Builder)
-    /// to set your own configuration, and then call
-    /// [`dense::DFA::to_sparse`](crate::dfa::dense::DFA::to_sparse) to create
-    /// a sparse DFA.
+    /// If you want a non-default configuration, then use the
+    /// [`dense::Builder`] to set your own configuration, and then call
+    /// [`dense::DFA::to_sparse`] to create a sparse DFA.
     ///
     /// # Example
     ///
@@ -167,11 +163,9 @@ impl DFA<Vec<u8>> {
     /// Parse the given regular expressions using a default configuration and
     /// return the corresponding multi-DFA.
     ///
-    /// If you want a non-default configuration, then use
-    /// the [`dense::Builder`](crate::dfa::dense::Builder)
-    /// to set your own configuration, and then call
-    /// [`dense::DFA::to_sparse`](crate::dfa::dense::DFA::to_sparse) to create
-    /// a sparse DFA.
+    /// If you want a non-default configuration, then use the
+    /// [`dense::Builder`] to set your own configuration, and then call
+    /// [`dense::DFA::to_sparse`] to create a sparse DFA.
     ///
     /// # Example
     ///
@@ -511,10 +505,9 @@ impl<T: AsRef<[u8]>> DFA<T> {
     /// * [`DFA::from_bytes`]
     /// * [`DFA::from_bytes_unchecked`]
     ///
-    /// Note that unlike a [`dense::DFA`](crate::dfa::dense::DFA)'s
-    /// serialization methods, this does not add any initial padding to the
-    /// returned bytes. Padding isn't required for sparse DFAs since they have
-    /// no alignment requirements.
+    /// Note that unlike a [`dense::DFA`]'s serialization methods, this does
+    /// not add any initial padding to the returned bytes. Padding isn't
+    /// required for sparse DFAs since they have no alignment requirements.
     ///
     /// # Example
     ///
@@ -553,10 +546,9 @@ impl<T: AsRef<[u8]>> DFA<T> {
     /// * [`DFA::from_bytes`]
     /// * [`DFA::from_bytes_unchecked`]
     ///
-    /// Note that unlike a [`dense::DFA`](crate::dfa::dense::DFA)'s
-    /// serialization methods, this does not add any initial padding to the
-    /// returned bytes. Padding isn't required for sparse DFAs since they have
-    /// no alignment requirements.
+    /// Note that unlike a [`dense::DFA`]'s serialization methods, this does
+    /// not add any initial padding to the returned bytes. Padding isn't
+    /// required for sparse DFAs since they have no alignment requirements.
     ///
     /// # Example
     ///
@@ -595,10 +587,9 @@ impl<T: AsRef<[u8]>> DFA<T> {
     /// * [`DFA::from_bytes`]
     /// * [`DFA::from_bytes_unchecked`]
     ///
-    /// Note that unlike a [`dense::DFA`](crate::dfa::dense::DFA)'s
-    /// serialization methods, this does not add any initial padding to the
-    /// returned bytes. Padding isn't required for sparse DFAs since they have
-    /// no alignment requirements.
+    /// Note that unlike a [`dense::DFA`]'s serialization methods, this does
+    /// not add any initial padding to the returned bytes. Padding isn't
+    /// required for sparse DFAs since they have no alignment requirements.
     ///
     /// Generally speaking, native endian format should only be used when
     /// you know that the target you're compiling the DFA for matches the
@@ -903,9 +894,9 @@ impl<'a> DFA<&'a [u8]> {
     ///
     /// If any of the above are not true, then an error will be returned.
     ///
-    /// Note that unlike deserializing a
-    /// [`dense::DFA`](crate::dfa::dense::DFA), deserializing a sparse DFA has
-    /// no alignment requirements. That is, an alignment of `1` is valid.
+    /// Note that unlike deserializing a [`dense::DFA`], deserializing a sparse
+    /// DFA has no alignment requirements. That is, an alignment of `1` is
+    /// valid.
     ///
     /// # Panics
     ///

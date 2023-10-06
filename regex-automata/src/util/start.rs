@@ -31,9 +31,9 @@ use crate::util::{
 /// the byte that occurs immediately before the start of the search.
 ///
 /// Generally speaking, this type is only useful when you want to run searches
-/// without using an [`Input`](crate::Input). In particular, an `Input` wants a
-/// haystack slice, but callers may not have a contiguous sequence of bytes as
-/// a haystack in all cases. This type provides a lower level of control such
+/// without using an [`Input`]. In particular, an `Input` wants a haystack
+/// slice, but callers may not have a contiguous sequence of bytes as a
+/// haystack in all cases. This type provides a lower level of control such
 /// that callers can provide their own anchored configuration and look-behind
 /// byte explicitly.
 ///

@@ -853,7 +853,7 @@ impl Builder {
     }
 
     /// Set the dense DFA compilation configuration for this builder using
-    /// [`dense::Config`](dense::Config).
+    /// [`dense::Config`].
     ///
     /// This permits setting things like whether the underlying DFAs should
     /// be minimized.
