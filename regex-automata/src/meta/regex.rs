@@ -3715,7 +3715,7 @@ mod tests {
     fn split_inclusive() {
         let arr = [
             (r"(x)", "1x2", vec!["1", "x", "2"]),
-            (r"([^\d]+)", "1-2", vec!["1", "-", "2"]),
+            (r"([^0-9]+)", "1-2", vec!["1", "-", "2"]),
             (
                 r"(\s+)",
                 "this  is a \n\ntest",
