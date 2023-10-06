@@ -3213,12 +3213,12 @@ impl Config {
     /// be quit bytes _only_ when a Unicode word boundary is present in the
     /// pattern.
     ///
-    /// When enabling this option, callers _must_ be prepared to handle
-    /// a [`MatchError`](crate::MatchError) error during search.
-    /// When using a [`Regex`](crate::hybrid::regex::Regex), this
-    /// corresponds to using the `try_` suite of methods. Alternatively,
-    /// if callers can guarantee that their input is ASCII only, then a
-    /// [`MatchError::quit`] error will never be returned while searching.
+    /// When enabling this option, callers _must_ be prepared to
+    /// handle a [`MatchError`] error during search. When using a
+    /// [`Regex`](crate::hybrid::regex::Regex), this corresponds to using the
+    /// `try_` suite of methods. Alternatively, if callers can guarantee that
+    /// their input is ASCII only, then a [`MatchError::quit`] error will never
+    /// be returned while searching.
     ///
     /// This is disabled by default.
     ///
@@ -3304,8 +3304,8 @@ impl Config {
     /// (The advantage being that non-ASCII quit bytes will only be added if a
     /// Unicode word boundary is in the pattern.)
     ///
-    /// When enabling this option, callers _must_ be prepared to handle a
-    /// [`MatchError`](crate::MatchError) error during search. When using a
+    /// When enabling this option, callers _must_ be prepared to
+    /// handle a [`MatchError`] error during search. When using a
     /// [`Regex`](crate::hybrid::regex::Regex), this corresponds to using the
     /// `try_` suite of methods.
     ///
