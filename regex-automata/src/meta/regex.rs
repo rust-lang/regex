@@ -898,7 +898,11 @@ impl Regex {
         &'r self,
         input: I,
     ) -> SplitInclusive<'r, 'h> {
-        SplitInclusive { finder: self.find_iter(input), last: 0, span_to_yield: None }
+        SplitInclusive {
+            finder: self.find_iter(input),
+            last: 0,
+            span_to_yield: None,
+        }
     }
 }
 
@@ -2311,7 +2315,7 @@ impl<'r, 'h> Iterator for SplitInclusive<'r, 'h> {
     fn next(&mut self) -> Option<Span> {
         if let Some(span) = self.span_to_yield {
             self.span_to_yield = None;
-            return Some(span)
+            return Some(span);
         }
 
         match self.finder.next() {
@@ -2324,10 +2328,10 @@ impl<'r, 'h> Iterator for SplitInclusive<'r, 'h> {
                     self.last = len + 1; // Next call will return None
                     Some(span)
                 }
-            },
+            }
             Some(m) => {
-                let span = Span::from(self.last..m.start());  // return this right now
-                self.span_to_yield = Some(Span::from(m.start()..m.end()));  // next call will return this
+                let span = Span::from(self.last..m.start()); // return this right now
+                self.span_to_yield = Some(Span::from(m.start()..m.end())); // next call will return this
 
                 self.last = m.end();
                 Some(span)
@@ -3710,16 +3714,8 @@ mod tests {
     #[test]
     fn split_inclusive() {
         let arr = [
-            (
-                r"(x)",
-                "1x2",
-                vec!["1", "x", "2"],
-            ),
-            (
-                r"([^\d]+)",
-                "1-2",
-                vec!["1", "-", "2"],
-            ),
+            (r"(x)", "1x2", vec!["1", "x", "2"]),
+            (r"([^\d]+)", "1-2", vec!["1", "-", "2"]),
             (
                 r"(\s+)",
                 "this  is a \n\ntest",
@@ -3728,21 +3724,33 @@ mod tests {
             (
                 r"([^0-9a-zA-Z_])",
                 " C# is great! (not actually) :)",
-                vec!["", " ", "C", "#", "", " ", "is", " ", "great", "!", "", " ", "", "(", "not", " ", "actually", ")", "", " ", "", ":", "", ")", ""],
+                vec![
+                    "", " ", "C", "#", "", " ", "is", " ", "great", "!", "",
+                    " ", "", "(", "not", " ", "actually", ")", "", " ", "",
+                    ":", "", ")", "",
+                ],
             ),
             (
                 r"([a-zA-Z](?:[a-zA-Z']*[a-zA-Z])?)",
                 r#"He said, "I'd like to eat cake!""#,
-                vec!["", "He", " ", "said", r#", ""#, "I'd", " ", "like", " ", "to", " ", "eat", " ", "cake", r#"!""#],
+                vec![
+                    "", "He", " ", "said", r#", ""#, "I'd", " ", "like", " ",
+                    "to", " ", "eat", " ", "cake", r#"!""#,
+                ],
             ),
         ];
         for (pattern, text, expected_output) in arr {
-            let out: Vec<_> = Regex::new(pattern).unwrap()
+            let out: Vec<_> = Regex::new(pattern)
+                .unwrap()
                 .split_inclusive(text)
                 .map(|sp| &text[sp])
                 .collect();
 
-            assert_eq!(out, expected_output, "Regex: {}, Input: {}", pattern, text);
+            assert_eq!(
+                out, expected_output,
+                "Regex: {}, Input: {}",
+                pattern, text
+            );
 
             // make sure that we can get the original string, from the splitted string by
             // concatenating it
