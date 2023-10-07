@@ -334,6 +334,9 @@ pub fn is_escapeable_character(c: char) -> bool {
         // escapeable, \< and \> will result in a parse error. Thus, we can
         // turn them into something else in the future without it being a
         // backwards incompatible change.
+        //
+        // OK, now we support \< and \>, and we need to retain them as *not*
+        // escapeable here since the escape sequence is significant.
         '<' | '>' => false,
         _ => true,
     }

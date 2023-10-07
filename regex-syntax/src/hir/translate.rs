@@ -962,6 +962,20 @@ impl<'t, 'p> TranslatorI<'t, 'p> {
             } else {
                 hir::Look::WordAsciiNegate
             }),
+            ast::AssertionKind::WordBoundaryStart
+            | ast::AssertionKind::WordBoundaryStartAngle => {
+                Hir::look(if unicode { todo!() } else { todo!() })
+            }
+            ast::AssertionKind::WordBoundaryEnd
+            | ast::AssertionKind::WordBoundaryEndAngle => {
+                Hir::look(if unicode { todo!() } else { todo!() })
+            }
+            ast::AssertionKind::WordBoundaryStartHalf => {
+                Hir::look(if unicode { todo!() } else { todo!() })
+            }
+            ast::AssertionKind::WordBoundaryEndHalf => {
+                Hir::look(if unicode { todo!() } else { todo!() })
+            }
         })
     }
 

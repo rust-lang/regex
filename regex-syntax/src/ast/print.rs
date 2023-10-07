@@ -261,6 +261,12 @@ impl<W: fmt::Write> Writer<W> {
             EndText => self.wtr.write_str(r"\z"),
             WordBoundary => self.wtr.write_str(r"\b"),
             NotWordBoundary => self.wtr.write_str(r"\B"),
+            WordBoundaryStart => self.wtr.write_str(r"\b{start}"),
+            WordBoundaryEnd => self.wtr.write_str(r"\b{end}"),
+            WordBoundaryStartAngle => self.wtr.write_str(r"\<"),
+            WordBoundaryEndAngle => self.wtr.write_str(r"\>"),
+            WordBoundaryStartHalf => self.wtr.write_str(r"\b{start-half}"),
+            WordBoundaryEndHalf => self.wtr.write_str(r"\b{end-half}"),
         }
     }
 

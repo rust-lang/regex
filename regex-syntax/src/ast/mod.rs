@@ -162,6 +162,18 @@ pub enum ErrorKind {
     /// `(?i)*`. It is, however, possible to create a repetition operating on
     /// an empty sub-expression. For example, `()*` is still considered valid.
     RepetitionMissing,
+    /// The special word boundary syntax, `\b{something}`, was used, but
+    /// either EOF without `}` was seen, or an invalid character in the
+    /// braces was seen.
+    SpecialWordBoundaryUnclosed,
+    /// The special word boundary syntax, `\b{something}`, was used, but
+    /// `something` was not recognized as a valid word boundary kind.
+    SpecialWordBoundaryUnrecognized,
+    /// The syntax `\b{` was observed, but afterwards the end of the pattern
+    /// was observed without being able to tell whether it was meant to be a
+    /// bounded repetition on the `\b` or the beginning of a special word
+    /// boundary assertion.
+    SpecialWordOrRepetitionUnexpectedEof,
     /// The Unicode class is not valid. This typically occurs when a `\p` is
     /// followed by something other than a `{`.
     UnicodeClassInvalid,
@@ -259,6 +271,29 @@ impl core::fmt::Display for ErrorKind {
             }
             RepetitionMissing => {
                 write!(f, "repetition operator missing expression")
+            }
+            SpecialWordBoundaryUnclosed => {
+                write!(
+                    f,
+                    "special word boundary assertion is either \
+                     unclosed or contains an invalid character",
+                )
+            }
+            SpecialWordBoundaryUnrecognized => {
+                write!(
+                    f,
+                    "unrecognized special word boundary assertion, \
+                     valid choices are: start, end, start-half \
+                     or end-half",
+                )
+            }
+            SpecialWordOrRepetitionUnexpectedEof => {
+                write!(
+                    f,
+                    "found either the beginning of a special word \
+                     boundary or a bounded repetition on a \\b with \
+                     an opening brace, but no closing brace",
+                )
             }
             UnicodeClassInvalid => {
                 write!(f, "invalid Unicode character class")
@@ -1293,6 +1328,18 @@ pub enum AssertionKind {
     WordBoundary,
     /// `\B`
     NotWordBoundary,
+    /// `\b{start}`
+    WordBoundaryStart,
+    /// `\b{end}`
+    WordBoundaryEnd,
+    /// `\<` (alias for `\b{start}`)
+    WordBoundaryStartAngle,
+    /// `\>` (alias for `\b{end}`)
+    WordBoundaryEndAngle,
+    /// `\b{start-half}`
+    WordBoundaryStartHalf,
+    /// `\b{end-half}`
+    WordBoundaryEndHalf,
 }
 
 /// A repetition operation applied to a regular expression.
