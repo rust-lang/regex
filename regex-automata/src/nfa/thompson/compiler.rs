@@ -1557,6 +1557,14 @@ impl Compiler {
             hir::Look::WordAsciiNegate => Look::WordAsciiNegate,
             hir::Look::WordUnicode => Look::WordUnicode,
             hir::Look::WordUnicodeNegate => Look::WordUnicodeNegate,
+            hir::Look::WordStartAscii => Look::WordStartAscii,
+            hir::Look::WordEndAscii => Look::WordEndAscii,
+            hir::Look::WordStartUnicode => Look::WordStartUnicode,
+            hir::Look::WordEndUnicode => Look::WordEndUnicode,
+            hir::Look::WordStartHalfAscii => Look::WordStartHalfAscii,
+            hir::Look::WordEndHalfAscii => Look::WordEndHalfAscii,
+            hir::Look::WordStartHalfUnicode => Look::WordStartHalfUnicode,
+            hir::Look::WordEndHalfUnicode => Look::WordEndHalfUnicode,
         };
         let id = self.add_look(look)?;
         Ok(ThompsonRef { start: id, end: id })
