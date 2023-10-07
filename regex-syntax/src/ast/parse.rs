@@ -1528,16 +1528,113 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
                 span,
                 kind: ast::AssertionKind::EndText,
             })),
-            'b' => Ok(Primitive::Assertion(ast::Assertion {
-                span,
-                kind: ast::AssertionKind::WordBoundary,
-            })),
+            'b' => {
+                let mut wb = ast::Assertion {
+                    span,
+                    kind: ast::AssertionKind::WordBoundary,
+                };
+                // After a \b, we "try" to parse things like \b{start} for
+                // special word boundary assertions.
+                if !self.is_eof() && self.char() == '{' {
+                    if let Some(kind) =
+                        self.maybe_parse_special_word_boundary(start)?
+                    {
+                        wb.kind = kind;
+                        wb.span.end = self.pos();
+                    }
+                }
+                Ok(Primitive::Assertion(wb))
+            }
             'B' => Ok(Primitive::Assertion(ast::Assertion {
                 span,
                 kind: ast::AssertionKind::NotWordBoundary,
             })),
+            '<' => Ok(Primitive::Assertion(ast::Assertion {
+                span,
+                kind: ast::AssertionKind::WordBoundaryStartAngle,
+            })),
+            '>' => Ok(Primitive::Assertion(ast::Assertion {
+                span,
+                kind: ast::AssertionKind::WordBoundaryEndAngle,
+            })),
             _ => Err(self.error(span, ast::ErrorKind::EscapeUnrecognized)),
         }
+    }
+
+    /// Attempt to parse a specialty word boundary. That is, `\b{start}`,
+    /// `\b{end}`, `\b{start-half}` or `\b{end-half}`.
+    ///
+    /// This is similar to `maybe_parse_ascii_class` in that, in most cases,
+    /// if it fails it will just return `None` with no error. This is done
+    /// because `\b{5}` is a valid expression and we want to let that be parsed
+    /// by the existing counted repetition parsing code. (I thought about just
+    /// invoking the counted repetition code from here, but it seemed a little
+    /// ham-fisted.)
+    ///
+    /// Unlike `maybe_parse_ascii_class` though, this can return an error.
+    /// Namely, if we definitely know it isn't a counted repetition, then we
+    /// return an error specific to the specialty word boundaries.
+    ///
+    /// This assumes the parser is positioned at a `{` immediately following
+    /// a `\b`. When `None` is returned, the parser is returned to the position
+    /// at which it started: pointing at a `{`.
+    ///
+    /// The position given should correspond to the start of the `\b`.
+    fn maybe_parse_special_word_boundary(
+        &self,
+        wb_start: Position,
+    ) -> Result<Option<ast::AssertionKind>> {
+        assert_eq!(self.char(), '{');
+
+        let is_valid_char = |c| match c {
+            'A'..='Z' | 'a'..='z' | '-' => true,
+            _ => false,
+        };
+        let start = self.pos();
+        if !self.bump_and_bump_space() {
+            return Err(self.error(
+                Span::new(wb_start, self.pos()),
+                ast::ErrorKind::SpecialWordOrRepetitionUnexpectedEof,
+            ));
+        }
+        let start_contents = self.pos();
+        // This is one of the critical bits: if the first non-whitespace
+        // character isn't in [-A-Za-z] (i.e., this can't be a special word
+        // boundary), then we bail and let the counted repetition parser deal
+        // with this.
+        if !is_valid_char(self.char()) {
+            self.parser().pos.set(start);
+            return Ok(None);
+        }
+
+        // Now collect up our chars until we see a '}'.
+        let mut scratch = self.parser().scratch.borrow_mut();
+        scratch.clear();
+        while !self.is_eof() && is_valid_char(self.char()) {
+            scratch.push(self.char());
+            self.bump_and_bump_space();
+        }
+        if self.is_eof() || self.char() != '}' {
+            return Err(self.error(
+                Span::new(start, self.pos()),
+                ast::ErrorKind::SpecialWordBoundaryUnclosed,
+            ));
+        }
+        let end = self.pos();
+        self.bump();
+        let kind = match scratch.as_str() {
+            "start" => ast::AssertionKind::WordBoundaryStart,
+            "end" => ast::AssertionKind::WordBoundaryEnd,
+            "start-half" => ast::AssertionKind::WordBoundaryStartHalf,
+            "end-half" => ast::AssertionKind::WordBoundaryEndHalf,
+            _ => {
+                return Err(self.error(
+                    Span::new(start_contents, end),
+                    ast::ErrorKind::SpecialWordBoundaryUnrecognized,
+                ))
+            }
+        };
+        Ok(Some(kind))
     }
 
     /// Parse an octal representation of a Unicode codepoint up to 3 digits
@@ -1967,9 +2064,9 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
         // because parsing cannot fail with any interesting error. For example,
         // in order to use an ASCII character class, it must be enclosed in
         // double brackets, e.g., `[[:alnum:]]`. Alternatively, you might think
-        // of it as "ASCII character characters have the syntax `[:NAME:]`
-        // which can only appear within character brackets." This means that
-        // things like `[[:lower:]A]` are legal constructs.
+        // of it as "ASCII character classes have the syntax `[:NAME:]` which
+        // can only appear within character brackets." This means that things
+        // like `[[:lower:]A]` are legal constructs.
         //
         // However, if one types an incorrect ASCII character class, e.g.,
         // `[[:loower:]]`, then we treat that as a normal nested character
@@ -3295,6 +3392,23 @@ bar
                 ast: Box::new(lit('a', 0)),
             }))
         );
+        assert_eq!(
+            parser(r"\b{5,9}").parse(),
+            Ok(Ast::repetition(ast::Repetition {
+                span: span(0..7),
+                op: ast::RepetitionOp {
+                    span: span(2..7),
+                    kind: ast::RepetitionKind::Range(
+                        ast::RepetitionRange::Bounded(5, 9)
+                    ),
+                },
+                greedy: true,
+                ast: Box::new(Ast::assertion(ast::Assertion {
+                    span: span(0..2),
+                    kind: ast::AssertionKind::WordBoundary,
+                })),
+            }))
+        );
 
         assert_eq!(
             parser(r"(?i){0}").parse().unwrap_err(),
@@ -4382,6 +4496,48 @@ bar
             }))
         );
         assert_eq!(
+            parser(r"\b{start}").parse_primitive(),
+            Ok(Primitive::Assertion(ast::Assertion {
+                span: span(0..9),
+                kind: ast::AssertionKind::WordBoundaryStart,
+            }))
+        );
+        assert_eq!(
+            parser(r"\b{end}").parse_primitive(),
+            Ok(Primitive::Assertion(ast::Assertion {
+                span: span(0..7),
+                kind: ast::AssertionKind::WordBoundaryEnd,
+            }))
+        );
+        assert_eq!(
+            parser(r"\b{start-half}").parse_primitive(),
+            Ok(Primitive::Assertion(ast::Assertion {
+                span: span(0..14),
+                kind: ast::AssertionKind::WordBoundaryStartHalf,
+            }))
+        );
+        assert_eq!(
+            parser(r"\b{end-half}").parse_primitive(),
+            Ok(Primitive::Assertion(ast::Assertion {
+                span: span(0..12),
+                kind: ast::AssertionKind::WordBoundaryEndHalf,
+            }))
+        );
+        assert_eq!(
+            parser(r"\<").parse_primitive(),
+            Ok(Primitive::Assertion(ast::Assertion {
+                span: span(0..2),
+                kind: ast::AssertionKind::WordBoundaryStartAngle,
+            }))
+        );
+        assert_eq!(
+            parser(r"\>").parse_primitive(),
+            Ok(Primitive::Assertion(ast::Assertion {
+                span: span(0..2),
+                kind: ast::AssertionKind::WordBoundaryEndAngle,
+            }))
+        );
+        assert_eq!(
             parser(r"\B").parse_primitive(),
             Ok(Primitive::Assertion(ast::Assertion {
                 span: span(0..2),
@@ -4418,20 +4574,60 @@ bar
                 kind: ast::ErrorKind::EscapeUnrecognized,
             }
         );
-        // But also, < and > are banned, so that we may evolve them into
-        // start/end word boundary assertions. (Not sure if we will...)
+
+        // Starting a special word boundary without any non-whitespace chars
+        // after the brace makes it ambiguous whether the user meant to write
+        // a counted repetition (probably not?) or an actual special word
+        // boundary assertion.
         assert_eq!(
-            parser(r"\<").parse_escape().unwrap_err(),
+            parser(r"\b{").parse_escape().unwrap_err(),
             TestError {
-                span: span(0..2),
-                kind: ast::ErrorKind::EscapeUnrecognized,
+                span: span(0..3),
+                kind: ast::ErrorKind::SpecialWordOrRepetitionUnexpectedEof,
             }
         );
         assert_eq!(
-            parser(r"\>").parse_escape().unwrap_err(),
+            parser_ignore_whitespace(r"\b{ ").parse_escape().unwrap_err(),
             TestError {
-                span: span(0..2),
-                kind: ast::ErrorKind::EscapeUnrecognized,
+                span: span(0..4),
+                kind: ast::ErrorKind::SpecialWordOrRepetitionUnexpectedEof,
+            }
+        );
+        // When 'x' is not enabled, the space is seen as a non-[-A-Za-z] char,
+        // and thus causes the parser to treat it as a counted repetition.
+        assert_eq!(
+            parser(r"\b{ ").parse().unwrap_err(),
+            TestError {
+                span: span(4..4),
+                kind: ast::ErrorKind::RepetitionCountDecimalEmpty,
+            }
+        );
+        // In this case, we got some valid chars that makes it look like the
+        // user is writing one of the special word boundary assertions, but
+        // we forget to close the brace.
+        assert_eq!(
+            parser(r"\b{foo").parse_escape().unwrap_err(),
+            TestError {
+                span: span(2..6),
+                kind: ast::ErrorKind::SpecialWordBoundaryUnclosed,
+            }
+        );
+        // We get the same error as above, except it is provoked by seeing a
+        // char that we know is invalid before seeing a closing brace.
+        assert_eq!(
+            parser(r"\b{foo!}").parse_escape().unwrap_err(),
+            TestError {
+                span: span(2..6),
+                kind: ast::ErrorKind::SpecialWordBoundaryUnclosed,
+            }
+        );
+        // And this one occurs when, syntactically, everything looks okay, but
+        // we don't use a valid spelling of a word boundary assertion.
+        assert_eq!(
+            parser(r"\b{foo}").parse_escape().unwrap_err(),
+            TestError {
+                span: span(3..6),
+                kind: ast::ErrorKind::SpecialWordBoundaryUnrecognized,
             }
         );
 
