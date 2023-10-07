@@ -1635,6 +1635,42 @@ pub enum Look {
     WordUnicode = 1 << 8,
     /// Match a Unicode-aware negation of a word boundary.
     WordUnicodeNegate = 1 << 9,
+    /// Match the start of an ASCII-only word boundary. That is, this matches a
+    /// position at either the beginning of the haystack or where the previous
+    /// character is not a word character and the following character is a word
+    /// character.
+    WordStartAscii = 1 << 10,
+    /// Match the end of an ASCII-only word boundary. That is, this matches
+    /// a position at either the end of the haystack or where the previous
+    /// character is a word character and the following character is not a word
+    /// character.
+    WordEndAscii = 1 << 11,
+    /// Match the start of a Unicode word boundary. That is, this matches a
+    /// position at either the beginning of the haystack or where the previous
+    /// character is not a word character and the following character is a word
+    /// character.
+    WordStartUnicode = 1 << 12,
+    /// Match the end of a Unicode word boundary. That is, this matches a
+    /// position at either the end of the haystack or where the previous
+    /// character is a word character and the following character is not a word
+    /// character.
+    WordEndUnicode = 1 << 13,
+    /// Match the start half of an ASCII-only word boundary. That is, this
+    /// matches a position at either the beginning of the haystack or where the
+    /// previous character is not a word character.
+    WordStartHalfAscii = 1 << 14,
+    /// Match the end half of an ASCII-only word boundary. That is, this
+    /// matches a position at either the end of the haystack or where the
+    /// following character is not a word character.
+    WordEndHalfAscii = 1 << 15,
+    /// Match the start half of a Unicode word boundary. That is, this matches
+    /// a position at either the beginning of the haystack or where the
+    /// previous character is not a word character.
+    WordStartHalfUnicode = 1 << 16,
+    /// Match the end half of a Unicode word boundary. That is, this matches
+    /// a position at either the end of the haystack or where the following
+    /// character is not a word character.
+    WordEndHalfUnicode = 1 << 17,
 }
 
 impl Look {
@@ -1656,6 +1692,14 @@ impl Look {
             Look::WordAsciiNegate => Look::WordAsciiNegate,
             Look::WordUnicode => Look::WordUnicode,
             Look::WordUnicodeNegate => Look::WordUnicodeNegate,
+            Look::WordStartAscii => Look::WordEndAscii,
+            Look::WordEndAscii => Look::WordStartAscii,
+            Look::WordStartUnicode => Look::WordEndUnicode,
+            Look::WordEndUnicode => Look::WordStartUnicode,
+            Look::WordStartHalfAscii => Look::WordEndHalfAscii,
+            Look::WordEndHalfAscii => Look::WordStartHalfAscii,
+            Look::WordStartHalfUnicode => Look::WordEndHalfUnicode,
+            Look::WordEndHalfUnicode => Look::WordStartHalfUnicode,
         }
     }
 
@@ -1676,16 +1720,24 @@ impl Look {
     #[inline]
     pub const fn from_repr(repr: u32) -> Option<Look> {
         match repr {
-            0b00_0000_0001 => Some(Look::Start),
-            0b00_0000_0010 => Some(Look::End),
-            0b00_0000_0100 => Some(Look::StartLF),
-            0b00_0000_1000 => Some(Look::EndLF),
-            0b00_0001_0000 => Some(Look::StartCRLF),
-            0b00_0010_0000 => Some(Look::EndCRLF),
-            0b00_0100_0000 => Some(Look::WordAscii),
-            0b00_1000_0000 => Some(Look::WordAsciiNegate),
-            0b01_0000_0000 => Some(Look::WordUnicode),
-            0b10_0000_0000 => Some(Look::WordUnicodeNegate),
+            0b00_0000_0000_0000_0001 => Some(Look::Start),
+            0b00_0000_0000_0000_0010 => Some(Look::End),
+            0b00_0000_0000_0000_0100 => Some(Look::StartLF),
+            0b00_0000_0000_0000_1000 => Some(Look::EndLF),
+            0b00_0000_0000_0001_0000 => Some(Look::StartCRLF),
+            0b00_0000_0000_0010_0000 => Some(Look::EndCRLF),
+            0b00_0000_0000_0100_0000 => Some(Look::WordAscii),
+            0b00_0000_0000_1000_0000 => Some(Look::WordAsciiNegate),
+            0b00_0000_0001_0000_0000 => Some(Look::WordUnicode),
+            0b00_0000_0010_0000_0000 => Some(Look::WordUnicodeNegate),
+            0b00_0000_0100_0000_0000 => Some(Look::WordStartAscii),
+            0b00_0000_1000_0000_0000 => Some(Look::WordEndAscii),
+            0b00_0001_0000_0000_0000 => Some(Look::WordStartUnicode),
+            0b00_0010_0000_0000_0000 => Some(Look::WordEndUnicode),
+            0b00_0100_0000_0000_0000 => Some(Look::WordStartHalfAscii),
+            0b00_1000_0000_0000_0000 => Some(Look::WordEndHalfAscii),
+            0b01_0000_0000_0000_0000 => Some(Look::WordStartHalfUnicode),
+            0b10_0000_0000_0000_0000 => Some(Look::WordEndHalfUnicode),
             _ => None,
         }
     }
@@ -1710,6 +1762,14 @@ impl Look {
             Look::WordAsciiNegate => 'B',
             Look::WordUnicode => '𝛃',
             Look::WordUnicodeNegate => '𝚩',
+            Look::WordStartAscii => '<',
+            Look::WordEndAscii => '>',
+            Look::WordStartUnicode => '〈',
+            Look::WordEndUnicode => '〉',
+            Look::WordStartHalfAscii => '◁',
+            Look::WordEndHalfAscii => '▷',
+            Look::WordStartHalfUnicode => '◀',
+            Look::WordEndHalfUnicode => '▶',
         }
     }
 }
@@ -2703,13 +2763,22 @@ impl LookSet {
     pub fn contains_word_unicode(self) -> bool {
         self.contains(Look::WordUnicode)
             || self.contains(Look::WordUnicodeNegate)
+            || self.contains(Look::WordStartUnicode)
+            || self.contains(Look::WordEndUnicode)
+            || self.contains(Look::WordStartHalfUnicode)
+            || self.contains(Look::WordEndHalfUnicode)
     }
 
     /// Returns true if and only if this set contains any ASCII word boundary
     /// or negated ASCII word boundary assertions.
     #[inline]
     pub fn contains_word_ascii(self) -> bool {
-        self.contains(Look::WordAscii) || self.contains(Look::WordAsciiNegate)
+        self.contains(Look::WordAscii)
+            || self.contains(Look::WordAsciiNegate)
+            || self.contains(Look::WordStartAscii)
+            || self.contains(Look::WordEndAscii)
+            || self.contains(Look::WordStartHalfAscii)
+            || self.contains(Look::WordEndHalfAscii)
     }
 
     /// Returns an iterator over all of the look-around assertions in this set.
@@ -3769,7 +3838,7 @@ mod tests {
         assert_eq!(0, set.iter().count());
 
         let set = LookSet::full();
-        assert_eq!(10, set.iter().count());
+        assert_eq!(18, set.iter().count());
 
         let set =
             LookSet::empty().insert(Look::StartLF).insert(Look::WordUnicode);
@@ -3787,6 +3856,6 @@ mod tests {
         let res = format!("{:?}", LookSet::empty());
         assert_eq!("∅", res);
         let res = format!("{:?}", LookSet::full());
-        assert_eq!("Az^$rRbB𝛃𝚩", res);
+        assert_eq!("Az^$rRbB𝛃𝚩<>〈〉◁▷◀▶", res);
     }
 }

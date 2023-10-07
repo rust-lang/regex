@@ -964,18 +964,32 @@ impl<'t, 'p> TranslatorI<'t, 'p> {
             }),
             ast::AssertionKind::WordBoundaryStart
             | ast::AssertionKind::WordBoundaryStartAngle => {
-                Hir::look(if unicode { todo!() } else { todo!() })
+                Hir::look(if unicode {
+                    hir::Look::WordStartUnicode
+                } else {
+                    hir::Look::WordStartAscii
+                })
             }
             ast::AssertionKind::WordBoundaryEnd
             | ast::AssertionKind::WordBoundaryEndAngle => {
-                Hir::look(if unicode { todo!() } else { todo!() })
+                Hir::look(if unicode {
+                    hir::Look::WordEndUnicode
+                } else {
+                    hir::Look::WordEndAscii
+                })
             }
             ast::AssertionKind::WordBoundaryStartHalf => {
-                Hir::look(if unicode { todo!() } else { todo!() })
+                Hir::look(if unicode {
+                    hir::Look::WordStartHalfUnicode
+                } else {
+                    hir::Look::WordStartHalfAscii
+                })
             }
-            ast::AssertionKind::WordBoundaryEndHalf => {
-                Hir::look(if unicode { todo!() } else { todo!() })
-            }
+            ast::AssertionKind::WordBoundaryEndHalf => Hir::look(if unicode {
+                hir::Look::WordEndHalfUnicode
+            } else {
+                hir::Look::WordEndHalfAscii
+            }),
         })
     }
 
