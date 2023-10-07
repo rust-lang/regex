@@ -1664,17 +1664,17 @@ impl Look {
     /// constructor is guaranteed to return the same look-around variant that
     /// one started with within a semver compatible release of this crate.
     #[inline]
-    pub const fn as_repr(self) -> u16 {
+    pub const fn as_repr(self) -> u32 {
         // AFAIK, 'as' is the only way to zero-cost convert an int enum to an
         // actual int.
-        self as u16
+        self as u32
     }
 
     /// Given the underlying representation of a `Look` value, return the
     /// corresponding `Look` value if the representation is valid. Otherwise
     /// `None` is returned.
     #[inline]
-    pub const fn from_repr(repr: u16) -> Option<Look> {
+    pub const fn from_repr(repr: u32) -> Option<Look> {
         match repr {
             0b00_0000_0001 => Some(Look::Start),
             0b00_0000_0010 => Some(Look::End),
@@ -2600,7 +2600,7 @@ pub struct LookSet {
     /// range of `u16` values to be represented. For example, even if the
     /// current implementation only makes use of the 10 least significant bits,
     /// it may use more bits in a future semver compatible release.
-    pub bits: u16,
+    pub bits: u32,
 }
 
 impl LookSet {
@@ -2788,29 +2788,31 @@ impl LookSet {
         *self = self.intersect(other);
     }
 
-    /// Return a `LookSet` from the slice given as a native endian 16-bit
+    /// Return a `LookSet` from the slice given as a native endian 32-bit
     /// integer.
     ///
     /// # Panics
     ///
-    /// This panics if `slice.len() < 2`.
+    /// This panics if `slice.len() < 4`.
     #[inline]
     pub fn read_repr(slice: &[u8]) -> LookSet {
-        let bits = u16::from_ne_bytes(slice[..2].try_into().unwrap());
+        let bits = u32::from_ne_bytes(slice[..4].try_into().unwrap());
         LookSet { bits }
     }
 
-    /// Write a `LookSet` as a native endian 16-bit integer to the beginning
+    /// Write a `LookSet` as a native endian 32-bit integer to the beginning
     /// of the slice given.
     ///
     /// # Panics
     ///
-    /// This panics if `slice.len() < 2`.
+    /// This panics if `slice.len() < 4`.
     #[inline]
     pub fn write_repr(self, slice: &mut [u8]) {
         let raw = self.bits.to_ne_bytes();
         slice[0] = raw[0];
         slice[1] = raw[1];
+        slice[2] = raw[2];
+        slice[3] = raw[3];
     }
 }
 
@@ -2843,9 +2845,9 @@ impl Iterator for LookSetIter {
             return None;
         }
         // We'll never have more than u8::MAX distinct look-around assertions,
-        // so 'repr' will always fit into a u16.
-        let repr = u16::try_from(self.set.bits.trailing_zeros()).unwrap();
-        let look = Look::from_repr(1 << repr)?;
+        // so 'bit' will always fit into a u16.
+        let bit = u16::try_from(self.set.bits.trailing_zeros()).unwrap();
+        let look = Look::from_repr(1 << bit)?;
         self.set = self.set.remove(look);
         Some(look)
     }
