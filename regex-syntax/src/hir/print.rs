@@ -202,6 +202,30 @@ impl<W: fmt::Write> Visitor for Writer<W> {
                 hir::Look::WordUnicodeNegate => {
                     self.wtr.write_str(r"\B")?;
                 }
+                hir::Look::WordStartAscii => {
+                    self.wtr.write_str(r"(?-u:\b{start})")?;
+                }
+                hir::Look::WordEndAscii => {
+                    self.wtr.write_str(r"(?-u:\b{end})")?;
+                }
+                hir::Look::WordStartUnicode => {
+                    self.wtr.write_str(r"\b{start}")?;
+                }
+                hir::Look::WordEndUnicode => {
+                    self.wtr.write_str(r"\b{end}")?;
+                }
+                hir::Look::WordStartHalfAscii => {
+                    self.wtr.write_str(r"(?-u:\b{start-half})")?;
+                }
+                hir::Look::WordEndHalfAscii => {
+                    self.wtr.write_str(r"(?-u:\b{end-half})")?;
+                }
+                hir::Look::WordStartHalfUnicode => {
+                    self.wtr.write_str(r"\b{start-half}")?;
+                }
+                hir::Look::WordEndHalfUnicode => {
+                    self.wtr.write_str(r"\b{end-half}")?;
+                }
             },
             HirKind::Capture(hir::Capture { ref name, .. }) => {
                 self.wtr.write_str("(")?;
