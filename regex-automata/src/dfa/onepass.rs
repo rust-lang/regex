@@ -2815,7 +2815,7 @@ impl Epsilons {
 
     /// Return the set of look-around assertions in these epsilon transitions.
     fn looks(self) -> LookSet {
-        LookSet { bits: (self.0 & Epsilons::LOOK_MASK).low_u16() }
+        LookSet { bits: (self.0 & Epsilons::LOOK_MASK).low_u32() }
     }
 
     /// Set the look-around assertions on these epsilon transitions.
