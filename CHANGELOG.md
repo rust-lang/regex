@@ -12,6 +12,8 @@ Performance improvements:
 
 * [PERF #1051](https://github.com/rust-lang/regex/pull/1051):
 Unicode character class operations have been optimized in `regex-syntax`.
+* [PERF #1090](https://github.com/rust-lang/regex/issues/1090):
+Make patterns containing lots of literal characters use less memory.
 
 Bug fixes:
 
