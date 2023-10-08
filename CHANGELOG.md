@@ -1,5 +1,30 @@
-TBD
-===
+1.10.0 (2023-10-09)
+===================
+This is a new minor release of `regex` that adds support for start and end
+word boundary assertions. That is, `\<` and `\>`. The minimum supported Rust
+version has also been raised to 1.65, which was released about one year ago.
+
+The new word boundary assertions are:
+
+* `\<` or `\b{start}`: a Unicode start-of-word boundary (`\W|\A` on the left,
+`\w` on the right).
+* `\>` or `\b{end}`: a Unicode end-of-word boundary (`\w` on the left, `\W|\z`
+on the right)).
+* `\b{start-half}`: half of a Unicode start-of-word boundary (`\W|\A` on the
+left).
+* `\b{end-half}`: half of a Unicode end-of-word boundary (`\W|\z` on the
+right).
+
+The `\<` and `\>` are GNU extensions to POSIX regexes. They have been added
+to the `regex` crate because they enjoy somewhat broad support in other regex
+engines as well (for example, vim). The `\b{start}` and `\b{end}` assertions
+are aliases for `\<` and `\>`, respectively.
+
+The `\b{start-half}` and `\b{end-half}` assertions are not found in any
+other regex engine (although regex engines with general look-around support
+can certainly express them). They were added principally to support the
+implementation of word matching in grep programs, where one generally wants to
+be a bit more flexible in what is considered a word boundary.
 
 New features:
 
@@ -26,6 +51,29 @@ crate).
 * [BUG(regex-syntax) #1088](https://github.com/rust-lang/regex/issues/1088):
 Remove guarantees in the API that connect the `u` flag with a specific HIR
 representation.
+
+`regex-automata` breaking change release:
+
+This release includes a `regex-automata 0.4.0` breaking change release, which
+was necessary in order to support the new word boundary assertions. For
+example, the `Look` enum has new variants and the `LookSet` type now uses `u32`
+instead of `u16` to represent a bitset of look-around assertions. These are
+overall very minor changes, and most users of `regex-automata` should be able
+to move to `0.4` from `0.3` without any changes at all.
+
+`regex-syntax` breaking change release:
+
+This release also includes a `regex-syntax 0.8.0` breaking change release,
+which, like `regex-automata`, was necessary in order to support the new word
+boundary assertions. This release also includes some changes to the `Ast`
+type to reduce heap usage in some cases. If you are using the `Ast` type
+directly, your code may require some minor modifications. Otherwise, users of
+`regex-syntax 0.7` should be able to migrate to `0.8` without any code changes.
+
+`regex-lite` release:
+
+The `regex-lite 0.1.1` release contains support for the new word boundary
+assertions. There are no breaking changes.
 
 
 1.9.6 (2023-09-30)
