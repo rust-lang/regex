@@ -3,8 +3,15 @@ TBD
 
 New features:
 
+* [FEATURE #469](https://github.com/rust-lang/regex/issues/469):
+Add support for `\<` and `\>` word boundary assertions.
 * [FEATURE(regex-automata) #1031](https://github.com/rust-lang/regex/pull/1031):
 DFAs now have a `start_state` method that doesn't use an `Input`.
+
+Performance improvements:
+
+* [PERF #1051](https://github.com/rust-lang/regex/pull/1051):
+Unicode character class operations have been optimized in `regex-syntax`.
 
 Bug fixes:
 

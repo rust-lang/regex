@@ -543,8 +543,10 @@ scalar value, even when it is encoded using multiple bytes. When Unicode mode
 is disabled (e.g., `(?-u:.)`), then `.` will match a single byte in all cases.
 * The character classes `\w`, `\d` and `\s` are all Unicode-aware by default.
 Use `(?-u:\w)`, `(?-u:\d)` and `(?-u:\s)` to get their ASCII-only definitions.
-* Similarly, `\b` and `\B` use a Unicode definition of a "word" character. To
-get ASCII-only word boundaries, use `(?-u:\b)` and `(?-u:\B)`.
+* Similarly, `\b` and `\B` use a Unicode definition of a "word" character.
+To get ASCII-only word boundaries, use `(?-u:\b)` and `(?-u:\B)`. This also
+applies to the special word boundary assertions. (That is, `\b{start}`,
+`\b{end}`, `\b{start-half}`, `\b{end-half}`.)
 * `^` and `$` are **not** Unicode-aware in multi-line mode. Namely, they only
 recognize `\n` (assuming CRLF mode is not enabled) and not any of the other
 forms of line terminators defined by Unicode.
@@ -723,12 +725,16 @@ x{n}?     exactly n x
 ### Empty matches
 
 <pre class="rust">
-^     the beginning of a haystack (or start-of-line with multi-line mode)
-$     the end of a haystack (or end-of-line with multi-line mode)
-\A    only the beginning of a haystack (even with multi-line mode enabled)
-\z    only the end of a haystack (even with multi-line mode enabled)
-\b    a Unicode word boundary (\w on one side and \W, \A, or \z on other)
-\B    not a Unicode word boundary
+^               the beginning of a haystack (or start-of-line with multi-line mode)
+$               the end of a haystack (or end-of-line with multi-line mode)
+\A              only the beginning of a haystack (even with multi-line mode enabled)
+\z              only the end of a haystack (even with multi-line mode enabled)
+\b              a Unicode word boundary (\w on one side and \W, \A, or \z on other)
+\B              not a Unicode word boundary
+\b{start}, \<   a Unicode start-of-word boundary (\W|\A on the left, \w on the right)
+\b{end}, \>     a Unicode end-of-word boundary (\w on the left, \W|\z on the right))
+\b{start-half}  half of a Unicode start-of-word boundary (\W|\A on the left)
+\b{end-half}    half of a Unicode end-of-word boundary (\W|\z on the right)
 </pre>
 
 The empty regex is valid and matches the empty string. For example, the
@@ -856,28 +862,32 @@ Note that this includes all possible escape sequences, even ones that are
 documented elsewhere.
 
 <pre class="rust">
-\*          literal *, applies to all ASCII except [0-9A-Za-z<>]
-\a          bell (\x07)
-\f          form feed (\x0C)
-\t          horizontal tab
-\n          new line
-\r          carriage return
-\v          vertical tab (\x0B)
-\A          matches at the beginning of a haystack
-\z          matches at the end of a haystack
-\b          word boundary assertion
-\B          negated word boundary assertion
-\123        octal character code, up to three digits (when enabled)
-\x7F        hex character code (exactly two digits)
-\x{10FFFF}  any hex character code corresponding to a Unicode code point
-\u007F      hex character code (exactly four digits)
-\u{7F}      any hex character code corresponding to a Unicode code point
-\U0000007F  hex character code (exactly eight digits)
-\U{7F}      any hex character code corresponding to a Unicode code point
-\p{Letter}  Unicode character class
-\P{Letter}  negated Unicode character class
-\d, \s, \w  Perl character class
-\D, \S, \W  negated Perl character class
+\*              literal *, applies to all ASCII except [0-9A-Za-z<>]
+\a              bell (\x07)
+\f              form feed (\x0C)
+\t              horizontal tab
+\n              new line
+\r              carriage return
+\v              vertical tab (\x0B)
+\A              matches at the beginning of a haystack
+\z              matches at the end of a haystack
+\b              word boundary assertion
+\B              negated word boundary assertion
+\b{start}, \<   start-of-word boundary assertion
+\b{end}, \>     end-of-word boundary assertion
+\b{start-half}  half of a start-of-word boundary assertion
+\b{end-half}    half of a end-of-word boundary assertion
+\123            octal character code, up to three digits (when enabled)
+\x7F            hex character code (exactly two digits)
+\x{10FFFF}      any hex character code corresponding to a Unicode code point
+\u007F          hex character code (exactly four digits)
+\u{7F}          any hex character code corresponding to a Unicode code point
+\U0000007F      hex character code (exactly eight digits)
+\U{7F}          any hex character code corresponding to a Unicode code point
+\p{Letter}      Unicode character class
+\P{Letter}      negated Unicode character class
+\d, \s, \w      Perl character class
+\D, \S, \W      negated Perl character class
 </pre>
 
 ### Perl character classes (Unicode friendly)
