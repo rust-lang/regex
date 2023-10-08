@@ -20,6 +20,9 @@ Bug fixes:
 * [BUG #1046](https://github.com/rust-lang/regex/issues/1046):
 Fix a bug that could result in incorrect match spans when using a Unicode word
 boundary and searching non-ASCII strings.
+* [BUG(regex-syntax) #1047](https://github.com/rust-lang/regex/issues/1047):
+Fix panics that can occur in `Ast->Hir` translation (not reachable from `regex`
+crate).
 * [BUG(regex-syntax) #1088](https://github.com/rust-lang/regex/issues/1088):
 Remove guarantees in the API that connect the `u` flag with a specific HIR
 representation.

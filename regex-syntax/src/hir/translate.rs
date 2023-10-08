@@ -354,14 +354,14 @@ impl<'t, 'p> Visitor for TranslatorI<'t, 'p> {
                     .unwrap_or_else(|| self.flags());
                 self.push(HirFrame::Group { old_flags });
             }
-            Ast::Concat(ref x) if x.asts.is_empty() => {}
             Ast::Concat(_) => {
                 self.push(HirFrame::Concat);
             }
-            Ast::Alternation(ref x) if x.asts.is_empty() => {}
-            Ast::Alternation(_) => {
+            Ast::Alternation(ref x) => {
                 self.push(HirFrame::Alternation);
-                self.push(HirFrame::AlternationBranch);
+                if !x.asts.is_empty() {
+                    self.push(HirFrame::AlternationBranch);
+                }
             }
             _ => {}
         }
@@ -3651,5 +3651,56 @@ mod tests {
                 hir_alt(vec![hir_lit("foo"), hir_lit("foobar")]),
             ]),
         );
+    }
+
+    #[test]
+    fn regression_alt_empty_concat() {
+        use crate::ast::{self, Ast};
+
+        let span = Span::splat(Position::new(0, 0, 0));
+        let ast = Ast::alternation(ast::Alternation {
+            span,
+            asts: vec![Ast::concat(ast::Concat { span, asts: vec![] })],
+        });
+
+        let mut t = Translator::new();
+        assert_eq!(Ok(Hir::empty()), t.translate("", &ast));
+    }
+
+    #[test]
+    fn regression_empty_alt() {
+        use crate::ast::{self, Ast};
+
+        let span = Span::splat(Position::new(0, 0, 0));
+        let ast = Ast::concat(ast::Concat {
+            span,
+            asts: vec![Ast::alternation(ast::Alternation {
+                span,
+                asts: vec![],
+            })],
+        });
+
+        let mut t = Translator::new();
+        assert_eq!(Ok(Hir::fail()), t.translate("", &ast));
+    }
+
+    #[test]
+    fn regression_singleton_alt() {
+        use crate::{
+            ast::{self, Ast},
+            hir::Dot,
+        };
+
+        let span = Span::splat(Position::new(0, 0, 0));
+        let ast = Ast::concat(ast::Concat {
+            span,
+            asts: vec![Ast::alternation(ast::Alternation {
+                span,
+                asts: vec![Ast::dot(span)],
+            })],
+        });
+
+        let mut t = Translator::new();
+        assert_eq!(Ok(Hir::dot(Dot::AnyCharExceptLF)), t.translate("", &ast));
     }
 }
