@@ -111,6 +111,12 @@ const ERR_CLASS_DIFFERENCE_UNSUPPORTED: &str =
     "character class difference is not supported";
 const ERR_CLASS_SYMDIFFERENCE_UNSUPPORTED: &str =
     "character class symmetric difference is not supported";
+const ERR_SPECIAL_WORD_BOUNDARY_UNCLOSED: &str =
+    "special word boundary assertion is unclosed or has an invalid character";
+const ERR_SPECIAL_WORD_BOUNDARY_UNRECOGNIZED: &str =
+    "special word boundary assertion is unrecognized";
+const ERR_SPECIAL_WORD_OR_REP_UNEXPECTED_EOF: &str =
+    "found start of special word boundary or repetition without an end";
 
 /// A regular expression parser.
 ///
@@ -479,10 +485,84 @@ impl<'a> Parser<'a> {
             'v' => special('\x0B'),
             'A' => Ok(Hir::look(hir::Look::Start)),
             'z' => Ok(Hir::look(hir::Look::End)),
-            'b' => Ok(Hir::look(hir::Look::Word)),
+            'b' => {
+                let mut hir = Hir::look(hir::Look::Word);
+                if !self.is_done() && self.char() == '{' {
+                    if let Some(special) =
+                        self.maybe_parse_special_word_boundary()?
+                    {
+                        hir = special;
+                    }
+                }
+                Ok(hir)
+            }
             'B' => Ok(Hir::look(hir::Look::WordNegate)),
+            '<' => Ok(Hir::look(hir::Look::WordStart)),
+            '>' => Ok(Hir::look(hir::Look::WordEnd)),
             _ => Err(Error::new(ERR_ESCAPE_UNRECOGNIZED)),
         }
+    }
+
+    /// Attempt to parse a specialty word boundary. That is, `\b{start}`,
+    /// `\b{end}`, `\b{start-half}` or `\b{end-half}`.
+    ///
+    /// This is similar to `maybe_parse_ascii_class` in that, in most cases,
+    /// if it fails it will just return `None` with no error. This is done
+    /// because `\b{5}` is a valid expression and we want to let that be parsed
+    /// by the existing counted repetition parsing code. (I thought about just
+    /// invoking the counted repetition code from here, but it seemed a little
+    /// ham-fisted.)
+    ///
+    /// Unlike `maybe_parse_ascii_class` though, this can return an error.
+    /// Namely, if we definitely know it isn't a counted repetition, then we
+    /// return an error specific to the specialty word boundaries.
+    ///
+    /// This assumes the parser is positioned at a `{` immediately following
+    /// a `\b`. When `None` is returned, the parser is returned to the position
+    /// at which it started: pointing at a `{`.
+    ///
+    /// The position given should correspond to the start of the `\b`.
+    fn maybe_parse_special_word_boundary(&self) -> Result<Option<Hir>, Error> {
+        assert_eq!(self.char(), '{');
+
+        let is_valid_char = |c| match c {
+            'A'..='Z' | 'a'..='z' | '-' => true,
+            _ => false,
+        };
+        let start = self.pos();
+        if !self.bump_and_bump_space() {
+            return Err(Error::new(ERR_SPECIAL_WORD_OR_REP_UNEXPECTED_EOF));
+        }
+        // This is one of the critical bits: if the first non-whitespace
+        // character isn't in [-A-Za-z] (i.e., this can't be a special word
+        // boundary), then we bail and let the counted repetition parser deal
+        // with this.
+        if !is_valid_char(self.char()) {
+            self.pos.set(start);
+            self.char.set(Some('{'));
+            return Ok(None);
+        }
+
+        // Now collect up our chars until we see a '}'.
+        let mut scratch = String::new();
+        while !self.is_done() && is_valid_char(self.char()) {
+            scratch.push(self.char());
+            self.bump_and_bump_space();
+        }
+        if self.is_done() || self.char() != '}' {
+            return Err(Error::new(ERR_SPECIAL_WORD_BOUNDARY_UNCLOSED));
+        }
+        self.bump();
+        let kind = match scratch.as_str() {
+            "start" => hir::Look::WordStart,
+            "end" => hir::Look::WordEnd,
+            "start-half" => hir::Look::WordStartHalf,
+            "end-half" => hir::Look::WordEndHalf,
+            _ => {
+                return Err(Error::new(ERR_SPECIAL_WORD_BOUNDARY_UNRECOGNIZED))
+            }
+        };
+        Ok(Some(Hir::look(kind)))
     }
 
     /// Parse a hex representation of a Unicode codepoint. This handles both
@@ -1948,8 +2028,6 @@ bar
         assert_eq!(ERR_UNICODE_CLASS_UNSUPPORTED, perr(r"\pL"));
         assert_eq!(ERR_UNICODE_CLASS_UNSUPPORTED, perr(r"\p{L}"));
         assert_eq!(ERR_ESCAPE_UNRECOGNIZED, perr(r"\i"));
-        assert_eq!(ERR_ESCAPE_UNRECOGNIZED, perr(r"\<"));
-        assert_eq!(ERR_ESCAPE_UNRECOGNIZED, perr(r"\>"));
         assert_eq!(ERR_UNCOUNTED_REP_SUB_MISSING, perr(r"?"));
         assert_eq!(ERR_UNCOUNTED_REP_SUB_MISSING, perr(r"*"));
         assert_eq!(ERR_UNCOUNTED_REP_SUB_MISSING, perr(r"+"));
@@ -1983,6 +2061,11 @@ bar
         assert_eq!(ERR_CLASS_INTERSECTION_UNSUPPORTED, perr(r"[a&&b]"));
         assert_eq!(ERR_CLASS_DIFFERENCE_UNSUPPORTED, perr(r"[a--b]"));
         assert_eq!(ERR_CLASS_SYMDIFFERENCE_UNSUPPORTED, perr(r"[a~~b]"));
+        assert_eq!(ERR_SPECIAL_WORD_BOUNDARY_UNCLOSED, perr(r"\b{foo"));
+        assert_eq!(ERR_SPECIAL_WORD_BOUNDARY_UNCLOSED, perr(r"\b{foo!}"));
+        assert_eq!(ERR_SPECIAL_WORD_BOUNDARY_UNRECOGNIZED, perr(r"\b{foo}"));
+        assert_eq!(ERR_SPECIAL_WORD_OR_REP_UNEXPECTED_EOF, perr(r"\b{"));
+        assert_eq!(ERR_SPECIAL_WORD_OR_REP_UNEXPECTED_EOF, perr(r"(?x)\b{ "));
     }
 
     #[test]

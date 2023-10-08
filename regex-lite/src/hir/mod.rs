@@ -592,6 +592,24 @@ pub(crate) enum Look {
     Word = 1 << 6,
     /// Match an ASCII-only negation of a word boundary.
     WordNegate = 1 << 7,
+    /// Match the start of an ASCII-only word boundary. That is, this matches a
+    /// position at either the beginning of the haystack or where the previous
+    /// character is not a word character and the following character is a word
+    /// character.
+    WordStart = 1 << 8,
+    /// Match the end of an ASCII-only word boundary. That is, this matches
+    /// a position at either the end of the haystack or where the previous
+    /// character is a word character and the following character is not a word
+    /// character.
+    WordEnd = 1 << 9,
+    /// Match the start half of an ASCII-only word boundary. That is, this
+    /// matches a position at either the beginning of the haystack or where the
+    /// previous character is not a word character.
+    WordStartHalf = 1 << 10,
+    /// Match the end half of an ASCII-only word boundary. That is, this
+    /// matches a position at either the end of the haystack or where the
+    /// following character is not a word character.
+    WordEndHalf = 1 << 11,
 }
 
 impl Look {
@@ -630,6 +648,30 @@ impl Look {
                 let word_after =
                     at < haystack.len() && utf8::is_word_byte(haystack[at]);
                 word_before == word_after
+            }
+            WordStart => {
+                let word_before =
+                    at > 0 && utf8::is_word_byte(haystack[at - 1]);
+                let word_after =
+                    at < haystack.len() && utf8::is_word_byte(haystack[at]);
+                !word_before && word_after
+            }
+            WordEnd => {
+                let word_before =
+                    at > 0 && utf8::is_word_byte(haystack[at - 1]);
+                let word_after =
+                    at < haystack.len() && utf8::is_word_byte(haystack[at]);
+                word_before && !word_after
+            }
+            WordStartHalf => {
+                let word_before =
+                    at > 0 && utf8::is_word_byte(haystack[at - 1]);
+                !word_before
+            }
+            WordEndHalf => {
+                let word_after =
+                    at < haystack.len() && utf8::is_word_byte(haystack[at]);
+                !word_after
             }
         }
     }
