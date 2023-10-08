@@ -2063,6 +2063,7 @@ impl<'h, 'n> core::ops::Index<&'n str> for Captures<'h> {
 /// This example shows how to create and use `CaptureLocations` in a search.
 ///
 /// ```
+/// # if !cfg!(target_pointer_width = "64") { return; } // see #1041
 /// use regex_lite::Regex;
 ///
 /// let re = Regex::new(r"(?<first>\w+)\s+(?<last>\w+)").unwrap();
