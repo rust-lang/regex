@@ -2540,7 +2540,7 @@ impl Seen {
     }
     fn insert(&mut self, _id: StateID) {}
     fn contains(&self, _id: &StateID) -> bool {
-        false
+        true
     }
 }
 
