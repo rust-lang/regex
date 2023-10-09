@@ -472,8 +472,8 @@ $               the end of a haystack (or end-of-line with multi-line mode)
 \z              only the end of a haystack (even with multi-line mode enabled)
 \b              an ASCII word boundary (\w on one side and \W, \A, or \z on other)
 \B              not an ASCII word boundary
-\b{start}       an ASCII start-of-word boundary (\W|\A on the left, \w on the right)
-\b{end}         an ASCII end-of-word boundary (\w on the left, \W|\z on the right))
+\b{start}, \<   an ASCII start-of-word boundary (\W|\A on the left, \w on the right)
+\b{end}, \>     an ASCII end-of-word boundary (\w on the left, \W|\z on the right))
 \b{start-half}  half of an ASCII start-of-word boundary (\W|\A on the left)
 \b{end-half}    half of an ASCII end-of-word boundary (\W|\z on the right)
 </pre>
