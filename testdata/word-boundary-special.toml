@@ -651,3 +651,37 @@ regex = '\b{end-half}'
 haystack = "b𝛃"
 matches = [[5, 5]]
 unicode = true
+
+# Specialty tests.
+
+# Since \r is special cased in the start state computation (to deal with CRLF
+# mode), this test ensures that the correct start state is computed when the
+# pattern starts with a half word boundary assertion.
+[[test]]
+name = "word-start-half-ascii-carriage"
+regex = '\b{start-half}[a-z]+'
+haystack = 'ABC\rabc'
+matches = [[4, 7]]
+bounds = [4, 7]
+unescape = true
+
+# Since \n is also special cased in the start state computation, this test
+# ensures that the correct start state is computed when the pattern starts with
+# a half word boundary assertion.
+[[test]]
+name = "word-start-half-ascii-linefeed"
+regex = '\b{start-half}[a-z]+'
+haystack = 'ABC\nabc'
+matches = [[4, 7]]
+bounds = [4, 7]
+unescape = true
+
+# Like the carriage return test above, but with a custom line terminator.
+[[test]]
+name = "word-start-half-ascii-customlineterm"
+regex = '\b{start-half}[a-z]+'
+haystack = 'ABC!abc'
+matches = [[4, 7]]
+bounds = [4, 7]
+unescape = true
+line-terminator = '!'
