@@ -141,7 +141,7 @@ jobs:
     - name: Install Rust
       uses: dtolnay/rust-toolchain@master
       with:
-        toolchain: 1.60.0
+        toolchain: 1.65.0
     # The memchr 2.6 release purportedly bumped its MSRV to Rust 1.60, but it
     # turned out that on aarch64, it was using something that wasn't stabilized
     # until Rust 1.61[1]. (This was an oversight on my part. I had previously

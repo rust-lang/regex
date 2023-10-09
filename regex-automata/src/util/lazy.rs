@@ -384,11 +384,7 @@ mod lazy {
                 // SAFETY: state is DONE if and only if data has been fully
                 // initialized. At which point, it is safe to drop.
                 unsafe {
-                    // MSRV(1.60): Use assume_init_drop. The below is how
-                    // assume_init_drop is implemented.
-                    core::ptr::drop_in_place(
-                        (*self.data.as_ptr()).as_mut_ptr(),
-                    )
+                    self.data.get_mut().assume_init_drop();
                 }
             }
         }

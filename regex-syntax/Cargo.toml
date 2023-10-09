@@ -8,7 +8,7 @@ documentation = "https://docs.rs/regex-syntax"
 description = "A regular expression parser."
 workspace = ".."
 edition = "2021"
-rust-version = "1.60.0"
+rust-version = "1.65"
 
 # Features are documented in the "Crate features" section of the crate docs:
 # https://docs.rs/regex-syntax/*/#crate-features
