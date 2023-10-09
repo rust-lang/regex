@@ -10,7 +10,7 @@ A lightweight regex engine that optimizes for binary size and compilation time.
 """
 workspace = ".."
 edition = "2021"
-rust-version = "1.60.0"
+rust-version = "1.65"
 autotests = false
 
 # Features are documented in the "Crate features" section of the crate docs:
