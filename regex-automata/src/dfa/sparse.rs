@@ -992,8 +992,8 @@ impl<'a> DFA<&'a [u8]> {
         // (by trying to decode every state) and start state ID list below. If
         // either validation fails, then we return an error.
         let (dfa, nread) = unsafe { DFA::from_bytes_unchecked(slice)? };
-        dfa.tt.validate(&dfa.special)?;
-        dfa.st.validate(&dfa.special, &dfa.tt)?;
+        let seen = dfa.tt.validate(&dfa.special)?;
+        dfa.st.validate(&dfa.special, &seen)?;
         // N.B. dfa.special doesn't have a way to do unchecked deserialization,
         // so it has already been validated.
         Ok((dfa, nread))
@@ -1388,63 +1388,8 @@ impl<T: AsRef<[u8]>> Transitions<T> {
     ///
     /// That is, every state ID can be used to correctly index a state in this
     /// table.
-    fn validate(&self, sp: &Special) -> Result<(), DeserializeError> {
-        // In order to validate everything, we not only need to make sure we
-        // can decode every state, but that every transition in every state
-        // points to a valid state. There are many duplicative transitions, so
-        // we record state IDs that we've verified so that we don't redo the
-        // decoding work.
-        //
-        // Except, when in no_std mode, we don't have dynamic memory allocation
-        // available to us, so we skip this optimization. It's not clear
-        // whether doing something more clever is worth it just yet. If you're
-        // profiling this code and need it to run faster, please file an issue.
-        //
-        // OK, so we also use this to record the set of valid state IDs. Since
-        // it is possible for a transition to point to an invalid state ID that
-        // still (somehow) deserializes to a valid state. So we need to make
-        // sure our transitions are limited to actually correct state IDs.
-        // The problem is, I'm not sure how to do this verification step in
-        // no-std no-alloc mode. I think we'd *have* to store the set of valid
-        // state IDs in the DFA itself. For now, we don't do this verification
-        // in no-std no-alloc mode. The worst thing that can happen is an
-        // incorrect result. But no panics or memory safety problems should
-        // result. Because we still do validate that the state itself is
-        // "valid" in the sense that everything it points to actually exists.
-        //
-        // ---AG
-        struct Seen {
-            #[cfg(feature = "alloc")]
-            set: alloc::collections::BTreeSet<StateID>,
-            #[cfg(not(feature = "alloc"))]
-            set: core::marker::PhantomData<StateID>,
-        }
-
-        #[cfg(feature = "alloc")]
-        impl Seen {
-            fn new() -> Seen {
-                Seen { set: alloc::collections::BTreeSet::new() }
-            }
-            fn insert(&mut self, id: StateID) {
-                self.set.insert(id);
-            }
-            fn contains(&self, id: &StateID) -> bool {
-                self.set.contains(id)
-            }
-        }
-
-        #[cfg(not(feature = "alloc"))]
-        impl Seen {
-            fn new() -> Seen {
-                Seen { set: core::marker::PhantomData }
-            }
-            fn insert(&mut self, _id: StateID) {}
-            fn contains(&self, _id: &StateID) -> bool {
-                false
-            }
-        }
-
-        let mut verified: Seen = Seen::new();
+    fn validate(&self, sp: &Special) -> Result<Seen, DeserializeError> {
+        let mut verified = Seen::new();
         // We need to make sure that we decode the correct number of states.
         // Otherwise, an empty set of transitions would validate even if the
         // recorded state length is non-empty.
@@ -1521,7 +1466,7 @@ impl<T: AsRef<[u8]>> Transitions<T> {
                 "mismatching sparse state length",
             ));
         }
-        Ok(())
+        Ok(verified)
     }
 
     /// Converts these transitions to a borrowed value.
@@ -1659,7 +1604,7 @@ impl<T: AsRef<[u8]>> Transitions<T> {
             let state = &state[nr..];
             if npats == 0 {
                 return Err(DeserializeError::generic(
-                    "state marked as a match, but has no pattern IDs",
+                    "state marked as a match, but pattern length is zero",
                 ));
             }
 
@@ -1681,6 +1626,21 @@ impl<T: AsRef<[u8]>> Transitions<T> {
         } else {
             (&[][..], state)
         };
+        if is_match && pattern_ids.is_empty() {
+            return Err(DeserializeError::generic(
+                "state marked as a match, but has no pattern IDs",
+            ));
+        }
+        if sp.is_match_state(id) && pattern_ids.is_empty() {
+            return Err(DeserializeError::generic(
+                "state marked special as a match, but has no pattern IDs",
+            ));
+        }
+        if sp.is_match_state(id) != is_match {
+            return Err(DeserializeError::generic(
+                "whether state is a match or not is inconsistent",
+            ));
+        }
 
         // Now read this state's accelerator info. The first byte is the length
         // of the accelerator, which is typically 0 (for no acceleration) but
@@ -2061,27 +2021,18 @@ impl<T: AsRef<[u8]>> StartTable<T> {
     fn validate(
         &self,
         sp: &Special,
-        trans: &Transitions<T>,
+        seen: &Seen,
     ) -> Result<(), DeserializeError> {
         for (id, _, _) in self.iter() {
+            if !seen.contains(&id) {
+                return Err(DeserializeError::generic(
+                    "found invalid start state ID",
+                ));
+            }
             if sp.is_match_state(id) {
                 return Err(DeserializeError::generic(
                     "start states cannot be match states",
                 ));
-            }
-            // Confirm that the start state points to a valid state.
-            let state = trans.try_state(sp, id)?;
-            // And like for the transition table, confirm that the transitions
-            // on all start states themselves point to a valid state.
-            //
-            // It'd probably be better to integrate this validation with the
-            // transition table, or otherwise store a sorted sequence of all
-            // valid state IDs in the sparse DFA itself. That way, we could
-            // check that every pointer to a state corresponds precisely to a
-            // correct and valid state.
-            for i in 0..state.ntrans {
-                let to = state.next_at(i);
-                let _ = trans.try_state(sp, to)?;
             }
         }
         Ok(())
@@ -2534,6 +2485,62 @@ impl<'a> fmt::Debug for StateMut<'a> {
             accel: self.accel,
         };
         fmt::Debug::fmt(&state, f)
+    }
+}
+
+// In order to validate everything, we not only need to make sure we
+// can decode every state, but that every transition in every state
+// points to a valid state. There are many duplicative transitions, so
+// we record state IDs that we've verified so that we don't redo the
+// decoding work.
+//
+// Except, when in no_std mode, we don't have dynamic memory allocation
+// available to us, so we skip this optimization. It's not clear
+// whether doing something more clever is worth it just yet. If you're
+// profiling this code and need it to run faster, please file an issue.
+//
+// OK, so we also use this to record the set of valid state IDs. Since
+// it is possible for a transition to point to an invalid state ID that
+// still (somehow) deserializes to a valid state. So we need to make
+// sure our transitions are limited to actually correct state IDs.
+// The problem is, I'm not sure how to do this verification step in
+// no-std no-alloc mode. I think we'd *have* to store the set of valid
+// state IDs in the DFA itself. For now, we don't do this verification
+// in no-std no-alloc mode. The worst thing that can happen is an
+// incorrect result. But no panics or memory safety problems should
+// result. Because we still do validate that the state itself is
+// "valid" in the sense that everything it points to actually exists.
+//
+// ---AG
+#[derive(Debug)]
+struct Seen {
+    #[cfg(feature = "alloc")]
+    set: alloc::collections::BTreeSet<StateID>,
+    #[cfg(not(feature = "alloc"))]
+    set: core::marker::PhantomData<StateID>,
+}
+
+#[cfg(feature = "alloc")]
+impl Seen {
+    fn new() -> Seen {
+        Seen { set: alloc::collections::BTreeSet::new() }
+    }
+    fn insert(&mut self, id: StateID) {
+        self.set.insert(id);
+    }
+    fn contains(&self, id: &StateID) -> bool {
+        self.set.contains(id)
+    }
+}
+
+#[cfg(not(feature = "alloc"))]
+impl Seen {
+    fn new() -> Seen {
+        Seen { set: core::marker::PhantomData }
+    }
+    fn insert(&mut self, _id: StateID) {}
+    fn contains(&self, _id: &StateID) -> bool {
+        false
     }
 }
 
