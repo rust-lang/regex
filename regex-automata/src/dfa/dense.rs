@@ -2346,6 +2346,24 @@ impl<'a> DFA<&'a [u32]> {
         dfa.accels.validate()?;
         // N.B. dfa.special doesn't have a way to do unchecked deserialization,
         // so it has already been validated.
+        for state in dfa.states() {
+            // If the state is an accel state, then it must have a non-empty
+            // accelerator.
+            if dfa.is_accel_state(state.id()) {
+                let index = dfa.accelerator_index(state.id());
+                if index >= dfa.accels.len() {
+                    return Err(DeserializeError::generic(
+                        "found DFA state with invalid accelerator index",
+                    ));
+                }
+                let needles = dfa.accels.needles(index);
+                if !(1 <= needles.len() && needles.len() <= 3) {
+                    return Err(DeserializeError::generic(
+                        "accelerator needles has invalid length",
+                    ));
+                }
+            }
+        }
         Ok((dfa, nread))
     }
 
