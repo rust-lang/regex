@@ -14,7 +14,7 @@ rust-version = "1.65"
 autotests = false
 
 # Features are documented in the "Crate features" section of the crate docs:
-# https://docs.rs/regex-syntax/*/#crate-features
+# https://docs.rs/regex-lite/*/#crate-features
 #
 # (Currently there are no supported features. 'std' is technically one, but it
 # is currently required.)
