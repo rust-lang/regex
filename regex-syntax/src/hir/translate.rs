@@ -3703,4 +3703,48 @@ mod tests {
         let mut t = Translator::new();
         assert_eq!(Ok(Hir::dot(Dot::AnyCharExceptLF)), t.translate("", &ast));
     }
+
+    // See: https://bugs.chromium.org/p/oss-fuzz/issues/detail?id=63168
+    #[test]
+    fn regression_fuzz_match() {
+        let pat = "[(\u{6} \0-\u{afdf5}]  \0 ";
+        let ast = ParserBuilder::new()
+            .octal(false)
+            .ignore_whitespace(true)
+            .build()
+            .parse(pat)
+            .unwrap();
+        let hir = TranslatorBuilder::new()
+            .utf8(true)
+            .case_insensitive(false)
+            .multi_line(false)
+            .dot_matches_new_line(false)
+            .swap_greed(true)
+            .unicode(true)
+            .build()
+            .translate(pat, &ast)
+            .unwrap();
+        assert_eq!(
+            hir,
+            Hir::concat(vec![
+                hir_uclass(&[('\0', '\u{afdf5}')]),
+                hir_lit("\0"),
+            ])
+        );
+    }
+
+    // See: https://bugs.chromium.org/p/oss-fuzz/issues/detail?id=63155
+    #[cfg(feature = "unicode")]
+    #[test]
+    fn regression_fuzz_difference1() {
+        let pat = r"\W\W|\W[^\v--\W\W\P{Script_Extensions:Pau_Cin_Hau}\u10A1A1-\U{3E3E3}--~~~~--~~~~~~~~------~~~~~~--~~~~~~]*";
+        let _ = t(pat); // shouldn't panic
+    }
+
+    // See: https://bugs.chromium.org/p/oss-fuzz/issues/detail?id=63153
+    #[test]
+    fn regression_fuzz_char_decrement1() {
+        let pat = "w[w[^w?\rw\rw[^w?\rw[^w?\rw[^w?\rw[^w?\rw[^w?\rw[^w?\r\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0w?\rw[^w?\rw[^w?\rw[^w\0\0\u{1}\0]\0\0-*\0]\0\0\0\0\0\0\u{1}\0]\0\0-*\0]\0\0\0\0\0\u{1}\0]\0\0\0\0\0\0\0\0\0*\0\0\u{1}\0]\0\0-*\0][^w?\rw[^w?\rw[^w?\rw[^w?\rw[^w?\rw[^w?\rw[^w\0\0\u{1}\0]\0\0-*\0]\0\0\0\0\0\0\u{1}\0]\0\0-*\0]\0\0\0\0\0\u{1}\0]\0\0\0\0\0\0\0\0\0x\0\0\u{1}\0]\0\0-*\0]\0\0\0\0\0\0\0\0\0*??\0\u{7f}{2}\u{10}??\0\0\0\0\0\0\0\0\0\u{3}\0\0\0}\0-*\0]\0\0\0\0\0\0\u{1}\0]\0\0-*\0]\0\0\0\0\0\0\u{1}\0]\0\0-*\0]\0\0\0\0\0\u{1}\0]\0\0-*\0]\0\0\0\0\0\0\0\u{1}\0]\0\u{1}\u{1}H-i]-]\0\0\0\0\u{1}\0]\0\0\0\u{1}\0]\0\0-*\0\0\0\0\u{1}9-\u{7f}]\0'|-\u{7f}]\0'|(?i-ux)[-\u{7f}]\0'\u{3}\0\0\0}\0-*\0]<D\0\0\0\0\0\0\u{1}]\0\0\0\0]\0\0-*\0]\0\0 ";
+        let _ = t(pat); // shouldn't panic
+    }
 }
