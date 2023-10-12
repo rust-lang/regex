@@ -388,17 +388,10 @@ impl<'t, 'p> Visitor for TranslatorI<'t, 'p> {
             }
             Ast::Literal(ref x) => match self.ast_literal_to_scalar(x)? {
                 Either::Right(byte) => self.push_byte(byte),
-                Either::Left(ch) => {
-                    if !self.flags().unicode() && ch.len_utf8() > 1 {
-                        return Err(
-                            self.error(x.span, ErrorKind::UnicodeNotAllowed)
-                        );
-                    }
-                    match self.case_fold_char(x.span, ch)? {
-                        None => self.push_char(ch),
-                        Some(expr) => self.push(HirFrame::Expr(expr)),
-                    }
-                }
+                Either::Left(ch) => match self.case_fold_char(x.span, ch)? {
+                    None => self.push_char(ch),
+                    Some(expr) => self.push(HirFrame::Expr(expr)),
+                },
             },
             Ast::Dot(ref span) => {
                 self.push(HirFrame::Expr(self.hir_dot(**span)?));
@@ -872,8 +865,8 @@ impl<'t, 'p> TranslatorI<'t, 'p> {
             })?;
             Ok(Some(Hir::class(hir::Class::Unicode(cls))))
         } else {
-            if c.len_utf8() > 1 {
-                return Err(self.error(span, ErrorKind::UnicodeNotAllowed));
+            if !c.is_ascii() {
+                return Ok(None);
             }
             // If case folding won't do anything, then don't bother trying.
             match c {
@@ -1211,9 +1204,8 @@ impl<'t, 'p> TranslatorI<'t, 'p> {
         match self.ast_literal_to_scalar(ast)? {
             Either::Right(byte) => Ok(byte),
             Either::Left(ch) => {
-                let cp = u32::from(ch);
-                if cp <= 0x7F {
-                    Ok(u8::try_from(cp).unwrap())
+                if ch.is_ascii() {
+                    Ok(u8::try_from(ch).unwrap())
                 } else {
                     // We can't feasibly support Unicode in
                     // byte oriented classes. Byte classes don't
@@ -1661,16 +1653,7 @@ mod tests {
         assert_eq!(t_bytes(r"(?-u)\x61"), hir_lit("a"));
         assert_eq!(t_bytes(r"(?-u)\xFF"), hir_blit(b"\xFF"));
 
-        assert_eq!(
-            t_err("(?-u)☃"),
-            TestError {
-                kind: hir::ErrorKind::UnicodeNotAllowed,
-                span: Span::new(
-                    Position::new(5, 1, 6),
-                    Position::new(8, 1, 7)
-                ),
-            }
-        );
+        assert_eq!(t("(?-u)☃"), hir_lit("☃"));
         assert_eq!(
             t_err(r"(?-u)\xFF"),
             TestError {
@@ -1748,16 +1731,7 @@ mod tests {
         );
         assert_eq!(t_bytes(r"(?i-u)\xFF"), hir_blit(b"\xFF"));
 
-        assert_eq!(
-            t_err("(?i-u)β"),
-            TestError {
-                kind: hir::ErrorKind::UnicodeNotAllowed,
-                span: Span::new(
-                    Position::new(6, 1, 7),
-                    Position::new(8, 1, 8),
-                ),
-            }
-        );
+        assert_eq!(t("(?i-u)β"), hir_lit("β"),);
     }
 
     #[test]
