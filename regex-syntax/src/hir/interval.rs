@@ -94,32 +94,30 @@ impl<I: Interval> IntervalSet<I> {
         // Find the first range that is not greater than the new interval.
         // This is the first range that could possibly be unioned with the
         // new interval.
-        let mut drain_end = self.ranges.len();
-        while drain_end > 0
-            && self.ranges[drain_end - 1].lower() > interval.upper()
-            && !self.ranges[drain_end - 1].is_contiguous(&interval)
-        {
-            drain_end -= 1;
+        for i in 0..self.ranges.len() {
+            if self.ranges[i].is_contiguous(&interval) {
+                self.ranges[i] = self.ranges[i].union(&interval).unwrap();
+                // Try to union the new interval with all subsequent ranges.
+                // When it's no longer possible to union, remove the remaining
+                // ranges and return.
+                for j in i + 1..self.ranges.len() {
+                    if let Some(union) = self.ranges[i].union(&self.ranges[j])
+                    {
+                        self.ranges[i] = union;
+                    } else {
+                        self.ranges.drain(i + 1..j);
+                        return;
+                    }
+                }
+                self.ranges.drain(i + 1..);
+                return;
+            } else if self.ranges[i].lower() > interval.upper() {
+                self.ranges.insert(i, interval);
+                return;
+            }
         }
 
-        // Try to union the new interval with old intervals backwards.
-        if drain_end > 0 && self.ranges[drain_end - 1].is_contiguous(&interval)
-        {
-            self.ranges[drain_end - 1] =
-                self.ranges[drain_end - 1].union(&interval).unwrap();
-            for i in (0..drain_end - 1).rev() {
-                if let Some(union) =
-                    self.ranges[drain_end - 1].union(&self.ranges[i])
-                {
-                    self.ranges[drain_end - 1] = union;
-                } else {
-                    self.ranges.drain(i + 1..drain_end - 1);
-                    break;
-                }
-            }
-        } else {
-            self.ranges.insert(drain_end, interval);
-        }
+        self.ranges.push(interval);
     }
 
     /// Return an iterator over all intervals in this set.
