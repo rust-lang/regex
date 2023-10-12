@@ -800,3 +800,16 @@ name = "non-prefix-literal-quit-state"
 regex = '.+\b\n'
 haystack = "β77\n"
 matches = [[0, 5]]
+
+# This is a regression test for some errant HIR interval set operations that
+# were made in the regex-syntax 0.8.0 release and then reverted in 0.8.1. The
+# issue here is that the HIR produced from the regex had out-of-order ranges.
+#
+# See: https://github.com/rust-lang/regex/issues/1103
+# Ref: https://github.com/rust-lang/regex/pull/1051
+# Ref: https://github.com/rust-lang/regex/pull/1102
+[[test]]
+name = "hir-optimization-out-of-order-class"
+regex = '^[[:alnum:]./-]+$'
+haystack = "a-b"
+matches = [[0, 3]]
