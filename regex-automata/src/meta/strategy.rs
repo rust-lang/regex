@@ -353,6 +353,7 @@ impl Pre<()> {
 // strategy when len(patterns)==1 if the number of literals is large. In that
 // case, literal extraction gives up and will return an infinite set.)
 impl<P: PrefilterI> Strategy for Pre<P> {
+    #[cfg_attr(feature = "perf-inline", inline(always))]
     fn group_info(&self) -> &GroupInfo {
         &self.group_info
     }
@@ -378,6 +379,7 @@ impl<P: PrefilterI> Strategy for Pre<P> {
         self.pre.memory_usage()
     }
 
+    #[cfg_attr(feature = "perf-inline", inline(always))]
     fn search(&self, _cache: &mut Cache, input: &Input<'_>) -> Option<Match> {
         if input.is_done() {
             return None;
@@ -393,6 +395,7 @@ impl<P: PrefilterI> Strategy for Pre<P> {
             .map(|sp| Match::new(PatternID::ZERO, sp))
     }
 
+    #[cfg_attr(feature = "perf-inline", inline(always))]
     fn search_half(
         &self,
         cache: &mut Cache,
@@ -401,10 +404,12 @@ impl<P: PrefilterI> Strategy for Pre<P> {
         self.search(cache, input).map(|m| HalfMatch::new(m.pattern(), m.end()))
     }
 
+    #[cfg_attr(feature = "perf-inline", inline(always))]
     fn is_match(&self, cache: &mut Cache, input: &Input<'_>) -> bool {
         self.search(cache, input).is_some()
     }
 
+    #[cfg_attr(feature = "perf-inline", inline(always))]
     fn search_slots(
         &self,
         cache: &mut Cache,
@@ -421,6 +426,7 @@ impl<P: PrefilterI> Strategy for Pre<P> {
         Some(m.pattern())
     }
 
+    #[cfg_attr(feature = "perf-inline", inline(always))]
     fn which_overlapping_matches(
         &self,
         cache: &mut Cache,
