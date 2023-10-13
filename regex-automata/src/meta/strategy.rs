@@ -1167,34 +1167,21 @@ impl ReverseSuffix {
             return Err(core);
         }
         let kind = core.info.config().get_match_kind();
-        let suffixes = crate::util::prefilter::suffixes(kind, hirs);
-        let lcs = match suffixes.longest_common_suffix() {
-            None => {
-                debug!(
-                    "skipping reverse suffix optimization because \
-                     a longest common suffix could not be found",
-                );
-                return Err(core);
-            }
-            Some(lcs) if lcs.is_empty() => {
-                debug!(
-                    "skipping reverse suffix optimization because \
-                     the longest common suffix is the empty string",
-                );
-                return Err(core);
-            }
-            Some(lcs) => lcs,
+        let suffixseq = crate::util::prefilter::suffixes(kind, hirs);
+        let Some(suffixes) = suffixseq.literals() else {
+            debug!(
+                "skipping reverse suffix optimization because \
+                 the extract suffix sequence is not finite",
+            );
+            return Err(core);
         };
-        let pre = match Prefilter::new(kind, &[lcs]) {
-            Some(pre) => pre,
-            None => {
-                debug!(
-                    "skipping reverse suffix optimization because \
+        let Some(pre) = Prefilter::new(kind, suffixes) else {
+            debug!(
+                "skipping reverse suffix optimization because \
                      a prefilter could not be constructed from the \
                      longest common suffix",
-                );
-                return Err(core);
-            }
+            );
+            return Err(core);
         };
         if !pre.is_fast() {
             debug!(
