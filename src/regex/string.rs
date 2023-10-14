@@ -2028,7 +2028,6 @@ impl<'h, 'n> core::ops::Index<&'n str> for Captures<'h> {
 /// This example shows how to create and use `CaptureLocations` in a search.
 ///
 /// ```
-/// # if !cfg!(target_pointer_width = "64") { return; } // see #1041
 /// use regex::Regex;
 ///
 /// let re = Regex::new(r"(?<first>\w+)\s+(?<last>\w+)").unwrap();
@@ -2041,7 +2040,10 @@ impl<'h, 'n> core::ops::Index<&'n str> for Captures<'h> {
 ///
 /// // Asking for an invalid capture group always returns None.
 /// assert_eq!(None, locs.get(3));
+/// # // literals are too big for 32-bit usize: #1041
+/// # #[cfg(target_pointer_width = "64")]
 /// assert_eq!(None, locs.get(34973498648));
+/// # #[cfg(target_pointer_width = "64")]
 /// assert_eq!(None, locs.get(9944060567225171988));
 /// ```
 #[derive(Clone, Debug)]
