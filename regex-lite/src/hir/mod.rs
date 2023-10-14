@@ -366,6 +366,24 @@ impl Hir {
     }
 }
 
+impl HirKind {
+    /// Returns a slice of this kind's sub-expressions, if any.
+    fn subs(&self) -> &[Hir] {
+        use core::slice::from_ref;
+
+        match *self {
+            HirKind::Empty
+            | HirKind::Char(_)
+            | HirKind::Class(_)
+            | HirKind::Look(_) => &[],
+            HirKind::Repetition(Repetition { ref sub, .. }) => from_ref(sub),
+            HirKind::Capture(Capture { ref sub, .. }) => from_ref(sub),
+            HirKind::Concat(ref subs) => subs,
+            HirKind::Alternation(ref subs) => subs,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct Class {
     pub(crate) ranges: Vec<ClassRange>,
@@ -746,4 +764,46 @@ fn prev_char(ch: char) -> Option<char> {
     // OK because subtracting 1 from any valid scalar value other than 0
     // and U+E000 yields a valid scalar value.
     Some(char::from_u32(u32::from(ch).checked_sub(1)?).unwrap())
+}
+
+impl Drop for Hir {
+    fn drop(&mut self) {
+        use core::mem;
+
+        match *self.kind() {
+            HirKind::Empty
+            | HirKind::Char(_)
+            | HirKind::Class(_)
+            | HirKind::Look(_) => return,
+            HirKind::Capture(ref x) if x.sub.kind.subs().is_empty() => return,
+            HirKind::Repetition(ref x) if x.sub.kind.subs().is_empty() => {
+                return
+            }
+            HirKind::Concat(ref x) if x.is_empty() => return,
+            HirKind::Alternation(ref x) if x.is_empty() => return,
+            _ => {}
+        }
+
+        let mut stack = vec![mem::replace(self, Hir::empty())];
+        while let Some(mut expr) = stack.pop() {
+            match expr.kind {
+                HirKind::Empty
+                | HirKind::Char(_)
+                | HirKind::Class(_)
+                | HirKind::Look(_) => {}
+                HirKind::Capture(ref mut x) => {
+                    stack.push(mem::replace(&mut x.sub, Hir::empty()));
+                }
+                HirKind::Repetition(ref mut x) => {
+                    stack.push(mem::replace(&mut x.sub, Hir::empty()));
+                }
+                HirKind::Concat(ref mut x) => {
+                    stack.extend(x.drain(..));
+                }
+                HirKind::Alternation(ref mut x) => {
+                    stack.extend(x.drain(..));
+                }
+            }
+        }
+    }
 }
