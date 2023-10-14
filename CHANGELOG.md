@@ -1,3 +1,19 @@
+1.10.1 (2023-10-14)
+===================
+This is a new patch release with a minor increase in the number of valid
+patterns and a broadening of some literal optimizations.
+
+New features:
+
+* [FEATURE 04f5d7be](https://github.com/rust-lang/regex/commit/04f5d7be4efc542864cc400f5d43fbea4eb9bab6):
+Loosen ASCII-compatible rules such that regexes like `(?-u:☃)` are now allowed.
+
+Performance improvements:
+
+* [PERF 8a8d599f](https://github.com/rust-lang/regex/commit/8a8d599f9d2f2d78e9ad84e4084788c2d563afa5):
+Broader the reverse suffix optimization to apply in more cases.
+
+
 1.10.0 (2023-10-09)
 ===================
 This is a new minor release of `regex` that adds support for start and end
