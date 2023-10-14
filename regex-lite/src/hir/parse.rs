@@ -377,6 +377,24 @@ impl<'a> Parser<'a> {
 /// own routine.
 impl<'a> Parser<'a> {
     pub(super) fn parse(&self) -> Result<Hir, Error> {
+        let hir = self.parse_inner()?;
+        // While we also check nesting during parsing, that only checks the
+        // number of recursive parse calls. It does not necessarily cover
+        // all possible recursive nestings of the Hir itself. For example,
+        // repetition operators don't require recursive parse calls. So one
+        // can stack them arbitrarily without overflowing the stack in the
+        // *parser*. But then if one recurses over the resulting Hir, a stack
+        // overflow is possible. So here we check the Hir nesting level
+        // thoroughly to ensure it isn't nested too deeply.
+        //
+        // Note that we do still need the nesting limit check in the parser as
+        // well, since that will avoid overflowing the stack during parse time
+        // before the complete Hir value is constructed.
+        check_hir_nesting(&hir, self.config.nest_limit)?;
+        Ok(hir)
+    }
+
+    fn parse_inner(&self) -> Result<Hir, Error> {
         let depth = self.increment_depth()?;
         let mut alternates = vec![];
         let mut concat = vec![];
@@ -806,7 +824,7 @@ impl<'a> Parser<'a> {
         if self.bump_if("?P<") || self.bump_if("?<") {
             let index = self.next_capture_index()?;
             let name = Some(Box::from(self.parse_capture_name()?));
-            let sub = Box::new(self.parse()?);
+            let sub = Box::new(self.parse_inner()?);
             let cap = hir::Capture { index, name, sub };
             Ok(Some(Hir::capture(cap)))
         } else if self.bump_if("?") {
@@ -826,11 +844,11 @@ impl<'a> Parser<'a> {
             } else {
                 assert_eq!(':', self.char());
                 self.bump();
-                self.parse().map(Some)
+                self.parse_inner().map(Some)
             }
         } else {
             let index = self.next_capture_index()?;
-            let sub = Box::new(self.parse()?);
+            let sub = Box::new(self.parse_inner()?);
             let cap = hir::Capture { index, name: None, sub };
             Ok(Some(Hir::capture(cap)))
         }
@@ -1263,6 +1281,38 @@ impl<'a> Parser<'a> {
     }
 }
 
+/// This checks the depth of the given `Hir` value, and if it exceeds the given
+/// limit, then an error is returned.
+fn check_hir_nesting(hir: &Hir, limit: u32) -> Result<(), Error> {
+    fn recurse(hir: &Hir, limit: u32, depth: u32) -> Result<(), Error> {
+        if depth > limit {
+            return Err(Error::new(ERR_TOO_MUCH_NESTING));
+        }
+        let Some(next_depth) = depth.checked_add(1) else {
+            return Err(Error::new(ERR_TOO_MUCH_NESTING));
+        };
+        match *hir.kind() {
+            HirKind::Empty
+            | HirKind::Char(_)
+            | HirKind::Class(_)
+            | HirKind::Look(_) => Ok(()),
+            HirKind::Repetition(hir::Repetition { ref sub, .. }) => {
+                recurse(sub, limit, next_depth)
+            }
+            HirKind::Capture(hir::Capture { ref sub, .. }) => {
+                recurse(sub, limit, next_depth)
+            }
+            HirKind::Concat(ref subs) | HirKind::Alternation(ref subs) => {
+                for sub in subs.iter() {
+                    recurse(sub, limit, next_depth)?;
+                }
+                Ok(())
+            }
+        }
+    }
+    recurse(hir, limit, 0)
+}
+
 /// Converts the given Hir to a literal char if the Hir is just a single
 /// character. Otherwise this returns an error.
 ///
@@ -1344,12 +1394,12 @@ mod tests {
     use super::*;
 
     fn p(pattern: &str) -> Hir {
-        Parser::new(Config::default(), pattern).parse().unwrap()
+        Parser::new(Config::default(), pattern).parse_inner().unwrap()
     }
 
     fn perr(pattern: &str) -> String {
         Parser::new(Config::default(), pattern)
-            .parse()
+            .parse_inner()
             .unwrap_err()
             .to_string()
     }

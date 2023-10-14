@@ -14,6 +14,23 @@ fn captures_wrong_order_min() {
     let _ = run(data);
 }
 
+// Simpler regression test from a failure found by OSS-fuzz[1]. This test,
+// when it failed, caused a stack overflow. We fixed it by adding another nest
+// check on the Hir value itself, since the Hir type can have depth added to
+// it without recursive calls in the parser (which is where the existing nest
+// check was).
+//
+// Many thanks to Addison Crump for coming up with this test case[2].
+//
+// [1]: https://bugs.chromium.org/p/oss-fuzz/issues/detail?id=60608
+// [2]: https://bugs.chromium.org/p/oss-fuzz/issues/detail?id=60608#c1
+#[test]
+fn many_zero_to_many_reps() {
+    let pat = format!(".{}", "*".repeat(1 << 15));
+    let Ok(re) = regex_lite::RegexBuilder::new(&pat).build() else { return };
+    re.is_match("");
+}
+
 // This is the fuzz target function. We duplicate it here since this is the
 // thing we use to interpret the data. It is ultimately what we want to
 // succeed.
