@@ -27,7 +27,7 @@ fn captures_wrong_order_min() {
 #[test]
 fn many_zero_to_many_reps() {
     let pat = format!(".{}", "*".repeat(1 << 15));
-    let Ok(re) = regex_lite::RegexBuilder::new(&pat).build() else { return };
+    let Ok(re) = regex_lite::Regex::new(&pat) else { return };
     re.is_match("");
 }
 
