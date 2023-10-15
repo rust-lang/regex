@@ -433,7 +433,6 @@ impl Captures {
     ///
     /// ```
     /// # if cfg!(miri) { return Ok(()); } // miri takes too long
-    /// # if !cfg!(target_pointer_width = "64") { return Ok(()); } // see #1039
     /// use regex_automata::{nfa::thompson::pikevm::PikeVM, Span, Match};
     ///
     /// let re = PikeVM::new(r"^(?P<first>\pL+)\s+(?P<last>\pL+)$")?;
@@ -445,6 +444,8 @@ impl Captures {
     /// assert_eq!(Some(Span::from(6..17)), caps.get_group(2));
     /// // Looking for a non-existent capturing group will return None:
     /// assert_eq!(None, caps.get_group(3));
+    /// # // literals are too big for 32-bit usize: #1039
+    /// # #[cfg(target_pointer_width = "64")]
     /// assert_eq!(None, caps.get_group(9944060567225171988));
     ///
     /// # Ok::<(), Box<dyn std::error::Error>>(())
