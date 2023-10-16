@@ -14,16 +14,16 @@ fn main() -> anyhow::Result<()> {
         "info" => log::LevelFilter::Info,
         "debug" => log::LevelFilter::Debug,
         "trace" => log::LevelFilter::Trace,
-        unk => anyhow::bail!("unrecognized log level '{}'", unk),
+        unk => anyhow::bail!("unrecognized log level '{unk}'"),
     };
     logger::Logger::init()?;
     log::set_max_level(level);
 
     if let Err(err) = cmd::run(&mut lexopt::Parser::from_env()) {
         if std::env::var("RUST_BACKTRACE").map_or(false, |v| v == "1") {
-            writeln!(&mut std::io::stderr(), "{:?}", err).unwrap();
+            writeln!(&mut std::io::stderr(), "{err:?}").unwrap();
         } else {
-            writeln!(&mut std::io::stderr(), "{:#}", err).unwrap();
+            writeln!(&mut std::io::stderr(), "{err:#}").unwrap();
         }
         std::process::exit(1);
     }

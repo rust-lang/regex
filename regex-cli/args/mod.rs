@@ -143,11 +143,11 @@ pub fn next_as_command(usage: &str, p: &mut Parser) -> anyhow::Result<String> {
     let usage = usage.trim();
     let arg = match p.next()? {
         Some(arg) => arg,
-        None => anyhow::bail!("{}", usage),
+        None => anyhow::bail!("{usage}"),
     };
     let cmd = match arg {
         Arg::Value(cmd) => cmd.string()?,
-        Arg::Short('h') | Arg::Long("help") => anyhow::bail!("{}", usage),
+        Arg::Short('h') | Arg::Long("help") => anyhow::bail!("{usage}"),
         arg => return Err(arg.unexpected().into()),
     };
     Ok(cmd)
