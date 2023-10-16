@@ -1,3 +1,14 @@
+1.10.2 (2023-10-16)
+===================
+This is a new patch release that fixes a search regression where incorrect
+matches could be reported.
+
+Bug fixes:
+
+* [BUG #1110](https://github.com/rust-lang/regex/issues/1110):
+Revert broadening of reverse suffix literal optimization introduced in 1.10.1.
+
+
 1.10.1 (2023-10-14)
 ===================
 This is a new patch release with a minor increase in the number of valid
