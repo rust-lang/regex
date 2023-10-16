@@ -229,11 +229,11 @@ pub fn escape_into(text: &str, buf: &mut String) {
 /// classes.
 ///
 /// In order to determine whether a character may be escaped at all, the
-/// [`is_escapeable_character`] routine should be used. The difference between
-/// `is_meta_character` and `is_escapeable_character` is that the latter will
+/// [`is_escapable_character`] routine should be used. The difference between
+/// `is_meta_character` and `is_escapable_character` is that the latter will
 /// return true for some characters that are _not_ meta characters. For
 /// example, `%` and `\%` both match a literal `%` in all contexts. In other
-/// words, `is_escapeable_character` includes "superfluous" escapes.
+/// words, `is_escapable_character` includes "superfluous" escapes.
 ///
 /// Note that the set of characters for which this function returns `true` or
 /// `false` is fixed and won't change in a semver compatible release. (In this
@@ -265,6 +265,12 @@ pub fn is_meta_character(c: char) -> bool {
     }
 }
 
+/// Legacy misspelled function, use [`is_escapable_character`] instead.
+#[deprecated(since = "0.8.3", note = "use is_escapable_character() instead")]
+pub fn is_escapeable_character(c: char) -> bool {
+    is_escapable_character(c)
+}
+
 /// Returns true if the given character can be escaped in a regex.
 ///
 /// This returns true in all cases that `is_meta_character` returns true, but
@@ -287,20 +293,20 @@ pub fn is_meta_character(c: char) -> bool {
 /// # Example
 ///
 /// ```
-/// use regex_syntax::is_escapeable_character;
+/// use regex_syntax::is_escapable_character;
 ///
-/// assert!(is_escapeable_character('?'));
-/// assert!(is_escapeable_character('-'));
-/// assert!(is_escapeable_character('&'));
-/// assert!(is_escapeable_character('#'));
-/// assert!(is_escapeable_character('%'));
-/// assert!(is_escapeable_character('/'));
-/// assert!(is_escapeable_character('!'));
-/// assert!(is_escapeable_character('"'));
+/// assert!(is_escapable_character('?'));
+/// assert!(is_escapable_character('-'));
+/// assert!(is_escapable_character('&'));
+/// assert!(is_escapable_character('#'));
+/// assert!(is_escapable_character('%'));
+/// assert!(is_escapable_character('/'));
+/// assert!(is_escapable_character('!'));
+/// assert!(is_escapable_character('"'));
 ///
-/// assert!(!is_escapeable_character('e'));
+/// assert!(!is_escapable_character('e'));
 /// ```
-pub fn is_escapeable_character(c: char) -> bool {
+pub fn is_escapable_character(c: char) -> bool {
     // Certainly escapeable if it's a meta character.
     if is_meta_character(c) {
         return true;
