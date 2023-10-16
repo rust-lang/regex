@@ -813,3 +813,18 @@ name = "hir-optimization-out-of-order-class"
 regex = '^[[:alnum:]./-]+$'
 haystack = "a-b"
 matches = [[0, 3]]
+
+# This is a regression test for an improper reverse suffix optimization. This
+# occurred when I "broadened" the applicability of the optimization to include
+# multiple possible literal suffixes instead of only sticking to a non-empty
+# longest common suffix. It turns out that, at least given how the reverse
+# suffix optimization works, we need to stick to the longest common suffix for
+# now.
+#
+# See: https://github.com/rust-lang/regex/issues/1110
+# See also: https://github.com/astral-sh/ruff/pull/7980
+[[test]]
+name = 'improper-reverse-suffix-optimization'
+regex = '(\\N\{[^}]+})|([{}])'
+haystack = 'hiya \N{snowman} bye'
+matches = [[[5, 16], [5, 16], []]]
