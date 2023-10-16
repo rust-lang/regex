@@ -1227,7 +1227,7 @@ impl<'a> core::fmt::Debug for CapturesDebugMap<'a> {
             fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
                 write!(f, "{}", self.0)?;
                 if let Some(name) = self.1 {
-                    write!(f, "/{:?}", name)?;
+                    write!(f, "/{name:?}")?;
                 }
                 Ok(())
             }
@@ -2433,7 +2433,7 @@ impl core::fmt::Display for GroupInfoError {
 
         match self.kind {
             TooManyPatterns { ref err } => {
-                write!(f, "too many patterns to build capture info: {}", err)
+                write!(f, "too many patterns to build capture info: {err}")
             }
             TooManyGroups { pattern, minimum } => {
                 write!(
