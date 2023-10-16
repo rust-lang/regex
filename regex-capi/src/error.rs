@@ -60,7 +60,7 @@ ffi_fn! {
 ffi_fn! {
     fn rure_error_message(err: *mut Error) -> *const c_char {
         let err = unsafe { &mut *err };
-        let cmsg = match CString::new(format!("{}", err)) {
+        let cmsg = match CString::new(format!("{err}")) {
             Ok(msg) => msg,
             Err(err) => {
                 // I guess this can probably happen if the regex itself has a
