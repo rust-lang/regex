@@ -552,7 +552,7 @@ pub(crate) mod string {
 
         /// This configures verbose mode for the entire pattern.
         ///
-        /// When enabled, whitespace will treated as insignifcant in the
+        /// When enabled, whitespace will treated as insignificant in the
         /// pattern and `#` can be used to start a comment until the next new
         /// line.
         ///
@@ -1133,7 +1133,7 @@ pub(crate) mod string {
 
         /// This configures verbose mode for all of the patterns.
         ///
-        /// When enabled, whitespace will treated as insignifcant in the
+        /// When enabled, whitespace will treated as insignificant in the
         /// pattern and `#` can be used to start a comment until the next new
         /// line.
         ///
@@ -1725,7 +1725,7 @@ pub(crate) mod bytes {
 
         /// This configures verbose mode for the entire pattern.
         ///
-        /// When enabled, whitespace will treated as insignifcant in the
+        /// When enabled, whitespace will treated as insignificant in the
         /// pattern and `#` can be used to start a comment until the next new
         /// line.
         ///
@@ -2317,7 +2317,7 @@ pub(crate) mod bytes {
 
         /// This configures verbose mode for all of the patterns.
         ///
-        /// When enabled, whitespace will treated as insignifcant in the
+        /// When enabled, whitespace will treated as insignificant in the
         /// pattern and `#` can be used to start a comment until the next new
         /// line.
         ///

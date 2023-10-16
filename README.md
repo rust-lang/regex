@@ -171,7 +171,7 @@ assert!(matches.matched(6));
 ### Usage: regex internals as a library
 
 The [`regex-automata` directory](./regex-automata/) contains a crate that
-exposes all of the internal matching engines used by the `regex` crate. The
+exposes all the internal matching engines used by the `regex` crate. The
 idea is that the `regex` crate exposes a simple API for 99% of use cases, but
 `regex-automata` exposes oodles of customizable behaviors.
 
@@ -192,7 +192,7 @@ recommended for general use.
 
 ### Crate features
 
-This crate comes with several features that permit tweaking the trade off
+This crate comes with several features that permit tweaking the trade-off
 between binary size, compilation time and runtime performance. Users of this
 crate can selectively disable Unicode tables, or choose from a variety of
 optimizations performed by this crate to disable.
@@ -230,7 +230,7 @@ searches are "fast" in practice.
 
 While the first interpretation is pretty unambiguous, the second one remains
 nebulous. While nebulous, it guides this crate's architecture and the sorts of
-the trade offs it makes. For example, here are some general architectural
+the trade-offs it makes. For example, here are some general architectural
 statements that follow as a result of the goal to be "fast":
 
 * When given the choice between faster regex searches and faster _Rust compile

@@ -679,7 +679,7 @@ impl NFA {
     /// use regex_automata::{nfa::thompson::NFA, PatternID};
     ///
     /// let nfa = NFA::new(r"(a)(?P<foo>b)(c)(d)(?P<bar>e)")?;
-    /// // The first is the implicit group that is always unnammed. The next
+    /// // The first is the implicit group that is always unnamed. The next
     /// // 5 groups are the explicit groups found in the concrete syntax above.
     /// let expected = vec![None, None, Some("foo"), None, None, Some("bar")];
     /// let got: Vec<Option<&str>> =
@@ -1302,7 +1302,7 @@ impl Inner {
                         // I left the 'Dense' state type in place in case we
                         // want to revisit this, but I suspect the real way
                         // to make forward progress is a more fundamental
-                        // rearchitecting of how data in the NFA is laid out.
+                        // re-architecting of how data in the NFA is laid out.
                         // I think we should consider a single contiguous
                         // allocation instead of all this indirection and
                         // potential heap allocations for every state. But this

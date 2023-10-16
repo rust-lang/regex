@@ -71,7 +71,7 @@ fn fail_branch_prevents_match() {
 // Basically, the NFA compiler works in two phases. The first phase builds
 // a more complicated-but-simpler-to-construct sequence of NFA states that
 // includes unconditional epsilon transitions. As part of converting this
-// sequence to the "final" NFA, we remove those unconditional espilon
+// sequence to the "final" NFA, we remove those unconditional epsilon
 // transition. The code responsible for doing this follows every chain of
 // these transitions and remaps the state IDs. The way we were doing this
 // before resulted in re-following every subsequent part of the chain for each

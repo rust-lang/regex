@@ -13,7 +13,7 @@ dense representations use more memory, but are faster to traverse. (Sometimes
 these lines are blurred. For example, an `NFA` might choose to represent a
 particular state in a dense fashion, and a DFA can be built using a sparse
 representation via [`sparse::DFA`](crate::dfa::sparse::DFA).
-* NFAs have espilon transitions and DFAs don't. In practice, this means that
+* NFAs have epsilon transitions and DFAs don't. In practice, this means that
 handling a single byte in a haystack with an NFA at search time may require
 visiting multiple NFA states. In a DFA, each byte only requires visiting
 a single state. Stated differently, NFAs require a variable number of CPU
