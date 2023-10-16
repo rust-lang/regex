@@ -31,7 +31,7 @@ COMMANDS:
         "half" => half::run(p),
         "match" => r#match::run(p),
         "which" => which::run(p),
-        unk => anyhow::bail!("unrecognized command '{}'", unk),
+        unk => anyhow::bail!("unrecognized command '{unk}'"),
     }
 }
 

@@ -50,9 +50,7 @@ impl std::str::FromStr for ByteSet {
         for &byte in Vec::unescape_bytes(s).iter() {
             anyhow::ensure!(
                 !seen[usize::from(byte)],
-                "saw duplicate byte 0x{:2X} in '{}'",
-                byte,
-                s,
+                "saw duplicate byte 0x{byte:2X} in '{s}'",
             );
             seen[usize::from(byte)] = true;
             set.push(byte);
@@ -96,7 +94,7 @@ impl std::str::FromStr for StartKind {
             "both" => regex_automata::dfa::StartKind::Both,
             "unanchored" => regex_automata::dfa::StartKind::Unanchored,
             "anchored" => regex_automata::dfa::StartKind::Anchored,
-            unk => anyhow::bail!("unrecognized start kind '{}'", unk),
+            unk => anyhow::bail!("unrecognized start kind '{unk}'"),
         };
         Ok(StartKind { kind })
     }
@@ -147,7 +145,7 @@ impl std::str::FromStr for MatchKind {
         let kind = match s {
             "leftmost-first" => regex_automata::MatchKind::LeftmostFirst,
             "all" => regex_automata::MatchKind::All,
-            unk => anyhow::bail!("unrecognized match kind '{}'", unk),
+            unk => anyhow::bail!("unrecognized match kind '{unk}'"),
         };
         Ok(MatchKind { kind })
     }

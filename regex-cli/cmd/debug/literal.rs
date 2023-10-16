@@ -64,8 +64,7 @@ OPTIONS:
                 ExtractKind::Suffix => seq.optimize_for_suffix_by_preference(),
                 unk => {
                     anyhow::bail!(
-                        "unsupported literal extraction kind: {:?}",
-                        unk
+                        "unsupported literal extraction kind: {unk:?}"
                     )
                 }
             }
@@ -95,10 +94,10 @@ OPTIONS:
             writeln!(out, "")?;
         }
         match seq.literals() {
-            None => writeln!(out, "{:?}", seq)?,
+            None => writeln!(out, "{seq:?}")?,
             Some(literals) => {
                 for lit in literals.iter() {
-                    writeln!(stdout(), "{:?}", lit)?;
+                    writeln!(stdout(), "{lit:?}")?;
                 }
             }
         }
@@ -127,8 +126,7 @@ impl Configurable for Literal {
                     "prefix" => ExtractKind::Prefix,
                     "suffix" => ExtractKind::Suffix,
                     unk => anyhow::bail!(
-                        "unknown value for --extract-kind: {}",
-                        unk
+                        "unknown value for --extract-kind: {unk}"
                     ),
                 };
                 self.kind = kind.clone();

@@ -17,6 +17,6 @@ ENGINES:
     match &*args::next_as_command(USAGE, p)? {
         "dense" => dfa::run_dense(p),
         "sparse" => dfa::run_sparse(p),
-        unk => anyhow::bail!("unrecognized command '{}'", unk),
+        unk => anyhow::bail!("unrecognized command '{unk}'"),
     }
 }
