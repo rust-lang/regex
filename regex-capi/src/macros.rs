@@ -18,10 +18,7 @@ macro_rules! ffi_fn {
                     } else {
                         "UNABLE TO SHOW RESULT OF PANIC.".to_owned()
                     };
-                    let _ = writeln!(
-                        &mut io::stderr(),
-                        "panic unwind caught, aborting: {:?}",
-                        msg);
+                    let _ = writeln!(&mut io::stderr(), "panic unwind caught, aborting: {msg:?}");
                     unsafe { abort() }
                 }
             }

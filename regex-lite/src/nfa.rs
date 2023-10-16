@@ -136,7 +136,7 @@ impl core::fmt::Debug for NFA {
         writeln!(f, "NFA(")?;
         writeln!(f, "pattern: {}", self.pattern)?;
         for (sid, state) in self.states.iter().enumerate() {
-            writeln!(f, "{:07?}: {:?}", sid, state)?;
+            writeln!(f, "{sid:07?}: {state:?}")?;
         }
         writeln!(f, ")")?;
         Ok(())
@@ -206,14 +206,14 @@ impl core::fmt::Debug for State {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match *self {
             State::Char { target, ch } => {
-                write!(f, "{:?} => {:?}", ch, target)
+                write!(f, "{ch:?} => {target:?}")
             }
             State::Ranges { target, ref ranges } => {
                 for (i, &(start, end)) in ranges.iter().enumerate() {
                     if i > 0 {
                         write!(f, ", ")?;
                     }
-                    write!(f, "{:?}-{:?} => {:?}", start, end, target)?;
+                    write!(f, "{start:?}-{end:?} => {target:?}")?;
                 }
                 Ok(())
             }
@@ -225,18 +225,18 @@ impl core::fmt::Debug for State {
                     if i > 0 {
                         write!(f, ", ")?;
                     }
-                    write!(f, "{:?}", sid)?;
+                    write!(f, "{sid:?}")?;
                 }
                 write!(f, ")")
             }
             State::Goto { target, look: None } => {
-                write!(f, "goto({:?})", target)
+                write!(f, "goto({target:?})")
             }
             State::Goto { target, look: Some(look) } => {
-                write!(f, "{:?} => {:?}", look, target)
+                write!(f, "{look:?} => {target:?}")
             }
             State::Capture { target, slot } => {
-                write!(f, "capture(slot={:?}) => {:?}", slot, target,)
+                write!(f, "capture(slot={slot:?}) => {target:?}")
             }
             State::Fail => write!(f, "FAIL"),
             State::Match => {
