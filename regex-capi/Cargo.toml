@@ -12,6 +12,7 @@ A C API for Rust's regular expression library.
 """
 workspace = ".."
 edition = "2021"
+rust-version = "1.65"
 
 [lib]
 name = "rure"
