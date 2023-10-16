@@ -66,7 +66,7 @@ impl Table {
         let mut wtr = tabwriter::TabWriter::new(wtr)
             .alignment(tabwriter::Alignment::Right);
         for (label, value) in self.pairs.iter() {
-            writeln!(wtr, "{}:\t{:?}", label, value)?;
+            writeln!(wtr, "{label}:\t{value:?}")?;
         }
         wtr.flush()
     }
