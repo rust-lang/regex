@@ -734,8 +734,8 @@ impl LookMatcher {
         haystack: &[u8],
         at: usize,
     ) -> bool {
-        // This used to luse LookSet::iter with Look::matches on each element,
-        // but that proved to be quite diastrous for perf. The manual "if
+        // This used to use LookSet::iter with Look::matches on each element,
+        // but that proved to be quite disastrous for perf. The manual "if
         // the set has this assertion, check it" turns out to be quite a bit
         // faster.
         if set.contains(Look::Start) {
@@ -1060,7 +1060,7 @@ impl LookMatcher {
         // try and detect this in is_word_char::{fwd,rev}, but it's not clear
         // if it's worth it. \B is, after all, rarely used. Even worse,
         // is_word_char::{fwd,rev} could do its own UTF-8 decoding, and so this
-        // will wind up doing UTF-8 decoding twice. Owch. We could fix this
+        // will wind up doing UTF-8 decoding twice. Ouch. We could fix this
         // with more code complexity, but it just doesn't feel worth it for \B.
         //
         // And in particular, we do *not* have to do this with \b, because \b
