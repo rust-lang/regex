@@ -2000,7 +2000,7 @@ impl<'h> core::ops::Index<usize> for Captures<'h> {
     fn index<'a>(&'a self, i: usize) -> &'a str {
         self.get(i)
             .map(|m| m.as_str())
-            .unwrap_or_else(|| panic!("no group at index '{}'", i))
+            .unwrap_or_else(|| panic!("no group at index '{i}'"))
     }
 }
 
@@ -2026,7 +2026,7 @@ impl<'h, 'n> core::ops::Index<&'n str> for Captures<'h> {
     fn index<'a>(&'a self, name: &'n str) -> &'a str {
         self.name(name)
             .map(|m| m.as_str())
-            .unwrap_or_else(|| panic!("no group named '{}'", name))
+            .unwrap_or_else(|| panic!("no group named '{name}'"))
     }
 }
 

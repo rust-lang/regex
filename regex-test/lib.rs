@@ -151,17 +151,17 @@ impl RegexTests {
     /// The given group name is assigned to all loaded tests.
     pub fn load_slice(&mut self, group_name: &str, data: &[u8]) -> Result<()> {
         let data = std::str::from_utf8(&data).with_context(|| {
-            format!("data in {} is not valid UTF-8", group_name)
+            format!("data in {group_name} is not valid UTF-8")
         })?;
         let mut index = 1;
         let mut tests: RegexTests =
             toml::from_str(&data).with_context(|| {
-                format!("error decoding TOML for '{}'", group_name)
+                format!("error decoding TOML for '{group_name}'")
             })?;
         for t in &mut tests.tests {
             t.group = group_name.to_string();
             if t.name.is_empty() {
-                t.name = format!("{}", index);
+                t.name = format!("{index}");
                 index += 1;
             }
             t.full_name = format!("{}/{}", t.group, t.name);
@@ -1101,7 +1101,7 @@ impl RegexTestFailureKind {
         let mut buf = String::new();
         match *self {
             RegexTestFailureKind::UserFailure { ref why } => {
-                write!(buf, "failed by implementor because: {}", why)?;
+                write!(buf, "failed by implementor because: {why}")?;
             }
             RegexTestFailureKind::IsMatch => {
                 if test.is_match() {
@@ -1140,13 +1140,13 @@ impl RegexTestFailureKind {
                 write!(buf, "expected regex to NOT compile, but it did")?;
             }
             RegexTestFailureKind::CompileError { ref err } => {
-                write!(buf, "expected regex to compile, failed: {}", err)?;
+                write!(buf, "expected regex to compile, failed: {err}")?;
             }
             RegexTestFailureKind::UnexpectedPanicCompile(ref msg) => {
-                write!(buf, "got unexpected panic while compiling:\n{}", msg)?;
+                write!(buf, "got unexpected panic while compiling:\n{msg}")?;
             }
             RegexTestFailureKind::UnexpectedPanicSearch(ref msg) => {
-                write!(buf, "got unexpected panic while searching:\n{}", msg)?;
+                write!(buf, "got unexpected panic while searching:\n{msg}")?;
             }
         }
         Ok(buf)
