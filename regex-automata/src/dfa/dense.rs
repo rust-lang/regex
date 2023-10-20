@@ -2340,8 +2340,8 @@ impl<'a> DFA<&'a [u32]> {
         // table, match states and accelerators below. If any validation fails,
         // then we return an error.
         let (dfa, nread) = unsafe { DFA::from_bytes_unchecked(slice)? };
-        dfa.tt.validate(&dfa.special)?;
-        dfa.st.validate(&dfa.tt)?;
+        dfa.tt.validate(&dfa)?;
+        dfa.st.validate(&dfa)?;
         dfa.ms.validate(&dfa)?;
         dfa.accels.validate()?;
         // N.B. dfa.special doesn't have a way to do unchecked deserialization,
@@ -3593,7 +3593,8 @@ impl<T: AsRef<[u32]>> TransitionTable<T> {
     ///
     /// That is, every state ID can be used to correctly index a state in this
     /// table.
-    fn validate(&self, sp: &Special) -> Result<(), DeserializeError> {
+    fn validate(&self, dfa: &DFA<T>) -> Result<(), DeserializeError> {
+        let sp = &dfa.special;
         for state in self.states() {
             // We check that the ID itself is well formed. That is, if it's
             // a special state then it must actually be a quit, dead, accel,
@@ -3609,6 +3610,13 @@ impl<T: AsRef<[u32]>> TransitionTable<T> {
                     return Err(DeserializeError::generic(
                         "found dense state tagged as special but \
                          wasn't actually special",
+                    ));
+                }
+                if sp.is_match_state(state.id())
+                    && dfa.match_len(state.id()) == 0
+                {
+                    return Err(DeserializeError::generic(
+                        "found match state with zero pattern IDs",
                     ));
                 }
             }
@@ -4127,10 +4135,8 @@ impl<T: AsRef<[u32]>> StartTable<T> {
     /// it against the given transition table (which must be for the same DFA).
     ///
     /// That is, every state ID can be used to correctly index a state.
-    fn validate(
-        &self,
-        tt: &TransitionTable<T>,
-    ) -> Result<(), DeserializeError> {
+    fn validate(&self, dfa: &DFA<T>) -> Result<(), DeserializeError> {
+        let tt = &dfa.tt;
         if !self.universal_start_unanchored.map_or(true, |s| tt.is_valid(s)) {
             return Err(DeserializeError::generic(
                 "found invalid universal unanchored starting state ID",
