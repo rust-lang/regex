@@ -1,6 +1,6 @@
 [package]
 name = "regex-cli"
-version = "0.1.1"  #:version
+version = "0.2.0"  #:version
 authors = ["The Rust Project Developers", "Andrew Gallant <jamslam@gmail.com>"]
 description = """
 A command line tool for debugging, ad hoc benchmarking and generating regular
