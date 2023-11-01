@@ -594,7 +594,7 @@ impl State {
         // Benchmarks suggest that binary search is just a bit faster than
         // straight linear search. Specifically when using the debug tool:
         //
-        //   hyperfine "regex-cli debug thompson -qr --no-captures '\w{90} ecurB'"
+        //   hyperfine "regex-cli debug thompson -qr --captures none '\w{90} ecurB'"
         binary_search(&self.transitions, |t| range.start <= t.range.end)
     }
 
