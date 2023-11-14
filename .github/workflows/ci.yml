@@ -58,6 +58,10 @@ jobs:
           os: ubuntu-latest
           rust: stable
           target: powerpc64-unknown-linux-gnu
+        - build: stable-mipsel
+          os: ubuntu-latest
+          rust: stable
+          target: mipsel-unknown-linux-gnu
         - build: stable-s390x
           os: ubuntu-latest
           rust: stable
