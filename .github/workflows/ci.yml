@@ -60,7 +60,7 @@ jobs:
           target: powerpc64-unknown-linux-gnu
         - build: stable-mipsel
           os: ubuntu-latest
-          rust: stable
+          rust: 1.72.0
           target: mipsel-unknown-linux-gnu
         - build: stable-s390x
           os: ubuntu-latest
