@@ -1694,13 +1694,14 @@ impl Anchored {
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 #[non_exhaustive]
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Default, Debug, Eq, PartialEq)]
 pub enum MatchKind {
     /// Report all possible matches.
     All,
     /// Report only the leftmost matches. When multiple leftmost matches exist,
     /// report the match corresponding to the part of the regex that appears
     /// first in the syntax.
+    #[default]
     LeftmostFirst,
     // There is prior art in RE2 that shows that we should be able to add
     // LeftmostLongest too. The tricky part of it is supporting ungreedy
@@ -1723,12 +1724,6 @@ impl MatchKind {
     #[cfg(feature = "alloc")]
     pub(crate) fn continue_past_first_match(&self) -> bool {
         *self == MatchKind::All
-    }
-}
-
-impl Default for MatchKind {
-    fn default() -> MatchKind {
-        MatchKind::LeftmostFirst
     }
 }
 

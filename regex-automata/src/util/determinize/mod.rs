@@ -131,7 +131,7 @@ pub(crate) fn next(
     if !state.look_need().is_empty() {
         // Add look-ahead assertions that are now true based on the current
         // input unit.
-        let mut look_have = state.look_have().clone();
+        let mut look_have = state.look_have();
         match unit.as_u8() {
             Some(b'\r') => {
                 if !rev || !state.is_half_crlf() {
