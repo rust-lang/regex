@@ -234,6 +234,6 @@ impl<'a> Iterator for SparseSetIter<'a> {
 
     #[cfg_attr(feature = "perf-inline", inline(always))]
     fn next(&mut self) -> Option<StateID> {
-        self.0.next().map(|&id| id)
+        self.0.next().copied()
     }
 }
