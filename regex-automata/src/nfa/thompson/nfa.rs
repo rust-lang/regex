@@ -1841,14 +1841,12 @@ impl SparseTransitions {
         // This is an alternative implementation that uses binary search. In
         // some ad hoc experiments, like
         //
-        //   smallishru=OpenSubtitles2018.raw.sample.smallish.ru
-        //   regex-cli find nfa thompson pikevm -b "@$smallishru" '\b\w+\b'
+        //   regex-cli find match pikevm -b -p '\b\w+\b' non-ascii-file
         //
         // I could not observe any improvement, and in fact, things seemed to
         // be a bit slower. I can see an improvement in at least one benchmark:
         //
-        //   allcpssmall=all-codepoints-utf8-10x
-        //   regex-cli find nfa thompson pikevm @$allcpssmall '\pL{100}'
+        //   regex-cli find match pikevm -b -p '\pL{100}' all-codepoints-utf8
         //
         // Where total search time goes from 3.2s to 2.4s when using binary
         // search.

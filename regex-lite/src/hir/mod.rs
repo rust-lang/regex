@@ -366,6 +366,24 @@ impl Hir {
     }
 }
 
+impl HirKind {
+    /// Returns a slice of this kind's sub-expressions, if any.
+    fn subs(&self) -> &[Hir] {
+        use core::slice::from_ref;
+
+        match *self {
+            HirKind::Empty
+            | HirKind::Char(_)
+            | HirKind::Class(_)
+            | HirKind::Look(_) => &[],
+            HirKind::Repetition(Repetition { ref sub, .. }) => from_ref(sub),
+            HirKind::Capture(Capture { ref sub, .. }) => from_ref(sub),
+            HirKind::Concat(ref subs) => subs,
+            HirKind::Alternation(ref subs) => subs,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct Class {
     pub(crate) ranges: Vec<ClassRange>,
@@ -592,6 +610,24 @@ pub(crate) enum Look {
     Word = 1 << 6,
     /// Match an ASCII-only negation of a word boundary.
     WordNegate = 1 << 7,
+    /// Match the start of an ASCII-only word boundary. That is, this matches a
+    /// position at either the beginning of the haystack or where the previous
+    /// character is not a word character and the following character is a word
+    /// character.
+    WordStart = 1 << 8,
+    /// Match the end of an ASCII-only word boundary. That is, this matches
+    /// a position at either the end of the haystack or where the previous
+    /// character is a word character and the following character is not a word
+    /// character.
+    WordEnd = 1 << 9,
+    /// Match the start half of an ASCII-only word boundary. That is, this
+    /// matches a position at either the beginning of the haystack or where the
+    /// previous character is not a word character.
+    WordStartHalf = 1 << 10,
+    /// Match the end half of an ASCII-only word boundary. That is, this
+    /// matches a position at either the end of the haystack or where the
+    /// following character is not a word character.
+    WordEndHalf = 1 << 11,
 }
 
 impl Look {
@@ -630,6 +666,30 @@ impl Look {
                 let word_after =
                     at < haystack.len() && utf8::is_word_byte(haystack[at]);
                 word_before == word_after
+            }
+            WordStart => {
+                let word_before =
+                    at > 0 && utf8::is_word_byte(haystack[at - 1]);
+                let word_after =
+                    at < haystack.len() && utf8::is_word_byte(haystack[at]);
+                !word_before && word_after
+            }
+            WordEnd => {
+                let word_before =
+                    at > 0 && utf8::is_word_byte(haystack[at - 1]);
+                let word_after =
+                    at < haystack.len() && utf8::is_word_byte(haystack[at]);
+                word_before && !word_after
+            }
+            WordStartHalf => {
+                let word_before =
+                    at > 0 && utf8::is_word_byte(haystack[at - 1]);
+                !word_before
+            }
+            WordEndHalf => {
+                let word_after =
+                    at < haystack.len() && utf8::is_word_byte(haystack[at]);
+                !word_after
             }
         }
     }
@@ -704,4 +764,46 @@ fn prev_char(ch: char) -> Option<char> {
     // OK because subtracting 1 from any valid scalar value other than 0
     // and U+E000 yields a valid scalar value.
     Some(char::from_u32(u32::from(ch).checked_sub(1)?).unwrap())
+}
+
+impl Drop for Hir {
+    fn drop(&mut self) {
+        use core::mem;
+
+        match *self.kind() {
+            HirKind::Empty
+            | HirKind::Char(_)
+            | HirKind::Class(_)
+            | HirKind::Look(_) => return,
+            HirKind::Capture(ref x) if x.sub.kind.subs().is_empty() => return,
+            HirKind::Repetition(ref x) if x.sub.kind.subs().is_empty() => {
+                return
+            }
+            HirKind::Concat(ref x) if x.is_empty() => return,
+            HirKind::Alternation(ref x) if x.is_empty() => return,
+            _ => {}
+        }
+
+        let mut stack = vec![mem::replace(self, Hir::empty())];
+        while let Some(mut expr) = stack.pop() {
+            match expr.kind {
+                HirKind::Empty
+                | HirKind::Char(_)
+                | HirKind::Class(_)
+                | HirKind::Look(_) => {}
+                HirKind::Capture(ref mut x) => {
+                    stack.push(mem::replace(&mut x.sub, Hir::empty()));
+                }
+                HirKind::Repetition(ref mut x) => {
+                    stack.push(mem::replace(&mut x.sub, Hir::empty()));
+                }
+                HirKind::Concat(ref mut x) => {
+                    stack.extend(x.drain(..));
+                }
+                HirKind::Alternation(ref mut x) => {
+                    stack.extend(x.drain(..));
+                }
+            }
+        }
+    }
 }

@@ -1,6 +1,6 @@
 [package]
 name = "regex-lite"
-version = "0.1.0"  #:version
+version = "0.1.5"  #:version
 authors = ["The Rust Project Developers", "Andrew Gallant <jamslam@gmail.com>"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/rust-lang/regex/tree/master/regex-lite"
@@ -10,11 +10,11 @@ A lightweight regex engine that optimizes for binary size and compilation time.
 """
 workspace = ".."
 edition = "2021"
-rust-version = "1.60.0"
+rust-version = "1.65"
 autotests = false
 
 # Features are documented in the "Crate features" section of the crate docs:
-# https://docs.rs/regex-syntax/*/#crate-features
+# https://docs.rs/regex-lite/*/#crate-features
 #
 # (Currently there are no supported features. 'std' is technically one, but it
 # is currently required.)

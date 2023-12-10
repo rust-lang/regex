@@ -69,9 +69,6 @@ pub(crate) fn dfa_try_search_half_rev(
             } else if dfa.is_dead_state(sid) {
                 return Ok(mat);
             } else if dfa.is_quit_state(sid) {
-                if mat.is_some() {
-                    return Ok(mat);
-                }
                 return Err(MatchError::quit(input.haystack()[at], at).into());
             }
         }
@@ -155,9 +152,6 @@ pub(crate) fn hybrid_try_search_half_rev(
             } else if sid.is_dead() {
                 return Ok(mat);
             } else if sid.is_quit() {
-                if mat.is_some() {
-                    return Ok(mat);
-                }
                 return Err(MatchError::quit(input.haystack()[at], at).into());
             }
         }
@@ -209,9 +203,6 @@ fn dfa_eoi_rev(
             let pattern = dfa.match_pattern(*sid, 0);
             *mat = Some(HalfMatch::new(pattern, sp.start));
         } else if dfa.is_quit_state(*sid) {
-            if mat.is_some() {
-                return Ok(());
-            }
             return Err(MatchError::quit(byte, sp.start - 1));
         }
     } else {
@@ -246,9 +237,6 @@ fn hybrid_eoi_rev(
             let pattern = dfa.match_pattern(cache, *sid, 0);
             *mat = Some(HalfMatch::new(pattern, sp.start));
         } else if sid.is_quit() {
-            if mat.is_some() {
-                return Ok(());
-            }
             return Err(MatchError::quit(byte, sp.start - 1));
         }
     } else {

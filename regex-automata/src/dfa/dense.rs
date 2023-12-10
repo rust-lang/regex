@@ -30,7 +30,7 @@ use crate::{
 use crate::{
     dfa::{
         accel::Accels,
-        automaton::{fmt_state_indicator, Automaton},
+        automaton::{fmt_state_indicator, Automaton, StartError},
         special::Special,
         start::StartKind,
         DEAD,
@@ -40,8 +40,8 @@ use crate::{
         int::{Pointer, Usize},
         prefilter::Prefilter,
         primitives::{PatternID, StateID},
-        search::{Anchored, Input, MatchError},
-        start::{Start, StartByteMap},
+        search::Anchored,
+        start::{self, Start, StartByteMap},
         wire::{self, DeserializeError, Endian, SerializeError},
     },
 };
@@ -66,8 +66,9 @@ const VERSION: u32 = 2;
 ///
 /// The default configuration guarantees that a search will never return
 /// a "quit" error, although it is possible for a search to fail if
-/// [`Config::starts_for_each_pattern`] wasn't enabled (which it is not by
-/// default) and an [`Anchored::Pattern`] mode is requested via [`Input`].
+/// [`Config::starts_for_each_pattern`] wasn't enabled (which it is
+/// not by default) and an [`Anchored::Pattern`] mode is requested via
+/// [`Input`](crate::Input).
 #[cfg(feature = "dfa-build")]
 #[derive(Clone, Debug, Default)]
 pub struct Config {
@@ -113,8 +114,7 @@ impl Config {
     /// make searching slower than it otherwise would be if the transitions
     /// that leave accelerated states are traversed frequently.
     ///
-    /// See [`Automaton::accelerator`](crate::dfa::Automaton::accelerator) for
-    /// an example.
+    /// See [`Automaton::accelerator`] for an example.
     ///
     /// This is enabled by default.
     pub fn accelerate(mut self, yes: bool) -> Config {
@@ -882,20 +882,20 @@ impl Config {
     /// # if !cfg!(target_pointer_width = "64") { return Ok(()); } // see #1039
     /// use regex_automata::{dfa::{dense, Automaton}, Input};
     ///
-    /// // 600KB isn't enough!
+    /// // 700KB isn't enough!
     /// dense::Builder::new()
     ///     .configure(dense::Config::new()
-    ///         .determinize_size_limit(Some(600_000))
+    ///         .determinize_size_limit(Some(700_000))
     ///     )
     ///     .build(r"\w{20}")
     ///     .unwrap_err();
     ///
-    /// // ... but 700KB probably is!
+    /// // ... but 800KB probably is!
     /// // (Note that auxiliary storage sizes aren't necessarily stable between
     /// // releases.)
     /// let dfa = dense::Builder::new()
     ///     .configure(dense::Config::new()
-    ///         .determinize_size_limit(Some(700_000))
+    ///         .determinize_size_limit(Some(800_000))
     ///     )
     ///     .build(r"\w{20}")?;
     /// let haystack = "A".repeat(20).into_bytes();
@@ -1228,13 +1228,14 @@ impl Builder {
         } else {
             let mut set = nfa.byte_class_set().clone();
             // It is important to distinguish any "quit" bytes from all other
-            // bytes. Otherwise, a non-quit byte may end up in the same class
-            // as a quit byte, and thus cause the DFA stop when it shouldn't.
+            // bytes. Otherwise, a non-quit byte may end up in the same
+            // class as a quit byte, and thus cause the DFA to stop when it
+            // shouldn't.
             //
             // Test case:
             //
-            //   regex-cli find hybrid regex -w @conn.json.1000x.log \
-            //     '^#' '\b10\.55\.182\.100\b'
+            //   regex-cli find match dense --unicode-word-boundary \
+            //     -p '^#' -p '\b10\.55\.182\.100\b' -y @conn.json.1000x.log
             if !quitset.is_empty() {
                 set.add_set(&quitset);
             }
@@ -2339,12 +2340,30 @@ impl<'a> DFA<&'a [u32]> {
         // table, match states and accelerators below. If any validation fails,
         // then we return an error.
         let (dfa, nread) = unsafe { DFA::from_bytes_unchecked(slice)? };
-        dfa.tt.validate(&dfa.special)?;
-        dfa.st.validate(&dfa.tt)?;
+        dfa.tt.validate(&dfa)?;
+        dfa.st.validate(&dfa)?;
         dfa.ms.validate(&dfa)?;
         dfa.accels.validate()?;
         // N.B. dfa.special doesn't have a way to do unchecked deserialization,
         // so it has already been validated.
+        for state in dfa.states() {
+            // If the state is an accel state, then it must have a non-empty
+            // accelerator.
+            if dfa.is_accel_state(state.id()) {
+                let index = dfa.accelerator_index(state.id());
+                if index >= dfa.accels.len() {
+                    return Err(DeserializeError::generic(
+                        "found DFA state with invalid accelerator index",
+                    ));
+                }
+                let needles = dfa.accels.needles(index);
+                if !(1 <= needles.len() && needles.len() <= 3) {
+                    return Err(DeserializeError::generic(
+                        "accelerator needles has invalid length",
+                    ));
+                }
+            }
+        }
         Ok((dfa, nread))
     }
 
@@ -2885,31 +2904,33 @@ impl OwnedDFA {
     fn set_universal_starts(&mut self) {
         assert_eq!(6, Start::len(), "expected 6 start configurations");
 
-        let start_id = |dfa: &mut OwnedDFA, inp: &Input<'_>, start: Start| {
+        let start_id = |dfa: &mut OwnedDFA,
+                        anchored: Anchored,
+                        start: Start| {
             // This OK because we only call 'start' under conditions
             // in which we know it will succeed.
-            dfa.st.start(inp, start).expect("valid Input configuration")
+            dfa.st.start(anchored, start).expect("valid Input configuration")
         };
         if self.start_kind().has_unanchored() {
-            let inp = Input::new("").anchored(Anchored::No);
-            let sid = start_id(self, &inp, Start::NonWordByte);
-            if sid == start_id(self, &inp, Start::WordByte)
-                && sid == start_id(self, &inp, Start::Text)
-                && sid == start_id(self, &inp, Start::LineLF)
-                && sid == start_id(self, &inp, Start::LineCR)
-                && sid == start_id(self, &inp, Start::CustomLineTerminator)
+            let anchor = Anchored::No;
+            let sid = start_id(self, anchor, Start::NonWordByte);
+            if sid == start_id(self, anchor, Start::WordByte)
+                && sid == start_id(self, anchor, Start::Text)
+                && sid == start_id(self, anchor, Start::LineLF)
+                && sid == start_id(self, anchor, Start::LineCR)
+                && sid == start_id(self, anchor, Start::CustomLineTerminator)
             {
                 self.st.universal_start_unanchored = Some(sid);
             }
         }
         if self.start_kind().has_anchored() {
-            let inp = Input::new("").anchored(Anchored::Yes);
-            let sid = start_id(self, &inp, Start::NonWordByte);
-            if sid == start_id(self, &inp, Start::WordByte)
-                && sid == start_id(self, &inp, Start::Text)
-                && sid == start_id(self, &inp, Start::LineLF)
-                && sid == start_id(self, &inp, Start::LineCR)
-                && sid == start_id(self, &inp, Start::CustomLineTerminator)
+            let anchor = Anchored::Yes;
+            let sid = start_id(self, anchor, Start::NonWordByte);
+            if sid == start_id(self, anchor, Start::WordByte)
+                && sid == start_id(self, anchor, Start::Text)
+                && sid == start_id(self, anchor, Start::LineLF)
+                && sid == start_id(self, anchor, Start::LineCR)
+                && sid == start_id(self, anchor, Start::CustomLineTerminator)
             {
                 self.st.universal_start_anchored = Some(sid);
             }
@@ -3216,35 +3237,21 @@ unsafe impl<T: AsRef<[u32]>> Automaton for DFA<T> {
     }
 
     #[cfg_attr(feature = "perf-inline", inline(always))]
-    fn start_state_forward(
+    fn start_state(
         &self,
-        input: &Input<'_>,
-    ) -> Result<StateID, MatchError> {
-        if !self.quitset.is_empty() && input.start() > 0 {
-            let offset = input.start() - 1;
-            let byte = input.haystack()[offset];
-            if self.quitset.contains(byte) {
-                return Err(MatchError::quit(byte, offset));
+        config: &start::Config,
+    ) -> Result<StateID, StartError> {
+        let anchored = config.get_anchored();
+        let start = match config.get_look_behind() {
+            None => Start::Text,
+            Some(byte) => {
+                if !self.quitset.is_empty() && self.quitset.contains(byte) {
+                    return Err(StartError::quit(byte));
+                }
+                self.st.start_map.get(byte)
             }
-        }
-        let start = self.st.start_map.fwd(&input);
-        self.st.start(input, start)
-    }
-
-    #[cfg_attr(feature = "perf-inline", inline(always))]
-    fn start_state_reverse(
-        &self,
-        input: &Input<'_>,
-    ) -> Result<StateID, MatchError> {
-        if !self.quitset.is_empty() && input.end() < input.haystack().len() {
-            let offset = input.end();
-            let byte = input.haystack()[offset];
-            if self.quitset.contains(byte) {
-                return Err(MatchError::quit(byte, offset));
-            }
-        }
-        let start = self.st.start_map.rev(&input);
-        self.st.start(input, start)
+        };
+        self.st.start(anchored, start)
     }
 
     #[cfg_attr(feature = "perf-inline", inline(always))]
@@ -3586,7 +3593,8 @@ impl<T: AsRef<[u32]>> TransitionTable<T> {
     ///
     /// That is, every state ID can be used to correctly index a state in this
     /// table.
-    fn validate(&self, sp: &Special) -> Result<(), DeserializeError> {
+    fn validate(&self, dfa: &DFA<T>) -> Result<(), DeserializeError> {
+        let sp = &dfa.special;
         for state in self.states() {
             // We check that the ID itself is well formed. That is, if it's
             // a special state then it must actually be a quit, dead, accel,
@@ -3602,6 +3610,13 @@ impl<T: AsRef<[u32]>> TransitionTable<T> {
                     return Err(DeserializeError::generic(
                         "found dense state tagged as special but \
                          wasn't actually special",
+                    ));
+                }
+                if sp.is_match_state(state.id())
+                    && dfa.match_len(state.id()) == 0
+                {
+                    return Err(DeserializeError::generic(
+                        "found match state with zero pattern IDs",
                     ));
                 }
             }
@@ -4120,10 +4135,8 @@ impl<T: AsRef<[u32]>> StartTable<T> {
     /// it against the given transition table (which must be for the same DFA).
     ///
     /// That is, every state ID can be used to correctly index a state.
-    fn validate(
-        &self,
-        tt: &TransitionTable<T>,
-    ) -> Result<(), DeserializeError> {
+    fn validate(&self, dfa: &DFA<T>) -> Result<(), DeserializeError> {
+        let tt = &dfa.tt;
         if !self.universal_start_unanchored.map_or(true, |s| tt.is_valid(s)) {
             return Err(DeserializeError::generic(
                 "found invalid universal unanchored starting state ID",
@@ -4180,28 +4193,27 @@ impl<T: AsRef<[u32]>> StartTable<T> {
     #[cfg_attr(feature = "perf-inline", inline(always))]
     fn start(
         &self,
-        input: &Input<'_>,
+        anchored: Anchored,
         start: Start,
-    ) -> Result<StateID, MatchError> {
+    ) -> Result<StateID, StartError> {
         let start_index = start.as_usize();
-        let mode = input.get_anchored();
-        let index = match mode {
+        let index = match anchored {
             Anchored::No => {
                 if !self.kind.has_unanchored() {
-                    return Err(MatchError::unsupported_anchored(mode));
+                    return Err(StartError::unsupported_anchored(anchored));
                 }
                 start_index
             }
             Anchored::Yes => {
                 if !self.kind.has_anchored() {
-                    return Err(MatchError::unsupported_anchored(mode));
+                    return Err(StartError::unsupported_anchored(anchored));
                 }
                 self.stride + start_index
             }
             Anchored::Pattern(pid) => {
                 let len = match self.pattern_len {
                     None => {
-                        return Err(MatchError::unsupported_anchored(mode))
+                        return Err(StartError::unsupported_anchored(anchored))
                     }
                     Some(len) => len,
                 };
@@ -5086,6 +5098,8 @@ impl core::fmt::Display for BuildError {
 
 #[cfg(all(test, feature = "syntax", feature = "dfa-build"))]
 mod tests {
+    use crate::{Input, MatchError};
+
     use super::*;
 
     #[test]

@@ -1573,10 +1573,15 @@ impl<'h> From<Match<'h>> for core::ops::Range<usize> {
 
 /// Represents the capture groups for a single match.
 ///
-/// Capture groups refer to parts of a regex enclosed in parentheses. They can
-/// be optionally named. The purpose of capture groups is to be able to
-/// reference different parts of a match based on the original pattern. For
-/// example, say you want to match the individual letters in a 5-letter word:
+/// Capture groups refer to parts of a regex enclosed in parentheses. They
+/// can be optionally named. The purpose of capture groups is to be able to
+/// reference different parts of a match based on the original pattern. In
+/// essence, a `Captures` is a container of [`Match`] values for each group
+/// that participated in a regex match. Each `Match` can be looked up by either
+/// its capture group index or name (if it has one).
+///
+/// For example, say you want to match the individual letters in a 5-letter
+/// word:
 ///
 /// ```text
 /// (?<first>\w)(\w)(?:\w)\w(?<last>\w)
@@ -2040,7 +2045,10 @@ impl<'h, 'n> core::ops::Index<&'n str> for Captures<'h> {
 ///
 /// // Asking for an invalid capture group always returns None.
 /// assert_eq!(None, locs.get(3));
+/// # // literals are too big for 32-bit usize: #1041
+/// # #[cfg(target_pointer_width = "64")]
 /// assert_eq!(None, locs.get(34973498648));
+/// # #[cfg(target_pointer_width = "64")]
 /// assert_eq!(None, locs.get(9944060567225171988));
 /// ```
 #[derive(Clone, Debug)]

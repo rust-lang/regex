@@ -1,6 +1,6 @@
 [package]
 name = "regex-cli"
-version = "0.1.0"  #:version
+version = "0.2.0"  #:version
 authors = ["The Rust Project Developers", "Andrew Gallant <jamslam@gmail.com>"]
 description = """
 A command line tool for debugging, ad hoc benchmarking and generating regular
@@ -12,6 +12,7 @@ license = "MIT OR Apache-2.0"
 categories = ["text-processing"]
 autotests = false
 edition = "2021"
+rust-version = "1.65"
 
 [[bin]]
 name = "regex-cli"
@@ -28,8 +29,8 @@ lexopt = "0.3.0"
 log = { version = "0.4.17", features = ["std"] }
 memmap2 = "0.5.10"
 regex = { version = "1.9.0", path = ".." }
-regex-automata = { version = "0.3.0", path = "../regex-automata", features = ["logging"] }
+regex-automata = { version = "0.4.0", path = "../regex-automata", features = ["logging"] }
 regex-lite = { version = "0.1.0", path = "../regex-lite" }
-regex-syntax = { version = "0.7.3", path = "../regex-syntax" }
+regex-syntax = { version = "0.8.0", path = "../regex-syntax" }
 tabwriter = { version = "1.2.1", features = ["ansi_formatting"] }
 textwrap = { version = "0.16.0", default-features = false }

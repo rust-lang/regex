@@ -168,18 +168,6 @@ The following features are available:
 #![forbid(unsafe_code)]
 #![deny(missing_docs, rustdoc::broken_intra_doc_links)]
 #![warn(missing_debug_implementations)]
-// MSRV(1.62): Allow unused warnings. Needed for the 'allow' below,
-// since the warning is no longer triggered in newer Rust releases.
-// Once the 'allow(mutable_borrow_reservation_conflict)' can be
-// removed, we can remove the 'allow(renamed_and_removed_lints)' too.
-#![allow(renamed_and_removed_lints)]
-// MSRV(1.62): This gets triggered on Rust <1.62, and since our MSRV
-// is Rust 1.60 at the time of writing, a warning is displayed. But
-// the lang team decided the code pattern flagged by this warning is
-// OK, so the warning is innocuous. We can remove this explicit allow
-// once we get to a Rust release where the warning is no longer
-// triggered. I believe that's Rust 1.62.
-#![allow(mutable_borrow_reservation_conflict)]
 #![cfg_attr(docsrs, feature(doc_auto_cfg))]
 
 #[cfg(any(test, feature = "std"))]
@@ -334,6 +322,9 @@ pub fn is_escapeable_character(c: char) -> bool {
         // escapeable, \< and \> will result in a parse error. Thus, we can
         // turn them into something else in the future without it being a
         // backwards incompatible change.
+        //
+        // OK, now we support \< and \>, and we need to retain them as *not*
+        // escapeable here since the escape sequence is significant.
         '<' | '>' => false,
         _ => true,
     }
@@ -381,7 +372,7 @@ pub fn try_is_word_character(
 /// Returns true if and only if the given character is an ASCII word character.
 ///
 /// An ASCII word character is defined by the following character class:
-/// `[_0-9a-zA-Z]'.
+/// `[_0-9a-zA-Z]`.
 pub fn is_word_byte(c: u8) -> bool {
     match c {
         b'_' | b'0'..=b'9' | b'a'..=b'z' | b'A'..=b'Z' => true,

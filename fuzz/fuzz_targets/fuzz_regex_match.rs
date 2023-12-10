@@ -54,6 +54,9 @@ re.is_match({haystack:?});
 fuzz_target!(|case: FuzzCase| -> Corpus {
     let _ = env_logger::try_init();
 
+    if case.pattern.len() > (16 * (1 << 10)) {
+        return Corpus::Reject;
+    }
     if case.haystack.len() > (16 * (1 << 10)) {
         return Corpus::Reject;
     }
@@ -65,8 +68,11 @@ fuzz_target!(|case: FuzzCase| -> Corpus {
         .ignore_whitespace(case.ignore_whitespace)
         .unicode(case.unicode)
         .octal(case.octal)
-        .size_limit(1<<18)
-        .build() else { return Corpus::Reject };
+        .size_limit(1 << 18)
+        .build()
+    else {
+        return Corpus::Reject;
+    };
     re.is_match(case.haystack);
     Corpus::Keep
 });

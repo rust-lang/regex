@@ -70,11 +70,11 @@ impl Configurable for Config {
             Arg::Long("shrink") => {
                 self.thompson = self.thompson.clone().shrink(true);
             }
-            Arg::Long("no-captures") => {
-                self.thompson = self
-                    .thompson
-                    .clone()
-                    .which_captures(thompson::WhichCaptures::None);
+            Arg::Long("captures") => {
+                let which: flags::WhichCaptures =
+                    args::parse(p, "--captures")?;
+                self.thompson =
+                    self.thompson.clone().which_captures(which.which);
             }
             Arg::Long("line-terminator") => {
                 let byte: flags::OneByte =
@@ -136,19 +136,7 @@ spent shrinking the NFA can lead to far larger savings in the subsequent DFA
 determinization.
 "#,
             ),
-            Usage::new(
-                "--no-captures",
-                "Disable capture states.",
-                r#"
-Disables capture states. By default, NFAs include special "capture" states that
-instruct some regex engines (like the PikeVM) to record offset positions in
-ancillary state.
-
-It can be useful to disable capture states in order to reduce "clutter" in the
-automaton when debugging it. Also, at time of writing, reverse NFAs require
-that capture groups are disabled.
-"#,
-            ),
+            flags::WhichCaptures::USAGE,
             Usage::new(
                 "--line-terminator",
                 "Set the line terminator used by line anchors.",

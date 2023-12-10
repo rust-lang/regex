@@ -404,7 +404,9 @@ fn count_capturing_groups_ast(ast: &regex_syntax::ast::Ast) -> usize {
         | Ast::Literal(_)
         | Ast::Dot(_)
         | Ast::Assertion(_)
-        | Ast::Class(_) => 0,
+        | Ast::ClassUnicode(_)
+        | Ast::ClassPerl(_)
+        | Ast::ClassBracketed(_) => 0,
         Ast::Repetition(ref rep) => count_capturing_groups_ast(&*rep.ast),
         Ast::Group(ref group) => {
             let this = if group.is_capturing() { 1 } else { 0 };

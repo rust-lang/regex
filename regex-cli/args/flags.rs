@@ -152,3 +152,55 @@ impl std::str::FromStr for MatchKind {
         Ok(MatchKind { kind })
     }
 }
+
+/// Provides an implementation of the --captures flag, for use with Thompson
+/// NFA configuration.
+#[derive(Debug)]
+pub struct WhichCaptures {
+    pub which: regex_automata::nfa::thompson::WhichCaptures,
+}
+
+impl WhichCaptures {
+    pub const USAGE: Usage = Usage::new(
+        "--captures <which>",
+        "One of: all, implicit or none.",
+        r#"
+Selects which capture states should be included in the Thompson NFA. The
+choices are 'all' (the default), 'implicit' or 'none'.
+
+'all' means that both explicit and implicit capture states are included.
+
+'implicit' means that only implicit capture states are included. That is, the
+Thompson NFA will only be able to report the overall match offsets and not the
+match offsets of each explicit capture group.
+
+'none' means that no capture states will be included. This is useful when
+capture states aren't needed (like when building a DFA) or if they aren't
+supported (like when building a reverse NFA).
+"#,
+    );
+}
+
+impl Default for WhichCaptures {
+    fn default() -> WhichCaptures {
+        WhichCaptures {
+            which: regex_automata::nfa::thompson::WhichCaptures::All,
+        }
+    }
+}
+
+impl std::str::FromStr for WhichCaptures {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> anyhow::Result<WhichCaptures> {
+        let which = match s {
+            "all" => regex_automata::nfa::thompson::WhichCaptures::All,
+            "implicit" => {
+                regex_automata::nfa::thompson::WhichCaptures::Implicit
+            }
+            "none" => regex_automata::nfa::thompson::WhichCaptures::None,
+            unk => anyhow::bail!("unrecognized captures option '{}'", unk),
+        };
+        Ok(WhichCaptures { which })
+    }
+}

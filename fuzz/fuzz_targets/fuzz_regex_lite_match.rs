@@ -57,8 +57,11 @@ fuzz_target!(|case: FuzzCase| -> Corpus {
         .dot_matches_new_line(case.dot_matches_new_line)
         .swap_greed(case.swap_greed)
         .ignore_whitespace(case.ignore_whitespace)
-        .size_limit(1<<20)
-        .build() else { return Corpus::Reject };
+        .size_limit(1 << 16)
+        .build()
+    else {
+        return Corpus::Reject;
+    };
     re.is_match(case.haystack);
     Corpus::Keep
 });

@@ -2706,7 +2706,7 @@ impl Config {
     /// you're compiling untrusted patterns.
     ///
     /// Note that this limit is applied to _each_ NFA built, and if any of
-    /// them excceed the limit, then construction will fail. This limit does
+    /// them exceed the limit, then construction will fail. This limit does
     /// _not_ correspond to the total memory used by all NFAs in the meta regex
     /// engine.
     ///
@@ -3640,8 +3640,8 @@ mod tests {
     // I found this in the course of building out the benchmark suite for
     // rebar.
     #[test]
-    fn regression() {
-        env_logger::init();
+    fn regression_suffix_literal_count() {
+        let _ = env_logger::try_init();
 
         let re = Regex::new(r"[a-zA-Z]+ing").unwrap();
         assert_eq!(1, re.find_iter("tingling").count());
