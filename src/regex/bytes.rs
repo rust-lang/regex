@@ -1989,7 +1989,7 @@ impl<'h> core::ops::Index<usize> for Captures<'h> {
 /// The haystack substring returned can't outlive the `Captures` object if this
 /// method is used, because of how `Index` is defined (normally `a[i]` is part
 /// of `a` and can't outlive it). To work around this limitation, do that, use
-/// [`Captures::get`] instead.
+/// [`Captures::name`] instead.
 ///
 /// `'h` is the lifetime of the matched haystack, but the lifetime of the
 /// `&str` returned by this implementation is the lifetime of the `Captures`
