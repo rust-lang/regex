@@ -79,7 +79,7 @@ jobs:
           rust: stable-x86_64-gnu
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
     - name: Install Rust
       uses: dtolnay/rust-toolchain@master
       with:
@@ -137,30 +137,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
     - name: Install Rust
       uses: dtolnay/rust-toolchain@master
       with:
         toolchain: 1.65.0
-    # The memchr 2.6 release purportedly bumped its MSRV to Rust 1.60, but it
-    # turned out that on aarch64, it was using something that wasn't stabilized
-    # until Rust 1.61[1]. (This was an oversight on my part. I had previously
-    # thought everything I needed was on Rust 1.60.) To resolve that, I just
-    # bumped memchr's MSRV to 1.61. Since it was so soon after the memchr 2.6
-    # release, I treated this as a bugfix.
-    #
-    # But the regex crate's MSRV is at Rust 1.60, and it now depends on at
-    # least memchr 2.6 (to make use of its `alloc` feature). So we can't set
-    # a lower minimal version. And I can't just bump the MSRV in a patch
-    # release as a bug fix because regex 1.9 was released quite some time ago.
-    # I could just release regex 1.10 and bump the MSRV there, but eh, I don't
-    # want to put out another minor version release just for this.
-    #
-    # So... pin memchr to 2.6.2, which at least works on x86-64 on Rust 1.60.
-    #
-    # [1]: https://github.com/BurntSushi/memchr/issues/136
-    - name: Pin memchr to 2.6.2
-      run: cargo update -p memchr --precise 2.6.2
     - name: Basic build
       run: cargo build --verbose
     - name: Build docs
@@ -177,7 +158,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
     - name: Install Rust
       uses: dtolnay/rust-toolchain@master
       with:
@@ -190,7 +171,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
     - name: Install Rust
       uses: dtolnay/rust-toolchain@master
       with:
@@ -203,7 +184,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
     - name: Install Rust
       uses: dtolnay/rust-toolchain@master
       with:
@@ -216,7 +197,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
     - name: Install Rust
       uses: dtolnay/rust-toolchain@master
       with:
@@ -231,7 +212,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
     - name: Install Rust
       uses: dtolnay/rust-toolchain@master
       with:
@@ -248,7 +229,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
     - name: Install Rust
       uses: dtolnay/rust-toolchain@master
       with:
