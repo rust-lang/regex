@@ -1,3 +1,14 @@
+1.10.3 (TBD)
+============
+This is a new patch release that fixes the feature configuration of optional
+dependencies.
+
+Bug fixes:
+
+* [BUG #1147](https://github.com/rust-lang/regex/issues/1147):
+Set `default-features=false` for the `memchr` and `aho-corasick` dependencies.
+
+
 1.10.2 (2023-10-16)
 ===================
 This is a new patch release that fixes a search regression where incorrect
