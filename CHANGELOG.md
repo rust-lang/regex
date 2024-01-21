@@ -1,5 +1,5 @@
-1.10.3 (TBD)
-============
+1.10.3 (2024-01-21)
+===================
 This is a new patch release that fixes the feature configuration of optional
 dependencies, and fixes an unsound use of bounds check elision.
 
