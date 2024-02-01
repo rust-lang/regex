@@ -1,3 +1,16 @@
+1.10.3 (2024-01-21)
+===================
+This is a new patch release that fixes the feature configuration of optional
+dependencies, and fixes an unsound use of bounds check elision.
+
+Bug fixes:
+
+* [BUG #1147](https://github.com/rust-lang/regex/issues/1147):
+Set `default-features=false` for the `memchr` and `aho-corasick` dependencies.
+* [BUG #1154](https://github.com/rust-lang/regex/pull/1154):
+Fix unsound bounds check elision.
+
+
 1.10.2 (2023-10-16)
 ===================
 This is a new patch release that fixes a search regression where incorrect
