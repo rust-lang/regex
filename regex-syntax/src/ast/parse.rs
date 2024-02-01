@@ -3419,7 +3419,7 @@ bar
         );
         assert_eq!(
             parser_empty_min_range(r"a{,9}").parse(),
-            Ok(Ast::Repetition(ast::Repetition {
+            Ok(Ast::repetition(ast::Repetition {
                 span: span(0..5),
                 op: ast::RepetitionOp {
                     span: span(1..5),
