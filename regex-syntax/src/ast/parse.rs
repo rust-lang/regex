@@ -4651,8 +4651,8 @@ bar
         assert_eq!(
             parser(r"\b{ ").parse().unwrap_err(),
             TestError {
-                span: span(4..4),
-                kind: ast::ErrorKind::RepetitionCountDecimalEmpty,
+                span: span(2..4),
+                kind: ast::ErrorKind::RepetitionCountUnclosed,
             }
         );
         // In this case, we got some valid chars that makes it look like the
