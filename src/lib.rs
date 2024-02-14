@@ -833,7 +833,7 @@ assert_eq!((m.start(), m.end()), (5, 5));
 ```
 
 When both CRLF mode and multi-line mode are enabled, then `^` and `$` will
-match either `\r` and `\n`, but never in the middle of a `\r\n`:
+match either `\r` or `\n`, but never in the middle of a `\r\n`:
 
 ```
 use regex::Regex;
