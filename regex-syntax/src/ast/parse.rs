@@ -2405,8 +2405,6 @@ mod tests {
 
     use alloc::format;
 
-    use crate::ast::{self, Ast, Position, Span};
-
     use super::*;
 
     // Our own assert_eq, which has slightly better formatting (but honestly

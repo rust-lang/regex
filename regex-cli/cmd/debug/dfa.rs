@@ -5,7 +5,7 @@ use crate::{
     util::{self, Table},
 };
 
-use {lexopt, regex_automata::dfa::Automaton};
+use regex_automata::dfa::Automaton;
 
 pub fn run_dense(p: &mut lexopt::Parser) -> anyhow::Result<()> {
     const USAGE: &'static str = "\

@@ -99,9 +99,7 @@ See [`MatchKind`] for more details. This is an optional field and defaults to
 /// For this reason, `anyhow` is a public dependency and is re-exported here.
 pub extern crate anyhow;
 
-use std::{
-    borrow::Borrow, collections::HashSet, convert::TryFrom, fs, path::Path,
-};
+use std::{borrow::Borrow, collections::HashSet, fs, path::Path};
 
 use {
     anyhow::{bail, Context, Result},

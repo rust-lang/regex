@@ -1876,11 +1876,11 @@ impl Utf8Node {
 
 #[cfg(test)]
 mod tests {
-    use alloc::{vec, vec::Vec};
+    use alloc::vec;
 
     use crate::{
-        nfa::thompson::{SparseTransitions, State, Transition, NFA},
-        util::primitives::{PatternID, SmallIndex, StateID},
+        nfa::thompson::{SparseTransitions, State},
+        util::primitives::SmallIndex,
     };
 
     use super::*;
