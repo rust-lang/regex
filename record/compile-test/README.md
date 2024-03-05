@@ -1,5 +1,5 @@
 This directory contains the results of compilation tests. Specifically,
-the results are from testing both the from scratch compilation time and
+the results are from testing both the from-scratch compilation time and
 relative binary size increases of various features for both the `regex` and
 `regex-automata` crates.
 
