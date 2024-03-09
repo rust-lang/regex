@@ -338,7 +338,7 @@ impl Regex {
     /// The `0`th capture group is always unnamed, so it must always be
     /// accessed with `get(0)` or `[0]`.
     ///
-    /// Finally, one other way to to get the matched substrings is with the
+    /// Finally, one other way to get the matched substrings is with the
     /// [`Captures::extract`] API:
     ///
     /// ```
