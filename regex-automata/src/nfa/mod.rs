@@ -46,7 +46,7 @@ the guarantee that given any state and a character in a haystack, there is at
 most one transition defined for it. (Although there may be many epsilon
 transitions.)
 
-It possible that other types of NFAs will be added in the future, such as a
+It's possible that other types of NFAs will be added in the future, such as a
 [Glushkov NFA](https://en.wikipedia.org/wiki/Glushkov%27s_construction_algorithm).
 But currently, this crate only provides a Thompson NFA.
 */
