@@ -965,7 +965,7 @@ impl Regex {
     /// Returns the end byte offset of the first match in the haystack given.
     ///
     /// This method may have the same performance characteristics as
-    /// `is_match`. Behaviorlly, it doesn't just report whether it match
+    /// `is_match`. Behaviorally, it doesn't just report whether it match
     /// occurs, but also the end offset for a match. In particular, the offset
     /// returned *may be shorter* than the proper end of the leftmost-first
     /// match that you would find via [`Regex::find`].
