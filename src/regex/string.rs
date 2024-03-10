@@ -1549,6 +1549,12 @@ impl<'h> Match<'h> {
     }
 }
 
+impl<'h> std::fmt::Display for Match<'h> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
+}
+
 impl<'h> core::fmt::Debug for Match<'h> {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         f.debug_struct("Match")
