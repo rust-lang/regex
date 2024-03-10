@@ -18,7 +18,7 @@ use alloc::{
 use crate::{
     ast::{self, Ast, Position, Span},
     either::Either,
-    is_escapeable_character, is_meta_character,
+    is_escapable_character, is_meta_character,
 };
 
 type Result<T> = core::result::Result<T, ast::Error>;
@@ -1499,7 +1499,7 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
                 c,
             }));
         }
-        if is_escapeable_character(c) {
+        if is_escapable_character(c) {
             return Ok(Primitive::Literal(ast::Literal {
                 span,
                 kind: ast::LiteralKind::Superfluous,
