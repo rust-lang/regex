@@ -1083,7 +1083,7 @@ impl<T: AsRef<[u8]>> fmt::Debug for DFA<T> {
             fmt_state_indicator(f, self, state.id())?;
             writeln!(f, "{:06?}: {:?}", state.id().as_usize(), state)?;
         }
-        writeln!(f, "")?;
+        writeln!(f)?;
         for (i, (start_id, anchored, sty)) in self.st.iter().enumerate() {
             if i % self.st.stride == 0 {
                 match anchored {

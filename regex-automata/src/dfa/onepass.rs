@@ -2413,9 +2413,9 @@ impl core::fmt::Debug for DFA {
             }
             write!(f, ": ")?;
             debug_state_transitions(f, self, sid)?;
-            write!(f, "\n")?;
+            writeln!(f)?;
         }
-        writeln!(f, "")?;
+        writeln!(f)?;
         for (i, &sid) in self.starts.iter().enumerate() {
             if i == 0 {
                 writeln!(f, "START(ALL): {:?}", sid.as_usize())?;

@@ -1472,13 +1472,13 @@ impl fmt::Debug for Inner {
         }
         let pattern_len = self.start_pattern.len();
         if pattern_len > 1 {
-            writeln!(f, "")?;
+            writeln!(f)?;
             for pid in 0..pattern_len {
                 let sid = self.start_pattern[pid];
                 writeln!(f, "START({:06?}): {:?}", pid, sid.as_usize())?;
             }
         }
-        writeln!(f, "")?;
+        writeln!(f)?;
         writeln!(
             f,
             "transition equivalence classes: {:?}",
