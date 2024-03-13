@@ -1458,6 +1458,7 @@ impl Inner {
 
 impl fmt::Debug for Inner {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "\nCodes:\t^ - Start Anchored, > - Start Unanchored\n")?;
         writeln!(f, "thompson::NFA(")?;
         for (sid, state) in self.states.iter().with_state_ids() {
             let status = if sid == self.start_anchored {

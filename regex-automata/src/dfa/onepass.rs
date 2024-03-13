@@ -2395,6 +2395,7 @@ impl core::fmt::Debug for DFA {
             Ok(())
         }
 
+        writeln!(f, "\nCodes:\tD - Dead State, * - Match State\n")?;
         writeln!(f, "onepass::DFA(")?;
         for index in 0..self.state_len() {
             let sid = StateID::must(index);

@@ -3077,6 +3077,11 @@ impl<T: AsRef<[u32]>> DFA<T> {
 
 impl<T: AsRef<[u32]>> fmt::Debug for DFA<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(
+            f,
+            "\nCodes:\tD - Dead State, Q - Quit State, > - Start State,\
+            \n\t\tA - Accel State, * - Match State\n"
+        )?;
         writeln!(f, "dense::DFA(")?;
         for state in self.states() {
             fmt_state_indicator(f, self, state.id())?;
