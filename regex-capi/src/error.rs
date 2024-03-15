@@ -4,7 +4,6 @@ use std::fmt;
 use std::str;
 
 use libc::c_char;
-use regex;
 
 #[derive(Debug)]
 pub struct Error {
@@ -22,7 +21,7 @@ pub enum ErrorKind {
 
 impl Error {
     pub fn new(kind: ErrorKind) -> Error {
-        Error { message: None, kind: kind }
+        Error { message: None, kind }
     }
 
     pub fn is_err(&self) -> bool {
