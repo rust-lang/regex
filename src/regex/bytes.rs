@@ -651,6 +651,9 @@ impl Regex {
     /// case, this implementation will likely return a `Cow::Borrowed` value
     /// such that no allocation is performed.
     ///
+    /// When a `Cow::Borrowed` is returned, the value returned is guaranteed
+    /// to be equivalent to the `haystack` given.
+    ///
     /// # Replacement string syntax
     ///
     /// All instances of `$ref` in the replacement string are replaced with
@@ -761,6 +764,13 @@ impl Regex {
     /// replacement provided. This is the same as calling `replacen` with
     /// `limit` set to `0`.
     ///
+    /// If no match is found, then the haystack is returned unchanged. In that
+    /// case, this implementation will likely return a `Cow::Borrowed` value
+    /// such that no allocation is performed.
+    ///
+    /// When a `Cow::Borrowed` is returned, the value returned is guaranteed
+    /// to be equivalent to the `haystack` given.
+    ///
     /// The documentation for [`Regex::replace`] goes into more detail about
     /// what kinds of replacement strings are supported.
     ///
@@ -854,6 +864,13 @@ impl Regex {
     /// the replacement provided. If `limit` is `0`, then all non-overlapping
     /// matches are replaced. That is, `Regex::replace_all(hay, rep)` is
     /// equivalent to `Regex::replacen(hay, 0, rep)`.
+    ///
+    /// If no match is found, then the haystack is returned unchanged. In that
+    /// case, this implementation will likely return a `Cow::Borrowed` value
+    /// such that no allocation is performed.
+    ///
+    /// When a `Cow::Borrowed` is returned, the value returned is guaranteed
+    /// to be equivalent to the `haystack` given.
     ///
     /// The documentation for [`Regex::replace`] goes into more detail about
     /// what kinds of replacement strings are supported.
