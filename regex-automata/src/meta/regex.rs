@@ -2282,7 +2282,7 @@ impl<'r, 'h> core::iter::FusedIterator for SplitN<'r, 'h> {}
 ///
 /// Most of the regex engines in this crate require some kind of
 /// mutable state in order to execute a search. This mutable state is
-/// explicitly separated from the the core regex object (such as a
+/// explicitly separated from the core regex object (such as a
 /// [`thompson::NFA`](crate::nfa::thompson::NFA)) so that the read-only regex
 /// object can be shared across multiple threads simultaneously without any
 /// synchronization. Conversely, a `Cache` must either be duplicated if using
