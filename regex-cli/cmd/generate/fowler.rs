@@ -178,7 +178,7 @@ impl TomlTest {
             // this trade off (to this extent anyway), so it really wants all
             // capturing groups...
             //
-            // So what we do here is is look for the number of groups in the
+            // So what we do here is look for the number of groups in the
             // pattern and then just pad out the capture matches with None
             // values to make the number of capture matches equal to what we
             // would expect from the pattern. (We actually parse the regex to
