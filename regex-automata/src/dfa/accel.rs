@@ -53,6 +53,8 @@
 #[cfg(feature = "dfa-build")]
 use alloc::{vec, vec::Vec};
 
+use zerocopy::{AsBytes, FromBytes};
+
 use crate::util::{
     int::Pointer,
     memchr,
@@ -208,15 +210,9 @@ impl<'a> Accels<&'a [AccelTy]> {
         wire::check_alignment::<AccelTy>(slice)?;
         let accel_tys = &slice[..accel_tys_bytes_len];
         slice = &slice[accel_tys_bytes_len..];
-        // SAFETY: We've checked the length and alignment above, and since
-        // slice is just bytes and AccelTy is just a u32, we can safely cast to
-        // a slice of &[AccelTy].
-        let accels = unsafe {
-            core::slice::from_raw_parts(
-                accel_tys.as_ptr().cast::<AccelTy>(),
-                accel_tys_len,
-            )
-        };
+        // PANICS: We've just checked the length and alignment, so this is
+        // guaranteed to succeed.
+        let accels = <AccelTy>::slice_from(accel_tys).unwrap();
         Ok((Accels { accels }, slice.as_ptr().as_usize() - slice_start))
     }
 }
@@ -235,15 +231,7 @@ impl<A: AsRef<[AccelTy]>> Accels<A> {
 
     /// Return the bytes representing the serialization of the accelerators.
     pub fn as_bytes(&self) -> &[u8] {
-        let accels = self.accels.as_ref();
-        // SAFETY: This is safe because accels is a just a slice of AccelTy,
-        // and u8 always has a smaller alignment.
-        unsafe {
-            core::slice::from_raw_parts(
-                accels.as_ptr().cast::<u8>(),
-                accels.len() * ACCEL_TY_SIZE,
-            )
-        }
+        self.accels.as_ref().as_bytes()
     }
 
     /// Returns the memory usage, in bytes, of these accelerators.

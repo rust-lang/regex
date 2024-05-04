@@ -45,6 +45,7 @@ use core::{cmp, mem::size_of};
 
 #[cfg(feature = "alloc")]
 use alloc::{vec, vec::Vec};
+use zerocopy::{AsBytes, FromBytes};
 
 use crate::util::{
     int::Pointer,
@@ -268,32 +269,16 @@ impl core::fmt::Display for DeserializeError {
 /// Safely converts a `&[u32]` to `&[StateID]` with zero cost.
 #[cfg_attr(feature = "perf-inline", inline(always))]
 pub(crate) fn u32s_to_state_ids(slice: &[u32]) -> &[StateID] {
-    // SAFETY: This is safe because StateID is defined to have the same memory
-    // representation as a u32 (it is repr(transparent)). While not every u32
-    // is a "valid" StateID, callers are not permitted to rely on the validity
-    // of StateIDs for memory safety. It can only lead to logical errors. (This
-    // is why StateID::new_unchecked is safe.)
-    unsafe {
-        core::slice::from_raw_parts(
-            slice.as_ptr().cast::<StateID>(),
-            slice.len(),
-        )
-    }
+    // PANICS: This is guaranteed to succeed since `u32` and `StateID` have the
+    // same size and alignment.
+    StateID::slice_from(slice.as_bytes()).unwrap()
 }
 
 /// Safely converts a `&mut [u32]` to `&mut [StateID]` with zero cost.
 pub(crate) fn u32s_to_state_ids_mut(slice: &mut [u32]) -> &mut [StateID] {
-    // SAFETY: This is safe because StateID is defined to have the same memory
-    // representation as a u32 (it is repr(transparent)). While not every u32
-    // is a "valid" StateID, callers are not permitted to rely on the validity
-    // of StateIDs for memory safety. It can only lead to logical errors. (This
-    // is why StateID::new_unchecked is safe.)
-    unsafe {
-        core::slice::from_raw_parts_mut(
-            slice.as_mut_ptr().cast::<StateID>(),
-            slice.len(),
-        )
-    }
+    // PANICS: This is guaranteed to succeed since `u32` and `StateID` have the
+    // same size and alignment.
+    StateID::mut_slice_from(slice.as_bytes_mut()).unwrap()
 }
 
 /// Safely converts a `&[u32]` to `&[PatternID]` with zero cost.

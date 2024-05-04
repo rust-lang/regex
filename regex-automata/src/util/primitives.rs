@@ -34,6 +34,8 @@ use core::num::NonZeroUsize;
 #[cfg(feature = "alloc")]
 use alloc::vec::Vec;
 
+use zerocopy::{AsBytes, FromBytes, FromZeroes};
+
 use crate::util::int::{Usize, U16, U32, U64};
 
 /// A `usize` that can never be `usize::MAX`.
@@ -138,7 +140,18 @@ impl core::fmt::Debug for NonMaxUsize {
 /// an invalid value can be done in entirely safe code. This may in turn result
 /// in panics or silent logical errors.
 #[derive(
-    Clone, Copy, Debug, Default, Eq, Hash, PartialEq, PartialOrd, Ord,
+    Clone,
+    Copy,
+    Debug,
+    Default,
+    Eq,
+    Hash,
+    PartialEq,
+    PartialOrd,
+    Ord,
+    FromZeroes,
+    FromBytes,
+    AsBytes,
 )]
 #[repr(transparent)]
 pub struct SmallIndex(u32);
@@ -746,7 +759,19 @@ pub struct PatternID(SmallIndex);
 ///
 /// See the [`SmallIndex`] type for more information about what it means for
 /// a state ID to be a "small index."
-#[derive(Clone, Copy, Default, Eq, Hash, PartialEq, PartialOrd, Ord)]
+#[derive(
+    Clone,
+    Copy,
+    Default,
+    Eq,
+    Hash,
+    PartialEq,
+    PartialOrd,
+    Ord,
+    FromZeroes,
+    FromBytes,
+    AsBytes,
+)]
 #[repr(transparent)]
 pub struct StateID(SmallIndex);
 
