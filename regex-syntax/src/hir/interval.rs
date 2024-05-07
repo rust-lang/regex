@@ -143,13 +143,10 @@ impl<I: Interval> IntervalSet<I> {
             MergeIter::new(self.ranges.iter(), other.ranges.iter()).copied();
 
         let final_range = merged.reduce(|range, next_range| {
-            match range.union_right(&next_range) {
-                Some(merged) => merged,
-                None => {
-                    ranges.push(range);
-                    next_range
-                }
-            }
+            range.union_right(&next_range).unwrap_or_else(|| {
+                ranges.push(range);
+                next_range
+            })
         });
 
         if let Some(final_range) = final_range {
