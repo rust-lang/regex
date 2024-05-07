@@ -331,7 +331,7 @@ impl<I: Interval> IntervalSet<I> {
         // negation, so it's skipped, and its upper bound is used as the first
         // leftward margin.
         let (margin, skip_first) = match first_range.lower() == I::Bound::MIN {
-            false => (I::Bound::MAX, false),
+            false => (I::Bound::MIN, false),
             true => match first_range.upper().try_increment() {
                 Some(bound) => (bound, true),
                 // The current range covers everything, so its negation is the empty set
