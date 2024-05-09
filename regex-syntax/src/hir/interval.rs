@@ -133,27 +133,38 @@ impl<I: Interval> IntervalSet<I> {
             return;
         }
 
-        // No way to know what the new size will be, so for now we assume that
-        // in typical cases, the union of a set of classes won't have many
-        // overlaps.
-        let mut ranges =
-            Vec::with_capacity(self.ranges.len() + other.ranges.len());
+        // If our allocated capacity is sufficient to hold both ourself and
+        // the new range, we just merge the ranges in-place, then canonicalize.
+        if self.ranges.capacity() >= self.ranges.len() + other.ranges.len() {
+            merge_sorted_into(&mut self.ranges, other.ranges.iter().copied());
+            union_sorted(&mut self.ranges)
+        }
+        // Otherwise, build a new vector by merging the two ranges and unioning
+        // them as we go
+        else {
+            // No way to know what the new size will be, so for now we assume that
+            // in typical cases, the union of a set of classes won't have many
+            // overlaps.
+            let mut ranges =
+                Vec::with_capacity(self.ranges.len() + other.ranges.len());
 
-        let merged =
-            MergeIter::new(self.ranges.iter(), other.ranges.iter()).copied();
+            let final_range =
+                MergeIter::new(self.ranges.iter(), other.ranges.iter())
+                    .copied()
+                    .reduce(|range, next_range| {
+                        range.union_right(&next_range).unwrap_or_else(|| {
+                            ranges.push(range);
+                            next_range
+                        })
+                    });
 
-        let final_range = merged.reduce(|range, next_range| {
-            range.union_right(&next_range).unwrap_or_else(|| {
-                ranges.push(range);
-                next_range
-            })
-        });
+            if let Some(final_range) = final_range {
+                ranges.push(final_range);
+            }
 
-        if let Some(final_range) = final_range {
-            ranges.push(final_range);
+            self.ranges = ranges;
         }
 
-        self.ranges = ranges;
         self.folded = self.folded && other.folded;
     }
 
@@ -398,24 +409,7 @@ impl<I: Interval> IntervalSet<I> {
 
         self.ranges.sort_unstable();
         assert!(!self.ranges.is_empty());
-
-        // `merge_idx` is the range into which we're merging contiguous ranges.
-        let mut merge_idx = 0;
-
-        for i in 1..self.ranges.len() {
-            if let Some(union) =
-                self.ranges[merge_idx].union_right(&self.ranges[i])
-            {
-                self.ranges[merge_idx] = union;
-            } else {
-                merge_idx += 1;
-                self.ranges[merge_idx] = self.ranges[i];
-            }
-        }
-
-        // At this point, `merge_idx` is the index of the last range that was
-        // merged into, so we truncate.
-        self.ranges.truncate(merge_idx + 1);
+        union_sorted(&mut self.ranges)
     }
 
     /// Returns true if and only if this class is in a canonical ordering.
@@ -697,6 +691,56 @@ where
 
         (min, max)
     }
+}
+
+/// Given a pair of sorted lists, merge them into `dest` so that `dest`
+/// remains sorted
+fn merge_sorted_into<T: Default + Ord>(
+    dest: &mut Vec<T>,
+    others: impl DoubleEndedIterator<Item = T> + ExactSizeIterator,
+) {
+    let mut dest_len = dest.len();
+    let mut insert_idx = dest.len() + others.len();
+
+    dest.resize_with(dest.len() + others.len(), Default::default);
+
+    others.rev().for_each(|new_item| {
+        // First, shift all the items that are ``> new_item`` rightward
+        // in the vec
+        for item_idx in (0..dest_len).rev() {
+            dest_len -= 1;
+            insert_idx -= 1;
+
+            if dest[item_idx] > new_item {
+                dest.swap(item_idx, insert_idx);
+            } else {
+                break;
+            }
+        }
+
+        // Then insert this item
+        insert_idx -= 1;
+        dest[insert_idx] = new_item;
+    });
+}
+
+// Given a sorted list of intervals, union them together into a canonical form.
+fn union_sorted(ranges: &mut Vec<impl Interval>) {
+    // `merge_idx` is the range into which we're merging contiguous ranges.
+    let mut merge_idx = 0;
+
+    for i in 1..ranges.len() {
+        if let Some(union) = ranges[merge_idx].union_right(&ranges[i]) {
+            ranges[merge_idx] = union;
+        } else {
+            merge_idx += 1;
+            ranges[merge_idx] = ranges[i];
+        }
+    }
+
+    // At this point, `merge_idx` is the index of the last range that was
+    // merged into, so we truncate.
+    ranges.truncate(merge_idx + 1);
 }
 
 // Tests for interval sets are written in src/hir.rs against the public API.
