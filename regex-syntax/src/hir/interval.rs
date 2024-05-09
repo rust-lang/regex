@@ -708,10 +708,9 @@ fn merge_sorted_into<T: Default + Ord>(
         // First, shift all the items that are ``> new_item`` rightward
         // in the vec
         for item_idx in (0..dest_len).rev() {
-            dest_len -= 1;
-            insert_idx -= 1;
-
             if dest[item_idx] > new_item {
+                dest_len -= 1;
+                insert_idx -= 1;
                 dest.swap(item_idx, insert_idx);
             } else {
                 break;
