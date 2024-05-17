@@ -1846,6 +1846,14 @@ impl StartTable<Vec<u8>> {
             let new_start_id = remap[dfa.to_index(old_start_id)];
             sl.set_start(anchored, sty, new_start_id);
         }
+        for ustart in [
+            &mut sl.universal_start_unanchored,
+            &mut sl.universal_start_anchored,
+        ] {
+            if let Some(id) = ustart {
+                *id = remap[dfa.to_index(*id)];
+            }
+        }
         Ok(sl)
     }
 }
