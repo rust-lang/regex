@@ -6,7 +6,8 @@ description = """
 A command line tool for debugging, ad hoc benchmarking and generating regular
 expressions.
 """
-repository = "https://github.com/rust-lang/regex/tree/master/regex-cli"
+homepage = "https://github.com/rust-lang/regex/tree/master/regex-cli"
+repository = "https://github.com/rust-lang/regex"
 keywords = ["regex", "cli", "debug", "nfa", "dfa"]
 license = "MIT OR Apache-2.0"
 categories = ["text-processing"]
