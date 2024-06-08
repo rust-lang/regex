@@ -1,4 +1,4 @@
-use alloc::{borrow::Cow, string::String, sync::Arc, vec::Vec};
+use alloc::{borrow::Cow, format, string::String, sync::Arc, vec::Vec};
 
 use regex_automata::{meta, util::captures, Input, PatternID};
 
@@ -1557,18 +1557,25 @@ impl<'h> core::fmt::Debug for Match<'h> {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         let mut fmt = f.debug_struct("Match");
         fmt.field("start", &self.start).field("end", &self.end);
-        if let Ok(s) = core::str::from_utf8(self.as_bytes()) {
-            fmt.field("bytes", &s);
-        } else {
-            // FIXME: It would be nice if this could be printed as a string
-            // with invalid UTF-8 replaced with hex escapes. A alloc would
-            // probably okay if that makes it easier, but regex-automata does
-            // (at time of writing) have internal routines that do this. So
-            // maybe we should expose them.
-            fmt.field("bytes", &self.as_bytes());
-        }
+
+        let bytes = self.as_bytes();
+        let formatted = bytes_to_string_with_invalid_utf8_escaped(bytes);
+        fmt.field("bytes", &formatted);
+
         fmt.finish()
     }
+}
+
+fn bytes_to_string_with_invalid_utf8_escaped(bytes: &[u8]) -> String {
+    let mut result = String::new();
+    for &byte in bytes {
+        if byte.is_ascii() {
+            result.push(byte as char);
+        } else {
+            result.push_str(&format!("\\x{:02X}", byte));
+        }
+    }
+    result
 }
 
 impl<'h> From<Match<'h>> for &'h [u8] {
@@ -2618,5 +2625,56 @@ fn no_expansion<T: AsRef<[u8]>>(replacement: &T) -> Option<Cow<'_, [u8]>> {
     match crate::find_byte::find_byte(b'$', replacement) {
         Some(_) => None,
         None => Some(Cow::Borrowed(replacement)),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use alloc::format;
+
+    #[test]
+    fn test_match_properties() {
+        let haystack = b"Hello, world!";
+        let m = Match::new(haystack, 7, 12);
+
+        assert_eq!(m.start(), 7);
+        assert_eq!(m.end(), 12);
+        assert_eq!(m.is_empty(), false);
+        assert_eq!(m.len(), 5);
+        assert_eq!(m.as_bytes(), b"world");
+    }
+
+    #[test]
+    fn test_empty_match() {
+        let haystack = b"";
+        let m = Match::new(haystack, 0, 0);
+
+        assert_eq!(m.is_empty(), true);
+        assert_eq!(m.len(), 0);
+    }
+
+    #[test]
+    fn test_debug_output_valid_utf8() {
+        let haystack = b"Hello, world!";
+        let m = Match::new(haystack, 7, 12);
+        let debug_str = format!("{:?}", m);
+
+        assert_eq!(
+            debug_str,
+            r#"Match { start: 7, end: 12, bytes: "world" }"#
+        );
+    }
+
+    #[test]
+    fn test_debug_output_invalid_utf8() {
+        let haystack = b"Hello, \xFFworld!";
+        let m = Match::new(haystack, 7, 13);
+        let debug_str = format!("{:?}", m);
+
+        assert_eq!(
+            debug_str,
+            r#"Match { start: 7, end: 13, bytes: "\\xFFworld" }"#
+        );
     }
 }
