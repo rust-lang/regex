@@ -1,3 +1,13 @@
+1.10.4 (2024-06-09)
+===================
+This is a new patch release with some minor fixes.
+
+Bug fixes:
+
+* [BUG #1203](https://github.com/rust-lang/regex/pull/1203):
+Escape invalid UTF-8 when in the `Debug` impl of `regex::bytes::Match`.
+
+
 1.10.3 (2024-01-21)
 ===================
 This is a new patch release that fixes the feature configuration of optional
