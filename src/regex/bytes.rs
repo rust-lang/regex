@@ -2667,14 +2667,36 @@ mod tests {
     }
 
     #[test]
-    fn test_non_ascii_utf8() {
-        let haystack = "아스키문자는 아닌데 UTF-8 문자열".as_bytes();
+    fn test_debug_output_various_unicode() {
+        let haystack =
+            "Hello, 😊 world! 안녕하세요? مرحبا بالعالم!".as_bytes();
         let m = Match::new(haystack, 0, haystack.len());
         let debug_str = format!("{:?}", m);
 
         assert_eq!(
             debug_str,
-            r#"Match { start: 0, end: 44, bytes: "아스키문자는 아닌데 UTF-8 문자열" }"#
+            r#"Match { start: 0, end: 62, bytes: "Hello, 😊 world! 안녕하세요? مرحبا بالعالم!" }"#
         );
+    }
+
+    #[test]
+    fn test_debug_output_ascii_escape() {
+        let haystack = b"Hello,\tworld!\nThis is a \x1b[31mtest\x1b[0m.";
+        let m = Match::new(haystack, 0, haystack.len());
+        let debug_str = format!("{:?}", m);
+
+        assert_eq!(
+            debug_str,
+            r#"Match { start: 0, end: 38, bytes: "Hello,\tworld!\nThis is a \u{1b}[31mtest\u{1b}[0m." }"#
+        );
+    }
+
+    #[test]
+    fn test_debug_output_match_in_middle() {
+        let haystack = b"The quick brown fox jumps over the lazy dog.";
+        let m = Match::new(haystack, 16, 19);
+        let debug_str = format!("{:?}", m);
+
+        assert_eq!(debug_str, r#"Match { start: 16, end: 19, bytes: "fox" }"#);
     }
 }
