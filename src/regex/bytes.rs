@@ -1,4 +1,4 @@
-use alloc::{borrow::Cow, format, string::String, sync::Arc, vec::Vec};
+use alloc::{borrow::Cow, string::String, sync::Arc, vec::Vec};
 
 use regex_automata::{meta, util::captures, Input, PatternID};
 
@@ -1555,27 +1555,15 @@ impl<'h> Match<'h> {
 
 impl<'h> core::fmt::Debug for Match<'h> {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
-        let mut fmt = f.debug_struct("Match");
-        fmt.field("start", &self.start).field("end", &self.end);
+        use regex_automata::util::escape::DebugHaystack;
 
-        let bytes = self.as_bytes();
-        let formatted = bytes_to_string_with_invalid_utf8_escaped(bytes);
-        fmt.field("bytes", &formatted);
+        let mut fmt = f.debug_struct("Match");
+        fmt.field("start", &self.start)
+            .field("end", &self.end)
+            .field("bytes", &DebugHaystack(&self.as_bytes()));
 
         fmt.finish()
     }
-}
-
-fn bytes_to_string_with_invalid_utf8_escaped(bytes: &[u8]) -> String {
-    let mut result = String::new();
-    for &byte in bytes {
-        if byte.is_ascii() {
-            result.push(byte as char);
-        } else {
-            result.push_str(&format!("\\x{:02X}", byte));
-        }
-    }
-    result
 }
 
 impl<'h> From<Match<'h>> for &'h [u8] {
@@ -2674,7 +2662,19 @@ mod tests {
 
         assert_eq!(
             debug_str,
-            r#"Match { start: 7, end: 13, bytes: "\\xFFworld" }"#
+            r#"Match { start: 7, end: 13, bytes: "\xffworld" }"#
+        );
+    }
+
+    #[test]
+    fn test_non_ascii_utf8() {
+        let haystack = "아스키문자는 아닌데 UTF-8 문자열".as_bytes();
+        let m = Match::new(haystack, 0, haystack.len());
+        let debug_str = format!("{:?}", m);
+
+        assert_eq!(
+            debug_str,
+            r#"Match { start: 0, end: 44, bytes: "아스키문자는 아닌데 UTF-8 문자열" }"#
         );
     }
 }
