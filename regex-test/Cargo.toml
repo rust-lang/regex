@@ -9,7 +9,8 @@ You probably don't want to use this crate unless you're working on a regex
 implementation.
 """
 documentation = "https://docs.rs/regex-test"
-repository = "https://github.com/rust-lang/regex/tree/master/regex-test"
+homepage = "https://github.com/rust-lang/regex/tree/master/regex-test"
+repository = "https://github.com/rust-lang/regex"
 readme = "README.md"
 keywords = ["regex", "regexp", "dfa", "automata", "test"]
 license = "MIT OR Apache-2.0"
