@@ -1183,6 +1183,10 @@ default are noted.
 
 ### Performance features
 
+**Note**:
+  To get performance benefits offered by the SIMD, `std` must be enabled.
+  None of the `perf-*` features will enable `std` implicitly.
+
 * **perf** -
   Enables all performance related features except for `perf-dfa-full`. This
   feature is enabled by default is intended to cover all reasonable features
