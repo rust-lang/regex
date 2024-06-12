@@ -42,7 +42,7 @@ as follows:
 
 * [`Regex::new`] compiles a regex using the default configuration. A
 [`RegexBuilder`] permits setting a non-default configuration. (For example,
-case insensitive matching, verbose mode and others.)
+case-insensitive matching, verbose mode and others.)
 * [`Regex::is_match`] reports whether a match exists in a particular haystack.
 * [`Regex::find`] reports the byte offsets of a match in a haystack, if one
 exists. [`Regex::find_iter`] returns an iterator over all such matches.
@@ -550,7 +550,7 @@ applies to the special word boundary assertions. (That is, `\b{start}`,
 * `^` and `$` are **not** Unicode-aware in multi-line mode. Namely, they only
 recognize `\n` (assuming CRLF mode is not enabled) and not any of the other
 forms of line terminators defined by Unicode.
-* Case insensitive searching is Unicode-aware and uses simple case folding.
+* case-insensitive searching is Unicode-aware and uses simple case folding.
 * Unicode general categories, scripts and many boolean properties are available
 by default via the `\p{property name}` syntax.
 * In all cases, matches are reported using byte offsets. Or more precisely,
@@ -1240,7 +1240,7 @@ default are noted.
   is not included here, but contains properties like `Alphabetic`, `Emoji`,
   `Lowercase`, `Math`, `Uppercase` and `White_Space`.
 * **unicode-case** -
-  Provide the data for case insensitive matching using
+  Provide the data for case-insensitive matching using
   [Unicode's "simple loose matches" specification](https://www.unicode.org/reports/tr18/#Simple_Loose_Matches).
 * **unicode-gencat** -
   Provide the data for
