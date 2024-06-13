@@ -1899,11 +1899,10 @@ impl DenseTransitions {
     /// This follows the matching transition for any member of the alphabet.
     ///
     /// The matching transition is found by looking for a transition that
-    /// doesn't correspond to `StateID::ZERO` for the byte `at` the given
-    /// position in `haystack`.
+    /// doesn't correspond to `StateID::ZERO` for the given alphabet `unit`.
     ///
-    /// If `at >= haystack.len()` or if the given alphabet unit is
-    /// [`EOI`](alphabet::Unit::eoi), then this returns `None`.
+    /// If the given alphabet unit is [`EOI`](alphabet::Unit::eoi), then
+    /// this returns `None`.
     #[inline]
     pub(crate) fn matches_unit(
         &self,
@@ -1916,8 +1915,6 @@ impl DenseTransitions {
     ///
     /// The matching transition is found by looking for a transition that
     /// doesn't correspond to `StateID::ZERO` for the given `byte`.
-    ///
-    /// If `at >= haystack.len()`, then this returns `None`.
     #[inline]
     pub fn matches_byte(&self, byte: u8) -> Option<StateID> {
         let next = self.transitions[usize::from(byte)];
