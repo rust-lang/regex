@@ -12,7 +12,7 @@ extern "C" {
 /*
  * rure is the type of a compiled regular expression.
  *
- * An rure can be safely used from multiple threads simultaneously.
+ * A rure can be safely used from multiple threads simultaneously.
  */
 typedef struct rure rure;
 
