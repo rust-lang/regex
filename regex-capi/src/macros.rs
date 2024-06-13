@@ -20,8 +20,8 @@ macro_rules! ffi_fn {
                     };
                     let _ = writeln!(
                         &mut io::stderr(),
-                        "panic unwind caught, aborting: {:?}",
-                        msg);
+                        "panic unwind caught, aborting: {msg:?}"
+                    );
                     unsafe { abort() }
                 }
             }

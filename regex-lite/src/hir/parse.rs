@@ -593,8 +593,7 @@ impl<'a> Parser<'a> {
             'u' => 4,
             'U' => 8,
             unk => unreachable!(
-                "invalid start of fixed length hexadecimal number {}",
-                unk
+                "invalid start of fixed length hexadecimal number {unk}"
             ),
         };
         if !self.bump_and_bump_space() {
@@ -720,7 +719,7 @@ impl<'a> Parser<'a> {
             '?' => (0, Some(1)),
             '*' => (0, None),
             '+' => (1, None),
-            unk => unreachable!("unrecognized repetition operator '{}'", unk),
+            unk => unreachable!("unrecognized repetition operator '{unk}'"),
         };
         let mut greedy = true;
         if self.bump() && self.char() == '?' {
@@ -1216,7 +1215,7 @@ impl<'a> Parser<'a> {
             'd' | 'D' => posix_class("digit").unwrap(),
             's' | 'S' => posix_class("space").unwrap(),
             'w' | 'W' => posix_class("word").unwrap(),
-            unk => unreachable!("invalid Perl class \\{}", unk),
+            unk => unreachable!("invalid Perl class \\{unk}"),
         });
         if ch.is_ascii_uppercase() {
             class.negate();
