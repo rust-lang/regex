@@ -341,7 +341,7 @@ impl Builder {
 ///
 /// The `PikeVM` is generally the most "powerful" regex engine in this crate.
 /// "Powerful" in this context means that it can handle any regular expression
-/// that is parseable by `regex-syntax` and any size haystack. Regretably,
+/// that is parseable by `regex-syntax` and any size haystack. Regrettably,
 /// the `PikeVM` is also simultaneously often the _slowest_ regex engine in
 /// practice. This results in an annoying situation where one generally tries
 /// to pick any other regex engine (or perhaps none at all) before being

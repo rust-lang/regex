@@ -182,7 +182,7 @@ flags we use here though:
 the size of the DFA as much as possible. In some cases it can make a big
 difference, but not all. Minimization can also be extremely expensive, but
 given that this is an offline process and presumably done rarely, it's usually
-a good trade off to make.
+a good trade-off to make.
 * `--shrink` uses heuristics to make the size of the NFA smaller in some cases.
 This doesn't impact the size of the DFA, but it can make determinization (the
 process of converting an NFA into a DFA) faster at the cost of making NFA
@@ -258,7 +258,7 @@ favor of (potentially much) smaller DFAs. One can also generate a "dense" DFA
 to get faster searches but larger DFAs.
 * Above, we generated a "dfa," but one can also generate a "regex." The
 difference is that a DFA can only find the end of a match (or start of a match
-if the DFA is reversed), where as a regex will generate two DFAs: one for
+if the DFA is reversed), whereas a regex will generate two DFAs: one for
 finding the end of a match and then another for finding the start. One can
 generate two DFAs manually and stitch them together in the code, but generating
 a `regex` will take care of this for you.

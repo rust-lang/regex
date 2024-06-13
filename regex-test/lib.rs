@@ -69,7 +69,7 @@ into a TOML file (which is not allowed). There is generally no other reason to
 enable `unescape`.
 * `unicode` - When enabled, the regex pattern should be compiled with its
 corresponding Unicode mode enabled. For example, `[^a]` matches any UTF-8
-encoding of any codepoint other than `a`. Case insensitivty should be Unicode
+encoding of any codepoint other than `a`. Case insensitivity should be Unicode
 aware. Unicode classes like `\pL` are available. The Perl classes `\w`, `\s`
 and `\d` should be Unicode aware. And so on. This is an optional field and is
 enabled by default.
@@ -333,7 +333,7 @@ impl RegexTest {
     /// Returns true if regex matching should have Unicode mode enabled.
     ///
     /// For example, `[^a]` matches any UTF-8 encoding of any codepoint other
-    /// than `a`. Case insensitivty should be Unicode aware. Unicode classes
+    /// than `a`. Case insensitivity should be Unicode aware. Unicode classes
     /// like `\pL` are available. The Perl classes `\w`, `\s` and `\d` should
     /// be Unicode aware. And so on.
     ///
@@ -1202,7 +1202,7 @@ pub struct Captures {
     /// the overall match.
     ///
     /// This should either have length 1 (when not capturing group offsets are
-    /// included in the tes tresult) or it should have length equal to the
+    /// included in the test result) or it should have length equal to the
     /// number of capturing groups in the regex pattern.
     groups: Vec<Option<Span>>,
 }
