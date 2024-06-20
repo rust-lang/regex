@@ -2395,6 +2395,7 @@ impl core::fmt::Debug for DFA {
             Ok(())
         }
 
+        writeln!(f, "\nCodes:\tD - Dead State, * - Match State\n")?;
         writeln!(f, "onepass::DFA(")?;
         for index in 0..self.state_len() {
             let sid = StateID::must(index);
@@ -2412,9 +2413,9 @@ impl core::fmt::Debug for DFA {
             }
             write!(f, ": ")?;
             debug_state_transitions(f, self, sid)?;
-            write!(f, "\n")?;
+            writeln!(f)?;
         }
-        writeln!(f, "")?;
+        writeln!(f)?;
         for (i, &sid) in self.starts.iter().enumerate() {
             if i == 0 {
                 writeln!(f, "START(ALL): {:?}", sid.as_usize())?;
