@@ -16,6 +16,18 @@ const BLACKLIST: &[&str] = &[
     // Nothing to blacklist yet!
 ];
 
+#[cfg(not(feature = "std"))]
+pub(crate) fn nostd_compat<T: core::fmt::Debug>(
+    re: Result<T, regex::Error>,
+) -> T {
+    assert!(
+        re.is_ok(),
+        "regex compilation failed: {}",
+        re.as_ref().unwrap_err(),
+    );
+    re.unwrap()
+}
+
 fn suite() -> anyhow::Result<regex_test::RegexTests> {
     let _ = env_logger::try_init();
 

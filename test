@@ -13,15 +13,11 @@ cd "$(dirname "$0")"
 echo "===== DEFAULT FEATURES ====="
 cargo test
 
-# no-std mode is annoyingly difficult to test. Currently, the integration tests
-# don't run. So for now, we just test that library tests run. (There aren't
-# many because `regex` is just a wrapper crate.)
-cargo test --no-default-features --lib
-
 echo "===== DOC TESTS ====="
 cargo test --doc
 
 features=(
+    ""
     "std"
     "std unicode"
     "std unicode-perl"
@@ -36,7 +32,7 @@ features=(
 )
 for f in "${features[@]}"; do
     echo "===== FEATURE: $f ====="
-    cargo test --test integration --no-default-features --features "$f"
+    cargo test --test integration --no-default-features --features="$f"
 done
 
 # And test the probably-forever-nightly-only 'pattern' feature...

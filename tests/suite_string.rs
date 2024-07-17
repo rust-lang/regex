@@ -1,3 +1,5 @@
+#[cfg(not(feature = "std"))]
+use crate::nostd_compat;
 use {
     anyhow::Result,
     regex::{Regex, RegexBuilder},
@@ -98,7 +100,11 @@ fn compiler(
         .case_insensitive(test.case_insensitive())
         .unicode(test.unicode())
         .line_terminator(test.line_terminator())
-        .build()?;
+        .build();
+    #[cfg(not(feature = "std"))]
+    let re = nostd_compat(re);
+    #[cfg(feature = "std")]
+    let re = re?; // Propagate any errors.
     Ok(CompiledRegex::compiled(move |test| run_test(&re, test)))
 }
 
