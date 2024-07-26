@@ -482,7 +482,7 @@ impl LookSet {
     /// assertions in this set that require tables that are not available, then
     /// this will return an error.
     ///
-    /// Specifically, this returns an error when the the
+    /// Specifically, this returns an error when the
     /// `unicode-word-boundary` feature is _not_ enabled _and_ this set
     /// contains a Unicode word boundary assertion.
     ///
