@@ -13,7 +13,7 @@ pub struct RegexSearcher<'r, 't> {
 impl<'r> Pattern for &'r Regex {
     type Searcher<'t> = RegexSearcher<'r, 't>;
 
-    fn into_searcher(self, haystack: &str) -> RegexSearcher<'r, '_> {
+    fn into_searcher<'h>(self, haystack: &'h str) -> RegexSearcher<'r, 'h> {
         RegexSearcher {
             haystack,
             it: self.find_iter(haystack),
