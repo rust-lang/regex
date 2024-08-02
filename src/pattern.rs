@@ -10,10 +10,10 @@ pub struct RegexSearcher<'r, 't> {
     next_match: Option<(usize, usize)>,
 }
 
-impl<'r, 't> Pattern<'t> for &'r Regex {
-    type Searcher = RegexSearcher<'r, 't>;
+impl<'r> Pattern for &'r Regex {
+    type Searcher<'t> = RegexSearcher<'r, 't>;
 
-    fn into_searcher(self, haystack: &'t str) -> RegexSearcher<'r, 't> {
+    fn into_searcher(self, haystack: &str) -> RegexSearcher<'r, '_> {
         RegexSearcher {
             haystack,
             it: self.find_iter(haystack),
