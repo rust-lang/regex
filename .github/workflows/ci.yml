@@ -50,33 +50,21 @@ jobs:
         - build: stable
           os: ubuntu-latest
           rust: stable
-        - build: stable-32
-          os: ubuntu-latest
-          rust: stable
-          target: i686-unknown-linux-gnu
-        - build: stable-powerpc64
-          os: ubuntu-latest
-          rust: stable
-          target: powerpc64-unknown-linux-gnu
-        - build: stable-s390x
-          os: ubuntu-latest
-          rust: stable
-          target: s390x-unknown-linux-gnu
         - build: beta
           os: ubuntu-latest
           rust: beta
         - build: nightly
           os: ubuntu-latest
           rust: nightly
-        - build: macos
-          os: macos-latest
+        - build: stable
+          os: blaze/ubuntu-22.04-amd
           rust: stable
-        - build: win-msvc
-          os: windows-latest
-          rust: stable
-        - build: win-gnu
-          os: windows-latest
-          rust: stable-x86_64-gnu
+        - build: beta
+          os: blaze/ubuntu-22.04-amd
+          rust: beta
+        - build: nightly
+          os: blaze/ubuntu-22.04-amd
+          rust: nightly
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
