@@ -2469,6 +2469,19 @@ impl<'a> DFA<&'a [u32]> {
     }
 }
 
+/// Other routines that work for all `T`.
+impl<T> DFA<T> {
+    /// Set or unset the prefilter attached to this DFA.
+    ///
+    /// This is useful when one has deserialized a DFA from `&[u8]`.
+    /// Deserialization does not currently include prefilters, so if you
+    /// want prefilter acceleration, you'll need to rebuild it and attach
+    /// it here.
+    pub fn set_prefilter(&mut self, prefilter: Option<Prefilter>) {
+        self.pre = prefilter
+    }
+}
+
 // The following methods implement mutable routines on the internal
 // representation of a DFA. As such, we must fix the first type parameter to a
 // `Vec<u32>` since a generic `T: AsRef<[u32]>` does not permit mutation. We
