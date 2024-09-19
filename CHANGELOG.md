@@ -1,6 +1,11 @@
-1.11.4 (TBD)
+1.12.0 (TBD)
 ============
 TODO
+
+Improvements:
+
+* [FEATURE #1146](https://github.com/rust-lang/regex/issues/1146):
+Add `Capture::get_match` for returning the overall match without `unwrap()`.
 
 Bug fixes:
 
