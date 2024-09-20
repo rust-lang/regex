@@ -482,18 +482,18 @@ impl SetMatches {
         !self.0.is_empty()
     }
 
-    /// Whether all patterns in this set matched
+    /// Whether all patterns in this set matched.
     ///
     /// # Example
     ///
     /// ```
-    /// use regex::RegexSet;
+    /// use regex::bytes::RegexSet;
     ///
     /// let set = RegexSet::new(&[
     ///     r"^foo",
     ///     r"[a-z]+\.com",
     /// ]).unwrap();
-    /// let matches = set.matches("foo.example.com");
+    /// let matches = set.matches(b"foo.example.com");
     /// assert!(matches.matched_all());
     /// ```
     pub fn matched_all(&self) -> bool {

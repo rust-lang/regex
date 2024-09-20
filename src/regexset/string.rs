@@ -478,7 +478,7 @@ impl SetMatches {
         !self.0.is_empty()
     }
 
-    /// Whether all patterns in this set matched
+    /// Whether all patterns in this set matched.
     ///
     /// # Example
     ///
