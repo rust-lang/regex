@@ -84,6 +84,23 @@ USAGE:
     gen(d.join("sentence_break.rs"), &["sentence-break", &ucd, "--chars"])?;
     gen(d.join("word_break.rs"), &["word-break", &ucd, "--chars"])?;
 
+    // These generate the \w, \d and \s Unicode-aware character classes for
+    // regex-syntax. \d and \s are technically part of the general category
+    // and boolean properties generated above. However, these are generated
+    // separately to make it possible to enable or disable them via Cargo
+    // features independently of whether all boolean properties or general
+    // categories are enabled or disabled. The crate ensures that only one copy
+    // is compiled.
+    gen(d.join("perl_word.rs"), &["perl-word", &ucd, "--chars"])?;
+    gen(
+        d.join("perl_decimal.rs"),
+        &["general-category", &ucd, "--chars", "--include", "decimalnumber"],
+    )?;
+    gen(
+        d.join("perl_space.rs"),
+        &["property-bool", &ucd, "--chars", "--include", "whitespace"],
+    )?;
+
     // Data tables for regex-automata.
     let d = out
         .join("regex-automata")
