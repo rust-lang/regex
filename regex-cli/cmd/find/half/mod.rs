@@ -2,12 +2,12 @@ use std::io::{stdout, Write};
 
 use {
     anyhow::Context,
-    lexopt::{Arg, Parser},
+    lexopt::Parser,
     regex_automata::{HalfMatch, Input, MatchError, PatternID},
 };
 
 use crate::{
-    args::{self, Configurable, Usage},
+    args,
     util::{self, Table},
 };
 
@@ -46,43 +46,6 @@ ENGINES:
         "regex" => run_regex(p),
         "sparse" => dfa::run_sparse(p),
         unk => anyhow::bail!("unrecognized command '{}'", unk),
-    }
-}
-
-#[derive(Debug, Default)]
-struct Args {
-    overlapping: bool,
-}
-
-impl Configurable for Args {
-    fn configure(
-        &mut self,
-        _: &mut Parser,
-        arg: &mut Arg,
-    ) -> anyhow::Result<bool> {
-        match *arg {
-            Arg::Long("overlapping") => {
-                self.overlapping = true;
-            }
-            _ => return Ok(false),
-        }
-        Ok(true)
-    }
-
-    fn usage(&self) -> &[Usage] {
-        const USAGES: &[Usage] = &[Usage::new(
-            "--overlapping",
-            "Search for overlapping matches.",
-            r#"
-This flag enables overlapping mode, where the regex engine will attempt to find
-all possible matches reported by the underlying matcher.
-
-Generally this flag is used in conjunction with '--match-kind all'. If the
-match semantics are not set to compile all possible matches in the underlying
-automaton, then the results will likely be counter-intuitive.
-"#,
-        )];
-        USAGES
     }
 }
 
