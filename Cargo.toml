@@ -183,7 +183,7 @@ features = ["alloc", "syntax", "meta", "nfa-pikevm"]
 # For parsing regular expressions.
 [dependencies.regex-syntax]
 path = "regex-syntax"
-version = "0.8.2"
+version = "0.8.5"
 default-features = false
 
 [dev-dependencies]

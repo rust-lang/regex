@@ -31,6 +31,6 @@ memmap2 = "0.9.4"
 regex = { version = "1.9.0", path = ".." }
 regex-automata = { version = "0.4.0", path = "../regex-automata", features = ["logging"] }
 regex-lite = { version = "0.1.0", path = "../regex-lite" }
-regex-syntax = { version = "0.8.0", path = "../regex-syntax" }
+regex-syntax = { version = "0.8.5", path = "../regex-syntax" }
 tabwriter = { version = "1.2.1", features = ["ansi_formatting"] }
 textwrap = { version = "0.16.0", default-features = false }
