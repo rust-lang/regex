@@ -3077,6 +3077,11 @@ impl<T: AsRef<[u32]>> DFA<T> {
 
 impl<T: AsRef<[u32]>> fmt::Debug for DFA<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(
+            f,
+            "\nCodes:\tD - Dead State, Q - Quit State, > - Start State,\
+            \n\t\tA - Accel State, * - Match State\n"
+        )?;
         writeln!(f, "dense::DFA(")?;
         for state in self.states() {
             fmt_state_indicator(f, self, state.id())?;
@@ -3087,9 +3092,9 @@ impl<T: AsRef<[u32]>> fmt::Debug for DFA<T> {
             };
             write!(f, "{:06?}: ", id)?;
             state.fmt(f)?;
-            write!(f, "\n")?;
+            writeln!(f)?;
         }
-        writeln!(f, "")?;
+        writeln!(f)?;
         for (i, (start_id, anchored, sty)) in self.starts().enumerate() {
             let id = if f.alternate() {
                 start_id.as_usize()
@@ -3108,7 +3113,7 @@ impl<T: AsRef<[u32]>> fmt::Debug for DFA<T> {
             writeln!(f, "  {:?} => {:06?}", sty, id)?;
         }
         if self.pattern_len() > 1 {
-            writeln!(f, "")?;
+            writeln!(f)?;
             for i in 0..self.ms.len() {
                 let id = self.ms.match_state_id(self, i);
                 let id = if f.alternate() {
@@ -3124,7 +3129,7 @@ impl<T: AsRef<[u32]>> fmt::Debug for DFA<T> {
                     }
                     write!(f, "{:?}", pid)?;
                 }
-                writeln!(f, "")?;
+                writeln!(f)?;
             }
         }
         writeln!(f, "state length: {:?}", self.state_len())?;

@@ -1073,12 +1073,17 @@ impl<'a> DFA<&'a [u8]> {
 
 impl<T: AsRef<[u8]>> fmt::Debug for DFA<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(
+            f,
+            "\nCodes:\tD - Dead State, Q - Quit State, > - Start State,\
+            \n\t\tA - Accel State, * - Match State\n"
+        )?;
         writeln!(f, "sparse::DFA(")?;
         for state in self.tt.states() {
             fmt_state_indicator(f, self, state.id())?;
             writeln!(f, "{:06?}: {:?}", state.id().as_usize(), state)?;
         }
-        writeln!(f, "")?;
+        writeln!(f)?;
         for (i, (start_id, anchored, sty)) in self.st.iter().enumerate() {
             if i % self.st.stride == 0 {
                 match anchored {
