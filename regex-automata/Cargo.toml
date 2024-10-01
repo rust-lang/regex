@@ -44,7 +44,7 @@ perf = ["perf-inline", "perf-literal"]
 perf-inline = []
 perf-literal = ["perf-literal-substring", "perf-literal-multisubstring"]
 perf-literal-substring = ["aho-corasick?/perf-literal", "dep:memchr"]
-perf-literal-multisubstring = ["std", "dep:aho-corasick"]
+perf-literal-multisubstring = ["dep:aho-corasick"]
 
 # Enables all Unicode features. This expands if new Unicode features are added.
 unicode = [
