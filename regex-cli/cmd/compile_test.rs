@@ -25,7 +25,7 @@ const REGEX_LITE_COMBOS: &[&[&str]] = &[&["std", "string"]];
 
 const REGEX_AUTOMATA_COMBOS: &[&[&str]] = &[
     &["std", "syntax", "perf", "unicode", "meta", "nfa", "dfa", "hybrid"],
-    // Try out some barebones combinations of individual regex engines.
+    // Try out some bare-bone combinations of individual regex engines.
     &["std", "syntax", "nfa-pikevm"],
     &["std", "syntax", "nfa-backtrack"],
     &["std", "syntax", "hybrid"],

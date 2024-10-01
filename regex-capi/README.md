@@ -17,7 +17,7 @@ API documentation: https://docs.rs/regex
 
 Examples
 --------
-There are readable examples in the `ctest` and `examples` sub-directories.
+There are readable examples in the `ctest` and `examples` subdirectories.
 
 Assuming you have
 [Rust and Cargo installed](https://www.rust-lang.org/downloads.html)
@@ -34,7 +34,7 @@ $ LD_LIBRARY_PATH=../target/release ./iter
 Performance
 -----------
 It's fast. Its core matching engine is a lazy DFA, which is what GNU grep
-and RE2 use. Like GNU grep, this regex engine can detect multi byte literals
+and RE2 use. Like GNU grep, this regex engine can detect multibyte literals
 in the regex and will use fast literal string searching to quickly skip
 through the input to find possible match locations.
 
@@ -51,7 +51,7 @@ All regular expressions must be valid UTF-8.
 
 The text encoding of haystacks is more complicated. To a first
 approximation, haystacks should be UTF-8. In fact, UTF-8 (and, one
-supposes, ASCII) is the only well defined text encoding supported by this
+supposes, ASCII) is the only well-defined text encoding supported by this
 library. It is impossible to match UTF-16, UTF-32 or any other encoding
 without first transcoding it to UTF-8.
 

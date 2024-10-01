@@ -83,7 +83,7 @@ enum UnitKind {
     /// Represents a byte value, or more typically, an equivalence class
     /// represented as a byte value.
     U8(u8),
-    /// Represents the "end of input" sentinel. We regretably use a `u16`
+    /// Represents the "end of input" sentinel. We regrettably use a `u16`
     /// here since the maximum sentinel value is `256`. Thankfully, we don't
     /// actually store a `Unit` anywhere, so this extra space shouldn't be too
     /// bad.

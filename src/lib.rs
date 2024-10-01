@@ -1120,7 +1120,7 @@ case `O(m * n)` time. Thus, iteration of all matches in a haystack has
 worst case `O(m * n^2)`. A good example of a pattern that exhibits this is
 `(?:A+){1000}|` or even `.*[^A-Z]|[A-Z]`.
 
-In general, unstrusted haystacks are easier to stomach than untrusted patterns.
+In general, untrusted haystacks are easier to stomach than untrusted patterns.
 Untrusted patterns give a lot more control to the caller to impact the
 performance of a search. In many cases, a regex search will actually execute in
 average case `O(n)` time (i.e., not dependent on the size of the regex), but
@@ -1274,7 +1274,7 @@ It is somewhat unusual for a regex engine to have dependencies, as most regex
 libraries are self contained units with no dependencies other than a particular
 environment's standard library. Indeed, for other similarly optimized regex
 engines, most or all of the code in the dependencies of this crate would
-normally just be unseparable or coupled parts of the crate itself. But since
+normally just be inseparable or coupled parts of the crate itself. But since
 Rust and its tooling ecosystem make the use of dependencies so easy, it made
 sense to spend some effort de-coupling parts of this crate and making them
 independently useful.
