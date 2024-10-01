@@ -82,7 +82,7 @@ ffi_fn! {
         let re = rure_compile(
             pat, len, RURE_DEFAULT_FLAGS, ptr::null(), &mut err);
         if err.is_err() {
-            let _ = writeln!(&mut io::stderr(), "{}", err);
+            let _ = writeln!(&mut io::stderr(), "{err}");
             let _ = writeln!(
                 &mut io::stderr(), "aborting from rure_compile_must");
             unsafe { abort() }
@@ -579,7 +579,7 @@ ffi_fn! {
         let mut err = Error::new(ErrorKind::None);
         let esc = rure_escape(pat, len, &mut err);
         if err.is_err() {
-            let _ = writeln!(&mut io::stderr(), "{}", err);
+            let _ = writeln!(&mut io::stderr(), "{err}");
             let _ = writeln!(
                 &mut io::stderr(), "aborting from rure_escape_must");
             unsafe { abort() }
