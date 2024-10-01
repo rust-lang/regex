@@ -1670,16 +1670,18 @@ impl<'h> Captures<'h> {
     /// This returns the match for index `0`. That is it is equivalent to
     /// `m.get(0).unwrap()`
     ///
+    /// # Example
+    ///
     /// ```
     /// use regex::bytes::Regex;
     ///
     /// let re = Regex::new(r"[a-z]+([0-9]+)").unwrap();
     /// let caps = re.captures(b"   abc123-def").unwrap();
     ///
-    /// assert_eq!(caps.as_match().as_bytes(), b"abc123");
+    /// assert_eq!(caps.get_match().as_bytes(), b"abc123");
     /// ```
     #[inline]
-    pub fn as_match(&self) -> Match {
+    pub fn get_match(&self) -> Match {
         self.get(0).unwrap()
     }
 
