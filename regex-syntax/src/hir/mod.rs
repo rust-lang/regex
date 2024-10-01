@@ -17,7 +17,7 @@ equivalent regex pattern string, it is unlikely to look like the original due
 to its simplified structure.
 */
 
-use core::{char, cmp};
+use core::{char, cmp, slice};
 
 use alloc::{
     boxed::Box,
@@ -29,7 +29,7 @@ use alloc::{
 
 use crate::{
     ast::Span,
-    hir::interval::{Interval, IntervalSet, IntervalSetIter},
+    hir::interval::{Interval, IntervalSet},
     unicode,
 };
 
@@ -1082,7 +1082,7 @@ impl ClassUnicode {
     ///
     /// The iterator yields ranges in ascending order.
     pub fn iter(&self) -> ClassUnicodeIter<'_> {
-        ClassUnicodeIter(self.set.iter())
+        ClassUnicodeIter(self.set.intervals().iter())
     }
 
     /// Return the underlying ranges as a slice.
@@ -1223,13 +1223,17 @@ impl ClassUnicode {
 ///
 /// The lifetime `'a` refers to the lifetime of the underlying class.
 #[derive(Debug)]
-pub struct ClassUnicodeIter<'a>(IntervalSetIter<'a, ClassUnicodeRange>);
+pub struct ClassUnicodeIter<'a>(slice::Iter<'a, ClassUnicodeRange>);
 
 impl<'a> Iterator for ClassUnicodeIter<'a> {
     type Item = &'a ClassUnicodeRange;
 
     fn next(&mut self) -> Option<&'a ClassUnicodeRange> {
         self.0.next()
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.0.size_hint()
     }
 }
 
@@ -1381,7 +1385,7 @@ impl ClassBytes {
     ///
     /// The iterator yields ranges in ascending order.
     pub fn iter(&self) -> ClassBytesIter<'_> {
-        ClassBytesIter(self.set.iter())
+        ClassBytesIter(self.set.intervals().iter())
     }
 
     /// Return the underlying ranges as a slice.
@@ -1501,13 +1505,17 @@ impl ClassBytes {
 ///
 /// The lifetime `'a` refers to the lifetime of the underlying class.
 #[derive(Debug)]
-pub struct ClassBytesIter<'a>(IntervalSetIter<'a, ClassBytesRange>);
+pub struct ClassBytesIter<'a>(slice::Iter<'a, ClassBytesRange>);
 
 impl<'a> Iterator for ClassBytesIter<'a> {
     type Item = &'a ClassBytesRange;
 
     fn next(&mut self) -> Option<&'a ClassBytesRange> {
         self.0.next()
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.0.size_hint()
     }
 }
 
