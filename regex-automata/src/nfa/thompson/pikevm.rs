@@ -1290,7 +1290,7 @@ impl PikeVM {
                 // the only thing in 'curr'. So we might as well just skip
                 // ahead until we find something that we know might advance us
                 // forward.
-                if let Some(ref pre) = pre {
+                if let Some(pre) = pre {
                     let span = Span::from(at..input.end());
                     match pre.find(input.haystack(), span) {
                         None => break,
@@ -1344,7 +1344,7 @@ impl PikeVM {
             // search. If we re-computed it at every position, we would be
             // simulating an unanchored search when we were tasked to perform
             // an anchored search.
-            if (!hm.is_some() || allmatches)
+            if (hm.is_none() || allmatches)
                 && (!anchored || at == input.start())
             {
                 // Since we are adding to the 'curr' active states and since

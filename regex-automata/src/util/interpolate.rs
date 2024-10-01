@@ -107,7 +107,7 @@ pub fn string(
         }
         // Handle escaping of '$'.
         if replacement.as_bytes().get(1).map_or(false, |&b| b == b'$') {
-            dst.push_str("$");
+            dst.push('$');
             replacement = &replacement[2..];
             continue;
         }
@@ -115,7 +115,7 @@ pub fn string(
         let cap_ref = match find_cap_ref(replacement.as_bytes()) {
             Some(cap_ref) => cap_ref,
             None => {
-                dst.push_str("$");
+                dst.push('$');
                 replacement = &replacement[1..];
                 continue;
             }
@@ -321,10 +321,7 @@ fn find_cap_ref_braced(rep: &[u8], mut i: usize) -> Option<CaptureRef<'_>> {
 /// Returns true if and only if the given byte is allowed in a capture name
 /// written in non-brace form.
 fn is_valid_cap_letter(b: u8) -> bool {
-    match b {
-        b'0'..=b'9' | b'a'..=b'z' | b'A'..=b'Z' | b'_' => true,
-        _ => false,
-    }
+    matches!(b, b'0'..=b'9' | b'a'..=b'z' | b'A'..=b'Z' | b'_')
 }
 
 #[cfg(test)]
