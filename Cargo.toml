@@ -187,8 +187,6 @@ version = "0.8.5"
 default-features = false
 
 [dev-dependencies]
-# For examples.
-once_cell = "1.17.1"
 # For property based tests.
 quickcheck = { version = "1.0.3", default-features = false }
 # To check README's example
