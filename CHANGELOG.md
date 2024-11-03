@@ -1,3 +1,18 @@
+1.11.2 (2025-08-24)
+===================
+This is a new patch release of `regex` with some minor fixes.
+
+Improvements:
+
+* [BUG #1217](https://github.com/rust-lang/regex/issues/1217):
+Switch recommendation from `once_cell` to `std::sync::LazyLock`.
+
+Bug fixes:
+
+* [BUG #1281](https://github.com/rust-lang/regex/pull/1281):
+Remove `fuzz/` and `record/` directories from published crate on crates.io.
+
+
 1.11.1 (2024-10-24)
 ===================
 This is a new patch release of `regex` that fixes compilation on nightly

@@ -80,18 +80,19 @@ compilation itself expensive, but this also prevents optimizations that reuse
 allocations internally to the matching engines.
 
 In Rust, it can sometimes be a pain to pass regular expressions around if
-they're used from inside a helper function. Instead, we recommend using the
-[`once_cell`](https://crates.io/crates/once_cell) crate to ensure that
-regular expressions are compiled exactly once. For example:
+they're used from inside a helper function. Instead, we recommend using
+[`std::sync::LazyLock`], or the [`once_cell`] crate,
+if you can't use the standard library.
+
+This example shows how to use `std::sync::LazyLock`:
 
 ```rust
-use {
-    once_cell::sync::Lazy,
-    regex::Regex,
-};
+use std::sync::LazyLock;
+
+use regex::Regex;
 
 fn some_helper_function(haystack: &str) -> bool {
-    static RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"...").unwrap());
+    static RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"...").unwrap());
     RE.is_match(haystack)
 }
 
@@ -103,6 +104,9 @@ fn main() {
 
 Specifically, in this example, the regex will be compiled when it is used for
 the first time. On subsequent uses, it will reuse the previous compilation.
+
+[`std::sync::LazyLock`]: https://doc.rust-lang.org/std/sync/struct.LazyLock.html
+[`once_cell`]: https://crates.io/crates/once_cell
 
 ### Usage: match regular expressions on `&[u8]`
 
