@@ -5219,3 +5219,10 @@ mod tests {
         assert_eq!(Err(expected), got);
     }
 }
+
+impl<T> DFA<T> {
+    /// Set or unset the prefilter attached to this DFA.
+    pub fn prefilter(&mut self, prefilter: Option<Prefilter>) {
+        self.pre = prefilter
+    }
+}
