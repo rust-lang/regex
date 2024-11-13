@@ -328,7 +328,7 @@ mod inner {
     ///
     /// See this issue for more context and discussion:
     /// https://github.com/rust-lang/regex/issues/934
-    const MAX_POOL_STACKS: usize = 8;
+    const MAX_POOL_STACKS: usize = 32;
 
     thread_local!(
         /// A thread local used to assign an ID to a thread.
