@@ -3,7 +3,8 @@ name = "regex-lite"
 version = "0.1.6"  #:version
 authors = ["The Rust Project Developers", "Andrew Gallant <jamslam@gmail.com>"]
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/rust-lang/regex/tree/master/regex-lite"
+homepage = "https://github.com/rust-lang/regex/tree/master/regex-lite"
+repository = "https://github.com/rust-lang/regex"
 documentation = "https://docs.rs/regex-lite"
 description = """
 A lightweight regex engine that optimizes for binary size and compilation time.
