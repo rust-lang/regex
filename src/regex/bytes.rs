@@ -1787,7 +1787,7 @@ impl<'h> Captures<'h> {
             .expect("number of capture groups can vary in a match")
             .checked_sub(1)
             .expect("number of groups is always greater than zero");
-        assert_eq!(N, len, "asked for {} groups, but must ask for {}", N, len);
+        assert_eq!(N, len, "asked for {N} groups, but must ask for {len}");
         // The regex-automata variant of extract is a bit more permissive.
         // It doesn't require the number of matching capturing groups to be
         // static, and you can even request fewer groups than what's there. So
@@ -1942,7 +1942,7 @@ impl<'h> core::fmt::Debug for Captures<'h> {
             fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
                 write!(f, "{}", self.0)?;
                 if let Some(name) = self.1 {
-                    write!(f, "/{:?}", name)?;
+                    write!(f, "/{name:?}")?;
                 }
                 Ok(())
             }
@@ -1992,7 +1992,7 @@ impl<'h> core::ops::Index<usize> for Captures<'h> {
     fn index<'a>(&'a self, i: usize) -> &'a [u8] {
         self.get(i)
             .map(|m| m.as_bytes())
-            .unwrap_or_else(|| panic!("no group at index '{}'", i))
+            .unwrap_or_else(|| panic!("no group at index '{i}'"))
     }
 }
 
@@ -2018,7 +2018,7 @@ impl<'h, 'n> core::ops::Index<&'n str> for Captures<'h> {
     fn index<'a>(&'a self, name: &'n str) -> &'a [u8] {
         self.name(name)
             .map(|m| m.as_bytes())
-            .unwrap_or_else(|| panic!("no group named '{}'", name))
+            .unwrap_or_else(|| panic!("no group named '{name}'"))
     }
 }
 
