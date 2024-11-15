@@ -780,7 +780,7 @@ enum FollowEpsilon {
 ///
 /// The data structure is based on: https://research.swtch.com/sparse
 /// Note though that we don't actually use uninitialized memory. We generally
-/// reuse sparse sets, so the initial allocation cost is bareable. However, its
+/// reuse sparse sets, so the initial allocation cost is bearable. However, its
 /// other properties listed above are extremely useful.
 #[derive(Clone)]
 struct SparseSet {
@@ -822,7 +822,7 @@ impl SparseSet {
     fn resize(&mut self, new_capacity: usize) {
         assert!(
             new_capacity <= u32::MAX.as_usize(),
-            "sparse set capacity cannot excced {:?}",
+            "sparse set capacity cannot exceed {:?}",
             u32::MAX,
         );
         self.clear();

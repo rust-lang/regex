@@ -969,7 +969,7 @@ impl Regex {
     /// Returns the end byte offset of the first match in the haystack given.
     ///
     /// This method may have the same performance characteristics as
-    /// `is_match`. Behaviorlly, it doesn't just report whether it match
+    /// `is_match`. Behaviorally, it doesn't just report whether it match
     /// occurs, but also the end offset for a match. In particular, the offset
     /// returned *may be shorter* than the proper end of the leftmost-first
     /// match that you would find via [`Regex::find`].
@@ -1743,7 +1743,7 @@ impl<'h> Captures<'h> {
     /// use regex::Regex;
     ///
     /// let re = Regex::new(r"([0-9]{4})-([0-9]{2})-([0-9]{2})").unwrap();
-    /// let hay = "On 2010-03-14, I became a Tenneessee lamb.";
+    /// let hay = "On 2010-03-14, I became a Tennessee lamb.";
     /// let Some((full, [year, month, day])) =
     ///     re.captures(hay).map(|caps| caps.extract()) else { return };
     /// assert_eq!("2010-03-14", full);
@@ -1852,7 +1852,7 @@ impl<'h> Captures<'h> {
     /// let re = Regex::new(
     ///     r"(?<day>[0-9]{2})-(?<month>[0-9]{2})-(?<year>[0-9]{4})",
     /// ).unwrap();
-    /// let hay = "On 14-03-2010, I became a Tenneessee lamb.";
+    /// let hay = "On 14-03-2010, I became a Tennessee lamb.";
     /// let caps = re.captures(hay).unwrap();
     ///
     /// let mut dst = String::new();
@@ -2593,7 +2593,7 @@ impl<'s> Replacer for NoExpand<'s> {
 /// no `$` anywhere, then interpolation definitely does not need to be done. In
 /// that case, the given string is returned as a borrowed `Cow`.
 ///
-/// This is meant to be used to implement the `Replacer::no_expandsion` method
+/// This is meant to be used to implement the [`Replacer::no_expansion`] method
 /// in its various trait impls.
 fn no_expansion<T: AsRef<str>>(replacement: &T) -> Option<Cow<'_, str>> {
     let replacement = replacement.as_ref();

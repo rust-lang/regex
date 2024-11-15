@@ -14,7 +14,7 @@ use crate::util::{escape::DebugByte, primitives::PatternID, utf8};
 ///
 /// It turns out that regex searches have a few parameters, and in most cases,
 /// those parameters have defaults that work in the vast majority of cases.
-/// This `Input` type exists to make that common case seamnless while also
+/// This `Input` type exists to make that common case seamless while also
 /// providing an avenue for changing the parameters of a search. In particular,
 /// this type enables doing so without a combinatorial explosion of different
 /// methods and/or superfluous parameters in the common cases.
@@ -1346,7 +1346,7 @@ impl core::fmt::Display for PatternSetInsertError {
         write!(
             f,
             "failed to insert pattern ID {} into pattern set \
-             with insufficiet capacity of {}",
+             with insufficient capacity of {}",
             self.attempted.as_usize(),
             self.capacity,
         )
