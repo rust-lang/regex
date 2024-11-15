@@ -1471,13 +1471,13 @@ impl fmt::Debug for Inner {
         }
         let pattern_len = self.start_pattern.len();
         if pattern_len > 1 {
-            writeln!(f, "")?;
+            writeln!(f)?;
             for pid in 0..pattern_len {
                 let sid = self.start_pattern[pid];
                 writeln!(f, "START({:06?}): {:?}", pid, sid.as_usize())?;
             }
         }
-        writeln!(f, "")?;
+        writeln!(f)?;
         writeln!(
             f,
             "transition equivalence classes: {:?}",
@@ -1819,7 +1819,7 @@ impl SparseTransitions {
         &self,
         unit: alphabet::Unit,
     ) -> Option<StateID> {
-        unit.as_u8().map_or(None, |byte| self.matches_byte(byte))
+        unit.as_u8().and_then(|byte| self.matches_byte(byte))
     }
 
     /// This follows the matching transition for a particular byte.
@@ -1909,7 +1909,7 @@ impl DenseTransitions {
         &self,
         unit: alphabet::Unit,
     ) -> Option<StateID> {
-        unit.as_u8().map_or(None, |byte| self.matches_byte(byte))
+        unit.as_u8().and_then(|byte| self.matches_byte(byte))
     }
 
     /// This follows the matching transition for a particular byte.
