@@ -1787,7 +1787,7 @@ impl<'h> Captures<'h> {
             .expect("number of capture groups can vary in a match")
             .checked_sub(1)
             .expect("number of groups is always greater than zero");
-        assert_eq!(N, len, "asked for {} groups, but must ask for {}", N, len);
+        assert_eq!(N, len, "asked for {N} groups, but must ask for {len}");
         // The regex-automata variant of extract is a bit more permissive.
         // It doesn't require the number of matching capturing groups to be
         // static, and you can even request fewer groups than what's there. So
@@ -1942,7 +1942,7 @@ impl<'h> core::fmt::Debug for Captures<'h> {
             fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
                 write!(f, "{}", self.0)?;
                 if let Some(name) = self.1 {
-                    write!(f, "/{:?}", name)?;
+                    write!(f, "/{name:?}")?;
                 }
                 Ok(())
             }
@@ -2646,7 +2646,7 @@ mod tests {
     fn test_debug_output_valid_utf8() {
         let haystack = b"Hello, world!";
         let m = Match::new(haystack, 7, 12);
-        let debug_str = format!("{:?}", m);
+        let debug_str = format!("{m:?}");
 
         assert_eq!(
             debug_str,
@@ -2658,7 +2658,7 @@ mod tests {
     fn test_debug_output_invalid_utf8() {
         let haystack = b"Hello, \xFFworld!";
         let m = Match::new(haystack, 7, 13);
-        let debug_str = format!("{:?}", m);
+        let debug_str = format!("{m:?}");
 
         assert_eq!(
             debug_str,
@@ -2671,7 +2671,7 @@ mod tests {
         let haystack =
             "Hello, 😊 world! 안녕하세요? مرحبا بالعالم!".as_bytes();
         let m = Match::new(haystack, 0, haystack.len());
-        let debug_str = format!("{:?}", m);
+        let debug_str = format!("{m:?}");
 
         assert_eq!(
             debug_str,
@@ -2683,7 +2683,7 @@ mod tests {
     fn test_debug_output_ascii_escape() {
         let haystack = b"Hello,\tworld!\nThis is a \x1b[31mtest\x1b[0m.";
         let m = Match::new(haystack, 0, haystack.len());
-        let debug_str = format!("{:?}", m);
+        let debug_str = format!("{m:?}");
 
         assert_eq!(
             debug_str,
@@ -2695,7 +2695,7 @@ mod tests {
     fn test_debug_output_match_in_middle() {
         let haystack = b"The quick brown fox jumps over the lazy dog.";
         let m = Match::new(haystack, 16, 19);
-        let debug_str = format!("{:?}", m);
+        let debug_str = format!("{m:?}");
 
         assert_eq!(debug_str, r#"Match { start: 16, end: 19, bytes: "fox" }"#);
     }
