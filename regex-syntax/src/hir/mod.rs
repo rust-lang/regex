@@ -3047,7 +3047,7 @@ fn lift_common_prefix(hirs: Vec<Hir>) -> Result<Hir, Vec<Hir>> {
             .count();
         prefix = &prefix[..common_len];
         if prefix.is_empty() {
-            return Err(hirs);
+            return lift_common_suffix(hirs).map(Hir::concat);
         }
     }
     let len = prefix.len();
@@ -3068,8 +3068,67 @@ fn lift_common_prefix(hirs: Vec<Hir>) -> Result<Hir, Vec<Hir>> {
         }
     }
     let mut concat = prefix_concat;
-    concat.push(Hir::alternation(suffix_alts));
+    match lift_common_suffix(suffix_alts) {
+        Ok(suffix_concat) => {
+            concat.extend(suffix_concat);
+        }
+        Err(suffix_alts) => {
+            concat.push(Hir::alternation(suffix_alts));
+        }
+    }
     Ok(Hir::concat(concat))
+}
+
+#[allow(clippy::inline_always)]
+#[inline(always)] // prevents blowing the stack
+fn lift_common_suffix(hirs: Vec<Hir>) -> Result<Vec<Hir>, Vec<Hir>> {
+    if hirs.len() <= 1 {
+        return Err(hirs);
+    }
+    let mut suffix = match hirs.last().unwrap().kind() {
+        HirKind::Concat(ref xs) => &**xs,
+        _ => return Err(hirs),
+    };
+    if suffix.is_empty() {
+        return Err(hirs);
+    }
+    for h in hirs.iter().rev().skip(1) {
+        let concat = match h.kind() {
+            HirKind::Concat(ref xs) => xs,
+            _ => return Err(hirs),
+        };
+        let common_len = suffix
+            .iter()
+            .rev()
+            .zip(concat.iter().rev())
+            .take_while(|(x, y)| x == y)
+            .count();
+        suffix = &suffix[suffix.len()-common_len..];
+        if suffix.is_empty() {
+            return Err(hirs);
+        }
+    }
+    let len = suffix.len();
+    assert_ne!(0, len);
+    let mut suffix_concat = vec![];
+    let mut prefix_alts = vec![];
+    for h in hirs {
+        let mut concat = match h.into_kind() {
+            HirKind::Concat(xs) => xs,
+            // We required all sub-expressions to be
+            // concats above, so we're only here if we
+            // have a concat.
+            _ => unreachable!(),
+        };
+        let suffix = concat.split_off(concat.len()-len);
+        prefix_alts.push(Hir::concat(concat));
+        if suffix_concat.is_empty() {
+            suffix_concat = suffix;
+        }
+    }
+    let mut concat = suffix_concat;
+    concat.insert(0, Hir::alternation(prefix_alts));
+    Ok(concat)
 }
 
 #[cfg(test)]
