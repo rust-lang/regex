@@ -3103,7 +3103,7 @@ fn lift_common_suffix(hirs: Vec<Hir>) -> Result<Vec<Hir>, Vec<Hir>> {
             .zip(concat.iter().rev())
             .take_while(|(x, y)| x == y)
             .count();
-        suffix = &suffix[suffix.len()-common_len..];
+        suffix = &suffix[suffix.len() - common_len..];
         if suffix.is_empty() {
             return Err(hirs);
         }
@@ -3120,7 +3120,7 @@ fn lift_common_suffix(hirs: Vec<Hir>) -> Result<Vec<Hir>, Vec<Hir>> {
             // have a concat.
             _ => unreachable!(),
         };
-        let suffix = concat.split_off(concat.len()-len);
+        let suffix = concat.split_off(concat.len() - len);
         prefix_alts.push(Hir::concat(concat));
         if suffix_concat.is_empty() {
             suffix_concat = suffix;
