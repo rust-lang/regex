@@ -696,22 +696,20 @@ where
     fn size_hint(&self) -> (usize, Option<usize>) {
         use MergeIterState::*;
 
-        // Fundamentally this is a spicy concatenation, so add the sizes together
-        let extra_element = match self.state {
-            LeftExhausted => 0,
-            RightExhausted => 0,
-            LeftItem(_) => 1,
-            RightItem(_) => 1,
-        };
+        match self.state {
+            LeftExhausted => return self.right.size_hint(),
+            RightExhausted => return self.left.size_hint(),
+            LeftItem(_) | RightItem(_) => {}
+        }
 
+        // Fundamentally this is a spicy concatenation, so add the sizes together
         let (min1, max1) = self.left.size_hint();
         let (min2, max2) = self.right.size_hint();
 
-        let min = min1.saturating_add(min2).saturating_add(extra_element);
-
+        let min = min1.saturating_add(min2).saturating_add(1);
         let max = max1
             .and_then(|max| max.checked_add(max2?))
-            .and_then(|max| max.checked_add(extra_element));
+            .and_then(|max| max.checked_add(1));
 
         (min, max)
     }
