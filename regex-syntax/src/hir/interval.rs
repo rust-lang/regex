@@ -614,6 +614,8 @@ impl Bound for char {
     }
 }
 
+/// Iterator that, given a pair of sorted iterators, merges their items into
+/// a single sorted sequence
 struct MergeIter<I: Iterator> {
     left: I,
     right: I,
@@ -692,12 +694,24 @@ where
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
+        use MergeIterState::*;
+
         // Fundamentally this is a spicy concatenation, so add the sizes together
+        let extra_element = match self.state {
+            LeftExhausted => 0,
+            RightExhausted => 0,
+            LeftItem(_) => 1,
+            RightItem(_) => 1,
+        };
+
         let (min1, max1) = self.left.size_hint();
         let (min2, max2) = self.right.size_hint();
 
-        let min = min1.saturating_add(min2);
-        let max = max1.and_then(|max| max.checked_add(max2?));
+        let min = min1.saturating_add(min2).saturating_add(extra_element);
+
+        let max = max1
+            .and_then(|max| max.checked_add(max2?))
+            .and_then(|max| max.checked_add(extra_element));
 
         (min, max)
     }
