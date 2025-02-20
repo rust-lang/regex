@@ -81,10 +81,20 @@ impl<I: Interval> IntervalSet<I> {
 
     /// Add a new interval to this set.
     pub fn push(&mut self, interval: I) {
-        // TODO: This could be faster. e.g., Push the interval such that
-        // it preserves canonicalization.
-        self.ranges.push(interval);
-        self.canonicalize();
+        // Use a binary search to try to find the approximate place this
+        // interval should go
+        let point = match self.ranges.binary_search(&interval) {
+            // We lucked out, this interval already exists in the set.
+            Ok(_) => return,
+            Err(point) => point,
+        };
+
+        // TODO: A more efficient implementation is possible here, one which
+        // avoids the unconditional insert and searches only the range covered
+        // by `interval` when performing the union.
+        self.ranges.insert(point, interval);
+        union_sorted(&mut self.ranges);
+
         // We don't know whether the new interval added here is considered
         // case folded, so we conservatively assume that the entire set is
         // no longer case folded if it was previously.
