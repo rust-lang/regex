@@ -373,6 +373,13 @@ impl Hir {
         Hir { kind: HirKind::Look(look), props }
     }
 
+    /// Creates a look-around subexpression HIR expression.
+    #[inline]
+    pub fn lookaround(lookaround: Lookaround) -> Hir {
+        let props = Properties::lookaround(&lookaround);
+        Hir { kind: HirKind::Lookaround(lookaround), props }
+    }
+
     /// Creates a repetition HIR expression.
     #[inline]
     pub fn repetition(mut rep: Repetition) -> Hir {
@@ -728,6 +735,8 @@ pub enum HirKind {
     Class(Class),
     /// A look-around assertion. A look-around match always has zero length.
     Look(Look),
+    /// A look-around subexpression
+    Lookaround(Lookaround),
     /// A repetition operation applied to a sub-expression.
     Repetition(Repetition),
     /// A capturing group, which contains a sub-expression.
@@ -761,6 +770,7 @@ impl HirKind {
             | HirKind::Literal(_)
             | HirKind::Class(_)
             | HirKind::Look(_) => &[],
+            HirKind::Lookaround(ref lookaround) => from_ref(lookaround.sub()),
             HirKind::Repetition(Repetition { ref sub, .. }) => from_ref(sub),
             HirKind::Capture(Capture { ref sub, .. }) => from_ref(sub),
             HirKind::Concat(ref subs) => subs,
@@ -1786,6 +1796,37 @@ impl Look {
     }
 }
 
+/// Represents a general lookaround assertion
+///
+/// Currently, only lookbehind assertions are supported.
+/// Furthermore, capture groups inside assertions are not supported.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum Lookaround {
+    /// A positive lookbehind assertion
+    PositiveLookBehind(Box<Hir>),
+    /// A negative lookbehind assertion
+    NegativeLookBehind(Box<Hir>),
+}
+
+impl Lookaround {
+    /// Returns a reference to the inner expression that must match for this
+    /// lookaround assertion to hold.
+    pub fn sub(&self) -> &Hir {
+        match self {
+            Lookaround::PositiveLookBehind(sub)
+            | Lookaround::NegativeLookBehind(sub) => sub,
+        }
+    }
+
+    /// Returns a mutable reference to the inner expression
+    pub fn sub_mut(&mut self) -> &mut Hir {
+        match self {
+            Lookaround::PositiveLookBehind(sub)
+            | Lookaround::NegativeLookBehind(sub) => sub,
+        }
+    }
+}
+
 /// The high-level intermediate representation for a capturing group.
 ///
 /// A capturing group always has an index and a child expression. It may
@@ -1935,6 +1976,9 @@ impl Drop for Hir {
                 | HirKind::Literal(_)
                 | HirKind::Class(_)
                 | HirKind::Look(_) => {}
+                HirKind::Lookaround(ref mut x) => {
+                    stack.push(mem::replace(x.sub_mut(), Hir::empty()));
+                }
                 HirKind::Capture(ref mut x) => {
                     stack.push(mem::replace(&mut x.sub, Hir::empty()));
                 }
@@ -2495,6 +2539,18 @@ impl Properties {
             static_explicit_captures_len: Some(0),
             literal: false,
             alternation_literal: false,
+        };
+        Properties(Box::new(inner))
+    }
+
+    fn lookaround(lookaround: &Lookaround) -> Properties {
+        let sub_p = lookaround.sub().properties();
+        let inner = PropertiesI {
+            minimum_len: Some(0),
+            maximum_len: Some(0),
+            literal: false,
+            alternation_literal: false,
+            ..*sub_p.0.clone()
         };
         Properties(Box::new(inner))
     }

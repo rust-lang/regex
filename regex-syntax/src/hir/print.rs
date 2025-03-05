@@ -227,6 +227,12 @@ impl<W: fmt::Write> Visitor for Writer<W> {
                     self.wtr.write_str(r"\b{end-half}")?;
                 }
             },
+            HirKind::Lookaround(hir::Lookaround::PositiveLookBehind(_)) => {
+                self.wtr.write_str(r"(?<=)")?;
+            }
+            HirKind::Lookaround(hir::Lookaround::NegativeLookBehind(_)) => {
+                self.wtr.write_str(r"(?<!)")?;
+            }
             HirKind::Capture(hir::Capture { ref name, .. }) => {
                 self.wtr.write_str("(")?;
                 if let Some(ref name) = *name {
@@ -293,7 +299,8 @@ impl<W: fmt::Write> Visitor for Writer<W> {
             }
             HirKind::Capture(_)
             | HirKind::Concat(_)
-            | HirKind::Alternation(_) => {
+            | HirKind::Alternation(_)
+            | HirKind::Lookaround(_) => {
                 self.wtr.write_str(r")")?;
             }
         }
