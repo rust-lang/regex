@@ -251,6 +251,10 @@ pub(crate) fn next(
             | thompson::State::Fail
             | thompson::State::Look { .. }
             | thompson::State::Capture { .. } => {}
+            thompson::State::CheckLookaround { .. }
+            | thompson::State::WriteLookaround { .. } => {
+                todo!("check how to handle")
+            }
             thompson::State::Match { pattern_id } => {
                 // Notice here that we are calling the NEW state a match
                 // state if the OLD state we are transitioning from
@@ -399,6 +403,10 @@ pub(crate) fn epsilon_closure(
                 | thompson::State::Dense { .. }
                 | thompson::State::Fail
                 | thompson::State::Match { .. } => break,
+                thompson::State::WriteLookaround { .. }
+                | thompson::State::CheckLookaround { .. } => {
+                    todo!("check how to handle")
+                }
                 thompson::State::Look { look, next } => {
                     if !look_have.contains(look) {
                         break;
@@ -464,6 +472,10 @@ pub(crate) fn add_nfa_states(
             thompson::State::Look { look, .. } => {
                 builder.add_nfa_state_id(nfa_id);
                 builder.set_look_need(|need| need.insert(look));
+            }
+            thompson::State::CheckLookaround { .. }
+            | thompson::State::WriteLookaround { .. } => {
+                todo!("check how to handle")
             }
             thompson::State::Union { .. }
             | thompson::State::BinaryUnion { .. } => {

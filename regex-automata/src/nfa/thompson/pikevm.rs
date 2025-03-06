@@ -1216,6 +1216,10 @@ impl PikeVM {
 }
 
 impl PikeVM {
+    fn look_count(&self) -> usize {
+        self.nfa.look_count()
+    }
+
     /// The implementation of standard leftmost search.
     ///
     /// Capturing group spans are written to `slots`, but only if requested.
@@ -1254,7 +1258,12 @@ impl PikeVM {
 
         let pre =
             if anchored { None } else { self.get_config().get_prefilter() };
-        let Cache { ref mut stack, ref mut curr, ref mut next } = cache;
+        let Cache {
+            ref mut stack,
+            ref mut curr,
+            ref mut next,
+            ref mut lookaround,
+        } = cache;
         let mut hm = None;
         // Yes, our search doesn't end at input.end(), but includes it. This
         // is necessary because matches are delayed by one byte, just like
@@ -1361,9 +1370,12 @@ impl PikeVM {
                 // transitions, and thus must be able to write offsets to the
                 // slots given which are later copied to slot values in 'curr'.
                 let slots = next.slot_table.all_absent();
-                self.epsilon_closure(stack, slots, curr, input, at, start_id);
+                self.epsilon_closure(
+                    stack, slots, curr, lookaround, input, at, start_id,
+                );
             }
-            if let Some(pid) = self.nexts(stack, curr, next, input, at, slots)
+            if let Some(pid) =
+                self.nexts(stack, curr, next, lookaround, input, at, slots)
             {
                 hm = Some(HalfMatch::new(pid, at));
             }
@@ -1425,7 +1437,12 @@ impl PikeVM {
             Some(config) => config,
         };
 
-        let Cache { ref mut stack, ref mut curr, ref mut next } = cache;
+        let Cache {
+            ref mut stack,
+            ref mut curr,
+            ref mut next,
+            ref mut lookaround,
+        } = cache;
         for at in input.start()..=input.end() {
             let any_matches = !patset.is_empty();
             if curr.set.is_empty() {
@@ -1438,9 +1455,13 @@ impl PikeVM {
             }
             if !any_matches || allmatches {
                 let slots = &mut [];
-                self.epsilon_closure(stack, slots, curr, input, at, start_id);
+                self.epsilon_closure(
+                    stack, slots, curr, lookaround, input, at, start_id,
+                );
             }
-            self.nexts_overlapping(stack, curr, next, input, at, patset);
+            self.nexts_overlapping(
+                stack, curr, next, lookaround, input, at, patset,
+            );
             // If we found a match and filled our set, then there is no more
             // additional info that we can provide. Thus, we can quit. We also
             // quit if the caller asked us to stop at the earliest point that
@@ -1469,6 +1490,7 @@ impl PikeVM {
         stack: &mut Vec<FollowEpsilon>,
         curr: &mut ActiveStates,
         next: &mut ActiveStates,
+        lookarounds: &mut Vec<bool>,
         input: &Input<'_>,
         at: usize,
         slots: &mut [Option<NonMaxUsize>],
@@ -1477,7 +1499,15 @@ impl PikeVM {
         let mut pid = None;
         let ActiveStates { ref set, ref mut slot_table } = *curr;
         for sid in set.iter() {
-            pid = match self.next(stack, slot_table, next, input, at, sid) {
+            pid = match self.next(
+                stack,
+                slot_table,
+                next,
+                lookarounds,
+                input,
+                at,
+                sid,
+            ) {
                 None => continue,
                 Some(pid) => Some(pid),
             };
@@ -1497,6 +1527,7 @@ impl PikeVM {
         stack: &mut Vec<FollowEpsilon>,
         curr: &mut ActiveStates,
         next: &mut ActiveStates,
+        lookarounds: &mut Vec<bool>,
         input: &Input<'_>,
         at: usize,
         patset: &mut PatternSet,
@@ -1505,8 +1536,15 @@ impl PikeVM {
         let utf8empty = self.get_nfa().has_empty() && self.get_nfa().is_utf8();
         let ActiveStates { ref set, ref mut slot_table } = *curr;
         for sid in set.iter() {
-            let pid = match self.next(stack, slot_table, next, input, at, sid)
-            {
+            let pid = match self.next(
+                stack,
+                slot_table,
+                next,
+                lookarounds,
+                input,
+                at,
+                sid,
+            ) {
                 None => continue,
                 Some(pid) => pid,
             };
@@ -1543,6 +1581,7 @@ impl PikeVM {
         stack: &mut Vec<FollowEpsilon>,
         curr_slot_table: &mut SlotTable,
         next: &mut ActiveStates,
+        lookarounds: &mut Vec<bool>,
         input: &Input<'_>,
         at: usize,
         sid: StateID,
@@ -1553,7 +1592,9 @@ impl PikeVM {
             | State::Look { .. }
             | State::Union { .. }
             | State::BinaryUnion { .. }
-            | State::Capture { .. } => None,
+            | State::Capture { .. }
+            | State::WriteLookaround { .. }
+            | State::CheckLookaround { .. } => None,
             State::ByteRange { ref trans } => {
                 if trans.matches(input.haystack(), at) {
                     let slots = curr_slot_table.for_state(sid);
@@ -1561,7 +1602,13 @@ impl PikeVM {
                     // adding 1 will never wrap.
                     let at = at.wrapping_add(1);
                     self.epsilon_closure(
-                        stack, slots, next, input, at, trans.next,
+                        stack,
+                        slots,
+                        next,
+                        lookarounds,
+                        input,
+                        at,
+                        trans.next,
                     );
                 }
                 None
@@ -1573,7 +1620,13 @@ impl PikeVM {
                     // adding 1 will never wrap.
                     let at = at.wrapping_add(1);
                     self.epsilon_closure(
-                        stack, slots, next, input, at, next_sid,
+                        stack,
+                        slots,
+                        next,
+                        lookarounds,
+                        input,
+                        at,
+                        next_sid,
                     );
                 }
                 None
@@ -1585,7 +1638,13 @@ impl PikeVM {
                     // adding 1 will never wrap.
                     let at = at.wrapping_add(1);
                     self.epsilon_closure(
-                        stack, slots, next, input, at, next_sid,
+                        stack,
+                        slots,
+                        next,
+                        lookarounds,
+                        input,
+                        at,
+                        next_sid,
                     );
                 }
                 None
@@ -1613,6 +1672,7 @@ impl PikeVM {
         stack: &mut Vec<FollowEpsilon>,
         curr_slots: &mut [Option<NonMaxUsize>],
         next: &mut ActiveStates,
+        lookarounds: &mut Vec<bool>,
         input: &Input<'_>,
         at: usize,
         sid: StateID,
@@ -1629,7 +1689,13 @@ impl PikeVM {
                 }
                 FollowEpsilon::Explore(sid) => {
                     self.epsilon_closure_explore(
-                        stack, curr_slots, next, input, at, sid,
+                        stack,
+                        curr_slots,
+                        next,
+                        lookarounds,
+                        input,
+                        at,
+                        sid,
                     );
                 }
             }
@@ -1666,6 +1732,7 @@ impl PikeVM {
         stack: &mut Vec<FollowEpsilon>,
         curr_slots: &mut [Option<NonMaxUsize>],
         next: &mut ActiveStates,
+        lookarounds: &mut Vec<bool>,
         input: &Input<'_>,
         at: usize,
         mut sid: StateID,
@@ -1701,6 +1768,16 @@ impl PikeVM {
                         input.haystack(),
                         at,
                     ) {
+                        return;
+                    }
+                    sid = next;
+                }
+                State::WriteLookaround { look_idx } => {
+                    lookarounds[look_idx] = true;
+                    return;
+                }
+                State::CheckLookaround { look_idx, positive, next } => {
+                    if lookarounds[look_idx] != positive {
                         return;
                     }
                     sid = next;
@@ -1886,6 +1963,9 @@ pub struct Cache {
     /// The next set of states we're building that will be explored for the
     /// next byte in the haystack.
     next: ActiveStates,
+    /// This answers the question: "Does lookaround assertion x hold at the
+    /// current position in the haystack"
+    lookaround: Vec<bool>,
 }
 
 impl Cache {
@@ -1902,6 +1982,11 @@ impl Cache {
             stack: vec![],
             curr: ActiveStates::new(re),
             next: ActiveStates::new(re),
+            lookaround: {
+                let mut res = Vec::new();
+                res.resize(re.look_count(), false);
+                res
+            },
         }
     }
 

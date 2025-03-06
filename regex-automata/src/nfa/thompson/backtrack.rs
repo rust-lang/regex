@@ -1519,6 +1519,10 @@ impl BoundedBacktracker {
                     }
                     sid = next;
                 }
+                State::WriteLookaround { .. }
+                | State::CheckLookaround { .. } => {
+                    todo!("check how to handle")
+                }
                 State::Union { ref alternates } => {
                     sid = match alternates.get(0) {
                         None => return None,

@@ -638,6 +638,10 @@ impl<'a> InternalBuilder<'a> {
             self.stack_push(nfa_id, Epsilons::empty())?;
             while let Some((id, epsilons)) = self.stack.pop() {
                 match *self.nfa.state(id) {
+                    thompson::State::WriteLookaround { .. }
+                    | thompson::State::CheckLookaround { .. } => {
+                        todo!("check how to handle")
+                    }
                     thompson::State::ByteRange { ref trans } => {
                         self.compile_transition(dfa_id, trans, epsilons)?;
                     }

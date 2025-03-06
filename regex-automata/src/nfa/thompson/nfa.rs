@@ -1100,6 +1100,12 @@ impl NFA {
         self.0.look_set_prefix_any
     }
 
+    /// Returns how many lookaround sub-expressions this nfa contains
+    #[inline]
+    pub fn look_count(&self) -> usize {
+        self.0.look_count
+    }
+
     // FIXME: The `look_set_prefix_all` computation was not correct, and it
     // seemed a little tricky to fix it. Since I wasn't actually using it for
     // anything, I just decided to remove it in the run up to the regex 1.9
@@ -1260,6 +1266,7 @@ pub(super) struct Inner {
     /// zero-length prefix for any of the patterns in this NFA.
     look_set_prefix_all: LookSet,
     */
+    look_count: usize,
     /// Heap memory used indirectly by NFA states and other things (like the
     /// various capturing group representations above). Since each state
     /// might use a different amount of heap, we need to keep track of this
@@ -1288,7 +1295,11 @@ impl Inner {
                 match self.states[sid] {
                     State::ByteRange { .. }
                     | State::Dense { .. }
-                    | State::Fail => continue,
+                    | State::Fail
+                    | State::WriteLookaround { .. } => continue,
+                    State::CheckLookaround { next, .. } => {
+                        stack.push(next);
+                    }
                     State::Sparse(_) => {
                         // This snippet below will rewrite this sparse state
                         // as a dense state. By doing it here, we apply this
@@ -1370,6 +1381,10 @@ impl Inner {
             }
             State::Capture { .. } => {
                 self.has_capture = true;
+            }
+            State::CheckLookaround { look_idx, .. }
+            | State::WriteLookaround { look_idx } => {
+                self.look_count = self.look_count.max(look_idx);
             }
             State::Union { .. }
             | State::BinaryUnion { .. }
@@ -1545,6 +1560,25 @@ pub enum State {
         /// satisfied.
         next: StateID,
     },
+    /// This is like a match state but for a lookaround expression
+    /// executing this state will write a `true` into the lookaround oracle at
+    /// index `look_idx`
+    WriteLookaround {
+        /// The index of the lookaround expression that matches
+        look_idx: usize,
+    },
+    /// This indicates that we need to check whether lookaround expression with
+    /// index `look_idx` holds at the current position in the haystack
+    /// If `positive` is false, then the lookaround expression is negative and
+    /// hence must NOT hold.
+    CheckLookaround {
+        /// The index of the lookaround expression that must be satisfied
+        look_idx: usize,
+        /// Whether this is a positive lookaround expression
+        positive: bool,
+        /// The next state to transition if the lookaround assertion is satisfied
+        next: StateID,
+    },
     /// An alternation such that there exists an epsilon transition to all
     /// states in `alternates`, where matches found via earlier transitions
     /// are preferred over later transitions.
@@ -1658,11 +1692,13 @@ impl State {
             | State::Sparse { .. }
             | State::Dense { .. }
             | State::Fail
-            | State::Match { .. } => false,
+            | State::Match { .. }
+            | State::WriteLookaround { .. } => false,
             State::Look { .. }
             | State::Union { .. }
             | State::BinaryUnion { .. }
-            | State::Capture { .. } => true,
+            | State::Capture { .. }
+            | State::CheckLookaround { .. } => true,
         }
     }
 
@@ -1674,7 +1710,9 @@ impl State {
             | State::BinaryUnion { .. }
             | State::Capture { .. }
             | State::Match { .. }
-            | State::Fail => 0,
+            | State::Fail
+            | State::WriteLookaround { .. }
+            | State::CheckLookaround { .. } => 0,
             State::Sparse(SparseTransitions { ref transitions }) => {
                 transitions.len() * mem::size_of::<Transition>()
             }
@@ -1707,6 +1745,9 @@ impl State {
                 }
             }
             State::Look { ref mut next, .. } => *next = remap[*next],
+            State::CheckLookaround { ref mut next, .. } => {
+                *next = remap[*next]
+            }
             State::Union { ref mut alternates } => {
                 for alt in alternates.iter_mut() {
                     *alt = remap[*alt];
@@ -1717,8 +1758,9 @@ impl State {
                 *alt2 = remap[*alt2];
             }
             State::Capture { ref mut next, .. } => *next = remap[*next],
-            State::Fail => {}
-            State::Match { .. } => {}
+            State::Fail
+            | State::Match { .. }
+            | State::WriteLookaround { .. } => {}
         }
     }
 }
@@ -1747,6 +1789,18 @@ impl fmt::Debug for State {
             }
             State::Look { ref look, next } => {
                 write!(f, "{:?} => {:?}", look, next.as_usize())
+            }
+            State::WriteLookaround { look_idx } => {
+                write!(f, "Write Lookaround: {}", look_idx)
+            }
+            State::CheckLookaround { look_idx, positive, next } => {
+                write!(
+                    f,
+                    "Check Lookaround {} is {} => {}",
+                    look_idx,
+                    positive,
+                    next.as_usize()
+                )
             }
             State::Union { ref alternates } => {
                 let alts = alternates
