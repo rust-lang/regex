@@ -3,7 +3,7 @@ use core::{borrow::Borrow, cell::RefCell};
 use alloc::{sync::Arc, vec, vec::Vec};
 
 use regex_syntax::{
-    hir::{self, Hir},
+    hir::{self, Hir, LookAround},
     utf8::{Utf8Range, Utf8Sequences},
     ParserBuilder,
 };
@@ -711,6 +711,7 @@ pub struct Compiler {
     /// State used for caching common suffixes when compiling reverse UTF-8
     /// automata (for Unicode character classes).
     utf8_suffix: RefCell<Utf8SuffixMap>,
+    lookaround_alt: RefCell<Option<StateID>>,
 }
 
 impl Compiler {
@@ -723,6 +724,7 @@ impl Compiler {
             utf8_state: RefCell::new(Utf8State::new()),
             trie_state: RefCell::new(RangeTrie::new()),
             utf8_suffix: RefCell::new(Utf8SuffixMap::new(1000)),
+            lookaround_alt: RefCell::new(None),
         }
     }
 
@@ -977,11 +979,20 @@ impl Compiler {
 
         let compiled = self.c_alt_iter(exprs.iter().map(|e| {
             let _ = self.start_pattern()?;
+            let lookaround_prefix =
+                self.c_at_least(&Hir::dot(hir::Dot::AnyByte), false, 0)?;
+            let lookaround_alt = self.add_union_reverse()?;
+            self.patch(lookaround_prefix.end, lookaround_alt)?;
+            let top_level_alt = self.add_union()?;
+            self.patch(top_level_alt, lookaround_prefix.start)?;
+            self.lookaround_alt.borrow_mut().replace(lookaround_alt);
             let one = self.c_cap(0, None, e.borrow())?;
             let match_state_id = self.add_match()?;
             self.patch(one.end, match_state_id)?;
-            let _ = self.finish_pattern(one.start)?;
-            Ok(ThompsonRef { start: one.start, end: match_state_id })
+            self.patch(top_level_alt, one.start)?;
+            let _ = self.finish_pattern(top_level_alt)?;
+            self.lookaround_alt.borrow_mut().take();
+            Ok(ThompsonRef { start: top_level_alt, end: match_state_id })
         }))?;
         self.patch(unanchored_prefix.end, compiled.start)?;
         let nfa = self
@@ -1003,12 +1014,37 @@ impl Compiler {
             Class(Class::Bytes(ref c)) => self.c_byte_class(c),
             Class(Class::Unicode(ref c)) => self.c_unicode_class(c),
             Look(ref look) => self.c_look(look),
-            LookAround(_) => todo!("implement lookaround NFA compilation"),
+            LookAround(ref lookaround) => self.c_lookaround(lookaround),
             Repetition(ref rep) => self.c_repetition(rep),
             Capture(ref c) => self.c_cap(c.index, c.name.as_deref(), &c.sub),
             Concat(ref es) => self.c_concat(es.iter().map(|e| self.c(e))),
             Alternation(ref es) => self.c_alt_slice(es),
         }
+    }
+
+    fn c_lookaround(
+        &self,
+        lookaround: &LookAround,
+    ) -> Result<ThompsonRef, BuildError> {
+        let sub = match lookaround {
+            LookAround::NegativeLookBehind(ref sub)
+            | LookAround::PositiveLookBehind(ref sub) => self.c(sub)?,
+        };
+        let pos = match lookaround {
+            LookAround::NegativeLookBehind(_) => false,
+            LookAround::PositiveLookBehind(_) => true,
+        };
+        let idx = todo!("get index");
+        let check = self.add_check_lookaround(idx, pos)?;
+        let write = self.add_write_lookaround(idx)?;
+        self.patch(sub.end, write)?;
+        self.patch(
+            self.lookaround_alt
+                .borrow()
+                .expect("Cannot compile lookaround outside pattern"),
+            sub.start,
+        )?;
+        Ok(ThompsonRef { start: check, end: check })
     }
 
     /// Compile a concatenation of the sub-expressions yielded by the given
@@ -1629,6 +1665,25 @@ impl Compiler {
 
     fn add_empty(&self) -> Result<StateID, BuildError> {
         self.builder.borrow_mut().add_empty()
+    }
+
+    fn add_write_lookaround(
+        &self,
+        index: usize,
+    ) -> Result<StateID, BuildError> {
+        self.builder.borrow_mut().add_write_lookaround(index)
+    }
+
+    fn add_check_lookaround(
+        &self,
+        index: usize,
+        positive: bool,
+    ) -> Result<StateID, BuildError> {
+        self.builder.borrow_mut().add_check_lookaround(
+            index,
+            positive,
+            StateID::ZERO,
+        )
     }
 
     fn add_range(&self, start: u8, end: u8) -> Result<StateID, BuildError> {

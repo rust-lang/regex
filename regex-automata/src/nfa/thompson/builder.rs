@@ -41,7 +41,9 @@ enum State {
     },
     /// A state that only transitions to another state if the current input
     /// byte is in a particular range of bytes.
-    ByteRange { trans: Transition },
+    ByteRange {
+        trans: Transition,
+    },
     /// A state with possibly many transitions, represented in a sparse
     /// fashion. Transitions must be ordered lexicographically by input range
     /// and be non-overlapping. As such, this may only be used when every
@@ -55,10 +57,15 @@ enum State {
     /// that `Sparse` is used for via `Union`. But this creates a more bloated
     /// NFA with more epsilon transitions than is necessary in the special case
     /// of character classes.
-    Sparse { transitions: Vec<Transition> },
+    Sparse {
+        transitions: Vec<Transition>,
+    },
     /// A conditional epsilon transition satisfied via some sort of
     /// look-around.
-    Look { look: Look, next: StateID },
+    Look {
+        look: Look,
+        next: StateID,
+    },
     /// An empty state that records the start of a capture location. This is an
     /// unconditional epsilon transition like `Empty`, except it can be used to
     /// record position information for a capture group when using the NFA for
@@ -91,10 +98,20 @@ enum State {
         /// The next state that this state should transition to.
         next: StateID,
     },
+    WriteLookaround {
+        lookaround_index: usize,
+    },
+    CheckLookaround {
+        lookaround_index: usize,
+        positive: bool,
+        next: StateID,
+    },
     /// An alternation such that there exists an epsilon transition to all
     /// states in `alternates`, where matches found via earlier transitions
     /// are preferred over later transitions.
-    Union { alternates: Vec<StateID> },
+    Union {
+        alternates: Vec<StateID>,
+    },
     /// An alternation such that there exists an epsilon transition to all
     /// states in `alternates`, where matches found via later transitions are
     /// preferred over earlier transitions.
@@ -110,7 +127,9 @@ enum State {
     /// to be amortized constant time. But if we used a `Union`, we'd need to
     /// prepend the state, which takes O(n) time. There are other approaches we
     /// could use to solve this, but this seems simple enough.
-    UnionReverse { alternates: Vec<StateID> },
+    UnionReverse {
+        alternates: Vec<StateID>,
+    },
     /// A state that cannot be transitioned out of. This is useful for cases
     /// where you want to prevent matching from occurring. For example, if your
     /// regex parser permits empty character classes, then one could choose a
@@ -124,7 +143,9 @@ enum State {
     ///
     /// `pattern_id` refers to the ID of the pattern itself, which corresponds
     /// to the pattern's index (starting at 0).
-    Match { pattern_id: PatternID },
+    Match {
+        pattern_id: PatternID,
+    },
 }
 
 impl State {
@@ -154,7 +175,9 @@ impl State {
             | State::CaptureStart { .. }
             | State::CaptureEnd { .. }
             | State::Fail
-            | State::Match { .. } => 0,
+            | State::Match { .. }
+            | State::CheckLookaround { .. }
+            | State::WriteLookaround { .. } => 0,
             State::Sparse { ref transitions } => {
                 transitions.len() * mem::size_of::<Transition>()
             }
@@ -470,6 +493,22 @@ impl Builder {
                 State::Look { look, next } => {
                     remap[sid] = nfa.add(nfa::State::Look { look, next });
                 }
+                State::WriteLookaround { lookaround_index } => {
+                    remap[sid] = nfa.add(nfa::State::WriteLookaround {
+                        look_idx: lookaround_index,
+                    });
+                }
+                State::CheckLookaround {
+                    lookaround_index,
+                    positive,
+                    next,
+                } => {
+                    remap[sid] = nfa.add(nfa::State::CheckLookaround {
+                        look_idx: lookaround_index,
+                        positive,
+                        next,
+                    });
+                }
                 State::CaptureStart { pattern_id, group_index, next } => {
                     // We can't remove this empty state because of the side
                     // effect of capturing an offset for this capture slot.
@@ -691,6 +730,30 @@ impl Builder {
     /// the configured heap size limit has been exceeded.
     pub fn add_empty(&mut self) -> Result<StateID, BuildError> {
         self.add(State::Empty { next: StateID::ZERO })
+    }
+
+    /// Add a state which will record that the lookaround with the given index
+    /// is satisfied at the current position.
+    pub fn add_write_lookaround(
+        &mut self,
+        index: usize,
+    ) -> Result<StateID, BuildError> {
+        self.add(State::WriteLookaround { lookaround_index: index })
+    }
+
+    /// Add a state which will check whether the lookaround with the given
+    /// index is satisfied at the current position.
+    pub fn add_check_lookaround(
+        &mut self,
+        index: usize,
+        positive: bool,
+        next: StateID,
+    ) -> Result<StateID, BuildError> {
+        self.add(State::CheckLookaround {
+            lookaround_index: index,
+            positive,
+            next,
+        })
     }
 
     /// Add a "union" NFA state.
@@ -1159,6 +1222,9 @@ impl Builder {
             State::Look { ref mut next, .. } => {
                 *next = to;
             }
+            State::CheckLookaround { ref mut next, .. } => {
+                *next = to;
+            }
             State::Union { ref mut alternates } => {
                 alternates.push(to);
                 self.memory_states += mem::size_of::<StateID>();
@@ -1173,6 +1239,7 @@ impl Builder {
             State::CaptureEnd { ref mut next, .. } => {
                 *next = to;
             }
+            State::WriteLookaround { .. } => {}
             State::Fail => {}
             State::Match { .. } => {}
         }
