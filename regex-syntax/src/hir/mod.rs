@@ -1976,6 +1976,9 @@ impl Drop for Hir {
             | HirKind::Class(_)
             | HirKind::Look(_) => return,
             HirKind::Capture(ref x) if x.sub.kind.subs().is_empty() => return,
+            HirKind::Lookaround(ref x) if x.sub().kind.subs().is_empty() => {
+                return
+            }
             HirKind::Repetition(ref x) if x.sub.kind.subs().is_empty() => {
                 return
             }
