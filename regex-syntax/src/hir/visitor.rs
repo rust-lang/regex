@@ -213,7 +213,7 @@ impl<'a> Frame<'a> {
         match *self {
             Frame::Repetition(rep) => &rep.sub,
             Frame::Capture(capture) => &capture.sub,
-            Frame::LookAround(lookaround) => &lookaround.sub(),
+            Frame::LookAround(lookaround) => lookaround.sub(),
             Frame::Concat { head, .. } => head,
             Frame::Alternation { head, .. } => head,
         }
