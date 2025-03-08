@@ -1232,7 +1232,7 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
         if self.is_lookaround_prefix() {
             return Err(self.error(
                 Span::new(open_span.start, self.span().end),
-                ast::ErrorKind::UnsupportedLookAround,
+                ast::ErrorKind::UnsupportedLookAhead,
             ));
         }
         let inner_span = self.span();
@@ -3736,33 +3736,37 @@ bar
     }
 
     #[test]
-    fn parse_unsupported_lookaround() {
+    fn parse_unsupported_lookahead() {
         assert_eq!(
             parser(r"(?=a)").parse().unwrap_err(),
             TestError {
                 span: span(0..3),
-                kind: ast::ErrorKind::UnsupportedLookAround,
+                kind: ast::ErrorKind::UnsupportedLookAhead,
             }
         );
         assert_eq!(
             parser(r"(?!a)").parse().unwrap_err(),
             TestError {
                 span: span(0..3),
-                kind: ast::ErrorKind::UnsupportedLookAround,
+                kind: ast::ErrorKind::UnsupportedLookAhead,
+            }
+        );
+    }
+
+    #[test]
+    fn parse_unsupported_capture_in_lookbehind() {
+        assert_eq!(
+            parser(r"(?<=(?<=(a)))").parse().unwrap_err(),
+            TestError {
+                span: span(8..10),
+                kind: ast::ErrorKind::UsupportedCaptureInLookBehind,
             }
         );
         assert_eq!(
-            parser(r"(?<=a)").parse().unwrap_err(),
+            parser(r"(?<!(a))").parse().unwrap_err(),
             TestError {
-                span: span(0..4),
-                kind: ast::ErrorKind::UnsupportedLookAround,
-            }
-        );
-        assert_eq!(
-            parser(r"(?<!a)").parse().unwrap_err(),
-            TestError {
-                span: span(0..4),
-                kind: ast::ErrorKind::UnsupportedLookAround,
+                span: span(4..6),
+                kind: ast::ErrorKind::UsupportedCaptureInLookBehind,
             }
         );
     }

@@ -181,12 +181,15 @@ pub enum ErrorKind {
     /// escape is used. The octal escape is assumed to be an invocation of
     /// a backreference, which is the common case.
     UnsupportedBackreference,
-    /// When syntax similar to PCRE's look-around is used, this error is
+    /// When syntax similar to PCRE's look-ahead is used, this error is
     /// returned. Some example syntaxes that are rejected include, but are
-    /// not necessarily limited to, `(?=re)`, `(?!re)`, `(?<=re)` and
-    /// `(?<!re)`. Note that all of these syntaxes are otherwise invalid; this
+    /// not necessarily limited to, `(?=re)` and `(?!re)`.
+    /// Note that all of these syntaxes are otherwise invalid; this
     /// error is used to improve the user experience.
-    UnsupportedLookAround,
+    UnsupportedLookAhead,
+    /// When a capture group is used in a look-behind assertion, this error is
+    /// returned. Look-behind assertions do not support capturing groups.
+    UsupportedCaptureInLookBehind,
 }
 
 #[cfg(feature = "std")]
@@ -301,11 +304,10 @@ impl core::fmt::Display for ErrorKind {
             UnsupportedBackreference => {
                 write!(f, "backreferences are not supported")
             }
-            UnsupportedLookAround => write!(
-                f,
-                "look-around, including look-ahead and look-behind, \
-                 is not supported"
-            ),
+            UnsupportedLookAhead => write!(f, "look-aheads are not supported"),
+            UsupportedCaptureInLookBehind => {
+                write!(f, "capture groups are not supported in look-behinds")
+            }
         }
     }
 }
