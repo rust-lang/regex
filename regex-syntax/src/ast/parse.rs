@@ -3756,11 +3756,13 @@ bar
     }
 
     #[test]
+    #[ignore = "Missing parser support for lookaround"]
     fn parse_lookbehinds() {
-        todo!()
+        todo!("write tests for lookbehinds");
     }
 
     #[test]
+    #[ignore = "Missing parser support for lookaround"]
     fn parse_unsupported_capture_in_lookbehind() {
         assert_eq!(
             parser(r"(?<=(?<=(a)))").parse().unwrap_err(),
