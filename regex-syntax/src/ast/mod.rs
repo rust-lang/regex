@@ -189,7 +189,7 @@ pub enum ErrorKind {
     UnsupportedLookAhead,
     /// When a capture group is used in a look-behind assertion, this error is
     /// returned. Look-behind assertions do not support capturing groups.
-    UsupportedCaptureInLookBehind,
+    UnsupportedCaptureInLookBehind,
 }
 
 #[cfg(feature = "std")]
@@ -305,7 +305,7 @@ impl core::fmt::Display for ErrorKind {
                 write!(f, "backreferences are not supported")
             }
             UnsupportedLookAhead => write!(f, "look-aheads are not supported"),
-            UsupportedCaptureInLookBehind => {
+            UnsupportedCaptureInLookBehind => {
                 write!(f, "capture groups are not supported in look-behinds")
             }
         }

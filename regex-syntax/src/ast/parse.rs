@@ -3768,14 +3768,14 @@ bar
             parser(r"(?<=(?<=(a)))").parse().unwrap_err(),
             TestError {
                 span: span(8..10),
-                kind: ast::ErrorKind::UsupportedCaptureInLookBehind,
+                kind: ast::ErrorKind::UnsupportedCaptureInLookBehind,
             }
         );
         assert_eq!(
             parser(r"(?<!(a))").parse().unwrap_err(),
             TestError {
                 span: span(4..6),
-                kind: ast::ErrorKind::UsupportedCaptureInLookBehind,
+                kind: ast::ErrorKind::UnsupportedCaptureInLookBehind,
             }
         );
     }
