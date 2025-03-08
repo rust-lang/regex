@@ -83,6 +83,9 @@ enum Frame<'a> {
     /// A stack frame allocated just before descending into a capture's child
     /// node.
     Capture(&'a hir::Capture),
+    /// A stack frame allocated just before descending into a look-around's
+    /// child node.
+    LookAround(&'a hir::Lookaround),
     /// The stack frame used while visiting every child node of a concatenation
     /// of expressions.
     Concat {
@@ -162,6 +165,7 @@ impl<'a> HeapVisitor<'a> {
         match *hir.kind() {
             HirKind::Repetition(ref x) => Some(Frame::Repetition(x)),
             HirKind::Capture(ref x) => Some(Frame::Capture(x)),
+            HirKind::Lookaround(ref x) => Some(Frame::LookAround(x)),
             HirKind::Concat(ref x) if x.is_empty() => None,
             HirKind::Concat(ref x) => {
                 Some(Frame::Concat { head: &x[0], tail: &x[1..] })
@@ -180,6 +184,7 @@ impl<'a> HeapVisitor<'a> {
         match induct {
             Frame::Repetition(_) => None,
             Frame::Capture(_) => None,
+            Frame::LookAround(_) => None,
             Frame::Concat { tail, .. } => {
                 if tail.is_empty() {
                     None
@@ -208,6 +213,7 @@ impl<'a> Frame<'a> {
         match *self {
             Frame::Repetition(rep) => &rep.sub,
             Frame::Capture(capture) => &capture.sub,
+            Frame::LookAround(lookaround) => &lookaround.sub(),
             Frame::Concat { head, .. } => head,
             Frame::Alternation { head, .. } => head,
         }
