@@ -228,10 +228,10 @@ impl<W: fmt::Write> Visitor for Writer<W> {
                 }
             },
             HirKind::Lookaround(hir::Lookaround::PositiveLookBehind(_)) => {
-                self.wtr.write_str(r"(?<=)")?;
+                self.wtr.write_str(r"(?<=")?;
             }
             HirKind::Lookaround(hir::Lookaround::NegativeLookBehind(_)) => {
-                self.wtr.write_str(r"(?<!)")?;
+                self.wtr.write_str(r"(?<!")?;
             }
             HirKind::Capture(hir::Capture { ref name, .. }) => {
                 self.wtr.write_str("(")?;
@@ -482,6 +482,18 @@ mod tests {
         roundtrip("(?:a)", "a");
 
         roundtrip("((((a))))", "((((a))))");
+    }
+
+    #[test]
+    #[ignore = "Missing parser support for lookaround"]
+    fn print_look_around() {
+        roundtrip("(?<=)", "(?<=(?:))");
+        roundtrip("(?<!)", "(?<!(?:))");
+
+        roundtrip("(?<=a)", "(?<=a)");
+        roundtrip("(?<!a)", "(?<!a)");
+
+        roundtrip("(?<=(?<!(?<!(?<=a))))", "(?<=(?<!(?<!(?<=a))))");
     }
 
     #[test]
