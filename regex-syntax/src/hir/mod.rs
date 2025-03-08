@@ -375,9 +375,9 @@ impl Hir {
 
     /// Creates a look-around subexpression HIR expression.
     #[inline]
-    pub fn lookaround(lookaround: Lookaround) -> Hir {
+    pub fn lookaround(lookaround: LookAround) -> Hir {
         let props = Properties::lookaround(&lookaround);
-        Hir { kind: HirKind::Lookaround(lookaround), props }
+        Hir { kind: HirKind::LookAround(lookaround), props }
     }
 
     /// Creates a repetition HIR expression.
@@ -736,7 +736,7 @@ pub enum HirKind {
     /// A look-around assertion. A look-around match always has zero length.
     Look(Look),
     /// A look-around subexpression
-    Lookaround(Lookaround),
+    LookAround(LookAround),
     /// A repetition operation applied to a sub-expression.
     Repetition(Repetition),
     /// A capturing group, which contains a sub-expression.
@@ -770,7 +770,7 @@ impl HirKind {
             | HirKind::Literal(_)
             | HirKind::Class(_)
             | HirKind::Look(_) => &[],
-            HirKind::Lookaround(ref lookaround) => from_ref(lookaround.sub()),
+            HirKind::LookAround(ref lookaround) => from_ref(lookaround.sub()),
             HirKind::Repetition(Repetition { ref sub, .. }) => from_ref(sub),
             HirKind::Capture(Capture { ref sub, .. }) => from_ref(sub),
             HirKind::Concat(ref subs) => subs,
@@ -1801,14 +1801,14 @@ impl Look {
 /// Currently, only lookbehind assertions are supported.
 /// Furthermore, capture groups inside assertions are not supported.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub enum Lookaround {
+pub enum LookAround {
     /// A positive lookbehind assertion.
     PositiveLookBehind(Box<Hir>),
     /// A negative lookbehind assertion.
     NegativeLookBehind(Box<Hir>),
 }
 
-impl Lookaround {
+impl LookAround {
     /// Returns a reference to the inner expression that must match for this
     /// lookaround assertion to hold.
     pub fn sub(&self) -> &Hir {
@@ -1830,7 +1830,7 @@ impl Lookaround {
 
     /// Returns a new lookaround of the same kind, but with its
     /// sub-expression replaced with the one given.
-    pub fn with(&self, sub: Hir) -> Lookaround {
+    pub fn with(&self, sub: Hir) -> LookAround {
         match self {
             Self::PositiveLookBehind(_) => {
                 Self::PositiveLookBehind(Box::new(sub))
@@ -1976,7 +1976,7 @@ impl Drop for Hir {
             | HirKind::Class(_)
             | HirKind::Look(_) => return,
             HirKind::Capture(ref x) if x.sub.kind.subs().is_empty() => return,
-            HirKind::Lookaround(ref x) if x.sub().kind.subs().is_empty() => {
+            HirKind::LookAround(ref x) if x.sub().kind.subs().is_empty() => {
                 return
             }
             HirKind::Repetition(ref x) if x.sub.kind.subs().is_empty() => {
@@ -1994,7 +1994,7 @@ impl Drop for Hir {
                 | HirKind::Literal(_)
                 | HirKind::Class(_)
                 | HirKind::Look(_) => {}
-                HirKind::Lookaround(ref mut x) => {
+                HirKind::LookAround(ref mut x) => {
                     stack.push(mem::replace(x.sub_mut(), Hir::empty()));
                 }
                 HirKind::Capture(ref mut x) => {
@@ -2561,7 +2561,7 @@ impl Properties {
         Properties(Box::new(inner))
     }
 
-    fn lookaround(lookaround: &Lookaround) -> Properties {
+    fn lookaround(lookaround: &LookAround) -> Properties {
         let sub_p = lookaround.sub().properties();
         let inner = PropertiesI {
             minimum_len: Some(0),

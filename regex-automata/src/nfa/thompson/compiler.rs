@@ -1003,7 +1003,7 @@ impl Compiler {
             Class(Class::Bytes(ref c)) => self.c_byte_class(c),
             Class(Class::Unicode(ref c)) => self.c_unicode_class(c),
             Look(ref look) => self.c_look(look),
-            Lookaround(_) => todo!("implement lookaround NFA compilation"),
+            LookAround(_) => todo!("implement lookaround NFA compilation"),
             Repetition(ref rep) => self.c_repetition(rep),
             Capture(ref c) => self.c_cap(c.index, c.name.as_deref(), &c.sub),
             Concat(ref es) => self.c_concat(es.iter().map(|e| self.c(e))),

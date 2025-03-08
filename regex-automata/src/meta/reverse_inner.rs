@@ -170,7 +170,7 @@ fn top_concat(mut hir: &Hir) -> Option<Vec<Hir>> {
             | HirKind::Literal(_)
             | HirKind::Class(_)
             | HirKind::Look(_)
-            | HirKind::Lookaround(_)
+            | HirKind::LookAround(_)
             | HirKind::Repetition(_)
             | HirKind::Alternation(_) => return None,
             HirKind::Capture(hir::Capture { ref sub, .. }) => sub,
@@ -207,7 +207,7 @@ fn flatten(hir: &Hir) -> Hir {
         HirKind::Literal(hir::Literal(ref x)) => Hir::literal(x.clone()),
         HirKind::Class(ref x) => Hir::class(x.clone()),
         HirKind::Look(ref x) => Hir::look(x.clone()),
-        HirKind::Lookaround(ref x) => {
+        HirKind::LookAround(ref x) => {
             Hir::lookaround(x.with(flatten(x.sub())))
         }
         HirKind::Repetition(ref x) => Hir::repetition(x.with(flatten(&x.sub))),

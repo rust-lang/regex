@@ -172,7 +172,7 @@ impl Extractor {
         use crate::hir::HirKind::*;
 
         match *hir.kind() {
-            Empty | Look(_) | Lookaround(_) => {
+            Empty | Look(_) | LookAround(_) => {
                 Seq::singleton(self::Literal::exact(vec![]))
             }
             Literal(hir::Literal(ref bytes)) => {
