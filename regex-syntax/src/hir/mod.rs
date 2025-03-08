@@ -1796,15 +1796,15 @@ impl Look {
     }
 }
 
-/// Represents a general lookaround assertion
+/// Represents a general lookaround assertion.
 ///
 /// Currently, only lookbehind assertions are supported.
 /// Furthermore, capture groups inside assertions are not supported.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Lookaround {
-    /// A positive lookbehind assertion
+    /// A positive lookbehind assertion.
     PositiveLookBehind(Box<Hir>),
-    /// A negative lookbehind assertion
+    /// A negative lookbehind assertion.
     NegativeLookBehind(Box<Hir>),
 }
 
@@ -1813,16 +1813,31 @@ impl Lookaround {
     /// lookaround assertion to hold.
     pub fn sub(&self) -> &Hir {
         match self {
-            Lookaround::PositiveLookBehind(sub)
-            | Lookaround::NegativeLookBehind(sub) => sub,
+            Self::PositiveLookBehind(sub) | Self::NegativeLookBehind(sub) => {
+                sub
+            }
         }
     }
 
     /// Returns a mutable reference to the inner expression
     pub fn sub_mut(&mut self) -> &mut Hir {
         match self {
-            Lookaround::PositiveLookBehind(sub)
-            | Lookaround::NegativeLookBehind(sub) => sub,
+            Self::PositiveLookBehind(sub) | Self::NegativeLookBehind(sub) => {
+                sub
+            }
+        }
+    }
+
+    /// Returns a new lookaround of the same kind, but with its
+    /// sub-expression replaced with the one given.
+    pub fn with(&self, sub: Hir) -> Lookaround {
+        match self {
+            Self::PositiveLookBehind(_) => {
+                Self::PositiveLookBehind(Box::new(sub))
+            }
+            Self::NegativeLookBehind(_) => {
+                Self::NegativeLookBehind(Box::new(sub))
+            }
         }
     }
 }
