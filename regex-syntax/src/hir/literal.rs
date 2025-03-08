@@ -2456,6 +2456,22 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "Missing parser support for lookaround"]
+    fn lookaround() {
+        assert_eq!(exact(["ab"]), e(r"a(?<=qwe)b"));
+        assert_eq!(exact(["ab"]), e(r"a(?<!qwe)b"));
+
+        assert_eq!(exact(["ab"]), e(r"(?<=qwe)ab"));
+        assert_eq!(exact(["ab"]), e(r"(?<!qwe)ab"));
+
+        assert_eq!(exact(["ab"]), e(r"ab(?<=qwe)"));
+        assert_eq!(exact(["ab"]), e(r"ab(?<!qwe)"));
+
+        let expected = (seq([I("aZ"), E("ab")]), seq([I("Zb"), E("ab")]));
+        assert_eq!(expected, e(r"(?<=foo)aZ*b"));
+    }
+
+    #[test]
     fn repetition() {
         assert_eq!(exact(["a", ""]), e(r"a?"));
         assert_eq!(exact(["", "a"]), e(r"a??"));
