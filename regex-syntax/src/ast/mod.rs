@@ -479,6 +479,8 @@ pub enum Ast {
     Dot(Box<Span>),
     /// A single zero-width assertion.
     Assertion(Box<Assertion>),
+    /// A single look-around regular expression.
+    LookAround(Box<LookAround>),
     /// A single Unicode character class, e.g., `\pL` or `\p{Greek}`.
     ClassUnicode(Box<ClassUnicode>),
     /// A single perl character class, e.g., `\d` or `\W`.
@@ -521,6 +523,11 @@ impl Ast {
     /// Create a "assertion" AST item.
     pub fn assertion(e: Assertion) -> Ast {
         Ast::Assertion(Box::new(e))
+    }
+
+    /// Create a "look-around" AST item.
+    pub fn look_around(e: LookAround) -> Ast {
+        Ast::LookAround(Box::new(e))
     }
 
     /// Create a "Unicode class" AST item.
@@ -566,6 +573,7 @@ impl Ast {
             Ast::Literal(ref x) => &x.span,
             Ast::Dot(ref span) => span,
             Ast::Assertion(ref x) => &x.span,
+            Ast::LookAround(ref x) => &x.span,
             Ast::ClassUnicode(ref x) => &x.span,
             Ast::ClassPerl(ref x) => &x.span,
             Ast::ClassBracketed(ref x) => &x.span,
@@ -598,6 +606,7 @@ impl Ast {
             Ast::ClassBracketed(_)
             | Ast::Repetition(_)
             | Ast::Group(_)
+            | Ast::LookAround(_)
             | Ast::Alternation(_)
             | Ast::Concat(_) => true,
         }
@@ -1344,6 +1353,28 @@ pub enum AssertionKind {
     WordBoundaryEndHalf,
 }
 
+/// A single zero-width look-around.
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
+pub struct LookAround {
+    /// The span of this look-around.
+    pub span: Span,
+    /// The look-around kind, e.g. negative/positive look-behind.
+    pub kind: LookAroundKind,
+    /// The regular expression inside the look-around.
+    pub ast: Box<Ast>,
+}
+
+/// A look-around kind.
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
+pub enum LookAroundKind {
+    /// `(?<=...)`
+    PositiveLookBehind,
+    /// `(?<!...)`
+    NegativeLookBehind,
+}
+
 /// A repetition operation applied to a regular expression.
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
@@ -1649,6 +1680,7 @@ impl Drop for Ast {
             | Ast::ClassBracketed(_) => return,
             Ast::Repetition(ref x) if !x.ast.has_subexprs() => return,
             Ast::Group(ref x) if !x.ast.has_subexprs() => return,
+            Ast::LookAround(ref x) if !x.ast.has_subexprs() => return,
             Ast::Alternation(ref x) if x.asts.is_empty() => return,
             Ast::Concat(ref x) if x.asts.is_empty() => return,
             _ => {}
@@ -1673,6 +1705,9 @@ impl Drop for Ast {
                     stack.push(mem::replace(&mut x.ast, empty_ast()));
                 }
                 Ast::Group(ref mut x) => {
+                    stack.push(mem::replace(&mut x.ast, empty_ast()));
+                }
+                Ast::LookAround(ref mut x) => {
                     stack.push(mem::replace(&mut x.ast, empty_ast()));
                 }
                 Ast::Alternation(ref mut x) => {

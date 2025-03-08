@@ -2328,6 +2328,7 @@ impl<'p, 's, P: Borrow<Parser>> ast::Visitor for NestLimiter<'p, 's, P> {
             Ast::ClassBracketed(ref x) => &x.span,
             Ast::Repetition(ref x) => &x.span,
             Ast::Group(ref x) => &x.span,
+            Ast::LookAround(ref x) => &x.span,
             Ast::Alternation(ref x) => &x.span,
             Ast::Concat(ref x) => &x.span,
         };
@@ -2349,6 +2350,7 @@ impl<'p, 's, P: Borrow<Parser>> ast::Visitor for NestLimiter<'p, 's, P> {
             Ast::ClassBracketed(_)
             | Ast::Repetition(_)
             | Ast::Group(_)
+            | Ast::LookAround(_)
             | Ast::Alternation(_)
             | Ast::Concat(_) => {
                 self.decrement_depth();
@@ -3751,6 +3753,11 @@ bar
                 kind: ast::ErrorKind::UnsupportedLookAhead,
             }
         );
+    }
+
+    #[test]
+    fn parse_lookbehinds() {
+        todo!()
     }
 
     #[test]

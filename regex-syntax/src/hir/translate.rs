@@ -354,6 +354,9 @@ impl<'t, 'p> Visitor for TranslatorI<'t, 'p> {
                     .unwrap_or_else(|| self.flags());
                 self.push(HirFrame::Group { old_flags });
             }
+            Ast::LookAround(ref x) => {
+                todo!("translation from AST to HIR");
+            }
             Ast::Concat(_) => {
                 self.push(HirFrame::Concat);
             }
@@ -445,6 +448,9 @@ impl<'t, 'p> Visitor for TranslatorI<'t, 'p> {
                 let old_flags = self.pop().unwrap().unwrap_group();
                 self.trans().flags.set(old_flags);
                 self.push(HirFrame::Expr(self.hir_capture(x, expr)));
+            }
+            Ast::LookAround(_) => {
+                todo!("translation from AST to HIR");
             }
             Ast::Concat(_) => {
                 let mut exprs = vec![];
