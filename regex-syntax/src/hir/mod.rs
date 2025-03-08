@@ -735,7 +735,7 @@ pub enum HirKind {
     Class(Class),
     /// A look-around assertion. A look-around match always has zero length.
     Look(Look),
-    /// A look-around subexpression
+    /// A look-around subexpression.
     LookAround(LookAround),
     /// A repetition operation applied to a sub-expression.
     Repetition(Repetition),
@@ -2561,6 +2561,7 @@ impl Properties {
         Properties(Box::new(inner))
     }
 
+    /// Create a new set of HIR properties for a look-around.
     fn lookaround(lookaround: &LookAround) -> Properties {
         let sub_p = lookaround.sub().properties();
         let inner = PropertiesI {
@@ -2568,6 +2569,8 @@ impl Properties {
             maximum_len: Some(0),
             literal: false,
             alternation_literal: false,
+            explicit_captures_len: sub_p.explicit_captures_len(),
+            static_explicit_captures_len: sub_p.static_explicit_captures_len(),
             ..*sub_p.0.clone()
         };
         Properties(Box::new(inner))
