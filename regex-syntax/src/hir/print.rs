@@ -486,8 +486,8 @@ mod tests {
 
     #[test]
     fn print_look_around() {
-        // we do not want to do a roundtrip: printed lookarounds are not
-        // can contain capture groups which are unsupported by the parser.
+        // we do not want to do a roundtrip: printed lookarounds can
+        // contain capture groups which are unsupported by the parser.
         // TODO(shilangyu): is this a problem that some regexes are not
         //                  roundtrippable?
         fn test(given: &str, expected: &str) {
