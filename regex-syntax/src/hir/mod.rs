@@ -1796,7 +1796,7 @@ impl Look {
     }
 }
 
-/// Represents a general lookaround assertion.
+/// Represents a general look-around assertion.
 ///
 /// Currently, only lookbehind assertions are supported.
 /// Furthermore, capture groups inside assertions are not supported.
@@ -1810,7 +1810,7 @@ pub enum LookAround {
 
 impl LookAround {
     /// Returns a reference to the inner expression that must match for this
-    /// lookaround assertion to hold.
+    /// look-around assertion to hold.
     pub fn sub(&self) -> &Hir {
         match self {
             Self::PositiveLookBehind(sub) | Self::NegativeLookBehind(sub) => {
@@ -1828,7 +1828,7 @@ impl LookAround {
         }
     }
 
-    /// Returns a new lookaround of the same kind, but with its
+    /// Returns a new look-around of the same kind, but with its
     /// sub-expression replaced with the one given.
     pub fn with(&self, sub: Hir) -> LookAround {
         match self {
