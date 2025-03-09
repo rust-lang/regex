@@ -144,6 +144,10 @@ pub enum ErrorKind {
     ///
     /// The span of this error corresponds to the unclosed parenthesis.
     GroupUnclosed,
+    /// An unclosed look-around, e.g., `(?<ab`.
+    ///
+    /// The span of this error corresponds to the unclosed parenthesis.
+    LookAroundUnclosed,
     /// An unopened group, e.g., `ab)`.
     GroupUnopened,
     /// The nest limit was exceeded. The limit stored here is the limit
@@ -254,6 +258,7 @@ impl core::fmt::Display for ErrorKind {
             GroupNameInvalid => write!(f, "invalid capture group character"),
             GroupNameUnexpectedEof => write!(f, "unclosed capture group name"),
             GroupUnclosed => write!(f, "unclosed group"),
+            LookAroundUnclosed => write!(f, "unclosed look-around"),
             GroupUnopened => write!(f, "unopened group"),
             NestLimitExceeded(limit) => write!(
                 f,
@@ -526,7 +531,7 @@ impl Ast {
     }
 
     /// Create a "look-around" AST item.
-    pub fn look_around(e: LookAround) -> Ast {
+    pub fn lookaround(e: LookAround) -> Ast {
         Ast::LookAround(Box::new(e))
     }
 
