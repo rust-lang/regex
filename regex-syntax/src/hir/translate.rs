@@ -354,9 +354,6 @@ impl<'t, 'p> Visitor for TranslatorI<'t, 'p> {
                     .unwrap_or_else(|| self.flags());
                 self.push(HirFrame::Group { old_flags });
             }
-            Ast::LookAround(ref x) => {
-                todo!("translation from AST to HIR");
-            }
             Ast::Concat(_) => {
                 self.push(HirFrame::Concat);
             }
@@ -449,8 +446,16 @@ impl<'t, 'p> Visitor for TranslatorI<'t, 'p> {
                 self.trans().flags.set(old_flags);
                 self.push(HirFrame::Expr(self.hir_capture(x, expr)));
             }
-            Ast::LookAround(_) => {
-                todo!("translation from AST to HIR");
+            Ast::LookAround(ref x) => {
+                let expr = Box::new(self.pop().unwrap().unwrap_expr());
+                self.push(HirFrame::Expr(Hir::lookaround(match x.kind {
+                    ast::LookAroundKind::PositiveLookBehind => {
+                        hir::LookAround::PositiveLookBehind(expr)
+                    }
+                    ast::LookAroundKind::NegativeLookBehind => {
+                        hir::LookAround::NegativeLookBehind(expr)
+                    }
+                })));
             }
             Ast::Concat(_) => {
                 let mut exprs = vec![];

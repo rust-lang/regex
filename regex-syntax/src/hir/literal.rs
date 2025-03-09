@@ -2456,7 +2456,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "Missing parser support for lookaround"]
     fn lookaround() {
         assert_eq!(exact(["ab"]), e(r"a(?<=qwa)b"));
         assert_eq!(exact(["ab"]), e(r"a(?<!qwe)b"));

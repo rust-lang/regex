@@ -485,15 +485,29 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "Missing parser support for lookaround"]
     fn print_look_around() {
-        roundtrip("(?<=)", "(?<=(?:))");
-        roundtrip("(?<!)", "(?<!(?:))");
+        // we do not want to do a roundtrip: printed lookarounds are not
+        // can contain capture groups which are unsupported by the parser.
+        // TODO(shilangyu): is this a problem that some regexes are not
+        //                  roundtrippable?
+        fn test(given: &str, expected: &str) {
+            let builder = ParserBuilder::new();
+            let hir = builder.build().parse(given).unwrap();
 
-        roundtrip("(?<=a)", "(?<=a)");
-        roundtrip("(?<!a)", "(?<!a)");
+            let mut printer = Printer::new();
+            let mut dst = String::new();
+            printer.print(&hir, &mut dst).unwrap();
 
-        roundtrip("(?<=(?<!(?<!(?<=a))))", "(?<=(?<!(?<!(?<=a))))");
+            assert_eq!(expected, dst);
+        }
+
+        test("(?<=)", "(?<=(?:))");
+        test("(?<!)", "(?<!(?:))");
+
+        test("(?<=a)", "(?<=a)");
+        test("(?<!a)", "(?<!a)");
+
+        test("(?<=(?<!(?<!(?<=a))))", "(?<=(?<!(?<!(?<=a))))");
     }
 
     #[test]
