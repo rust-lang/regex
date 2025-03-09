@@ -751,6 +751,8 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
     ///
     /// If no such grouping could be popped, then an unopened group error is
     /// returned.
+    ///
+    /// If a look-behind contains a capture group, then an error is returned.
     #[inline(never)]
     fn pop_grouping(
         &self,
@@ -829,7 +831,16 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
         }
         prior_concat.asts.push(match grouping {
             Either::Left(group) => Ast::group(group),
-            Either::Right(lookaround) => Ast::lookaround(lookaround),
+            Either::Right(lookaround) => {
+                if let Some(span) = first_capture_group_span(&lookaround.ast) {
+                    return Err(self.error(
+                        span,
+                        ast::ErrorKind::UnsupportedCaptureInLookBehind,
+                    ));
+                }
+
+                Ast::lookaround(lookaround)
+            }
         });
         Ok(prior_concat)
     }
@@ -2511,6 +2522,29 @@ fn specialize_err<T>(
     }
 }
 
+/// Returns the span of the first capture group found. Returns None in case there are no capture groups.
+fn first_capture_group_span(ast: &Ast) -> Option<Span> {
+    struct CaptureGroupSearcher;
+
+    impl ast::Visitor for CaptureGroupSearcher {
+        type Output = ();
+        type Err = Span;
+
+        fn finish(self) -> core::result::Result<Self::Output, Self::Err> {
+            Ok(())
+        }
+
+        fn visit_pre(&mut self, ast: &Ast) -> std::result::Result<(), Span> {
+            match ast {
+                Ast::Group(group) => Err(group.span),
+                _ => Ok(()),
+            }
+        }
+    }
+
+    ast::visit(ast, CaptureGroupSearcher).err()
+}
+
 #[cfg(test)]
 mod tests {
     use core::ops::Range;
@@ -3838,19 +3872,53 @@ bar
     }
 
     #[test]
-    #[ignore = "Missing parser support for lookaround"]
     fn parse_unsupported_capture_in_lookbehind() {
         assert_eq!(
             parser(r"(?<=(?<=(a)))").parse().unwrap_err(),
             TestError {
-                span: span(8..10),
+                span: span(8..11),
                 kind: ast::ErrorKind::UnsupportedCaptureInLookBehind,
             }
         );
         assert_eq!(
             parser(r"(?<!(a))").parse().unwrap_err(),
             TestError {
-                span: span(4..6),
+                span: span(4..7),
+                kind: ast::ErrorKind::UnsupportedCaptureInLookBehind,
+            }
+        );
+        assert_eq!(
+            parser(r"(?<!(a)|b)").parse().unwrap_err(),
+            TestError {
+                span: span(4..7),
+                kind: ast::ErrorKind::UnsupportedCaptureInLookBehind,
+            }
+        );
+        assert_eq!(
+            parser(r"(?<!(a)|(b))").parse().unwrap_err(),
+            TestError {
+                span: span(4..7),
+                kind: ast::ErrorKind::UnsupportedCaptureInLookBehind,
+            }
+        );
+        assert_eq!(
+            parser(r"(?<!(a)(b))").parse().unwrap_err(),
+            TestError {
+                span: span(4..7),
+                kind: ast::ErrorKind::UnsupportedCaptureInLookBehind,
+            }
+        );
+        assert_eq!(
+            parser(r"(?<!(?<name>a))").parse().unwrap_err(),
+            TestError {
+                span: span(4..14),
+                kind: ast::ErrorKind::UnsupportedCaptureInLookBehind,
+            }
+        );
+        assert_eq!(
+            parser(r"(?<!b|(?<name>a)|b)").parse().unwrap_err(),
+            TestError {
+                span: span(6..16),
                 kind: ast::ErrorKind::UnsupportedCaptureInLookBehind,
             }
         );
