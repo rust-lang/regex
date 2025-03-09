@@ -526,9 +526,8 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "Missing parser support for lookaround"]
     fn print_lookaround() {
-        roundtrip("(?<a)");
+        roundtrip("(?<=a)");
         roundtrip("(?<!a)");
     }
 

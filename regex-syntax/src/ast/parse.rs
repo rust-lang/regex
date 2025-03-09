@@ -16,7 +16,7 @@ use alloc::{
 };
 
 use crate::{
-    ast::{self, Ast, Position, Span},
+    ast::{self, Ast, LookAroundKind, Position, Span},
     either::Either,
     is_escapeable_character, is_meta_character,
 };
@@ -299,9 +299,9 @@ struct ParserI<'s, P> {
     pattern: &'s str,
 }
 
-/// GroupState represents a single stack frame while parsing nested groups
-/// and alternations. Each frame records the state up to an opening parenthesis
-/// or a alternating bracket `|`.
+/// GroupState represents a single stack frame while parsing nested groups,
+/// look-arounds and alternations. Each frame records the state up to an opening
+/// parenthesis or a alternating bracket `|`.
 #[derive(Clone, Debug)]
 enum GroupState {
     /// This state is pushed whenever an opening group is found.
@@ -312,6 +312,13 @@ enum GroupState {
         group: ast::Group,
         /// Whether this group has the `x` flag enabled or not.
         ignore_whitespace: bool,
+    },
+    /// This state is pushed whenever an opening look-around is found.
+    LookAround {
+        /// The concatenation immediately preceding the opening look-around.
+        concat: ast::Concat,
+        /// The look-around that has been opened. Its sub-AST is always empty.
+        lookaround: ast::LookAround,
     },
     /// This state is pushed whenever a new alternation branch is found. If
     /// an alternation branch is found and this state is at the top of the
@@ -521,18 +528,15 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
         }
     }
 
-    /// Returns true if and only if the parser is positioned at a look-around
+    /// Returns true if and only if the parser is positioned at a look-ahead
     /// prefix. The conditions under which this returns true must always
     /// correspond to a regular expression that would otherwise be consider
     /// invalid.
     ///
     /// This should only be called immediately after parsing the opening of
     /// a group or a set of flags.
-    fn is_lookaround_prefix(&self) -> bool {
-        self.bump_if("?=")
-            || self.bump_if("?!")
-            || self.bump_if("?<=")
-            || self.bump_if("?<!")
+    fn is_lookahead_prefix(&self) -> bool {
+        self.bump_if("?=") || self.bump_if("?!")
     }
 
     /// Bump the parser, and if the `x` flag is enabled, bump through any
@@ -686,9 +690,9 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
         }));
     }
 
-    /// Parse and push a group AST (and its parent concatenation) on to the
-    /// parser's internal stack. Return a fresh concatenation corresponding
-    /// to the group's sub-AST.
+    /// Parse and push a group or look-around AST (and its parent
+    /// concatenation) on to the parser's internal stack. Return a fresh
+    /// concatenation corresponding to the grouping's sub-AST.
     ///
     /// If a set of flags was found (with no group), then the concatenation
     /// is returned with that set of flags added.
@@ -697,12 +701,12 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
     /// parenthesis. It advances the parser to the character at the start
     /// of the sub-expression (or adjoining expression).
     ///
-    /// If there was a problem parsing the start of the group, then an error
-    /// is returned.
+    /// If there was a problem parsing the start of the grouping, then an
+    /// error is returned.
     #[inline(never)]
-    fn push_group(&self, mut concat: ast::Concat) -> Result<ast::Concat> {
+    fn push_grouping(&self, mut concat: ast::Concat) -> Result<ast::Concat> {
         assert_eq!(self.char(), '(');
-        match self.parse_group()? {
+        match self.parse_grouping()? {
             Either::Left(set) => {
                 let ignore = set.flags.flag_state(ast::Flag::IgnoreWhitespace);
                 if let Some(v) = ignore {
@@ -712,7 +716,7 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
                 concat.asts.push(Ast::flags(set));
                 Ok(concat)
             }
-            Either::Right(group) => {
+            Either::Right(Either::Left(group)) => {
                 let old_ignore_whitespace = self.ignore_whitespace();
                 let new_ignore_whitespace = group
                     .flags()
@@ -728,61 +732,105 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
                 self.parser().ignore_whitespace.set(new_ignore_whitespace);
                 Ok(ast::Concat { span: self.span(), asts: vec![] })
             }
+            Either::Right(Either::Right(lookaround)) => {
+                self.parser()
+                    .stack_group
+                    .borrow_mut()
+                    .push(GroupState::LookAround { concat, lookaround });
+                Ok(ast::Concat { span: self.span(), asts: vec![] })
+            }
         }
     }
 
-    /// Pop a group AST from the parser's internal stack and set the group's
-    /// AST to the given concatenation. Return the concatenation containing
-    /// the group.
+    /// Pop a group or look-around AST from the parser's internal stack and
+    /// set the grouping's AST to the given concatenation. Return the
+    /// concatenation containing the grouping.
     ///
     /// This assumes that the parser is currently positioned on the closing
     /// parenthesis and advances the parser to the character following the `)`.
     ///
-    /// If no such group could be popped, then an unopened group error is
+    /// If no such grouping could be popped, then an unopened group error is
     /// returned.
     #[inline(never)]
-    fn pop_group(&self, mut group_concat: ast::Concat) -> Result<ast::Concat> {
+    fn pop_grouping(
+        &self,
+        mut grouping_concat: ast::Concat,
+    ) -> Result<ast::Concat> {
         use self::GroupState::*;
 
         assert_eq!(self.char(), ')');
         let mut stack = self.parser().stack_group.borrow_mut();
-        let (mut prior_concat, mut group, ignore_whitespace, alt) = match stack
-            .pop()
-        {
-            Some(Group { concat, group, ignore_whitespace }) => {
-                (concat, group, ignore_whitespace, None)
-            }
-            Some(Alternation(alt)) => match stack.pop() {
+        let (mut prior_concat, mut grouping, ignore_whitespace, alt) =
+            match stack.pop() {
                 Some(Group { concat, group, ignore_whitespace }) => {
-                    (concat, group, ignore_whitespace, Some(alt))
+                    (concat, Either::Left(group), ignore_whitespace, None)
                 }
-                None | Some(Alternation(_)) => {
+                Some(LookAround { concat, lookaround }) => (
+                    concat,
+                    Either::Right(lookaround),
+                    self.parser().ignore_whitespace.get(),
+                    None,
+                ),
+                Some(Alternation(alt)) => match stack.pop() {
+                    Some(Group { concat, group, ignore_whitespace }) => (
+                        concat,
+                        Either::Left(group),
+                        ignore_whitespace,
+                        Some(alt),
+                    ),
+                    Some(LookAround { concat, lookaround }) => (
+                        concat,
+                        Either::Right(lookaround),
+                        self.parser().ignore_whitespace.get(),
+                        Some(alt),
+                    ),
+                    None | Some(Alternation(_)) => {
+                        return Err(self.error(
+                            self.span_char(),
+                            ast::ErrorKind::GroupUnopened,
+                        ));
+                    }
+                },
+                None => {
                     return Err(self.error(
                         self.span_char(),
                         ast::ErrorKind::GroupUnopened,
                     ));
                 }
-            },
-            None => {
-                return Err(self
-                    .error(self.span_char(), ast::ErrorKind::GroupUnopened));
-            }
-        };
+            };
         self.parser().ignore_whitespace.set(ignore_whitespace);
-        group_concat.span.end = self.pos();
+        grouping_concat.span.end = self.pos();
         self.bump();
-        group.span.end = self.pos();
+        match &mut grouping {
+            Either::Left(group) => group.span.end = self.pos(),
+            Either::Right(lookaround) => lookaround.span.end = self.pos(),
+        }
         match alt {
             Some(mut alt) => {
-                alt.span.end = group_concat.span.end;
-                alt.asts.push(group_concat.into_ast());
-                group.ast = Box::new(alt.into_ast());
+                alt.span.end = grouping_concat.span.end;
+                alt.asts.push(grouping_concat.into_ast());
+                match &mut grouping {
+                    Either::Left(group) => {
+                        group.ast = Box::new(alt.into_ast())
+                    }
+                    Either::Right(lookaround) => {
+                        lookaround.ast = Box::new(alt.into_ast())
+                    }
+                }
             }
-            None => {
-                group.ast = Box::new(group_concat.into_ast());
-            }
+            None => match &mut grouping {
+                Either::Left(group) => {
+                    group.ast = Box::new(grouping_concat.into_ast())
+                }
+                Either::Right(lookaround) => {
+                    lookaround.ast = Box::new(grouping_concat.into_ast())
+                }
+            },
         }
-        prior_concat.asts.push(Ast::group(group));
+        prior_concat.asts.push(match grouping {
+            Either::Left(group) => Ast::group(group),
+            Either::Right(lookaround) => Ast::lookaround(lookaround),
+        });
         Ok(prior_concat)
     }
 
@@ -793,7 +841,7 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
     ///
     /// This assumes that the parser has advanced to the end.
     #[inline(never)]
-    fn pop_group_end(&self, mut concat: ast::Concat) -> Result<Ast> {
+    fn pop_grouping_end(&self, mut concat: ast::Concat) -> Result<Ast> {
         concat.span.end = self.pos();
         let mut stack = self.parser().stack_group.borrow_mut();
         let ast = match stack.pop() {
@@ -807,6 +855,12 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
                 return Err(
                     self.error(group.span, ast::ErrorKind::GroupUnclosed)
                 );
+            }
+            Some(GroupState::LookAround { lookaround, .. }) => {
+                return Err(self.error(
+                    lookaround.span,
+                    ast::ErrorKind::LookAroundUnclosed,
+                ));
             }
         };
         // If we try to pop again, there should be nothing.
@@ -824,6 +878,8 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
             Some(GroupState::Group { group, .. }) => {
                 Err(self.error(group.span, ast::ErrorKind::GroupUnclosed))
             }
+            Some(GroupState::LookAround { lookaround, .. }) => Err(self
+                .error(lookaround.span, ast::ErrorKind::LookAroundUnclosed)),
         }
     }
 
@@ -989,8 +1045,8 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
                 break;
             }
             match self.char() {
-                '(' => concat = self.push_group(concat)?,
-                ')' => concat = self.pop_group(concat)?,
+                '(' => concat = self.push_grouping(concat)?,
+                ')' => concat = self.pop_grouping(concat)?,
                 '|' => concat = self.push_alternate(concat)?,
                 '[' => {
                     let class = self.parse_set_class()?;
@@ -1020,7 +1076,7 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
                 _ => concat.asts.push(self.parse_primitive()?.into_ast()),
             }
         }
-        let ast = self.pop_group_end(concat)?;
+        let ast = self.pop_grouping_end(concat)?;
         NestLimiter::new(self).check(&ast)?;
         Ok(ast::WithComments {
             ast,
@@ -1205,16 +1261,17 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
         Ok(concat)
     }
 
-    /// Parse a group (which contains a sub-expression) or a set of flags.
+    /// Parse a group or look-around (which contain a sub-expression), or a
+    /// set of flags.
     ///
-    /// If a group was found, then it is returned with an empty AST. If a set
-    /// of flags is found, then that set is returned.
+    /// If a group or look-around was found, then it is returned with an
+    /// empty AST. If a set of flags is found, then that set is returned.
     ///
     /// The parser should be positioned at the opening parenthesis.
     ///
     /// This advances the parser to the character before the start of the
-    /// sub-expression (in the case of a group) or to the closing parenthesis
-    /// immediately following the set of flags.
+    /// sub-expression (in the case of a group or look-around) or to the
+    /// closing parenthesis immediately following the set of flags.
     ///
     /// # Errors
     ///
@@ -1223,19 +1280,38 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
     ///
     /// If a capture name is given and it is incorrectly specified, then a
     /// corresponding error is returned.
+    ///
+    /// If a look-ahead is given (which is currently unsupported), then an
+    /// error is returned.
     #[inline(never)]
-    fn parse_group(&self) -> Result<Either<ast::SetFlags, ast::Group>> {
+    fn parse_grouping(
+        &self,
+    ) -> Result<Either<ast::SetFlags, Either<ast::Group, ast::LookAround>>>
+    {
         assert_eq!(self.char(), '(');
         let open_span = self.span_char();
         self.bump();
         self.bump_space();
-        if self.is_lookaround_prefix() {
+        if self.is_lookahead_prefix() {
             return Err(self.error(
                 Span::new(open_span.start, self.span().end),
                 ast::ErrorKind::UnsupportedLookAhead,
             ));
         }
         let inner_span = self.span();
+
+        let mut lookaround_kind = LookAroundKind::PositiveLookBehind;
+        if self.bump_if("?<=") || {
+            lookaround_kind = LookAroundKind::NegativeLookBehind;
+            self.bump_if("?<!")
+        } {
+            return Ok(Either::Right(Either::Right(ast::LookAround {
+                span: open_span,
+                kind: lookaround_kind,
+                ast: Box::new(Ast::empty(self.span())),
+            })));
+        }
+
         let mut starts_with_p = true;
         if self.bump_if("?P<") || {
             starts_with_p = false;
@@ -1243,11 +1319,11 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
         } {
             let capture_index = self.next_capture_index(open_span)?;
             let name = self.parse_capture_name(capture_index)?;
-            Ok(Either::Right(ast::Group {
+            Ok(Either::Right(Either::Left(ast::Group {
                 span: open_span,
                 kind: ast::GroupKind::CaptureName { starts_with_p, name },
                 ast: Box::new(Ast::empty(self.span())),
-            }))
+            })))
         } else if self.bump_if("?") {
             if self.is_eof() {
                 return Err(
@@ -1272,19 +1348,19 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
                 }))
             } else {
                 assert_eq!(char_end, ':');
-                Ok(Either::Right(ast::Group {
+                Ok(Either::Right(Either::Left(ast::Group {
                     span: open_span,
                     kind: ast::GroupKind::NonCapturing(flags),
                     ast: Box::new(Ast::empty(self.span())),
-                }))
+                })))
             }
         } else {
             let capture_index = self.next_capture_index(open_span)?;
-            Ok(Either::Right(ast::Group {
+            Ok(Either::Right(Either::Left(ast::Group {
                 span: open_span,
                 kind: ast::GroupKind::CaptureIndex(capture_index),
                 ast: Box::new(Ast::empty(self.span())),
-            }))
+            })))
         }
     }
 
