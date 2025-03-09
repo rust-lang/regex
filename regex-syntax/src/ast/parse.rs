@@ -3866,9 +3866,88 @@ bar
     }
 
     #[test]
-    #[ignore = "Missing parser support for lookaround"]
     fn parse_lookbehinds() {
-        todo!("write tests for lookbehinds");
+        assert_eq!(
+            parser(r"(?<=)").parse(),
+            Ok(Ast::lookaround(ast::LookAround {
+                span: span(0..5),
+                ast: Box::new(Ast::empty(span(4..4))),
+                kind: ast::LookAroundKind::PositiveLookBehind
+            }))
+        );
+        assert_eq!(
+            parser(r"(?<=a)").parse(),
+            Ok(Ast::lookaround(ast::LookAround {
+                span: span(0..6),
+                ast: Box::new(lit('a', 4)),
+                kind: ast::LookAroundKind::PositiveLookBehind
+            }))
+        );
+        assert_eq!(
+            parser(r"(?<!a)").parse(),
+            Ok(Ast::lookaround(ast::LookAround {
+                span: span(0..6),
+                ast: Box::new(lit('a', 4)),
+                kind: ast::LookAroundKind::NegativeLookBehind
+            }))
+        );
+        assert_eq!(
+            parser(r"(?<=a|b)").parse(),
+            Ok(Ast::lookaround(ast::LookAround {
+                span: span(0..8),
+                ast: Box::new(alt(4..7, vec![lit('a', 4), lit('b', 6)])),
+                kind: ast::LookAroundKind::PositiveLookBehind
+            }))
+        );
+        assert_eq!(
+            parser(r"(?<!a|b)").parse(),
+            Ok(Ast::lookaround(ast::LookAround {
+                span: span(0..8),
+                ast: Box::new(alt(4..7, vec![lit('a', 4), lit('b', 6)])),
+                kind: ast::LookAroundKind::NegativeLookBehind
+            }))
+        );
+        assert_eq!(
+            parser(r"(?<=(?<!a))").parse(),
+            Ok(Ast::lookaround(ast::LookAround {
+                span: span(0..11),
+                ast: Box::new(Ast::lookaround(ast::LookAround {
+                    span: span(4..10),
+                    ast: Box::new(lit('a', 8)),
+                    kind: ast::LookAroundKind::NegativeLookBehind
+                })),
+                kind: ast::LookAroundKind::PositiveLookBehind
+            }))
+        );
+
+        assert_eq!(
+            parser(r"(?<=a").parse().unwrap_err(),
+            TestError {
+                span: span(0..1),
+                kind: ast::ErrorKind::LookAroundUnclosed,
+            }
+        );
+        assert_eq!(
+            parser(r"(?<!a").parse().unwrap_err(),
+            TestError {
+                span: span(0..1),
+                kind: ast::ErrorKind::LookAroundUnclosed,
+            }
+        );
+        assert_eq!(
+            parser(r"(?<!a|b").parse().unwrap_err(),
+            TestError {
+                span: span(0..1),
+                kind: ast::ErrorKind::LookAroundUnclosed,
+            }
+        );
+        assert_eq!(
+            parser(r"(?<!a|").parse().unwrap_err(),
+            TestError {
+                span: span(0..1),
+                kind: ast::ErrorKind::LookAroundUnclosed,
+            }
+        );
     }
 
     #[test]
