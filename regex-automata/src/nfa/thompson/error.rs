@@ -1,6 +1,6 @@
 use crate::util::{
     captures, look,
-    primitives::{PatternID, StateID},
+    primitives::{PatternID, SmallIndex, StateID},
 };
 
 /// An error that can occurred during the construction of a thompson NFA.
@@ -53,6 +53,14 @@ enum BuildErrorKind {
         /// limit.
         given: usize,
         /// The limit on the number of states.
+        limit: usize,
+    },
+    /// An error that occurs if too many indices need to be generated for
+    /// look-around sub-expressions while building an NFA.
+    TooManyLookArounds {
+        /// The number of sub-expressions that exceeded the limit.
+        given: usize,
+        /// The limit on the number of sub-expressions.
         limit: usize,
     },
     /// An error that occurs when NFA compilation exceeds a configured heap
@@ -115,6 +123,13 @@ impl BuildError {
         BuildError { kind: BuildErrorKind::TooManyStates { given, limit } }
     }
 
+    pub(crate) fn too_many_lookarounds(given: usize) -> BuildError {
+        let limit = SmallIndex::LIMIT;
+        BuildError {
+            kind: BuildErrorKind::TooManyLookArounds { given, limit },
+        }
+    }
+
     pub(crate) fn exceeded_size_limit(limit: usize) -> BuildError {
         BuildError { kind: BuildErrorKind::ExceededSizeLimit { limit } }
     }
@@ -161,6 +176,12 @@ impl core::fmt::Display for BuildError {
             BuildErrorKind::TooManyStates { given, limit } => write!(
                 f,
                 "attempted to compile {} NFA states, \
+                 which exceeds the limit of {}",
+                given, limit,
+            ),
+            BuildErrorKind::TooManyLookArounds { given, limit } => write!(
+                f,
+                "attempted to compile {} look-around expressions, \
                  which exceeds the limit of {}",
                 given, limit,
             ),

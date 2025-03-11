@@ -711,7 +711,13 @@ pub struct Compiler {
     /// State used for caching common suffixes when compiling reverse UTF-8
     /// automata (for Unicode character classes).
     utf8_suffix: RefCell<Utf8SuffixMap>,
+    /// Top level alternation state which is used to run all look-around
+    /// assertion checks in lockstep with the main expression. Each look-around
+    /// expression is compiled to a set of states that is patched into this
+    /// state, and this state is updated on each new pattern being compiled.
     lookaround_alt: RefCell<Option<StateID>>,
+    /// The next index to use for a look-around expression.
+    lookaround_index: RefCell<SmallIndex>,
 }
 
 impl Compiler {
@@ -725,6 +731,7 @@ impl Compiler {
             trie_state: RefCell::new(RangeTrie::new()),
             utf8_suffix: RefCell::new(Utf8SuffixMap::new(1000)),
             lookaround_alt: RefCell::new(None),
+            lookaround_index: RefCell::new(SmallIndex::ZERO),
         }
     }
 
@@ -1046,7 +1053,11 @@ impl Compiler {
             LookAround::NegativeLookBehind(_) => false,
             LookAround::PositiveLookBehind(_) => true,
         };
-        let idx = todo!("get index");
+        let idx = *self.lookaround_index.borrow();
+        *self.lookaround_index.borrow_mut() = SmallIndex::new(idx.one_more())
+            .map_err(|e| {
+                BuildError::too_many_lookarounds(e.attempted() as usize)
+            })?;
         let check = self.add_check_lookaround(idx, pos)?;
         let write = self.add_write_lookaround(idx)?;
         self.patch(sub.end, write)?;
