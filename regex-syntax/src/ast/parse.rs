@@ -2536,7 +2536,14 @@ fn first_capture_group_span(ast: &Ast) -> Option<Span> {
 
         fn visit_pre(&mut self, ast: &Ast) -> std::result::Result<(), Span> {
             match ast {
-                Ast::Group(group) => Err(group.span),
+                Ast::Group(group)
+                    if !matches!(
+                        group.kind,
+                        ast::GroupKind::NonCapturing(_)
+                    ) =>
+                {
+                    Err(group.span)
+                }
                 _ => Ok(()),
             }
         }
@@ -3884,6 +3891,21 @@ bar
             }))
         );
         assert_eq!(
+            parser(r"(?<=(?:a))").parse(),
+            Ok(Ast::lookaround(ast::LookAround {
+                span: span(0..10),
+                ast: Box::new(Ast::group(ast::Group {
+                    span: span(4..9),
+                    kind: ast::GroupKind::NonCapturing(ast::Flags {
+                        span: span(6..6),
+                        items: vec![],
+                    }),
+                    ast: Box::new(lit('a', 7)),
+                })),
+                kind: ast::LookAroundKind::PositiveLookBehind
+            }))
+        );
+        assert_eq!(
             parser(r"(?<!a)").parse(),
             Ok(Ast::lookaround(ast::LookAround {
                 span: span(0..6),
@@ -3956,6 +3978,20 @@ bar
             parser(r"(?<=(?<=(a)))").parse().unwrap_err(),
             TestError {
                 span: span(8..11),
+                kind: ast::ErrorKind::UnsupportedCaptureInLookBehind,
+            }
+        );
+        assert_eq!(
+            parser(r"(?<=(?<=t)(a))").parse().unwrap_err(),
+            TestError {
+                span: span(10..13),
+                kind: ast::ErrorKind::UnsupportedCaptureInLookBehind,
+            }
+        );
+        assert_eq!(
+            parser(r"(?<=(a)(?<=t))").parse().unwrap_err(),
+            TestError {
+                span: span(4..7),
                 kind: ast::ErrorKind::UnsupportedCaptureInLookBehind,
             }
         );
