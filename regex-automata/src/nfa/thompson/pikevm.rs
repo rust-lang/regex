@@ -1490,7 +1490,7 @@ impl PikeVM {
         stack: &mut Vec<FollowEpsilon>,
         curr: &mut ActiveStates,
         next: &mut ActiveStates,
-        lookarounds: &mut Vec<bool>,
+        lookarounds: &mut Vec<Option<NonMaxUsize>>,
         input: &Input<'_>,
         at: usize,
         slots: &mut [Option<NonMaxUsize>],
@@ -1527,7 +1527,7 @@ impl PikeVM {
         stack: &mut Vec<FollowEpsilon>,
         curr: &mut ActiveStates,
         next: &mut ActiveStates,
-        lookarounds: &mut Vec<bool>,
+        lookarounds: &mut Vec<Option<NonMaxUsize>>,
         input: &Input<'_>,
         at: usize,
         patset: &mut PatternSet,
@@ -1581,7 +1581,7 @@ impl PikeVM {
         stack: &mut Vec<FollowEpsilon>,
         curr_slot_table: &mut SlotTable,
         next: &mut ActiveStates,
-        lookarounds: &mut Vec<bool>,
+        lookarounds: &mut Vec<Option<NonMaxUsize>>,
         input: &Input<'_>,
         at: usize,
         sid: StateID,
@@ -1672,7 +1672,7 @@ impl PikeVM {
         stack: &mut Vec<FollowEpsilon>,
         curr_slots: &mut [Option<NonMaxUsize>],
         next: &mut ActiveStates,
-        lookarounds: &mut Vec<bool>,
+        lookarounds: &mut Vec<Option<NonMaxUsize>>,
         input: &Input<'_>,
         at: usize,
         sid: StateID,
@@ -1732,7 +1732,7 @@ impl PikeVM {
         stack: &mut Vec<FollowEpsilon>,
         curr_slots: &mut [Option<NonMaxUsize>],
         next: &mut ActiveStates,
-        lookarounds: &mut Vec<bool>,
+        lookarounds: &mut Vec<Option<NonMaxUsize>>,
         input: &Input<'_>,
         at: usize,
         mut sid: StateID,
@@ -1773,11 +1773,16 @@ impl PikeVM {
                     sid = next;
                 }
                 State::WriteLookaround { look_idx } => {
-                    lookarounds[look_idx] = true;
+                    // This is ok since `at` is always less than `usize::MAX`.
+                    lookarounds[look_idx] = NonMaxUsize::new(at);
                     return;
                 }
                 State::CheckLookaround { look_idx, positive, next } => {
-                    if lookarounds[look_idx] != positive {
+                    let state = match lookarounds[look_idx] {
+                        None => usize::MAX,
+                        Some(pos) => pos.get(),
+                    };
+                    if (state == at) != positive {
                         return;
                     }
                     sid = next;
@@ -1963,9 +1968,10 @@ pub struct Cache {
     /// The next set of states we're building that will be explored for the
     /// next byte in the haystack.
     next: ActiveStates,
-    /// This answers the question: "Does lookaround assertion x hold at the
-    /// current position in the haystack"
-    lookaround: Vec<bool>,
+    /// This answers the question: "What is the maximum position in the
+    /// haystack at which lookaround assertion x holds and which is <= to the
+    /// current position"
+    lookaround: Vec<Option<NonMaxUsize>>,
 }
 
 impl Cache {
@@ -1984,7 +1990,7 @@ impl Cache {
             next: ActiveStates::new(re),
             lookaround: {
                 let mut res = Vec::new();
-                res.resize(re.lookaround_count().as_usize(), false);
+                res.resize(re.lookaround_count().as_usize(), None);
                 res
             },
         }
