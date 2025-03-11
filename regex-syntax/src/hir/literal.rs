@@ -2458,13 +2458,13 @@ mod tests {
     #[test]
     #[ignore = "Missing parser support for lookaround"]
     fn lookaround() {
-        assert_eq!(exact(["ab"]), e(r"a(?<=qwe)b"));
+        assert_eq!(exact(["ab"]), e(r"a(?<=qwa)b"));
         assert_eq!(exact(["ab"]), e(r"a(?<!qwe)b"));
 
         assert_eq!(exact(["ab"]), e(r"(?<=qwe)ab"));
         assert_eq!(exact(["ab"]), e(r"(?<!qwe)ab"));
 
-        assert_eq!(exact(["ab"]), e(r"ab(?<=qwe)"));
+        assert_eq!(exact(["ab"]), e(r"ab(?<=qab)"));
         assert_eq!(exact(["ab"]), e(r"ab(?<!qwe)"));
 
         let expected = (seq([I("aZ"), E("ab")]), seq([I("Zb"), E("ab")]));

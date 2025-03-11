@@ -2569,8 +2569,6 @@ impl Properties {
             maximum_len: Some(0),
             literal: false,
             alternation_literal: false,
-            explicit_captures_len: sub_p.explicit_captures_len(),
-            static_explicit_captures_len: sub_p.static_explicit_captures_len(),
             ..*sub_p.0.clone()
         };
         Properties(Box::new(inner))
