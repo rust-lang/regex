@@ -16,7 +16,7 @@ use alloc::{
 };
 
 use crate::{
-    ast::{self, Ast, LookAroundKind, Position, Span},
+    ast::{self, Ast, Position, Span},
     either::Either,
     is_escapeable_character, is_meta_character,
 };
@@ -1329,9 +1329,9 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
         }
         let inner_span = self.span();
 
-        let mut lookaround_kind = LookAroundKind::PositiveLookBehind;
+        let mut lookaround_kind = ast::LookAroundKind::PositiveLookBehind;
         if self.bump_if("?<=") || {
-            lookaround_kind = LookAroundKind::NegativeLookBehind;
+            lookaround_kind = ast::LookAroundKind::NegativeLookBehind;
             self.bump_if("?<!")
         } {
             return Ok(Either::Right(Either::Right(ast::LookAround {
