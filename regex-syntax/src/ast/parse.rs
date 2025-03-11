@@ -159,6 +159,7 @@ impl ParserBuilder {
             stack_class: RefCell::new(vec![]),
             capture_names: RefCell::new(vec![]),
             scratch: RefCell::new(String::new()),
+            lookaround_depth: Cell::new(0),
         }
     }
 
@@ -280,6 +281,9 @@ pub struct Parser {
     /// A scratch buffer used in various places. Mostly this is used to
     /// accumulate relevant characters from parts of a pattern.
     scratch: RefCell<String>,
+    /// Whether the parser is currently in a look-around. This is used to
+    /// detect capture groups within look-arounds, which are not supported.
+    lookaround_depth: Cell<usize>,
 }
 
 /// ParserI is the internal parser implementation.
@@ -392,6 +396,7 @@ impl Parser {
         self.comments.borrow_mut().clear();
         self.stack_group.borrow_mut().clear();
         self.stack_class.borrow_mut().clear();
+        self.lookaround_depth.set(0);
     }
 }
 
@@ -475,6 +480,11 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
     /// Return whether the parser should ignore whitespace or not.
     fn ignore_whitespace(&self) -> bool {
         self.parser().ignore_whitespace.get()
+    }
+
+    /// Return whether the parser is currently in a look-around.
+    fn in_lookaround(&self) -> bool {
+        self.parser().lookaround_depth.get() != 0
     }
 
     /// Return the character at the current position of the parser.
@@ -737,6 +747,9 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
                     .stack_group
                     .borrow_mut()
                     .push(GroupState::LookAround { concat, lookaround });
+                self.parser()
+                    .lookaround_depth
+                    .set(self.parser().lookaround_depth.get() + 1);
                 Ok(ast::Concat { span: self.span(), asts: vec![] })
             }
         }
@@ -770,7 +783,7 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
                 Some(LookAround { concat, lookaround }) => (
                     concat,
                     Either::Right(lookaround),
-                    self.parser().ignore_whitespace.get(),
+                    self.ignore_whitespace(),
                     None,
                 ),
                 Some(Alternation(alt)) => match stack.pop() {
@@ -783,7 +796,7 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
                     Some(LookAround { concat, lookaround }) => (
                         concat,
                         Either::Right(lookaround),
-                        self.parser().ignore_whitespace.get(),
+                        self.ignore_whitespace(),
                         Some(alt),
                     ),
                     None | Some(Alternation(_)) => {
@@ -830,15 +843,20 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
             },
         }
         prior_concat.asts.push(match grouping {
-            Either::Left(group) => Ast::group(group),
-            Either::Right(lookaround) => {
-                if let Some(span) = first_capture_group_span(&lookaround.ast) {
+            Either::Left(group) => {
+                if group.is_capturing() && self.in_lookaround() {
                     return Err(self.error(
-                        span,
+                        group.span,
                         ast::ErrorKind::UnsupportedCaptureInLookBehind,
                     ));
                 }
 
+                Ast::group(group)
+            }
+            Either::Right(lookaround) => {
+                self.parser()
+                    .lookaround_depth
+                    .set(self.parser().lookaround_depth.get() - 1);
                 Ast::lookaround(lookaround)
             }
         });
@@ -2522,36 +2540,6 @@ fn specialize_err<T>(
     }
 }
 
-/// Returns the span of the first capture group found. Returns None in case there are no capture groups.
-fn first_capture_group_span(ast: &Ast) -> Option<Span> {
-    struct CaptureGroupSearcher;
-
-    impl ast::Visitor for CaptureGroupSearcher {
-        type Output = ();
-        type Err = Span;
-
-        fn finish(self) -> core::result::Result<Self::Output, Self::Err> {
-            Ok(())
-        }
-
-        fn visit_pre(&mut self, ast: &Ast) -> std::result::Result<(), Span> {
-            match ast {
-                Ast::Group(group)
-                    if !matches!(
-                        group.kind,
-                        ast::GroupKind::NonCapturing(_)
-                    ) =>
-                {
-                    Err(group.span)
-                }
-                _ => Ok(()),
-            }
-        }
-    }
-
-    ast::visit(ast, CaptureGroupSearcher).err()
-}
-
 #[cfg(test)]
 mod tests {
     use core::ops::Range;
@@ -3881,6 +3869,24 @@ bar
                 ast: Box::new(Ast::empty(span(4..4))),
                 kind: ast::LookAroundKind::PositiveLookBehind
             }))
+        );
+        assert_eq!(
+            parser(r"(?<=(?<=))(a)").parse(),
+            Ok(concat(
+                0..13,
+                vec![
+                    Ast::lookaround(ast::LookAround {
+                        span: span(0..10),
+                        ast: Box::new(Ast::lookaround(ast::LookAround {
+                            span: span(4..9),
+                            ast: Box::new(Ast::empty(span(8..8))),
+                            kind: ast::LookAroundKind::PositiveLookBehind
+                        })),
+                        kind: ast::LookAroundKind::PositiveLookBehind
+                    }),
+                    group(10..13, 1, lit('a', 11)),
+                ]
+            ))
         );
         assert_eq!(
             parser(r"(?<=a)").parse(),
