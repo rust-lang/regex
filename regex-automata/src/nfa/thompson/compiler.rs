@@ -979,17 +979,29 @@ impl Compiler {
 
         let compiled = self.c_alt_iter(exprs.iter().map(|e| {
             let _ = self.start_pattern()?;
-            let lookaround_prefix =
-                self.c_at_least(&Hir::dot(hir::Dot::AnyByte), false, 0)?;
-            let lookaround_alt = self.add_union_reverse()?;
-            self.patch(lookaround_prefix.end, lookaround_alt)?;
-            let top_level_alt = self.add_union()?;
-            self.patch(top_level_alt, lookaround_prefix.start)?;
-            self.lookaround_alt.borrow_mut().replace(lookaround_alt);
+            let has_lookarounds =
+                (e.borrow() as &Hir).properties().contains_lookaround_expr();
+            let mut top_level_alt = if has_lookarounds {
+                self.add_union()?
+            } else {
+                StateID::ZERO
+            };
+            if has_lookarounds {
+                let lookaround_prefix =
+                    self.c_at_least(&Hir::dot(hir::Dot::AnyByte), false, 0)?;
+                let lookaround_alt = self.add_union_reverse()?;
+                self.patch(lookaround_prefix.end, lookaround_alt)?;
+                self.patch(top_level_alt, lookaround_prefix.start)?;
+                self.lookaround_alt.borrow_mut().replace(lookaround_alt);
+            }
             let one = self.c_cap(0, None, e.borrow())?;
             let match_state_id = self.add_match()?;
             self.patch(one.end, match_state_id)?;
-            self.patch(top_level_alt, one.start)?;
+            if has_lookarounds {
+                self.patch(top_level_alt, one.start)?;
+            } else {
+                top_level_alt = one.start;
+            }
             let _ = self.finish_pattern(top_level_alt)?;
             self.lookaround_alt.borrow_mut().take();
             Ok(ThompsonRef { start: top_level_alt, end: match_state_id })

@@ -2041,6 +2041,7 @@ struct PropertiesI {
     look_set_suffix: LookSet,
     look_set_prefix_any: LookSet,
     look_set_suffix_any: LookSet,
+    contains_lookaround_expr: bool,
     utf8: bool,
     explicit_captures_len: usize,
     static_explicit_captures_len: Option<usize>,
@@ -2132,6 +2133,17 @@ impl Properties {
     #[inline]
     pub fn look_set_suffix_any(&self) -> LookSet {
         self.0.look_set_suffix_any
+    }
+
+    /// Returns whether there are any look-around expressions in this HIR value.
+    ///
+    /// Only returns true for [`HirKind::LookAround`] and not for
+    /// [`HirKind::Look`], which can be queried by [`look_set`] instead.
+    /// Currently, only lookbehind assertions without capture groups are
+    /// supported.
+    #[inline]
+    pub fn contains_lookaround_expr(&self) -> bool {
+        self.0.contains_lookaround_expr
     }
 
     /// Return true if and only if the corresponding HIR will always match
@@ -2403,6 +2415,7 @@ impl Properties {
             look_set_suffix: fix,
             look_set_prefix_any: LookSet::empty(),
             look_set_suffix_any: LookSet::empty(),
+            contains_lookaround_expr: false,
             utf8: true,
             explicit_captures_len: 0,
             static_explicit_captures_len,
@@ -2418,6 +2431,8 @@ impl Properties {
             props.look_set_suffix.set_intersect(p.look_set_suffix());
             props.look_set_prefix_any.set_union(p.look_set_prefix_any());
             props.look_set_suffix_any.set_union(p.look_set_suffix_any());
+            props.contains_lookaround_expr =
+                props.contains_lookaround_expr || p.contains_lookaround_expr();
             props.utf8 = props.utf8 && p.is_utf8();
             props.explicit_captures_len = props
                 .explicit_captures_len
@@ -2465,6 +2480,7 @@ impl Properties {
             look_set_suffix: LookSet::empty(),
             look_set_prefix_any: LookSet::empty(),
             look_set_suffix_any: LookSet::empty(),
+            contains_lookaround_expr: false,
             // It is debatable whether an empty regex always matches at valid
             // UTF-8 boundaries. Strictly speaking, at a byte oriented view,
             // it is clearly false. There are, for example, many empty strings
@@ -2501,6 +2517,7 @@ impl Properties {
             look_set_suffix: LookSet::empty(),
             look_set_prefix_any: LookSet::empty(),
             look_set_suffix_any: LookSet::empty(),
+            contains_lookaround_expr: false,
             utf8: core::str::from_utf8(&lit.0).is_ok(),
             explicit_captures_len: 0,
             static_explicit_captures_len: Some(0),
@@ -2520,6 +2537,7 @@ impl Properties {
             look_set_suffix: LookSet::empty(),
             look_set_prefix_any: LookSet::empty(),
             look_set_suffix_any: LookSet::empty(),
+            contains_lookaround_expr: false,
             utf8: class.is_utf8(),
             explicit_captures_len: 0,
             static_explicit_captures_len: Some(0),
@@ -2539,6 +2557,9 @@ impl Properties {
             look_set_suffix: LookSet::singleton(look),
             look_set_prefix_any: LookSet::singleton(look),
             look_set_suffix_any: LookSet::singleton(look),
+            // Note, this field represents _general_ lookarounds (ones using
+            // LookAround) and not simple ones (using Look).
+            contains_lookaround_expr: false,
             // This requires a little explanation. Basically, we don't consider
             // matching an empty string to be equivalent to matching invalid
             // UTF-8, even though technically matching every empty string will
@@ -2569,6 +2590,7 @@ impl Properties {
             maximum_len: Some(0),
             literal: false,
             alternation_literal: false,
+            contains_lookaround_expr: true,
             ..*sub_p.0.clone()
         };
         Properties(Box::new(inner))
@@ -2595,6 +2617,7 @@ impl Properties {
             look_set_suffix: LookSet::empty(),
             look_set_prefix_any: p.look_set_prefix_any(),
             look_set_suffix_any: p.look_set_suffix_any(),
+            contains_lookaround_expr: p.contains_lookaround_expr(),
             utf8: p.is_utf8(),
             explicit_captures_len: p.explicit_captures_len(),
             static_explicit_captures_len: p.static_explicit_captures_len(),
@@ -2656,6 +2679,7 @@ impl Properties {
             look_set_suffix: LookSet::empty(),
             look_set_prefix_any: LookSet::empty(),
             look_set_suffix_any: LookSet::empty(),
+            contains_lookaround_expr: false,
             utf8: true,
             explicit_captures_len: 0,
             static_explicit_captures_len: Some(0),
@@ -2667,6 +2691,8 @@ impl Properties {
             let p = x.properties();
             props.look_set.set_union(p.look_set());
             props.utf8 = props.utf8 && p.is_utf8();
+            props.contains_lookaround_expr =
+                props.contains_lookaround_expr || p.contains_lookaround_expr();
             props.explicit_captures_len = props
                 .explicit_captures_len
                 .saturating_add(p.explicit_captures_len());
