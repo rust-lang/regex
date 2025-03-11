@@ -1102,8 +1102,8 @@ impl NFA {
 
     /// Returns how many lookaround sub-expressions this nfa contains
     #[inline]
-    pub fn look_count(&self) -> usize {
-        self.0.look_count
+    pub fn lookaround_count(&self) -> SmallIndex {
+        self.0.lookaround_count
     }
 
     // FIXME: The `look_set_prefix_all` computation was not correct, and it
@@ -1266,7 +1266,10 @@ pub(super) struct Inner {
     /// zero-length prefix for any of the patterns in this NFA.
     look_set_prefix_all: LookSet,
     */
-    look_count: usize,
+    /// How many look-around expression this NFA contains.
+    /// This is needed to initialize the table for storing the result of
+    /// look-around evaluation
+    lookaround_count: SmallIndex,
     /// Heap memory used indirectly by NFA states and other things (like the
     /// various capturing group representations above). Since each state
     /// might use a different amount of heap, we need to keep track of this
@@ -1384,7 +1387,7 @@ impl Inner {
             }
             State::CheckLookaround { look_idx, .. }
             | State::WriteLookaround { look_idx } => {
-                self.look_count = self.look_count.max(look_idx);
+                self.lookaround_count = self.lookaround_count.max(look_idx);
             }
             State::Union { .. }
             | State::BinaryUnion { .. }
@@ -1565,7 +1568,7 @@ pub enum State {
     /// index `look_idx`
     WriteLookaround {
         /// The index of the lookaround expression that matches
-        look_idx: usize,
+        look_idx: SmallIndex,
     },
     /// This indicates that we need to check whether lookaround expression with
     /// index `look_idx` holds at the current position in the haystack
@@ -1573,7 +1576,7 @@ pub enum State {
     /// hence must NOT hold.
     CheckLookaround {
         /// The index of the lookaround expression that must be satisfied
-        look_idx: usize,
+        look_idx: SmallIndex,
         /// Whether this is a positive lookaround expression
         positive: bool,
         /// The next state to transition if the lookaround assertion is satisfied
@@ -1791,13 +1794,13 @@ impl fmt::Debug for State {
                 write!(f, "{:?} => {:?}", look, next.as_usize())
             }
             State::WriteLookaround { look_idx } => {
-                write!(f, "Write Lookaround: {}", look_idx)
+                write!(f, "Write Lookaround: {}", look_idx.as_u32())
             }
             State::CheckLookaround { look_idx, positive, next } => {
                 write!(
                     f,
                     "Check Lookaround {} is {} => {}",
-                    look_idx,
+                    look_idx.as_u32(),
                     positive,
                     next.as_usize()
                 )

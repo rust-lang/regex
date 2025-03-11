@@ -41,9 +41,7 @@ enum State {
     },
     /// A state that only transitions to another state if the current input
     /// byte is in a particular range of bytes.
-    ByteRange {
-        trans: Transition,
-    },
+    ByteRange { trans: Transition },
     /// A state with possibly many transitions, represented in a sparse
     /// fashion. Transitions must be ordered lexicographically by input range
     /// and be non-overlapping. As such, this may only be used when every
@@ -57,15 +55,10 @@ enum State {
     /// that `Sparse` is used for via `Union`. But this creates a more bloated
     /// NFA with more epsilon transitions than is necessary in the special case
     /// of character classes.
-    Sparse {
-        transitions: Vec<Transition>,
-    },
+    Sparse { transitions: Vec<Transition> },
     /// A conditional epsilon transition satisfied via some sort of
     /// look-around.
-    Look {
-        look: Look,
-        next: StateID,
-    },
+    Look { look: Look, next: StateID },
     /// An empty state that records the start of a capture location. This is an
     /// unconditional epsilon transition like `Empty`, except it can be used to
     /// record position information for a capture group when using the NFA for
@@ -98,20 +91,21 @@ enum State {
         /// The next state that this state should transition to.
         next: StateID,
     },
-    WriteLookaround {
-        lookaround_index: usize,
-    },
+    /// An empty state that behaves analogously to a `Match` state but for
+    /// the look-around sub-expression with the given index.
+    WriteLookaround { lookaround_index: SmallIndex },
+    /// A conditional epsilon transition that will only be taken if the
+    /// look-around sub-expression with the given index evaluates to `positive`
+    /// at the current position in the haystack.
     CheckLookaround {
-        lookaround_index: usize,
+        lookaround_index: SmallIndex,
         positive: bool,
         next: StateID,
     },
     /// An alternation such that there exists an epsilon transition to all
     /// states in `alternates`, where matches found via earlier transitions
     /// are preferred over later transitions.
-    Union {
-        alternates: Vec<StateID>,
-    },
+    Union { alternates: Vec<StateID> },
     /// An alternation such that there exists an epsilon transition to all
     /// states in `alternates`, where matches found via later transitions are
     /// preferred over earlier transitions.
@@ -127,9 +121,7 @@ enum State {
     /// to be amortized constant time. But if we used a `Union`, we'd need to
     /// prepend the state, which takes O(n) time. There are other approaches we
     /// could use to solve this, but this seems simple enough.
-    UnionReverse {
-        alternates: Vec<StateID>,
-    },
+    UnionReverse { alternates: Vec<StateID> },
     /// A state that cannot be transitioned out of. This is useful for cases
     /// where you want to prevent matching from occurring. For example, if your
     /// regex parser permits empty character classes, then one could choose a
@@ -143,9 +135,7 @@ enum State {
     ///
     /// `pattern_id` refers to the ID of the pattern itself, which corresponds
     /// to the pattern's index (starting at 0).
-    Match {
-        pattern_id: PatternID,
-    },
+    Match { pattern_id: PatternID },
 }
 
 impl State {
@@ -736,7 +726,7 @@ impl Builder {
     /// is satisfied at the current position.
     pub fn add_write_lookaround(
         &mut self,
-        index: usize,
+        index: SmallIndex,
     ) -> Result<StateID, BuildError> {
         self.add(State::WriteLookaround { lookaround_index: index })
     }
@@ -745,7 +735,7 @@ impl Builder {
     /// index is satisfied at the current position.
     pub fn add_check_lookaround(
         &mut self,
-        index: usize,
+        index: SmallIndex,
         positive: bool,
         next: StateID,
     ) -> Result<StateID, BuildError> {

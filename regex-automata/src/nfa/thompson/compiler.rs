@@ -19,7 +19,7 @@ use crate::{
     },
     util::{
         look::{Look, LookMatcher},
-        primitives::{PatternID, StateID},
+        primitives::{PatternID, SmallIndex, StateID},
     },
 };
 
@@ -1681,14 +1681,14 @@ impl Compiler {
 
     fn add_write_lookaround(
         &self,
-        index: usize,
+        index: SmallIndex,
     ) -> Result<StateID, BuildError> {
         self.builder.borrow_mut().add_write_lookaround(index)
     }
 
     fn add_check_lookaround(
         &self,
-        index: usize,
+        index: SmallIndex,
         positive: bool,
     ) -> Result<StateID, BuildError> {
         self.builder.borrow_mut().add_check_lookaround(

@@ -1216,8 +1216,8 @@ impl PikeVM {
 }
 
 impl PikeVM {
-    fn look_count(&self) -> usize {
-        self.nfa.look_count()
+    fn lookaround_count(&self) -> SmallIndex {
+        self.nfa.lookaround_count()
     }
 
     /// The implementation of standard leftmost search.
@@ -1984,7 +1984,7 @@ impl Cache {
             next: ActiveStates::new(re),
             lookaround: {
                 let mut res = Vec::new();
-                res.resize(re.look_count(), false);
+                res.resize(re.lookaround_count().as_usize(), false);
                 res
             },
         }
