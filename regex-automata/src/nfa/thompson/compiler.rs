@@ -996,7 +996,7 @@ impl Compiler {
             if has_lookarounds {
                 let lookaround_prefix =
                     self.c_at_least(&Hir::dot(hir::Dot::AnyByte), false, 0)?;
-                let lookaround_alt = self.add_union_reverse()?;
+                let lookaround_alt = self.add_union()?;
                 self.patch(lookaround_prefix.end, lookaround_alt)?;
                 self.patch(top_level_alt, lookaround_prefix.start)?;
                 self.lookaround_alt.borrow_mut().replace(lookaround_alt);
@@ -2037,6 +2037,22 @@ mod tests {
         }
     }
 
+    fn s_write_lookaround(id: usize) -> State {
+        State::WriteLookaround {
+            look_idx: SmallIndex::new(id)
+                .expect("look-around index too large"),
+        }
+    }
+
+    fn s_check_lookaround(id: usize, positive: bool, next: usize) -> State {
+        State::CheckLookaround {
+            look_idx: SmallIndex::new(id)
+                .expect("look-around index too large"),
+            positive,
+            next: sid(next),
+        }
+    }
+
     fn s_fail() -> State {
         State::Fail
     }
@@ -2259,6 +2275,38 @@ mod tests {
         assert_eq!(
             build(r"a|").states(),
             &[s_byte(b'a', 2), s_bin_union(0, 2), s_match(0)]
+        );
+    }
+
+    #[test]
+    fn compile_lookbehind() {
+        assert_eq!(
+            build(r"(?<=a)").states(),
+            &[
+                s_bin_union(1, 4),
+                s_bin_union(3, 2),
+                s_range(b'\x00', b'\xFF', 1),
+                s_byte(b'a', 5),
+                s_check_lookaround(0, true, 6),
+                s_write_lookaround(0),
+                s_match(0)
+            ]
+        );
+        assert_eq!(
+            build(r"(?<=a(?<!b))").states(),
+            &[
+                s_bin_union(1, 8),
+                s_bin_union(3, 2),
+                s_range(b'\x00', b'\xFF', 1),
+                s_bin_union(5, 4),
+                s_byte(b'a', 6),
+                s_byte(b'b', 7),
+                s_check_lookaround(0, false, 9),
+                s_write_lookaround(0),
+                s_check_lookaround(1, true, 10),
+                s_write_lookaround(1),
+                s_match(0)
+            ]
         );
     }
 
