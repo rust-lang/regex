@@ -421,6 +421,5 @@ fn count_capturing_groups_ast(ast: &regex_syntax::ast::Ast) -> usize {
         Ast::Concat(ref concat) => {
             concat.asts.iter().map(count_capturing_groups_ast).sum()
         }
-        Ast::LookAround(_) => todo!(),
     }
 }
