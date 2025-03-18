@@ -204,6 +204,8 @@ impl BoundedBacktrackerEngine {
         {
             if !info.config().get_backtrack()
                 || info.config().get_match_kind() != MatchKind::LeftmostFirst
+                // TODO: remove once look-around support is added.
+                || nfa.lookaround_count() > 0
             {
                 return Ok(None);
             }

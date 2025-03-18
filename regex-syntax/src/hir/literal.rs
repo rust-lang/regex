@@ -172,9 +172,8 @@ impl Extractor {
         use crate::hir::HirKind::*;
 
         match *hir.kind() {
-            Empty | Look(_) | LookAround(_) => {
-                Seq::singleton(self::Literal::exact(vec![]))
-            }
+            Empty | Look(_) => Seq::singleton(self::Literal::exact(vec![])),
+            LookAround(_) => Seq::infinite(),
             Literal(hir::Literal(ref bytes)) => {
                 let mut seq =
                     Seq::singleton(self::Literal::exact(bytes.to_vec()));
