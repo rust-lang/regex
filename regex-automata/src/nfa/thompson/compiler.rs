@@ -1045,7 +1045,7 @@ impl Compiler {
         &self,
         lookaround: &LookAround,
     ) -> Result<ThompsonRef, BuildError> {
-        let sub = self.c(lookaround.sub());
+        let sub = self.c(lookaround.sub())?;
         let pos = match lookaround {
             LookAround::NegativeLookBehind(_) => false,
             LookAround::PositiveLookBehind(_) => true,

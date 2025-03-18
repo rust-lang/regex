@@ -1102,7 +1102,7 @@ impl NFA {
 
     /// Returns how many look-around sub-expressions this nfa contains
     #[inline]
-    pub fn lookaround_count(&self) -> SmallIndex {
+    pub fn lookaround_count(&self) -> usize {
         self.0.lookaround_count
     }
 
@@ -1269,7 +1269,7 @@ pub(super) struct Inner {
     /// How many look-around expression this NFA contains.
     /// This is needed to initialize the table for storing the result of
     /// look-around evaluation
-    lookaround_count: SmallIndex,
+    lookaround_count: usize,
     /// Heap memory used indirectly by NFA states and other things (like the
     /// various capturing group representations above). Since each state
     /// might use a different amount of heap, we need to keep track of this
@@ -1387,7 +1387,8 @@ impl Inner {
             }
             State::CheckLookAround { lookaround_idx: look_idx, .. }
             | State::WriteLookAround { lookaround_idx: look_idx } => {
-                self.lookaround_count = self.lookaround_count.max(look_idx);
+                self.lookaround_count =
+                    self.lookaround_count.max(look_idx.as_usize() + 1);
             }
             State::Union { .. }
             | State::BinaryUnion { .. }

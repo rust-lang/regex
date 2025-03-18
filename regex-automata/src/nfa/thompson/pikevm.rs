@@ -1216,7 +1216,7 @@ impl PikeVM {
 }
 
 impl PikeVM {
-    fn lookaround_count(&self) -> SmallIndex {
+    fn lookaround_count(&self) -> usize {
         self.nfa.lookaround_count()
     }
 
@@ -1992,7 +1992,7 @@ impl Cache {
             stack: vec![],
             curr: ActiveStates::new(re),
             next: ActiveStates::new(re),
-            lookaround: vec![None; re.lookaround_count().as_usize()],
+            lookaround: vec![None; re.lookaround_count()],
         }
     }
 
