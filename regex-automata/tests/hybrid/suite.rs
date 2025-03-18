@@ -183,7 +183,16 @@ fn compiler(
         if !configure_regex_builder(test, &mut builder) {
             return Ok(CompiledRegex::skip());
         }
-        let re = builder.build_many(&regexes)?;
+        let re = match builder.build_many(regexes) {
+            Ok(re) => re,
+            Err(err)
+                if test.compiles()
+                    && format!("{err}").contains("look-around") =>
+            {
+                return Ok(CompiledRegex::skip());
+            }
+            Err(err) => return Err(err.into()),
+        };
         let mut cache = re.create_cache();
         Ok(CompiledRegex::compiled(move |test| -> TestResult {
             run_test(&re, &mut cache, test)

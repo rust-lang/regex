@@ -74,6 +74,10 @@ fn min_visited_capacity() -> Result<()> {
                 .configure(config_thompson(test))
                 .syntax(config_syntax(test))
                 .build_many(&regexes)?;
+            // TODO: remove once look-around is supported.
+            if nfa.lookaround_count() > 0 {
+                return Ok(CompiledRegex::skip());
+            }
             let mut builder = BoundedBacktracker::builder();
             if !configure_backtrack_builder(test, &mut builder) {
                 return Ok(CompiledRegex::skip());
@@ -105,6 +109,10 @@ fn compiler(
             return Ok(CompiledRegex::skip());
         }
         let re = builder.build_many(&regexes)?;
+        // TODO: remove once look-around is supported.
+        if re.get_nfa().lookaround_count() > 0 {
+            return Ok(CompiledRegex::skip());
+        }
         let mut cache = re.create_cache();
         Ok(CompiledRegex::compiled(move |test| -> TestResult {
             run_test(&re, &mut cache, test)
