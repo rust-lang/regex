@@ -1593,8 +1593,8 @@ impl PikeVM {
             | State::Union { .. }
             | State::BinaryUnion { .. }
             | State::Capture { .. }
-            | State::WriteLookaround { .. }
-            | State::CheckLookaround { .. } => None,
+            | State::WriteLookAround { .. }
+            | State::CheckLookAround { .. } => None,
             State::ByteRange { ref trans } => {
                 if trans.matches(input.haystack(), at) {
                     let slots = curr_slot_table.for_state(sid);
@@ -1772,12 +1772,16 @@ impl PikeVM {
                     }
                     sid = next;
                 }
-                State::WriteLookaround { look_idx } => {
+                State::WriteLookAround { lookaround_idx: look_idx } => {
                     // This is ok since `at` is always less than `usize::MAX`.
                     lookarounds[look_idx] = NonMaxUsize::new(at);
                     return;
                 }
-                State::CheckLookaround { look_idx, positive, next } => {
+                State::CheckLookAround {
+                    lookaround_idx: look_idx,
+                    positive,
+                    next,
+                } => {
                     let state = match lookarounds[look_idx] {
                         None => usize::MAX,
                         Some(pos) => pos.get(),
@@ -1988,11 +1992,7 @@ impl Cache {
             stack: vec![],
             curr: ActiveStates::new(re),
             next: ActiveStates::new(re),
-            lookaround: {
-                let mut res = Vec::new();
-                res.resize(re.lookaround_count().as_usize(), None);
-                res
-            },
+            lookaround: vec![None; re.lookaround_count().as_usize()],
         }
     }
 

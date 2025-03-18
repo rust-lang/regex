@@ -1045,10 +1045,7 @@ impl Compiler {
         &self,
         lookaround: &LookAround,
     ) -> Result<ThompsonRef, BuildError> {
-        let sub = match lookaround {
-            LookAround::NegativeLookBehind(ref sub)
-            | LookAround::PositiveLookBehind(ref sub) => self.c(sub)?,
-        };
+        let sub = self.c(lookaround.sub());
         let pos = match lookaround {
             LookAround::NegativeLookBehind(_) => false,
             LookAround::PositiveLookBehind(_) => true,
@@ -1064,7 +1061,7 @@ impl Compiler {
         self.patch(
             self.lookaround_alt
                 .borrow()
-                .expect("Cannot compile lookaround outside pattern"),
+                .expect("Cannot compile look-around outside pattern"),
             sub.start,
         )?;
         Ok(ThompsonRef { start: check, end: check })
@@ -2038,15 +2035,15 @@ mod tests {
     }
 
     fn s_write_lookaround(id: usize) -> State {
-        State::WriteLookaround {
-            look_idx: SmallIndex::new(id)
+        State::WriteLookAround {
+            lookaround_idx: SmallIndex::new(id)
                 .expect("look-around index too large"),
         }
     }
 
     fn s_check_lookaround(id: usize, positive: bool, next: usize) -> State {
-        State::CheckLookaround {
-            look_idx: SmallIndex::new(id)
+        State::CheckLookAround {
+            lookaround_idx: SmallIndex::new(id)
                 .expect("look-around index too large"),
             positive,
             next: sid(next),

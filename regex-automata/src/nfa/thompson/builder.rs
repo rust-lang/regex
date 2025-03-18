@@ -93,11 +93,11 @@ enum State {
     },
     /// An empty state that behaves analogously to a `Match` state but for
     /// the look-around sub-expression with the given index.
-    WriteLookaround { lookaround_index: SmallIndex },
+    WriteLookAround { lookaround_index: SmallIndex },
     /// A conditional epsilon transition that will only be taken if the
     /// look-around sub-expression with the given index evaluates to `positive`
     /// at the current position in the haystack.
-    CheckLookaround {
+    CheckLookAround {
         lookaround_index: SmallIndex,
         positive: bool,
         next: StateID,
@@ -166,8 +166,8 @@ impl State {
             | State::CaptureEnd { .. }
             | State::Fail
             | State::Match { .. }
-            | State::CheckLookaround { .. }
-            | State::WriteLookaround { .. } => 0,
+            | State::CheckLookAround { .. }
+            | State::WriteLookAround { .. } => 0,
             State::Sparse { ref transitions } => {
                 transitions.len() * mem::size_of::<Transition>()
             }
@@ -483,18 +483,18 @@ impl Builder {
                 State::Look { look, next } => {
                     remap[sid] = nfa.add(nfa::State::Look { look, next });
                 }
-                State::WriteLookaround { lookaround_index } => {
-                    remap[sid] = nfa.add(nfa::State::WriteLookaround {
-                        look_idx: lookaround_index,
+                State::WriteLookAround { lookaround_index } => {
+                    remap[sid] = nfa.add(nfa::State::WriteLookAround {
+                        lookaround_idx: lookaround_index,
                     });
                 }
-                State::CheckLookaround {
+                State::CheckLookAround {
                     lookaround_index,
                     positive,
                     next,
                 } => {
-                    remap[sid] = nfa.add(nfa::State::CheckLookaround {
-                        look_idx: lookaround_index,
+                    remap[sid] = nfa.add(nfa::State::CheckLookAround {
+                        lookaround_idx: lookaround_index,
                         positive,
                         next,
                     });
@@ -728,7 +728,7 @@ impl Builder {
         &mut self,
         index: SmallIndex,
     ) -> Result<StateID, BuildError> {
-        self.add(State::WriteLookaround { lookaround_index: index })
+        self.add(State::WriteLookAround { lookaround_index: index })
     }
 
     /// Add a state which will check whether the lookaround with the given
@@ -739,7 +739,7 @@ impl Builder {
         positive: bool,
         next: StateID,
     ) -> Result<StateID, BuildError> {
-        self.add(State::CheckLookaround {
+        self.add(State::CheckLookAround {
             lookaround_index: index,
             positive,
             next,
@@ -1212,7 +1212,7 @@ impl Builder {
             State::Look { ref mut next, .. } => {
                 *next = to;
             }
-            State::CheckLookaround { ref mut next, .. } => {
+            State::CheckLookAround { ref mut next, .. } => {
                 *next = to;
             }
             State::Union { ref mut alternates } => {
@@ -1229,7 +1229,7 @@ impl Builder {
             State::CaptureEnd { ref mut next, .. } => {
                 *next = to;
             }
-            State::WriteLookaround { .. } => {}
+            State::WriteLookAround { .. } => {}
             State::Fail => {}
             State::Match { .. } => {}
         }

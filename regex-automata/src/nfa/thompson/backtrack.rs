@@ -1519,8 +1519,8 @@ impl BoundedBacktracker {
                     }
                     sid = next;
                 }
-                State::WriteLookaround { .. }
-                | State::CheckLookaround { .. } => {
+                State::WriteLookAround { .. }
+                | State::CheckLookAround { .. } => {
                     todo!("check how to handle")
                 }
                 State::Union { ref alternates } => {

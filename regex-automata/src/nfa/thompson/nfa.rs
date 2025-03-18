@@ -1100,7 +1100,7 @@ impl NFA {
         self.0.look_set_prefix_any
     }
 
-    /// Returns how many lookaround sub-expressions this nfa contains
+    /// Returns how many look-around sub-expressions this nfa contains
     #[inline]
     pub fn lookaround_count(&self) -> SmallIndex {
         self.0.lookaround_count
@@ -1299,8 +1299,8 @@ impl Inner {
                     State::ByteRange { .. }
                     | State::Dense { .. }
                     | State::Fail
-                    | State::WriteLookaround { .. } => continue,
-                    State::CheckLookaround { next, .. } => {
+                    | State::WriteLookAround { .. } => continue,
+                    State::CheckLookAround { next, .. } => {
                         stack.push(next);
                     }
                     State::Sparse(_) => {
@@ -1385,8 +1385,8 @@ impl Inner {
             State::Capture { .. } => {
                 self.has_capture = true;
             }
-            State::CheckLookaround { look_idx, .. }
-            | State::WriteLookaround { look_idx } => {
+            State::CheckLookAround { lookaround_idx: look_idx, .. }
+            | State::WriteLookAround { lookaround_idx: look_idx } => {
                 self.lookaround_count = self.lookaround_count.max(look_idx);
             }
             State::Union { .. }
@@ -1563,23 +1563,24 @@ pub enum State {
         /// satisfied.
         next: StateID,
     },
-    /// This is like a match state but for a lookaround expression
-    /// executing this state will write a `true` into the lookaround oracle at
-    /// index `look_idx`
-    WriteLookaround {
-        /// The index of the lookaround expression that matches
-        look_idx: SmallIndex,
+    /// This is like a match state but for a look-around expression.
+    /// Executing this state will write the current haystack offset into the
+    /// look-around oracle at index `lookaround_idx`.
+    WriteLookAround {
+        /// The index of the look-around expression that matches.
+        lookaround_idx: SmallIndex,
     },
     /// This indicates that we need to check whether lookaround expression with
-    /// index `look_idx` holds at the current position in the haystack
+    /// index `lookaround_idx` holds at the current position in the haystack
     /// If `positive` is false, then the lookaround expression is negative and
     /// hence must NOT hold.
-    CheckLookaround {
-        /// The index of the lookaround expression that must be satisfied
-        look_idx: SmallIndex,
-        /// Whether this is a positive lookaround expression
+    CheckLookAround {
+        /// The index of the look-around expression that must be satisfied.
+        lookaround_idx: SmallIndex,
+        /// Whether this is a positive lookaround expression.
         positive: bool,
-        /// The next state to transition if the lookaround assertion is satisfied
+        /// The next state to transition if the look-around assertion is
+        /// satisfied.
         next: StateID,
     },
     /// An alternation such that there exists an epsilon transition to all
@@ -1696,12 +1697,12 @@ impl State {
             | State::Dense { .. }
             | State::Fail
             | State::Match { .. }
-            | State::WriteLookaround { .. } => false,
+            | State::WriteLookAround { .. } => false,
             State::Look { .. }
             | State::Union { .. }
             | State::BinaryUnion { .. }
             | State::Capture { .. }
-            | State::CheckLookaround { .. } => true,
+            | State::CheckLookAround { .. } => true,
         }
     }
 
@@ -1714,8 +1715,8 @@ impl State {
             | State::Capture { .. }
             | State::Match { .. }
             | State::Fail
-            | State::WriteLookaround { .. }
-            | State::CheckLookaround { .. } => 0,
+            | State::WriteLookAround { .. }
+            | State::CheckLookAround { .. } => 0,
             State::Sparse(SparseTransitions { ref transitions }) => {
                 transitions.len() * mem::size_of::<Transition>()
             }
@@ -1748,7 +1749,7 @@ impl State {
                 }
             }
             State::Look { ref mut next, .. } => *next = remap[*next],
-            State::CheckLookaround { ref mut next, .. } => {
+            State::CheckLookAround { ref mut next, .. } => {
                 *next = remap[*next]
             }
             State::Union { ref mut alternates } => {
@@ -1763,7 +1764,7 @@ impl State {
             State::Capture { ref mut next, .. } => *next = remap[*next],
             State::Fail
             | State::Match { .. }
-            | State::WriteLookaround { .. } => {}
+            | State::WriteLookAround { .. } => {}
         }
     }
 }
@@ -1793,15 +1794,19 @@ impl fmt::Debug for State {
             State::Look { ref look, next } => {
                 write!(f, "{:?} => {:?}", look, next.as_usize())
             }
-            State::WriteLookaround { look_idx } => {
-                write!(f, "Write Lookaround: {}", look_idx.as_u32())
+            State::WriteLookAround { lookaround_idx: look_idx } => {
+                write!(f, "write-look-around({})", look_idx.as_u32())
             }
-            State::CheckLookaround { look_idx, positive, next } => {
+            State::CheckLookAround {
+                lookaround_idx: look_idx,
+                positive,
+                next,
+            } => {
                 write!(
                     f,
-                    "Check Lookaround {} is {} => {}",
+                    "check-look-around({} is {}) => {}",
                     look_idx.as_u32(),
-                    positive,
+                    if positive { "matched" } else { "not matched" },
                     next.as_usize()
                 )
             }

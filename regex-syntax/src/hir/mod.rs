@@ -2139,8 +2139,6 @@ impl Properties {
     ///
     /// Only returns true for [`HirKind::LookAround`] and not for
     /// [`HirKind::Look`], which can be queried by [`look_set`] instead.
-    /// Currently, only lookbehind assertions without capture groups are
-    /// supported.
     #[inline]
     pub fn contains_lookaround_expr(&self) -> bool {
         self.0.contains_lookaround_expr

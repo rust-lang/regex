@@ -251,8 +251,8 @@ pub(crate) fn next(
             | thompson::State::Fail
             | thompson::State::Look { .. }
             | thompson::State::Capture { .. } => {}
-            thompson::State::CheckLookaround { .. }
-            | thompson::State::WriteLookaround { .. } => {
+            thompson::State::CheckLookAround { .. }
+            | thompson::State::WriteLookAround { .. } => {
                 todo!("check how to handle")
             }
             thompson::State::Match { pattern_id } => {
@@ -403,8 +403,8 @@ pub(crate) fn epsilon_closure(
                 | thompson::State::Dense { .. }
                 | thompson::State::Fail
                 | thompson::State::Match { .. } => break,
-                thompson::State::WriteLookaround { .. }
-                | thompson::State::CheckLookaround { .. } => {
+                thompson::State::WriteLookAround { .. }
+                | thompson::State::CheckLookAround { .. } => {
                     todo!("check how to handle")
                 }
                 thompson::State::Look { look, next } => {
@@ -473,8 +473,8 @@ pub(crate) fn add_nfa_states(
                 builder.add_nfa_state_id(nfa_id);
                 builder.set_look_need(|need| need.insert(look));
             }
-            thompson::State::CheckLookaround { .. }
-            | thompson::State::WriteLookaround { .. } => {
+            thompson::State::CheckLookAround { .. }
+            | thompson::State::WriteLookAround { .. } => {
                 todo!("check how to handle")
             }
             thompson::State::Union { .. }
