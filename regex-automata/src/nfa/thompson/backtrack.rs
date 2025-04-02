@@ -1453,7 +1453,7 @@ impl BoundedBacktracker {
     /// Execute a "step" in the backtracing algorithm.
     ///
     /// A "step" is somewhat of a misnomer, because this routine keeps going
-    /// until it either runs out of things to try or fins a match. In the
+    /// until it either runs out of things to try or finds a match. In the
     /// former case, it may have pushed some things on to the backtracking
     /// stack, in which case, those will be tried next as part of the
     /// 'backtrack' routine above.

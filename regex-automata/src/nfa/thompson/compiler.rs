@@ -2036,14 +2036,14 @@ mod tests {
 
     fn s_write_lookaround(id: usize) -> State {
         State::WriteLookAround {
-            lookaround_idx: SmallIndex::new(id)
+            lookaround_index: SmallIndex::new(id)
                 .expect("look-around index too large"),
         }
     }
 
     fn s_check_lookaround(id: usize, positive: bool, next: usize) -> State {
         State::CheckLookAround {
-            lookaround_idx: SmallIndex::new(id)
+            lookaround_index: SmallIndex::new(id)
                 .expect("look-around index too large"),
             positive,
             next: sid(next),

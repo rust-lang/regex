@@ -92,7 +92,7 @@ enum State {
         next: StateID,
     },
     /// An empty state that behaves analogously to a `Match` state but for
-    /// the look-around sub-expression with the given index.
+    /// the look-around sub-expression with the given look-around index.
     WriteLookAround { lookaround_index: SmallIndex },
     /// A conditional epsilon transition that will only be taken if the
     /// look-around sub-expression with the given index evaluates to `positive`
@@ -484,9 +484,8 @@ impl Builder {
                     remap[sid] = nfa.add(nfa::State::Look { look, next });
                 }
                 State::WriteLookAround { lookaround_index } => {
-                    remap[sid] = nfa.add(nfa::State::WriteLookAround {
-                        lookaround_idx: lookaround_index,
-                    });
+                    remap[sid] = nfa
+                        .add(nfa::State::WriteLookAround { lookaround_index });
                 }
                 State::CheckLookAround {
                     lookaround_index,
@@ -494,7 +493,7 @@ impl Builder {
                     next,
                 } => {
                     remap[sid] = nfa.add(nfa::State::CheckLookAround {
-                        lookaround_idx: lookaround_index,
+                        lookaround_index,
                         positive,
                         next,
                     });
@@ -722,7 +721,7 @@ impl Builder {
         self.add(State::Empty { next: StateID::ZERO })
     }
 
-    /// Add a state which will record that the lookaround with the given index
+    /// Add a state which will record that the look-around with the given index
     /// is satisfied at the current position.
     pub fn add_write_lookaround(
         &mut self,
@@ -731,7 +730,7 @@ impl Builder {
         self.add(State::WriteLookAround { lookaround_index: index })
     }
 
-    /// Add a state which will check whether the lookaround with the given
+    /// Add a state which will check whether the look-around with the given
     /// index is satisfied at the current position.
     pub fn add_check_lookaround(
         &mut self,

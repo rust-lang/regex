@@ -1819,7 +1819,7 @@ impl LookAround {
         }
     }
 
-    /// Returns a mutable reference to the inner expression
+    /// Returns a mutable reference to the inner expression.
     pub fn sub_mut(&mut self) -> &mut Hir {
         match self {
             Self::PositiveLookBehind(sub) | Self::NegativeLookBehind(sub) => {
@@ -2556,7 +2556,7 @@ impl Properties {
             look_set_prefix_any: LookSet::singleton(look),
             look_set_suffix_any: LookSet::singleton(look),
             // Note, this field represents _general_ lookarounds (ones using
-            // LookAround) and not simple ones (using Look).
+            // LookAround) and not assertions (using Look).
             contains_lookaround_expr: false,
             // This requires a little explanation. Basically, we don't consider
             // matching an empty string to be equivalent to matching invalid

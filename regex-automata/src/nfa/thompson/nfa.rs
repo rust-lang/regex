@@ -1100,7 +1100,7 @@ impl NFA {
         self.0.look_set_prefix_any
     }
 
-    /// Returns how many look-around sub-expressions this nfa contains
+    /// Returns how many look-around sub-expressions this nfa contains.
     #[inline]
     pub fn lookaround_count(&self) -> usize {
         self.0.lookaround_count
@@ -1268,7 +1268,7 @@ pub(super) struct Inner {
     */
     /// How many look-around expression this NFA contains.
     /// This is needed to initialize the table for storing the result of
-    /// look-around evaluation
+    /// look-around evaluation.
     lookaround_count: usize,
     /// Heap memory used indirectly by NFA states and other things (like the
     /// various capturing group representations above). Since each state
@@ -1385,8 +1385,8 @@ impl Inner {
             State::Capture { .. } => {
                 self.has_capture = true;
             }
-            State::CheckLookAround { lookaround_idx: look_idx, .. }
-            | State::WriteLookAround { lookaround_idx: look_idx } => {
+            State::CheckLookAround { lookaround_index: look_idx, .. }
+            | State::WriteLookAround { lookaround_index: look_idx } => {
                 self.lookaround_count =
                     self.lookaround_count.max(look_idx.as_usize() + 1);
             }
@@ -1566,19 +1566,19 @@ pub enum State {
     },
     /// This is like a match state but for a look-around expression.
     /// Executing this state will write the current haystack offset into the
-    /// look-around oracle at index `lookaround_idx`.
+    /// look-around oracle at index `lookaround_index`.
     WriteLookAround {
         /// The index of the look-around expression that matches.
-        lookaround_idx: SmallIndex,
+        lookaround_index: SmallIndex,
     },
-    /// This indicates that we need to check whether lookaround expression with
-    /// index `lookaround_idx` holds at the current position in the haystack
-    /// If `positive` is false, then the lookaround expression is negative and
+    /// This indicates that we need to check whether look-around expression with
+    /// index `lookaround_index` holds at the current position in the haystack.
+    /// If `positive` is false, then the look-around expression is negative and
     /// hence must NOT hold.
     CheckLookAround {
         /// The index of the look-around expression that must be satisfied.
-        lookaround_idx: SmallIndex,
-        /// Whether this is a positive lookaround expression.
+        lookaround_index: SmallIndex,
+        /// Whether this is a positive look-around expression.
         positive: bool,
         /// The next state to transition if the look-around assertion is
         /// satisfied.
@@ -1795,11 +1795,11 @@ impl fmt::Debug for State {
             State::Look { ref look, next } => {
                 write!(f, "{:?} => {:?}", look, next.as_usize())
             }
-            State::WriteLookAround { lookaround_idx: look_idx } => {
+            State::WriteLookAround { lookaround_index: look_idx } => {
                 write!(f, "write-look-around({})", look_idx.as_u32())
             }
             State::CheckLookAround {
-                lookaround_idx: look_idx,
+                lookaround_index: look_idx,
                 positive,
                 next,
             } => {

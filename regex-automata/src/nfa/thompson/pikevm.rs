@@ -1772,13 +1772,13 @@ impl PikeVM {
                     }
                     sid = next;
                 }
-                State::WriteLookAround { lookaround_idx: look_idx } => {
+                State::WriteLookAround { lookaround_index: look_idx } => {
                     // This is ok since `at` is always less than `usize::MAX`.
                     lookarounds[look_idx] = NonMaxUsize::new(at);
                     return;
                 }
                 State::CheckLookAround {
-                    lookaround_idx: look_idx,
+                    lookaround_index: look_idx,
                     positive,
                     next,
                 } => {
@@ -1973,8 +1973,8 @@ pub struct Cache {
     /// next byte in the haystack.
     next: ActiveStates,
     /// This answers the question: "What is the maximum position in the
-    /// haystack at which lookaround assertion x holds and which is <= to the
-    /// current position"
+    /// haystack at which look-around indexed x holds and which is <= to the
+    /// current position".
     lookaround: Vec<Option<NonMaxUsize>>,
 }
 
