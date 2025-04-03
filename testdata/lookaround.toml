@@ -26,34 +26,43 @@ matches = []
 name = "lookbehind in quantifier non-repeating"
 regex = "(?:(?<=c)a)+"
 haystack = "badacacaea"
-matches = [[5,6], [7,8]]
+matches = [[5, 6], [7, 8]]
 
 [[test]]
 name = "lookbehind in quantifier repeating"
 regex = "(?:(?<=a)a)+"
 haystack = "babaabaaabaaaac"
-matches = [[4,5], [7,9], [11,14]]
+matches = [[4, 5], [7, 9], [11, 14]]
 
 [[test]]
 name = "lookbehind with quantifier"
 regex = "(?<=cb+)a"
 haystack = "acabacbacbbaea"
-matches = [[7,8], [11,12]]
+matches = [[7, 8], [11, 12]]
 
 [[test]]
 name = "nested lookbehind"
 regex = "(?<=c[def]+(?<!fed))a"
 haystack = "cdaceacfeeacfedeacfeda"
-matches = [[2,3], [5,6], [10,11], [16,17]]
+matches = [[2, 3], [5, 6], [10, 11], [16, 17]]
 
 [[test]]
 name = "lookbehind with alternation"
 regex = "(?<=def|abc)a"
 haystack = "defaabcadefbca"
-matches = [[3,4], [7,8]]
+matches = [[3, 4], [7, 8]]
 
 [[test]]
 name = "lookbehind in alternation"
 regex = "(?<=c+)a|(?<=d+)a"
 haystack = "aabacadaccaddaea"
-matches = [[5,6], [7,8], [10,11], [13,14]]
+matches = [[5, 6], [7, 8], [10, 11], [13, 14]]
+
+[[test]]
+name = "lookbehind next to capture group"
+regex = "(?<=c)(a|b)(b|a)"
+haystack = "cabacbacb"
+matches = [
+	[[1, 3], [1, 2], [2, 3]],
+	[[5, 7], [5, 6], [6, 7]],
+]
