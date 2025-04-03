@@ -289,20 +289,16 @@ fn compiler(
                 }
             }
         }
+        // Or look-around expressions.
+        for hir in hirs.iter() {
+            if hir.properties().contains_lookaround_expr() {
+                return Ok(CompiledRegex::skip());
+            }
+        }
         if !configure_regex_builder(test, &mut builder) {
             return Ok(CompiledRegex::skip());
         }
-        let re = match builder.build_many(regexes) {
-            Ok(re) => re,
-            Err(err)
-                if test.compiles()
-                    && format!("{err}").contains("look-around") =>
-            {
-                return Ok(CompiledRegex::skip());
-            }
-            Err(err) => return Err(err.into()),
-        };
-        create_matcher(&builder, pre, re)
+        create_matcher(&builder, pre, builder.build_many(regexes)?)
     }
 }
 

@@ -74,7 +74,7 @@ fn min_visited_capacity() -> Result<()> {
                 .configure(config_thompson(test))
                 .syntax(config_syntax(test))
                 .build_many(&regexes)?;
-            // TODO: remove once look-around is supported.
+            // The backtracker doesn't support lookarounds, so skip if there are any.
             if nfa.lookaround_count() > 0 {
                 return Ok(CompiledRegex::skip());
             }
@@ -109,7 +109,7 @@ fn compiler(
             return Ok(CompiledRegex::skip());
         }
         let re = builder.build_many(&regexes)?;
-        // TODO: remove once look-around is supported.
+        // The backtracker doesn't support lookarounds, so skip if there are any.
         if re.get_nfa().lookaround_count() > 0 {
             return Ok(CompiledRegex::skip());
         }
