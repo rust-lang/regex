@@ -954,6 +954,13 @@ impl Compiler {
         {
             return Err(BuildError::unsupported_captures());
         }
+        if self.config.get_reverse()
+            && exprs.iter().any(|e| {
+                (e.borrow() as &Hir).properties().contains_lookaround_expr()
+            })
+        {
+            return Err(BuildError::unsupported_lookarounds());
+        }
 
         self.builder.borrow_mut().clear();
         self.builder.borrow_mut().set_utf8(self.config.get_utf8());

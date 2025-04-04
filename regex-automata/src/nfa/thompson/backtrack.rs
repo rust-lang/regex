@@ -301,6 +301,9 @@ impl Builder {
         nfa: NFA,
     ) -> Result<BoundedBacktracker, BuildError> {
         nfa.look_set_any().available().map_err(BuildError::word)?;
+        if nfa.lookaround_count() > 0 {
+            return Err(BuildError::unsupported_lookarounds());
+        }
         Ok(BoundedBacktracker { config: self.config.clone(), nfa })
     }
 
@@ -1521,7 +1524,9 @@ impl BoundedBacktracker {
                 }
                 State::WriteLookAround { .. }
                 | State::CheckLookAround { .. } => {
-                    todo!("check how to handle")
+                    unimplemented!(
+                        "backtracking engine does not support look-arounds"
+                    );
                 }
                 State::Union { ref alternates } => {
                     sid = match alternates.get(0) {

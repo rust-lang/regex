@@ -108,7 +108,17 @@ fn compiler(
         if !configure_backtrack_builder(test, &mut builder) {
             return Ok(CompiledRegex::skip());
         }
-        let re = builder.build_many(&regexes)?;
+        let re = match builder.build_many(&regexes) {
+            Ok(re) => re,
+            // Due to errors being opaque, we need to check the error message to skip tests with look-arounds
+            Err(err) => {
+                if test.compiles() && err.to_string().contains("look-around") {
+                    return Ok(CompiledRegex::skip());
+                }
+
+                return Err(err.into());
+            }
+        };
         // The backtracker doesn't support lookarounds, so skip if there are any.
         if re.get_nfa().lookaround_count() > 0 {
             return Ok(CompiledRegex::skip());

@@ -253,7 +253,7 @@ pub(crate) fn next(
             | thompson::State::Capture { .. } => {}
             thompson::State::CheckLookAround { .. }
             | thompson::State::WriteLookAround { .. } => {
-                todo!("check how to handle")
+                unimplemented!("look-around support in DFA")
             }
             thompson::State::Match { pattern_id } => {
                 // Notice here that we are calling the NEW state a match
@@ -405,7 +405,7 @@ pub(crate) fn epsilon_closure(
                 | thompson::State::Match { .. } => break,
                 thompson::State::WriteLookAround { .. }
                 | thompson::State::CheckLookAround { .. } => {
-                    todo!("check how to handle")
+                    unimplemented!("look-around support in DFA")
                 }
                 thompson::State::Look { look, next } => {
                     if !look_have.contains(look) {
@@ -475,7 +475,7 @@ pub(crate) fn add_nfa_states(
             }
             thompson::State::CheckLookAround { .. }
             | thompson::State::WriteLookAround { .. } => {
-                todo!("check how to handle")
+                unimplemented!("look-around support in DFA")
             }
             thompson::State::Union { .. }
             | thompson::State::BinaryUnion { .. } => {

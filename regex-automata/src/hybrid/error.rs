@@ -63,7 +63,7 @@ impl BuildError {
     }
 
     pub(crate) fn unsupported_lookaround() -> BuildError {
-        let msg = "cannot build DFAs for regexes with look-around\
+        let msg = "cannot build DFAs for regexes with look-around \
                    sub-expressions; use a different regex engine";
         BuildError { kind: BuildErrorKind::Unsupported(msg) }
     }

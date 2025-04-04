@@ -81,6 +81,13 @@ enum BuildErrorKind {
     /// should support it at some point.
     #[cfg(feature = "syntax")]
     UnsupportedCaptures,
+    /// An error that occurs when one tries to build a reverse NFA with
+    /// look-around sub-expressions. Currently, this isn't supported, but we
+    /// probably should support it at some point.
+    ///
+    /// This is also emmitted by the backtracking engine which does not
+    /// support look-around sub-expressions.
+    UnsupportedLookArounds,
 }
 
 impl BuildError {
@@ -142,6 +149,10 @@ impl BuildError {
     pub(crate) fn unsupported_captures() -> BuildError {
         BuildError { kind: BuildErrorKind::UnsupportedCaptures }
     }
+
+    pub(crate) fn unsupported_lookarounds() -> BuildError {
+        BuildError { kind: BuildErrorKind::UnsupportedLookArounds }
+    }
 }
 
 #[cfg(feature = "std")]
@@ -200,6 +211,11 @@ impl core::fmt::Display for BuildError {
                 f,
                 "currently captures must be disabled when compiling \
                  a reverse NFA",
+            ),
+            BuildErrorKind::UnsupportedLookArounds => write!(
+                f,
+                "currently look-around sub-expressions cannot be in the pattern \
+                 when compiling a reverse NFA or using the backtracking engine",
             ),
         }
     }

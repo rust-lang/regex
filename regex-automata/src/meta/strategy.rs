@@ -490,49 +490,52 @@ impl Core {
         // we know we aren't going to use the lazy DFA. So we do a config check
         // up front, which is in practice the only way we won't try to use the
         // DFA.
-        let (nfarev, hybrid, dfa) =
-            if !info.config().get_hybrid() && !info.config().get_dfa() {
-                (None, wrappers::Hybrid::none(), wrappers::DFA::none())
+        let (nfarev, hybrid, dfa) = if !info.config().get_hybrid()
+            && !info.config().get_dfa()
+            // With look-arounds, the lazy DFA and dense DFA would fail to build
+            || nfa.lookaround_count() > 0
+        {
+            (None, wrappers::Hybrid::none(), wrappers::DFA::none())
+        } else {
+            // FIXME: Technically, we don't quite yet KNOW that we need
+            // a reverse NFA. It's possible for the DFAs below to both
+            // fail to build just based on the forward NFA. In which case,
+            // building the reverse NFA was totally wasted work. But...
+            // fixing this requires breaking DFA construction apart into
+            // two pieces: one for the forward part and another for the
+            // reverse part. Quite annoying. Making it worse, when building
+            // both DFAs fails, it's quite likely that the NFA is large and
+            // that it will take quite some time to build the reverse NFA
+            // too. So... it's really probably worth it to do this!
+            let nfarev = thompson::Compiler::new()
+                // Currently, reverse NFAs don't support capturing groups,
+                // so we MUST disable them. But even if we didn't have to,
+                // we would, because nothing in this crate does anything
+                // useful with capturing groups in reverse. And of course,
+                // the lazy DFA ignores capturing groups in all cases.
+                .configure(
+                    thompson_config
+                        .clone()
+                        .which_captures(WhichCaptures::None)
+                        .reverse(true),
+                )
+                .build_many_from_hir(hirs)
+                .map_err(BuildError::nfa)?;
+            let dfa = if !info.config().get_dfa() {
+                wrappers::DFA::none()
             } else {
-                // FIXME: Technically, we don't quite yet KNOW that we need
-                // a reverse NFA. It's possible for the DFAs below to both
-                // fail to build just based on the forward NFA. In which case,
-                // building the reverse NFA was totally wasted work. But...
-                // fixing this requires breaking DFA construction apart into
-                // two pieces: one for the forward part and another for the
-                // reverse part. Quite annoying. Making it worse, when building
-                // both DFAs fails, it's quite likely that the NFA is large and
-                // that it will take quite some time to build the reverse NFA
-                // too. So... it's really probably worth it to do this!
-                let nfarev = thompson::Compiler::new()
-                    // Currently, reverse NFAs don't support capturing groups,
-                    // so we MUST disable them. But even if we didn't have to,
-                    // we would, because nothing in this crate does anything
-                    // useful with capturing groups in reverse. And of course,
-                    // the lazy DFA ignores capturing groups in all cases.
-                    .configure(
-                        thompson_config
-                            .clone()
-                            .which_captures(WhichCaptures::None)
-                            .reverse(true),
-                    )
-                    .build_many_from_hir(hirs)
-                    .map_err(BuildError::nfa)?;
-                let dfa = if !info.config().get_dfa() {
-                    wrappers::DFA::none()
-                } else {
-                    wrappers::DFA::new(&info, pre.clone(), &nfa, &nfarev)
-                };
-                let hybrid = if !info.config().get_hybrid() {
-                    wrappers::Hybrid::none()
-                } else if dfa.is_some() {
-                    debug!("skipping lazy DFA because we have a full DFA");
-                    wrappers::Hybrid::none()
-                } else {
-                    wrappers::Hybrid::new(&info, pre.clone(), &nfa, &nfarev)
-                };
-                (Some(nfarev), hybrid, dfa)
+                wrappers::DFA::new(&info, pre.clone(), &nfa, &nfarev)
             };
+            let hybrid = if !info.config().get_hybrid() {
+                wrappers::Hybrid::none()
+            } else if dfa.is_some() {
+                debug!("skipping lazy DFA because we have a full DFA");
+                wrappers::Hybrid::none()
+            } else {
+                wrappers::Hybrid::new(&info, pre.clone(), &nfa, &nfarev)
+            };
+            (Some(nfarev), hybrid, dfa)
+        };
         Ok(Core {
             info,
             pre,
