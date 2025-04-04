@@ -2456,16 +2456,16 @@ mod tests {
 
     #[test]
     fn lookaround() {
-        assert_eq!(exact(["ab"]), e(r"a(?<=qwa)b"));
-        assert_eq!(exact(["ab"]), e(r"a(?<!qwe)b"));
+        assert_eq!(inexact([I("a")], [I("b")]), e(r"a(?<=qwa)b"));
+        assert_eq!(inexact([I("a")], [I("b")]), e(r"a(?<!qw1)b"));
 
-        assert_eq!(exact(["ab"]), e(r"(?<=qwe)ab"));
-        assert_eq!(exact(["ab"]), e(r"(?<!qwe)ab"));
+        assert_eq!((Seq::infinite(), seq([I("ab")])), e(r"(?<=qwe)ab"));
+        assert_eq!((Seq::infinite(), seq([I("ab")])), e(r"(?<!qwe)ab"));
 
-        assert_eq!(exact(["ab"]), e(r"ab(?<=qab)"));
-        assert_eq!(exact(["ab"]), e(r"ab(?<!qwe)"));
+        assert_eq!((seq([I("ab")]), Seq::infinite()), e(r"ab(?<=qab)"));
+        assert_eq!((seq([I("ab")]), Seq::infinite()), e(r"ab(?<!qwe)"));
 
-        let expected = (seq([I("aZ"), E("ab")]), seq([I("Zb"), E("ab")]));
+        let expected = (Seq::infinite(), seq([I("Zb"), I("ab")]));
         assert_eq!(expected, e(r"(?<=foo)aZ*b"));
     }
 
