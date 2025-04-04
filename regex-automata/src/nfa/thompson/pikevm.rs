@@ -1772,17 +1772,17 @@ impl PikeVM {
                     }
                     sid = next;
                 }
-                State::WriteLookAround { lookaround_index: look_idx } => {
+                State::WriteLookAround { lookaround_index } => {
                     // This is ok since `at` is always less than `usize::MAX`.
-                    lookarounds[look_idx] = NonMaxUsize::new(at);
+                    lookarounds[lookaround_index] = NonMaxUsize::new(at);
                     return;
                 }
                 State::CheckLookAround {
-                    lookaround_index: look_idx,
+                    lookaround_index,
                     positive,
                     next,
                 } => {
-                    let state = match lookarounds[look_idx] {
+                    let state = match lookarounds[lookaround_index] {
                         None => usize::MAX,
                         Some(pos) => pos.get(),
                     };

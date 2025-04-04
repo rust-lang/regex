@@ -1385,10 +1385,10 @@ impl Inner {
             State::Capture { .. } => {
                 self.has_capture = true;
             }
-            State::CheckLookAround { lookaround_index: look_idx, .. }
-            | State::WriteLookAround { lookaround_index: look_idx } => {
+            State::CheckLookAround { lookaround_index, .. }
+            | State::WriteLookAround { lookaround_index } => {
                 self.lookaround_count =
-                    self.lookaround_count.max(look_idx.as_usize() + 1);
+                    self.lookaround_count.max(lookaround_index.as_usize() + 1);
             }
             State::Union { .. }
             | State::BinaryUnion { .. }
@@ -1795,18 +1795,14 @@ impl fmt::Debug for State {
             State::Look { ref look, next } => {
                 write!(f, "{:?} => {:?}", look, next.as_usize())
             }
-            State::WriteLookAround { lookaround_index: look_idx } => {
-                write!(f, "write-look-around({})", look_idx.as_u32())
+            State::WriteLookAround { lookaround_index } => {
+                write!(f, "write-look-around({})", lookaround_index.as_u32())
             }
-            State::CheckLookAround {
-                lookaround_index: look_idx,
-                positive,
-                next,
-            } => {
+            State::CheckLookAround { lookaround_index, positive, next } => {
                 write!(
                     f,
                     "check-look-around({} is {}) => {}",
-                    look_idx.as_u32(),
+                    lookaround_index.as_u32(),
                     if positive { "matched" } else { "not matched" },
                     next.as_usize()
                 )
