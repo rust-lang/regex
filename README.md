@@ -301,7 +301,7 @@ Therefore, if you're looking to work on the internals of this crate, you'll
 likely either want to look in `regex-syntax` (for parsing) or `regex-automata`
 (for construction of finite automata and the search routines).
 
-My [blog on regex internals](https://blog.burntsushi.net/regex-internals/)
+My [blog on regex internals](https://burntsushi.net/regex-internals/)
 goes into more depth.
 
 
