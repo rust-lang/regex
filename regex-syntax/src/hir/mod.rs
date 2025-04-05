@@ -2589,6 +2589,8 @@ impl Properties {
             literal: false,
             alternation_literal: false,
             contains_lookaround_expr: true,
+            look_set_prefix: LookSet::empty(),
+            look_set_suffix: LookSet::empty(),
             ..*sub_p.0.clone()
         };
         Properties(Box::new(inner))

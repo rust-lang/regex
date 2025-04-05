@@ -2159,6 +2159,29 @@ mod tests {
     }
 
     #[test]
+    fn compile_yes_unanchored_prefix_with_start_anchor_in_lookaround() {
+        let nfa = NFA::compiler()
+            .configure(NFA::config().which_captures(WhichCaptures::None))
+            .build(r"(?<=^)a")
+            .unwrap();
+        assert_eq!(
+            nfa.states(),
+            &[
+                s_bin_union(2, 1),
+                s_range(0, 255, 0),
+                s_bin_union(3, 6),
+                s_bin_union(5, 4),
+                s_range(0, 255, 3),
+                s_look(Look::Start, 7),
+                s_check_lookaround(0, true, 8),
+                s_write_lookaround(0),
+                s_byte(b'a', 9),
+                s_match(0)
+            ]
+        );
+    }
+
+    #[test]
     fn compile_empty() {
         assert_eq!(build("").states(), &[s_match(0),]);
     }
