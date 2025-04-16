@@ -1270,6 +1270,8 @@ pub(super) struct Inner {
     /// This is needed to initialize the table for storing the result of
     /// look-around evaluation.
     lookaround_count: usize,
+    /// Contains the start states for each of the look-behind subexpressions
+    start_look_behind: Vec<StateID>,
     /// Heap memory used indirectly by NFA states and other things (like the
     /// various capturing group representations above). Since each state
     /// might use a different amount of heap, we need to keep track of this
@@ -1417,6 +1419,13 @@ impl Inner {
         self.start_anchored = start_anchored;
         self.start_unanchored = start_unanchored;
         self.start_pattern = start_pattern.to_vec();
+    }
+
+    pub(super) fn set_look_behind_starts(
+        &mut self,
+        look_behind_starts: &[StateID],
+    ) {
+        self.start_look_behind = look_behind_starts.to_vec();
     }
 
     /// Sets the UTF-8 mode of this NFA.

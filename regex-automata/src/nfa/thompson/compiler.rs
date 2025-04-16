@@ -711,11 +711,6 @@ pub struct Compiler {
     /// State used for caching common suffixes when compiling reverse UTF-8
     /// automata (for Unicode character classes).
     utf8_suffix: RefCell<Utf8SuffixMap>,
-    /// Top level alternation state which is used to run all look-around
-    /// assertion checks in lockstep with the main expression. Each look-around
-    /// expression is compiled to a set of states that is patched into this
-    /// state, and this state is updated on each new pattern being compiled.
-    lookaround_alt: RefCell<Option<StateID>>,
     /// The next index to use for a look-around expression.
     lookaround_index: RefCell<SmallIndex>,
 }
@@ -730,7 +725,6 @@ impl Compiler {
             utf8_state: RefCell::new(Utf8State::new()),
             trie_state: RefCell::new(RangeTrie::new()),
             utf8_suffix: RefCell::new(Utf8SuffixMap::new(1000)),
-            lookaround_alt: RefCell::new(None),
             lookaround_index: RefCell::new(SmallIndex::ZERO),
         }
     }
@@ -993,32 +987,11 @@ impl Compiler {
 
         let compiled = self.c_alt_iter(exprs.iter().map(|e| {
             let _ = self.start_pattern()?;
-            let has_lookarounds =
-                (e.borrow() as &Hir).properties().contains_lookaround_expr();
-            let mut top_level_alt = if has_lookarounds {
-                self.add_union()?
-            } else {
-                StateID::ZERO
-            };
-            if has_lookarounds {
-                let lookaround_prefix =
-                    self.c_at_least(&Hir::dot(hir::Dot::AnyByte), false, 0)?;
-                let lookaround_alt = self.add_union()?;
-                self.patch(lookaround_prefix.end, lookaround_alt)?;
-                self.patch(top_level_alt, lookaround_prefix.start)?;
-                self.lookaround_alt.borrow_mut().replace(lookaround_alt);
-            }
             let one = self.c_cap(0, None, e.borrow())?;
             let match_state_id = self.add_match()?;
             self.patch(one.end, match_state_id)?;
-            if has_lookarounds {
-                self.patch(top_level_alt, one.start)?;
-            } else {
-                top_level_alt = one.start;
-            }
-            let _ = self.finish_pattern(top_level_alt)?;
-            self.lookaround_alt.borrow_mut().take();
-            Ok(ThompsonRef { start: top_level_alt, end: match_state_id })
+            let _ = self.finish_pattern(one.start)?;
+            Ok(ThompsonRef { start: one.start, end: match_state_id })
         }))?;
         self.patch(unanchored_prefix.end, compiled.start)?;
         let nfa = self
@@ -1052,25 +1025,25 @@ impl Compiler {
         &self,
         lookaround: &LookAround,
     ) -> Result<ThompsonRef, BuildError> {
-        let sub = self.c(lookaround.sub())?;
-        let pos = match lookaround {
-            LookAround::NegativeLookBehind(_) => false,
-            LookAround::PositiveLookBehind(_) => true,
-        };
         let idx = *self.lookaround_index.borrow();
         *self.lookaround_index.borrow_mut() = SmallIndex::new(idx.one_more())
             .map_err(|e| {
                 BuildError::too_many_lookarounds(e.attempted() as usize)
             })?;
+        let pos = match lookaround {
+            LookAround::NegativeLookBehind(_) => false,
+            LookAround::PositiveLookBehind(_) => true,
+        };
         let check = self.add_check_lookaround(idx, pos)?;
+
+        let unanchored =
+            self.c_at_least(&Hir::dot(hir::Dot::AnyByte), false, 0)?;
+
+        let sub = self.c(lookaround.sub())?;
         let write = self.add_write_lookaround(idx)?;
+        self.patch(unanchored.end, sub.start)?;
         self.patch(sub.end, write)?;
-        self.patch(
-            self.lookaround_alt
-                .borrow()
-                .expect("Cannot compile look-around outside pattern"),
-            sub.start,
-        )?;
+        self.builder.borrow_mut().start_look_behind(unanchored.start);
         Ok(ThompsonRef { start: check, end: check })
     }
 
@@ -2169,13 +2142,12 @@ mod tests {
             &[
                 s_bin_union(2, 1),
                 s_range(0, 255, 0),
-                s_bin_union(3, 6),
+                s_check_lookaround(0, true, 7),
                 s_bin_union(5, 4),
                 s_range(0, 255, 3),
-                s_look(Look::Start, 7),
-                s_check_lookaround(0, true, 8),
+                s_look(Look::Start, 6),
                 s_write_lookaround(0),
-                s_byte(b'a', 9),
+                s_byte(b'a', 8),
                 s_match(0)
             ]
         );
@@ -2310,11 +2282,10 @@ mod tests {
         assert_eq!(
             build(r"(?<=a)").states(),
             &[
-                s_bin_union(1, 4),
+                s_check_lookaround(0, true, 5),
                 s_bin_union(3, 2),
                 s_range(b'\x00', b'\xFF', 1),
-                s_byte(b'a', 5),
-                s_check_lookaround(0, true, 6),
+                s_byte(b'a', 4),
                 s_write_lookaround(0),
                 s_match(0)
             ]
@@ -2322,16 +2293,16 @@ mod tests {
         assert_eq!(
             build(r"(?<=a(?<!b))").states(),
             &[
-                s_bin_union(1, 8),
+                s_check_lookaround(0, true, 10),
                 s_bin_union(3, 2),
                 s_range(b'\x00', b'\xFF', 1),
-                s_bin_union(5, 4),
-                s_byte(b'a', 6),
-                s_byte(b'b', 7),
-                s_check_lookaround(0, false, 9),
-                s_write_lookaround(0),
-                s_check_lookaround(1, true, 10),
+                s_byte(b'a', 4),
+                s_check_lookaround(1, false, 9),
+                s_bin_union(7, 6),
+                s_range(b'\x00', b'\xFF', 5),
+                s_byte(b'b', 8),
                 s_write_lookaround(1),
+                s_write_lookaround(0),
                 s_match(0)
             ]
         );
