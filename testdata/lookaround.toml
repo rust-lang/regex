@@ -47,6 +47,18 @@ haystack = "cdaceacfeeacfedeacfeda"
 matches = [[2, 3], [5, 6], [10, 11], [16, 17]]
 
 [[test]]
+name = "nested positive lookbehind"
+regex = "(?<=\\w{2}(?<=\\d))d"
+haystack = "ad 1d1ada1d1 d a1d"
+matches = [[10, 11], [17, 18]]
+
+[[test]]
+name = "overlapping lookbehind"
+regex = "(?<=abcab)c"
+haystack = "abcabcabcabc"
+matches = [[5,6], [8,9], [11,12]]
+
+[[test]]
 name = "lookbehind with alternation"
 regex = "(?<=def|abc)a"
 haystack = "defaabcadefbca"
