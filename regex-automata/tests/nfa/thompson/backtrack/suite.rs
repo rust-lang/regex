@@ -119,10 +119,6 @@ fn compiler(
                 return Err(err.into());
             }
         };
-        // The backtracker doesn't support lookarounds, so skip if there are any.
-        if re.get_nfa().lookaround_count() > 0 {
-            return Ok(CompiledRegex::skip());
-        }
         let mut cache = re.create_cache();
         Ok(CompiledRegex::compiled(move |test| -> TestResult {
             run_test(&re, &mut cache, test)
