@@ -710,7 +710,7 @@ impl Builder {
         self.start_pattern.len()
     }
 
-    /// Adds the [`start_id`] to the set of starting states that is used when
+    /// Adds the `start_id` to the set of starting states that is used when
     /// running look-behind expressions.
     pub fn start_look_behind(&mut self, start_id: StateID) {
         self.start_look_behind.push(start_id);
