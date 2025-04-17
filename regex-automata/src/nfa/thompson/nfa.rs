@@ -1106,6 +1106,12 @@ impl NFA {
         self.0.lookaround_count
     }
 
+    /// Returns the starting states for initializing look-behind evaluation
+    #[inline]
+    pub fn look_behind_starts(&self) -> &Vec<StateID> {
+        &self.0.start_look_behind
+    }
+
     // FIXME: The `look_set_prefix_all` computation was not correct, and it
     // seemed a little tricky to fix it. Since I wasn't actually using it for
     // anything, I just decided to remove it in the run up to the regex 1.9
@@ -1479,6 +1485,9 @@ impl Inner {
         self.start_anchored = old_to_new[self.start_anchored];
         self.start_unanchored = old_to_new[self.start_unanchored];
         for id in self.start_pattern.iter_mut() {
+            *id = old_to_new[*id];
+        }
+        for id in self.start_look_behind.iter_mut() {
             *id = old_to_new[*id];
         }
     }

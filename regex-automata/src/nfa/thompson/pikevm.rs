@@ -1263,7 +1263,46 @@ impl PikeVM {
             ref mut curr,
             ref mut next,
             ref mut lookaround,
+            ref mut curr_lookaround,
+            ref mut next_lookaround,
         } = cache;
+
+        // This initializes the look-behind threads from the start of the input
+        // Note: since capture groups are not allowed inside look-behinds,
+        // there won't be any Capture epsilon transitions and hence it is ok to
+        // use &mut [] for the slots parameter. We need to add the start states
+        // in reverse because nested look-behinds have a higher index but must
+        // be executed first.
+        for look_behind_start in self.nfa.look_behind_starts() {
+            self.epsilon_closure(
+                stack,
+                &mut [],
+                curr_lookaround,
+                lookaround,
+                input,
+                0,
+                *look_behind_start,
+            );
+        }
+
+        // This brings the look-behind threads into the state they must be for
+        // starting at input.start() instead of the beginning. This is
+        // necessary for lookbehinds to be able to match outside of the input
+        // span.
+        for lb_at in 0..input.start() {
+            self.nexts(
+                stack,
+                curr_lookaround,
+                next_lookaround,
+                lookaround,
+                input,
+                lb_at,
+                &mut [],
+            );
+            core::mem::swap(curr_lookaround, next_lookaround);
+            next_lookaround.set.clear();
+        }
+
         let mut hm = None;
         // Yes, our search doesn't end at input.end(), but includes it. This
         // is necessary because matches are delayed by one byte, just like
@@ -1374,6 +1413,17 @@ impl PikeVM {
                     stack, slots, curr, lookaround, input, at, start_id,
                 );
             }
+            // The lookbehind states must be processed first, since their
+            // result must be available for the processing of the main states.
+            self.nexts(
+                stack,
+                curr_lookaround,
+                next_lookaround,
+                lookaround,
+                input,
+                at,
+                &mut [],
+            );
             if let Some(pid) =
                 self.nexts(stack, curr, next, lookaround, input, at, slots)
             {
@@ -1387,7 +1437,9 @@ impl PikeVM {
                 break;
             }
             core::mem::swap(curr, next);
+            core::mem::swap(curr_lookaround, next_lookaround);
             next.set.clear();
+            next_lookaround.set.clear();
             at += 1;
         }
         instrument!(|c| c.eprint(&self.nfa));
@@ -1442,7 +1494,34 @@ impl PikeVM {
             ref mut curr,
             ref mut next,
             ref mut lookaround,
+            ref mut curr_lookaround,
+            ref mut next_lookaround,
         } = cache;
+
+        for look_behind_start in self.nfa.look_behind_starts() {
+            self.epsilon_closure(
+                stack,
+                &mut [],
+                curr_lookaround,
+                lookaround,
+                input,
+                0,
+                *look_behind_start,
+            );
+        }
+        for lb_at in 0..input.start() {
+            self.nexts(
+                stack,
+                curr_lookaround,
+                next_lookaround,
+                lookaround,
+                input,
+                lb_at,
+                &mut [],
+            );
+            core::mem::swap(curr_lookaround, next_lookaround);
+            next_lookaround.set.clear();
+        }
         for at in input.start()..=input.end() {
             let any_matches = !patset.is_empty();
             if curr.set.is_empty() {
@@ -1459,6 +1538,15 @@ impl PikeVM {
                     stack, slots, curr, lookaround, input, at, start_id,
                 );
             }
+            self.nexts(
+                stack,
+                curr_lookaround,
+                next_lookaround,
+                lookaround,
+                input,
+                at,
+                &mut [],
+            );
             self.nexts_overlapping(
                 stack, curr, next, lookaround, input, at, patset,
             );
@@ -1470,7 +1558,9 @@ impl PikeVM {
                 break;
             }
             core::mem::swap(curr, next);
+            core::mem::swap(curr_lookaround, next_lookaround);
             next.set.clear();
+            next_lookaround.set.clear();
         }
         instrument!(|c| c.eprint(&self.nfa));
     }
@@ -1976,6 +2066,10 @@ pub struct Cache {
     /// haystack at which look-around indexed x holds and which is <= to the
     /// current position".
     lookaround: Vec<Option<NonMaxUsize>>,
+    /// The current active states for look-behind subexpressions
+    curr_lookaround: ActiveStates,
+    /// The next set of states to be explored for look-behind subexpressions
+    next_lookaround: ActiveStates,
 }
 
 impl Cache {
@@ -1993,6 +2087,8 @@ impl Cache {
             curr: ActiveStates::new(re),
             next: ActiveStates::new(re),
             lookaround: vec![None; re.lookaround_count()],
+            curr_lookaround: ActiveStates::new(re),
+            next_lookaround: ActiveStates::new(re),
         }
     }
 
@@ -2036,6 +2132,9 @@ impl Cache {
     pub fn reset(&mut self, re: &PikeVM) {
         self.curr.reset(re);
         self.next.reset(re);
+        self.curr_lookaround.reset(re);
+        self.next_lookaround.reset(re);
+        self.lookaround = vec![None; re.lookaround_count()];
     }
 
     /// Returns the heap memory usage, in bytes, of this cache.
@@ -2063,6 +2162,10 @@ impl Cache {
         self.stack.clear();
         self.curr.setup_search(captures_slot_len);
         self.next.setup_search(captures_slot_len);
+        // capture groups are not allowed inside look-arounds, so we
+        // set the slot-length to zero.
+        self.curr_lookaround.setup_search(0);
+        self.next_lookaround.setup_search(0);
     }
 }
 

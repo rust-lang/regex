@@ -387,6 +387,7 @@ impl Builder {
         self.pattern_id = None;
         self.states.clear();
         self.start_pattern.clear();
+        self.start_look_behind.clear();
         self.captures.clear();
         self.memory_states = 0;
     }
