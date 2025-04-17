@@ -1501,6 +1501,8 @@ impl fmt::Debug for Inner {
                 '^'
             } else if sid == self.start_unanchored {
                 '>'
+            } else if self.start_look_behind.contains(&sid) {
+                '<'
             } else {
                 ' '
             };
