@@ -891,6 +891,7 @@ impl PikeVM {
         cache: &'c mut Cache,
         input: I,
     ) -> FindMatches<'r, 'c, 'h> {
+        cache.keep_lookaround_state(true);
         let caps = Captures::matches(self.get_nfa().group_info().clone());
         let it = iter::Searcher::new(input.into());
         FindMatches { re: self, cache, caps, it }
@@ -934,6 +935,7 @@ impl PikeVM {
         cache: &'c mut Cache,
         input: I,
     ) -> CapturesMatches<'r, 'c, 'h> {
+        cache.keep_lookaround_state(true);
         let caps = self.create_captures();
         let it = iter::Searcher::new(input.into());
         CapturesMatches { re: self, cache, caps, it }
@@ -1265,42 +1267,48 @@ impl PikeVM {
             ref mut lookaround,
             ref mut curr_lookaround,
             ref mut next_lookaround,
+            ref mut match_lookaround,
+            ref keep_lookaround_state,
         } = cache;
 
-        // This initializes the look-behind threads from the start of the input
-        // Note: since capture groups are not allowed inside look-behinds,
-        // there won't be any Capture epsilon transitions and hence it is ok to
-        // use &mut [] for the slots parameter. We need to add the start states
-        // in reverse because nested look-behinds have a higher index but must
-        // be executed first.
-        for look_behind_start in self.nfa.look_behind_starts() {
-            self.epsilon_closure(
-                stack,
-                &mut [],
-                curr_lookaround,
-                lookaround,
-                input,
-                0,
-                *look_behind_start,
-            );
-        }
+        if let Some(active) = match_lookaround {
+            *curr_lookaround = active.clone();
+        } else {
+            // This initializes the look-behind threads from the start of the input
+            // Note: since capture groups are not allowed inside look-behinds,
+            // there won't be any Capture epsilon transitions and hence it is ok to
+            // use &mut [] for the slots parameter. We need to add the start states
+            // in reverse because nested look-behinds have a higher index but must
+            // be executed first.
+            for look_behind_start in self.nfa.look_behind_starts() {
+                self.epsilon_closure(
+                    stack,
+                    &mut [],
+                    curr_lookaround,
+                    lookaround,
+                    input,
+                    0,
+                    *look_behind_start,
+                );
+            }
 
-        // This brings the look-behind threads into the state they must be for
-        // starting at input.start() instead of the beginning. This is
-        // necessary for look-behinds to be able to match outside of the input
-        // span.
-        for lb_at in 0..input.start() {
-            self.nexts(
-                stack,
-                curr_lookaround,
-                next_lookaround,
-                lookaround,
-                input,
-                lb_at,
-                &mut [],
-            );
-            core::mem::swap(curr_lookaround, next_lookaround);
-            next_lookaround.set.clear();
+            // This brings the look-behind threads into the state they must be for
+            // starting at input.start() instead of the beginning. This is
+            // necessary for lookbehinds to be able to match outside of the input
+            // span.
+            for lb_at in 0..input.start() {
+                self.nexts(
+                    stack,
+                    curr_lookaround,
+                    next_lookaround,
+                    lookaround,
+                    input,
+                    lb_at,
+                    &mut [],
+                );
+                core::mem::swap(curr_lookaround, next_lookaround);
+                next_lookaround.set.clear();
+            }
         }
 
         let mut hm = None;
@@ -1428,6 +1436,9 @@ impl PikeVM {
                 self.nexts(stack, curr, next, lookaround, input, at, slots)
             {
                 hm = Some(HalfMatch::new(pid, at));
+                if *keep_lookaround_state {
+                    *match_lookaround = Some(curr_lookaround.clone());
+                }
             }
             // Unless the caller asked us to return early, we need to mush on
             // to see if we can extend our match. (But note that 'nexts' will
@@ -1496,6 +1507,10 @@ impl PikeVM {
             ref mut lookaround,
             ref mut curr_lookaround,
             ref mut next_lookaround,
+            // It makes no sense to keep any look-behind state for this version of
+            // the search, since the caller receives no information about
+            // where the search ended.
+            ..
         } = cache;
 
         for look_behind_start in self.nfa.look_behind_starts() {
@@ -1989,10 +2004,14 @@ impl<'r, 'c, 'h> Iterator for FindMatches<'r, 'c, 'h> {
             *self;
         // 'advance' converts errors into panics, which is OK here because
         // the PikeVM can never return an error.
-        it.advance(|input| {
+        let result = it.advance(|input| {
             re.search(cache, input, caps);
             Ok(caps.get_match())
-        })
+        });
+        if result.is_none() {
+            cache.keep_lookaround_state(false);
+        }
+        result
     }
 }
 
@@ -2034,6 +2053,7 @@ impl<'r, 'c, 'h> Iterator for CapturesMatches<'r, 'c, 'h> {
         if caps.is_match() {
             Some(caps.clone())
         } else {
+            cache.keep_lookaround_state(false);
             None
         }
     }
@@ -2070,6 +2090,12 @@ pub struct Cache {
     curr_lookaround: ActiveStates,
     /// The next set of states to be explored for look-behind subexpressions.
     next_lookaround: ActiveStates,
+    /// The active set of states when a match was found. This is needed
+    /// to resume a search without recomputing look-behind subexpressions.
+    match_lookaround: Option<ActiveStates>,
+    /// When true, use the states of `match_lookaround` to initialize a search,
+    /// otherwise recompute from the beginning of the haystack.
+    keep_lookaround_state: bool,
 }
 
 impl Cache {
@@ -2089,6 +2115,8 @@ impl Cache {
             lookaround: vec![None; re.lookaround_count()],
             curr_lookaround: ActiveStates::new(re),
             next_lookaround: ActiveStates::new(re),
+            match_lookaround: None,
+            keep_lookaround_state: false,
         }
     }
 
@@ -2135,6 +2163,24 @@ impl Cache {
         self.curr_lookaround.reset(re);
         self.next_lookaround.reset(re);
         self.lookaround = vec![None; re.lookaround_count()];
+        self.match_lookaround = None;
+        self.keep_lookaround_state = false;
+    }
+
+    /// Set this cache to keep the state of look-behind assertions upon a
+    /// match being found.
+    ///
+    /// This must only be called with a value of `true` when a new search is
+    /// started at the end of a previously found match, otherwise the result
+    /// of any search after this call will most likely be wrong.
+    ///
+    /// Calling this function with a value of `false` will clear any previously
+    /// stored look-behind state.
+    pub fn keep_lookaround_state(&mut self, keep: bool) {
+        self.keep_lookaround_state = keep;
+        if !keep {
+            self.match_lookaround = None;
+        }
     }
 
     /// Returns the heap memory usage, in bytes, of this cache.
@@ -2143,11 +2189,16 @@ impl Cache {
     /// compute that, use `std::mem::size_of::<Cache>()`.
     pub fn memory_usage(&self) -> usize {
         use core::mem::size_of;
+        let match_lookaround_memory = match &self.match_lookaround {
+            Some(ml) => ml.memory_usage(),
+            None => 0,
+        };
         (self.stack.len() * size_of::<FollowEpsilon>())
             + self.curr.memory_usage()
             + self.next.memory_usage()
             + self.curr_lookaround.memory_usage()
             + self.next_lookaround.memory_usage()
+            + match_lookaround_memory
     }
 
     /// Clears this cache. This should be called at the start of every search
