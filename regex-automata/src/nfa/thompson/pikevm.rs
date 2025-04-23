@@ -2146,6 +2146,8 @@ impl Cache {
         (self.stack.len() * size_of::<FollowEpsilon>())
             + self.curr.memory_usage()
             + self.next.memory_usage()
+            + self.curr_lookaround.memory_usage()
+            + self.next_lookaround.memory_usage()
     }
 
     /// Clears this cache. This should be called at the start of every search
