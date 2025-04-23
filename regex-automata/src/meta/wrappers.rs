@@ -133,6 +133,12 @@ impl PikeVMCache {
         PikeVMCache(Some(builder.get().0.create_cache()))
     }
 
+    pub(crate) fn keep_lookaround_state(&mut self, keep: bool) {
+        if let Some(cache) = self.0.as_mut() {
+            cache.keep_lookaround_state(keep);
+        }
+    }
+
     pub(crate) fn reset(&mut self, builder: &PikeVM) {
         self.0.as_mut().unwrap().reset(&builder.get().0);
     }
