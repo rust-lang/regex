@@ -1106,7 +1106,7 @@ impl NFA {
         self.0.lookaround_count
     }
 
-    /// Returns the starting states for initializing look-behind evaluation
+    /// Returns the starting states for initializing look-behind evaluation.
     #[inline]
     pub fn look_behind_starts(&self) -> &Vec<StateID> {
         &self.0.start_look_behind
@@ -1276,7 +1276,7 @@ pub(super) struct Inner {
     /// This is needed to initialize the table for storing the result of
     /// look-around evaluation.
     lookaround_count: usize,
-    /// Contains the start states for each of the look-behind subexpressions
+    /// Contains the start states for each of the look-behind subexpressions.
     start_look_behind: Vec<StateID>,
     /// Heap memory used indirectly by NFA states and other things (like the
     /// various capturing group representations above). Since each state

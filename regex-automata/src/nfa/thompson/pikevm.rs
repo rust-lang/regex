@@ -1287,7 +1287,7 @@ impl PikeVM {
 
         // This brings the look-behind threads into the state they must be for
         // starting at input.start() instead of the beginning. This is
-        // necessary for lookbehinds to be able to match outside of the input
+        // necessary for look-behinds to be able to match outside of the input
         // span.
         for lb_at in 0..input.start() {
             self.nexts(
@@ -1413,7 +1413,7 @@ impl PikeVM {
                     stack, slots, curr, lookaround, input, at, start_id,
                 );
             }
-            // The lookbehind states must be processed first, since their
+            // The look-behind states must be processed first, since their
             // result must be available for the processing of the main states.
             self.nexts(
                 stack,
@@ -2066,9 +2066,9 @@ pub struct Cache {
     /// haystack at which look-around indexed x holds and which is <= to the
     /// current position".
     lookaround: Vec<Option<NonMaxUsize>>,
-    /// The current active states for look-behind subexpressions
+    /// The current active states for look-behind subexpressions.
     curr_lookaround: ActiveStates,
-    /// The next set of states to be explored for look-behind subexpressions
+    /// The next set of states to be explored for look-behind subexpressions.
     next_lookaround: ActiveStates,
 }
 
