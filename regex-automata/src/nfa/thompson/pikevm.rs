@@ -1510,7 +1510,8 @@ impl PikeVM {
             // It makes no sense to keep any look-behind state for this version of
             // the search, since the caller receives no information about
             // where the search ended.
-            ..
+            keep_lookaround_state: _,
+            match_lookaround: _,
         } = cache;
 
         for look_behind_start in self.nfa.look_behind_starts() {
