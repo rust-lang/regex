@@ -2589,6 +2589,8 @@ impl Properties {
             literal: false,
             alternation_literal: false,
             contains_lookaround_expr: true,
+            // We do not want look-around subexpressions to influence matching
+            // of the main expression when they contain anchors, so we clear the set.
             look_set_prefix: LookSet::empty(),
             look_set_suffix: LookSet::empty(),
             ..*sub_p.0.clone()
