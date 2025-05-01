@@ -1273,7 +1273,7 @@ impl PikeVM {
 
         if let Some(active) = match_lookaround {
             *curr_lookaround = active.clone();
-        } else {
+        } else if self.lookaround_count() > 0 {
             // This initializes the look-behind threads from the start of the input
             // Note: since capture groups are not allowed inside look-behinds,
             // there won't be any Capture epsilon transitions and hence it is ok to
