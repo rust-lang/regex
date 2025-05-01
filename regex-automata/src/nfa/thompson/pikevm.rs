@@ -1278,9 +1278,11 @@ impl PikeVM {
             // Note: since capture groups are not allowed inside look-behinds,
             // there won't be any Capture epsilon transitions and hence it is ok to
             // use &mut [] for the slots parameter. We need to add the start states
-            // in reverse because nested look-behinds have a higher index but must
-            // be executed first.
-            for look_behind_start in self.nfa.look_behind_starts() {
+            // in reverse because more deeply nested look-behinds have a higher index
+            // but must be executed first, so that the result is available for the
+            // outer expression.
+            for look_behind_start in self.nfa.look_behind_starts().iter().rev()
+            {
                 self.epsilon_closure(
                     stack,
                     &mut [],
@@ -2091,8 +2093,10 @@ pub struct Cache {
     curr_lookaround: ActiveStates,
     /// The next set of states to be explored for look-behind subexpressions.
     next_lookaround: ActiveStates,
-    /// The active set of states when a match was found. This is needed
-    /// to resume a search without recomputing look-behind subexpressions.
+    /// The set of active threads, belonging to look-behind expressions,
+    /// when a match was found. This is needed to resume a search after a match
+    /// was found (to look for further matches), without having to re-scan the
+    /// beginning of the haystack.
     match_lookaround: Option<ActiveStates>,
     /// When true, use the states of `match_lookaround` to initialize a search,
     /// otherwise recompute from the beginning of the haystack.
@@ -2168,12 +2172,13 @@ impl Cache {
         self.keep_lookaround_state = false;
     }
 
-    /// Set this cache to keep the state of look-behind assertions upon a
-    /// match being found.
+    /// Set this cache to store a copy of the active threads belonging
+    /// to look-behind assertions upon a match being found.
     ///
-    /// This must only be called with a value of `true` when a new search is
-    /// started at the end of a previously found match, otherwise the result
-    /// of any search after this call will most likely be wrong.
+    /// This is a performance optimization and must only be called with a
+    /// value of `true` when intending to start a new search at the end of
+    /// a previously found match. Otherwise, the result of look-behind
+    /// sub-expressions will be out of sync with the main regex.
     ///
     /// Calling this function with a value of `false` will clear any previously
     /// stored look-behind state.

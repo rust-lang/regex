@@ -1038,12 +1038,12 @@ impl Compiler {
 
         let unanchored =
             self.c_at_least(&Hir::dot(hir::Dot::AnyByte), false, 0)?;
+        self.builder.borrow_mut().start_look_behind(unanchored.start);
 
         let sub = self.c(lookaround.sub())?;
         let write = self.add_write_lookaround(idx)?;
         self.patch(unanchored.end, sub.start)?;
         self.patch(sub.end, write)?;
-        self.builder.borrow_mut().start_look_behind(unanchored.start);
         Ok(ThompsonRef { start: check, end: check })
     }
 
