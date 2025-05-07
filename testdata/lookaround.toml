@@ -84,3 +84,9 @@ matches = [
 	[[1, 3], [1, 2], [2, 3]],
 	[[5, 7], [5, 6], [6, 7]],
 ]
+
+[[test]]
+name = "lookbehind matching before the prefiltered start position"
+regex = "b(?<=ab)"
+haystack = "ab"
+matches = [[1, 2]]
