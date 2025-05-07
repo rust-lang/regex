@@ -1293,24 +1293,16 @@ impl PikeVM {
                     *look_behind_start,
                 );
             }
-
-            // This brings the look-behind threads into the state they must be for
-            // starting at input.start() instead of the beginning. This is
-            // necessary for lookbehinds to be able to match outside of the input
-            // span.
-            for lb_at in 0..input.start() {
-                self.nexts(
-                    stack,
-                    curr_lookaround,
-                    next_lookaround,
-                    lookaround,
-                    input,
-                    lb_at,
-                    &mut [],
-                );
-                core::mem::swap(curr_lookaround, next_lookaround);
-                next_lookaround.set.clear();
-            }
+            // This is necessary for look-behinds to be able to match outside of the
+            // input span.
+            self.fast_forward_lookbehinds(
+                Span { start: 0, end: input.start() },
+                input,
+                stack,
+                curr_lookaround,
+                next_lookaround,
+                lookaround,
+            );
         }
 
         let mut hm = None;
@@ -1352,7 +1344,21 @@ impl PikeVM {
                     let span = Span::from(at..input.end());
                     match pre.find(input.haystack(), span) {
                         None => break,
-                        Some(ref span) => at = span.start,
+                        Some(ref span) => {
+                            if self.lookaround_count() > 0 {
+                                // We are jumping ahead due to the pre-filter, thus we must bring
+                                // the look-behind threads to the new position.
+                                self.fast_forward_lookbehinds(
+                                    Span { start: at, end: span.start },
+                                    input,
+                                    stack,
+                                    curr_lookaround,
+                                    next_lookaround,
+                                    lookaround,
+                                );
+                            }
+                            at = span.start
+                        }
                     }
                 }
             }
@@ -1459,6 +1465,36 @@ impl PikeVM {
         hm
     }
 
+    /// This brings the look-behind threads into the state they must be for
+    /// starting at [input.end]. The assumption is that they are currently
+    /// at [input.start].
+    fn fast_forward_lookbehinds(
+        &self,
+        forward_span: Span,
+        input: &Input<'_>,
+        stack: &mut Vec<FollowEpsilon>,
+        curr_lookaround: &mut ActiveStates,
+        next_lookaround: &mut ActiveStates,
+        lookaround: &mut Vec<Option<NonMaxUsize>>,
+    ) {
+        for lb_at in forward_span.start..forward_span.end {
+            self.nexts(
+                stack,
+                curr_lookaround,
+                next_lookaround,
+                lookaround,
+                input,
+                lb_at,
+                // Since capture groups are not allowed inside look-arounds,
+                // there won't be any Capture epsilon transitions and hence it is ok to
+                // use &mut [] for the slots parameter.
+                &mut [],
+            );
+            core::mem::swap(curr_lookaround, next_lookaround);
+            next_lookaround.set.clear();
+        }
+    }
+
     /// The implementation for the 'which_overlapping_matches' API. Basically,
     /// we do a single scan through the entire haystack (unless our regex
     /// or search is anchored) and record every pattern that matched. In
@@ -1527,19 +1563,14 @@ impl PikeVM {
                 *look_behind_start,
             );
         }
-        for lb_at in 0..input.start() {
-            self.nexts(
-                stack,
-                curr_lookaround,
-                next_lookaround,
-                lookaround,
-                input,
-                lb_at,
-                &mut [],
-            );
-            core::mem::swap(curr_lookaround, next_lookaround);
-            next_lookaround.set.clear();
-        }
+        self.fast_forward_lookbehinds(
+            Span { start: 0, end: input.start() },
+            input,
+            stack,
+            curr_lookaround,
+            next_lookaround,
+            lookaround,
+        );
         for at in input.start()..=input.end() {
             let any_matches = !patset.is_empty();
             if curr.set.is_empty() {
