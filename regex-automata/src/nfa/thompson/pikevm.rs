@@ -1552,7 +1552,7 @@ impl PikeVM {
             match_lookaround: _,
         } = cache;
 
-        for look_behind_start in self.nfa.look_behind_starts() {
+        for look_behind_start in self.nfa.look_behind_starts().iter().rev() {
             self.epsilon_closure(
                 stack,
                 &mut [],
