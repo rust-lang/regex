@@ -258,6 +258,11 @@ impl Pre<()> {
         if !info.props()[0].look_set().is_empty() {
             return None;
         }
+        // For a similar reason, we require that it has zero look-around
+        // expressions.
+        if info.props()[0].contains_lookaround_expr() {
+            return None;
+        }
         // Finally, currently, our prefilters are all oriented around
         // leftmost-first match semantics, so don't try to use them if the
         // caller asked for anything else.
