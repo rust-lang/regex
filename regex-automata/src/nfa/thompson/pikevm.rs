@@ -1466,8 +1466,8 @@ impl PikeVM {
     }
 
     /// This brings the look-behind threads into the state they must be for
-    /// starting at [input.end]. The assumption is that they are currently
-    /// at [input.start].
+    /// starting at [forward_span.end]. The assumption is that they are currently
+    /// at [forward_span.start].
     fn fast_forward_lookbehinds(
         &self,
         forward_span: Span,
