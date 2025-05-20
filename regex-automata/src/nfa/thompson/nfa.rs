@@ -1185,6 +1185,7 @@ impl NFA {
             + self.0.states.len() * size_of::<State>()
             + self.0.start_pattern.len() * size_of::<StateID>()
             + self.0.group_info.memory_usage()
+            + self.0.start_look_behind.len() * size_of::<StateID>()
             + self.0.memory_extra
     }
 }
@@ -1276,7 +1277,7 @@ pub(super) struct Inner {
     /// This is needed to initialize the table for storing the result of
     /// look-around evaluation.
     lookaround_count: usize,
-    /// Contains the start states for each of the look-behind subexpressions.
+    /// Contains the start state for each of the look-behind subexpressions.
     start_look_behind: Vec<StateID>,
     /// Heap memory used indirectly by NFA states and other things (like the
     /// various capturing group representations above). Since each state
