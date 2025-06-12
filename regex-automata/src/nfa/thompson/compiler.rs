@@ -965,6 +965,7 @@ impl Compiler {
         self.builder
             .borrow_mut()
             .set_size_limit(self.config.get_nfa_size_limit())?;
+        *self.lookaround_index.borrow_mut() = SmallIndex::ZERO;
 
         // We always add an unanchored prefix unless we were specifically told
         // not to (for tests only), or if we know that the regex is anchored
