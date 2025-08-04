@@ -7,8 +7,8 @@ use alloc::{
     vec::Vec,
 };
 
+pub use crate::error::Error;
 use crate::{
-    error::Error,
     hir::{self, Hir},
     int::NonMaxUsize,
     interpolate,
