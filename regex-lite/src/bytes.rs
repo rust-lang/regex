@@ -419,9 +419,7 @@ impl Regex {
         CaptureMatches {
             haystack,
             re: self,
-            it: self
-                .pikevm
-                .captures_iter(self.pool.get(), haystack),
+            it: self.pikevm.captures_iter(self.pool.get(), haystack),
         }
     }
 
