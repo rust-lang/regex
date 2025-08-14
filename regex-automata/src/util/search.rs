@@ -590,7 +590,7 @@ impl<'h> Input<'h> {
     /// assert_eq!(b"foobar", input.haystack());
     /// ```
     #[inline]
-    pub fn haystack(&self) -> &[u8] {
+    pub fn haystack(&self) -> &'h [u8] {
         self.haystack
     }
 
