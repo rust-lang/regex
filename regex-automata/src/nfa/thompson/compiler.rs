@@ -230,9 +230,9 @@ impl Config {
     /// # if cfg!(miri) { return Ok(()); } // miri takes too long
     /// use regex_automata::nfa::thompson::NFA;
     ///
-    /// // 400KB isn't enough!
+    /// // 300KB isn't enough!
     /// NFA::compiler()
-    ///     .configure(NFA::config().nfa_size_limit(Some(400_000)))
+    ///     .configure(NFA::config().nfa_size_limit(Some(300_000)))
     ///     .build(r"\w{20}")
     ///     .unwrap_err();
     ///

@@ -198,7 +198,7 @@ impl RegexTests {
     /// loaded.
     ///
     /// This is useful to pass to [`TestRunner::test_iter`].
-    pub fn iter(&self) -> RegexTestsIter {
+    pub fn iter(&self) -> RegexTestsIter<'_> {
         RegexTestsIter(self.tests.iter())
     }
 }
