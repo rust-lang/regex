@@ -1,14 +1,22 @@
 1.11.2 (2025-08-24)
 ===================
-This is a new patch release of `regex` with some minor fixes.
+This is a new patch release of `regex` with some minor fixes. A larger number
+of typo or lint fix patches were merged. Also, we now finally recommend using
+`std::sync::LazyLock`.
 
 Improvements:
 
 * [BUG #1217](https://github.com/rust-lang/regex/issues/1217):
 Switch recommendation from `once_cell` to `std::sync::LazyLock`.
+* [BUG #1225](https://github.com/rust-lang/regex/issues/1225):
+Add `DFA::set_prefilter` to `regex-automata`.
 
 Bug fixes:
 
+* [BUG #1165](https://github.com/rust-lang/regex/pull/1150):
+Remove `std` dependency from `perf-literal-multisubstring` crate feature.
+* [BUG #1165](https://github.com/rust-lang/regex/pull/1165):
+Clarify the meaning of `(?R)$` in the documentation.
 * [BUG #1281](https://github.com/rust-lang/regex/pull/1281):
 Remove `fuzz/` and `record/` directories from published crate on crates.io.
 
