@@ -30,18 +30,6 @@ permissions:
 jobs:
   # This job does our basic build+test for supported platforms.
   test:
-    env:
-      # For some builds, we use cross to test on 32-bit and big-endian
-      # systems.
-      CARGO: cargo
-      # When CARGO is set to CROSS, TARGET is set to `--target matrix.target`.
-      # Note that we only use cross on Linux, so setting a target on a
-      # different OS will just use normal cargo.
-      TARGET:
-      # Bump this as appropriate. We pin to a version to make sure CI
-      # continues to work as cross releases in the past have broken things
-      # in subtle ways.
-      CROSS_VERSION: v0.2.5
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -50,18 +38,6 @@ jobs:
         - build: stable
           os: ubuntu-latest
           rust: stable
-        - build: stable-32
-          os: ubuntu-latest
-          rust: stable
-          target: i686-unknown-linux-gnu
-        - build: stable-powerpc64
-          os: ubuntu-latest
-          rust: stable
-          target: powerpc64-unknown-linux-gnu
-        - build: stable-s390x
-          os: ubuntu-latest
-          rust: stable
-          target: s390x-unknown-linux-gnu
         - build: beta
           os: ubuntu-latest
           rust: beta
@@ -84,8 +60,57 @@ jobs:
       uses: dtolnay/rust-toolchain@master
       with:
         toolchain: ${{ matrix.rust }}
+    - name: Show CPU info for debugging
+      if: matrix.os == 'ubuntu-latest'
+      run: lscpu
+    - name: Basic build
+      run: cargo build --verbose
+    - name: Build docs
+      run: cargo doc --verbose
+    - name: Run subset of tests
+      run: cargo test --verbose --test integration
+    - name: Build regex-syntax docs
+      run: cargo doc --verbose -p regex-syntax
+    - name: Run subset of regex-syntax tests
+      run: cargo test --verbose -p regex-syntax
+    - name: Build regex-automata docs
+      run: cargo doc --verbose -p regex-automata
+    - name: Run subset of regex-automata tests
+      if: matrix.build != 'win-gnu'  # Just horrifically slow.
+      run: cargo test --verbose -p regex-automata
+    - name: Run regex-lite tests
+      run: cargo test --verbose -p regex-lite
+    - name: Run regex-cli tests
+      run: cargo test --verbose -p regex-cli
+
+  # This job runs tests on cross compiled targets.
+  #
+  # We used to just have one test and do the same thing on normal targets and
+  # cross targets, but cross tests can take an obscenely long time. Especially
+  # the doc tests, where each one is compiled individually. (We haven't moved
+  # to Rust 2024 yet.)
+  cross:
+    env:
+      # Bump this as appropriate. We pin to a version to make sure CI
+      # continues to work as cross releases in the past have broken things
+      # in subtle ways.
+      CROSS_VERSION: v0.2.5
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+        - i686-unknown-linux-gnu
+        - aarch64-unknown-linux-gnu
+        - powerpc-unknown-linux-gnu
+        - powerpc64-unknown-linux-gnu
+        - s390x-unknown-linux-gnu
+        - x86_64-linux-android
+        - aarch64-linux-android
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
     - name: Install and configure Cross
-      if: matrix.os == 'ubuntu-latest' && matrix.target != ''
       run: |
         # In the past, new releases of 'cross' have broken CI. So for now, we
         # pin it. We also use their pre-compiled binary releases because cross
@@ -96,34 +121,18 @@ jobs:
         cd "$dir"
         curl -LO "https://github.com/cross-rs/cross/releases/download/$CROSS_VERSION/cross-x86_64-unknown-linux-musl.tar.gz"
         tar xf cross-x86_64-unknown-linux-musl.tar.gz
-        echo "CARGO=cross" >> $GITHUB_ENV
-        echo "TARGET=--target ${{ matrix.target }}" >> $GITHUB_ENV
-    - name: Show command used for Cargo
-      run: |
-        echo "cargo command is: $CARGO"
-        echo "target flag is: $TARGET"
-    - name: Show CPU info for debugging
-      if: matrix.os == 'ubuntu-latest'
-      run: lscpu
     - name: Basic build
-      run: ${{ env.CARGO }} build --verbose $TARGET
-    - name: Build docs
-      run: ${{ env.CARGO }} doc --verbose $TARGET
+      run: cross build --all --verbose --target ${{ matrix.target }}
     - name: Run subset of tests
-      run: ${{ env.CARGO }} test --verbose --test integration $TARGET
-    - name: Build regex-syntax docs
-      run: ${{ env.CARGO }} doc --verbose --manifest-path regex-syntax/Cargo.toml $TARGET
+      run: ${{ env.CARGO }} test --verbose --test integration --target ${{ matrix.target }}
     - name: Run subset of regex-syntax tests
-      run: ${{ env.CARGO }} test --verbose --manifest-path regex-syntax/Cargo.toml $TARGET
-    - name: Build regex-automata docs
-      run: ${{ env.CARGO }} doc --verbose --manifest-path regex-automata/Cargo.toml $TARGET
+      run: ${{ env.CARGO }} test --verbose -p regex-syntax --lib --target ${{ matrix.target }}
     - name: Run subset of regex-automata tests
-      if: matrix.build != 'win-gnu'  # Just horrifically slow.
-      run: ${{ env.CARGO }} test --verbose --manifest-path regex-automata/Cargo.toml $TARGET
+      run: ${{ env.CARGO }} test --verbose -p regex-automata --lib --target ${{ matrix.target }}
     - name: Run regex-lite tests
-      run: ${{ env.CARGO }} test --verbose --manifest-path regex-lite/Cargo.toml $TARGET
+      run: ${{ env.CARGO }} test --verbose -p regex-lite --lib --target ${{ matrix.target }}
     - name: Run regex-cli tests
-      run: ${{ env.CARGO }} test --verbose --manifest-path regex-cli/Cargo.toml $TARGET
+      run: ${{ env.CARGO }} test --verbose -p regex-cli --lib --target ${{ matrix.target }}
 
   # This job runs a stripped down version of CI to test the MSRV. The specific
   # reason for doing this is that the regex crate's dev-dependencies tend to
@@ -222,7 +231,7 @@ jobs:
         toolchain: nightly
         components: miri
     - name: Run full test suite
-      run: cargo miri test --manifest-path regex-automata/Cargo.toml
+      run: cargo miri test -p regex-automata
 
   # Tests that everything is formatted correctly.
   rustfmt:
