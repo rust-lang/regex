@@ -95,7 +95,7 @@ jobs:
       # continues to work as cross releases in the past have broken things
       # in subtle ways.
       CROSS_VERSION: v0.2.5
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
