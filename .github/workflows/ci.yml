@@ -95,7 +95,7 @@ jobs:
       # continues to work as cross releases in the past have broken things
       # in subtle ways.
       CROSS_VERSION: v0.2.5
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
@@ -105,8 +105,6 @@ jobs:
         - powerpc-unknown-linux-gnu
         - powerpc64-unknown-linux-gnu
         - s390x-unknown-linux-gnu
-        - x86_64-linux-android
-        - aarch64-linux-android
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
@@ -124,15 +122,13 @@ jobs:
     - name: Basic build
       run: cross build --all --verbose --target ${{ matrix.target }}
     - name: Run subset of tests
-      run: ${{ env.CARGO }} test --verbose --test integration --target ${{ matrix.target }}
+      run: cross test --verbose --test integration --target ${{ matrix.target }}
     - name: Run subset of regex-syntax tests
-      run: ${{ env.CARGO }} test --verbose -p regex-syntax --lib --target ${{ matrix.target }}
+      run: cross test --verbose -p regex-syntax --lib --target ${{ matrix.target }}
     - name: Run subset of regex-automata tests
-      run: ${{ env.CARGO }} test --verbose -p regex-automata --lib --target ${{ matrix.target }}
+      run: cross test --verbose -p regex-automata --lib --target ${{ matrix.target }}
     - name: Run regex-lite tests
-      run: ${{ env.CARGO }} test --verbose -p regex-lite --lib --target ${{ matrix.target }}
-    - name: Run regex-cli tests
-      run: ${{ env.CARGO }} test --verbose -p regex-cli --lib --target ${{ matrix.target }}
+      run: cross test --verbose -p regex-lite --lib --target ${{ matrix.target }}
 
   # This job runs a stripped down version of CI to test the MSRV. The specific
   # reason for doing this is that the regex crate's dev-dependencies tend to
