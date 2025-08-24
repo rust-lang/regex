@@ -1,6 +1,6 @@
 // The code in this module honestly sucks. I did at one point try and make it a
 // little more composable, particularly with respect to the stuff that writes
-// the Rust code, but it became an unintelligble mess. Instead, I squashed
+// the Rust code, but it became an unintelligible mess. Instead, I squashed
 // it down into four functions: dense DFAs, dense regexes, sparse DFAs and
 // sparse regexes. And each of those functions handles the 'regex-automata',
 // 'once-cell' and 'lazy-static' variants. So that's 12 different variants.

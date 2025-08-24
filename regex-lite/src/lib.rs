@@ -12,7 +12,7 @@ over performance and functionality. As a result, regex searches in this crate
 are typically substantially slower than what is provided by the `regex` crate.
 Moreover, this crate only has the most basic level of Unicode support: it
 matches codepoint by codepoint but otherwise doesn't support Unicode case
-insensivity or things like `\p{Letter}`. In exchange, this crate contributes
+insensitivity or things like `\p{Letter}`. In exchange, this crate contributes
 far less to binary size and compiles much more quickly.
 
 If you just want API documentation, then skip to the [`Regex`] type. Otherwise,
@@ -831,7 +831,7 @@ case `O(m * n)` time. Thus, iteration of all matches in a haystack has
 worst case `O(m * n^2)`. A good example of a pattern that exhibits this is
 `(?:A+){1000}|` or even `.*[^A-Z]|[A-Z]`.
 
-In general, unstrusted haystacks are easier to stomach than untrusted patterns.
+In general, untrusted haystacks are easier to stomach than untrusted patterns.
 Untrusted patterns give a lot more control to the caller to impact the
 performance of a search. Therefore, permitting untrusted patterns means that
 your only line of defense is to put a limit on how big `m` (and perhaps also

@@ -581,7 +581,7 @@ impl SetMatches {
     /// assert_eq!(matches, vec![0, 1, 3]);
     /// ```
     ///
-    /// Note that `SetMatches` also implemnets the `IntoIterator` trait, so
+    /// Note that `SetMatches` also implements the `IntoIterator` trait, so
     /// this method is not always needed. For example:
     ///
     /// ```

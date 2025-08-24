@@ -122,7 +122,7 @@ The new word boundary assertions are:
 * `\<` or `\b{start}`: a Unicode start-of-word boundary (`\W|\A` on the left,
 `\w` on the right).
 * `\>` or `\b{end}`: a Unicode end-of-word boundary (`\w` on the left, `\W|\z`
-on the right)).
+on the right).
 * `\b{start-half}`: half of a Unicode start-of-word boundary (`\W|\A` on the
 left).
 * `\b{end-half}`: half of a Unicode end-of-word boundary (`\W|\z` on the
@@ -236,7 +236,7 @@ Bug fixes:
 
 * [BUG #934](https://github.com/rust-lang/regex/issues/934):
 Fix a performance bug where high contention on a single regex led to massive
-slow downs.
+slow-downs.
 
 
 1.9.4 (2023-08-26)
@@ -479,14 +479,14 @@ New features:
 Permit many more characters to be escaped, even if they have no significance.
 More specifically, any ASCII character except for `[0-9A-Za-z<>]` can now be
 escaped. Also, a new routine, `is_escapeable_character`, has been added to
-`regex-syntax` to query whether a character is escapeable or not.
+`regex-syntax` to query whether a character is escapable or not.
 * [FEATURE #547](https://github.com/rust-lang/regex/issues/547):
 Add `Regex::captures_at`. This fills a hole in the API, but doesn't otherwise
 introduce any new expressive power.
 * [FEATURE #595](https://github.com/rust-lang/regex/issues/595):
 Capture group names are now Unicode-aware. They can now begin with either a `_`
 or any "alphabetic" codepoint. After the first codepoint, subsequent codepoints
-can be any sequence of alpha-numeric codepoints, along with `_`, `.`, `[` and
+can be any sequence of alphanumeric codepoints, along with `_`, `.`, `[` and
 `]`. Note that replacement syntax has not changed.
 * [FEATURE #810](https://github.com/rust-lang/regex/issues/810):
 Add `Match::is_empty` and `Match::len` APIs.
@@ -530,7 +530,7 @@ Fix a number of issues with printing `Hir` values as regex patterns.
 * [BUG #610](https://github.com/rust-lang/regex/issues/610):
 Add explicit example of `foo|bar` in the regex syntax docs.
 * [BUG #625](https://github.com/rust-lang/regex/issues/625):
-Clarify that `SetMatches::len` does not (regretably) refer to the number of
+Clarify that `SetMatches::len` does not (regrettably) refer to the number of
 matches in the set.
 * [BUG #660](https://github.com/rust-lang/regex/issues/660):
 Clarify "verbose mode" in regex syntax documentation.
@@ -917,7 +917,7 @@ Bug fixes:
 
 1.3.1 (2019-09-04)
 ==================
-This is a maintenance release with no changes in order to try to work-around
+This is a maintenance release with no changes in order to try to work around
 a [docs.rs/Cargo issue](https://github.com/rust-lang/docs.rs/issues/400).
 
 
@@ -952,7 +952,7 @@ This release does a bit of house cleaning. Namely:
   Rust project.
 * Teddy has been removed from the `regex` crate, and is now part of the
   `aho-corasick` crate.
-  [See `aho-corasick`'s new `packed` sub-module for details](https://docs.rs/aho-corasick/0.7.6/aho_corasick/packed/index.html).
+  [See `aho-corasick`'s new `packed` submodule for details](https://docs.rs/aho-corasick/0.7.6/aho_corasick/packed/index.html).
 * The `utf8-ranges` crate has been deprecated, with its functionality moving
   into the
   [`utf8` sub-module of `regex-syntax`](https://docs.rs/regex-syntax/0.6.11/regex_syntax/utf8/index.html).
@@ -960,7 +960,7 @@ This release does a bit of house cleaning. Namely:
   little we need inside of `regex-syntax` itself.
 
 In general, this is part of an ongoing (long term) effort to make optimizations
-in the regex engine easier to reason about. The current code is too convoluted
+in the regex engine easier to reason about. The current code is too convoluted,
 and thus it is very easy to introduce new bugs. This simplification effort is
 the primary motivation behind re-working the `aho-corasick` crate to not only
 bundle algorithms like Teddy, but to also provide regex-like match semantics
@@ -1162,7 +1162,7 @@ need or want to use these APIs.
 New features:
 
 * [FEATURE #493](https://github.com/rust-lang/regex/pull/493):
-  Add a few lower level APIs for amortizing allocation and more fine grained
+  Add a few lower level APIs for amortizing allocation and more fine-grained
   searching.
 
 Bug fixes:
@@ -1208,7 +1208,7 @@ of the regex library should be able to migrate to 1.0 by simply bumping the
 version number. The important changes are as follows:
 
 * We adopt Rust 1.20 as the new minimum supported version of Rust for regex.
-  We also tentativley adopt a policy that permits bumping the minimum supported
+  We also tentatively adopt a policy that permits bumping the minimum supported
   version of Rust in minor version releases of regex, but no patch releases.
   That is, with respect to semver, we do not strictly consider bumping the
   minimum version of Rust to be a breaking change, but adopt a conservative
@@ -1295,7 +1295,7 @@ Bug fixes:
 
 0.2.8 (2018-03-12)
 ==================
-Bug gixes:
+Bug fixes:
 
 * [BUG #454](https://github.com/rust-lang/regex/pull/454):
   Fix a bug in the nest limit checker being too aggressive.
@@ -1316,7 +1316,7 @@ New features:
 * Full support for intersection, difference and symmetric difference of
   character classes. These can be used via the `&&`, `--` and `~~` binary
   operators within classes.
-* A Unicode Level 1 conformat implementation of `\p{..}` character classes.
+* A Unicode Level 1 conformant implementation of `\p{..}` character classes.
   Things like `\p{scx:Hira}`, `\p{age:3.2}` or `\p{Changes_When_Casefolded}`
   now work. All property name and value aliases are supported, and properties
   are selected via loose matching. e.g., `\p{Greek}` is the same as
@@ -1439,7 +1439,7 @@ Bug fixes:
 0.2.1
 =====
 One major bug with `replace_all` has been fixed along with a couple of other
-touchups.
+touch-ups.
 
 * [BUG #312](https://github.com/rust-lang/regex/issues/312):
   Fix documentation for `NoExpand` to reference correct lifetime parameter.
@@ -1588,7 +1588,7 @@ A number of bugs have been fixed:
 * Fix bug #277.
 * [PR #270](https://github.com/rust-lang/regex/pull/270):
   Fixes bugs #264, #268 and an unreported where the DFA cache size could be
-  drastically under estimated in some cases (leading to high unexpected memory
+  drastically underestimated in some cases (leading to high unexpected memory
   usage).
 
 0.1.73

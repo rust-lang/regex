@@ -9,7 +9,7 @@ The basic idea here is that we have many different regex engines but generally
 one set of tests. We want to be able to run those tests (or most of them) on
 every engine. Prior to `regex 1.9`, we used to do this with a hodge podge soup
 of macros and a different test executable for each engine. It overall took a
-longer time to compile, was harder to maintain and it made the test definitions
+longer time to compile, was harder to maintain, and it made the test definitions
 themselves less clear.
 
 In `regex 1.9`, when we moved over to `regex-automata`, the situation got a lot

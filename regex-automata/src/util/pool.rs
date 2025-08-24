@@ -947,7 +947,7 @@ mod inner {
         }
     }
 
-    /// A spin-lock based mutex. Yes, I have read spinlocks cosnidered
+    /// A spin-lock based mutex. Yes, I have read spinlocks considered
     /// harmful[1], and if there's a reasonable alternative choice, I'll
     /// happily take it.
     ///

@@ -380,7 +380,7 @@ impl<'a> Parser<'a> {
         let hir = self.parse_inner()?;
         // While we also check nesting during parsing, that only checks the
         // number of recursive parse calls. It does not necessarily cover
-        // all possible recursive nestings of the Hir itself. For example,
+        // all possible recursive nesting of the Hir itself. For example,
         // repetition operators don't require recursive parse calls. So one
         // can stack them arbitrarily without overflowing the stack in the
         // *parser*. But then if one recurses over the resulting Hir, a stack
@@ -490,7 +490,7 @@ impl<'a> Parser<'a> {
 
         // Handle all of the one letter sequences inline.
         self.bump();
-        if hir::is_meta_character(ch) || hir::is_escapeable_character(ch) {
+        if hir::is_meta_character(ch) || hir::is_escapable_character(ch) {
             return Ok(self.hir_char(ch));
         }
         let special = |ch| Ok(self.hir_char(ch));
@@ -1153,7 +1153,7 @@ impl<'a> Parser<'a> {
         // that we should return an error instead since the repeated colons
         // give away the intent to write an POSIX class. But what if the user
         // typed `[[:lower]]` instead? How can we tell that was intended to be
-        // a POSXI class and not just a normal nested class?
+        // a POSIX class and not just a normal nested class?
         //
         // Reasonable people can probably disagree over this, but for better
         // or worse, we implement semantics that never fails at the expense of

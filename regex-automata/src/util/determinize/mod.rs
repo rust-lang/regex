@@ -269,7 +269,7 @@ pub(crate) fn next(
                 // guarantee here, but it's subtle. In particular, a Thompson
                 // NFA guarantees that each pattern has exactly one match
                 // state. Moreover, since we're iterating over the NFA state
-                // IDs in a set, we are guarateed not to have any duplicative
+                // IDs in a set, we are guaranteed not to have any duplicative
                 // match states. Thus, it is impossible to add the same pattern
                 // ID more than once.
                 //
