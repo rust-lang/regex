@@ -140,6 +140,9 @@ enum Frame<'a> {
     /// A stack frame allocated just before descending into a group's child
     /// node.
     Group(&'a ast::Group),
+    /// A stack frame allocated just before descending into a look-around's
+    /// child node.
+    LookAround(&'a ast::LookAround),
     /// The stack frame used while visiting every child node of a concatenation
     /// of expressions.
     Concat {
@@ -270,6 +273,7 @@ impl<'a> HeapVisitor<'a> {
             }
             Ast::Repetition(ref x) => Some(Frame::Repetition(x)),
             Ast::Group(ref x) => Some(Frame::Group(x)),
+            Ast::LookAround(ref x) => Some(Frame::LookAround(x)),
             Ast::Concat(ref x) if x.asts.is_empty() => None,
             Ast::Concat(ref x) => {
                 Some(Frame::Concat { head: &x.asts[0], tail: &x.asts[1..] })
@@ -289,6 +293,7 @@ impl<'a> HeapVisitor<'a> {
         match induct {
             Frame::Repetition(_) => None,
             Frame::Group(_) => None,
+            Frame::LookAround(_) => None,
             Frame::Concat { tail, .. } => {
                 if tail.is_empty() {
                     None
@@ -444,6 +449,7 @@ impl<'a> Frame<'a> {
         match *self {
             Frame::Repetition(rep) => &rep.ast,
             Frame::Group(group) => &group.ast,
+            Frame::LookAround(look) => &look.ast,
             Frame::Concat { head, .. } => head,
             Frame::Alternation { head, .. } => head,
         }

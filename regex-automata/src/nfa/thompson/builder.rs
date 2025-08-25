@@ -91,6 +91,17 @@ enum State {
         /// The next state that this state should transition to.
         next: StateID,
     },
+    /// An empty state that behaves analogously to a `Match` state but for
+    /// the look-around sub-expression with the given look-around index.
+    WriteLookAround { lookaround_index: SmallIndex },
+    /// A conditional epsilon transition that will only be taken if the
+    /// look-around sub-expression with the given index evaluates to `positive`
+    /// at the current position in the haystack.
+    CheckLookAround {
+        lookaround_index: SmallIndex,
+        positive: bool,
+        next: StateID,
+    },
     /// An alternation such that there exists an epsilon transition to all
     /// states in `alternates`, where matches found via earlier transitions
     /// are preferred over later transitions.
@@ -154,7 +165,9 @@ impl State {
             | State::CaptureStart { .. }
             | State::CaptureEnd { .. }
             | State::Fail
-            | State::Match { .. } => 0,
+            | State::Match { .. }
+            | State::CheckLookAround { .. }
+            | State::WriteLookAround { .. } => 0,
             State::Sparse { ref transitions } => {
                 transitions.len() * mem::size_of::<Transition>()
             }
@@ -327,6 +340,8 @@ pub struct Builder {
     /// contains a single regex, then `start_pattern[0]` and `start_anchored`
     /// are always equivalent.
     start_pattern: Vec<StateID>,
+    /// The starting states for each individual look-behind sub-expression.
+    start_look_behind: Vec<StateID>,
     /// A map from pattern ID to capture group index to name. (If no name
     /// exists, then a None entry is present. Thus, all capturing groups are
     /// present in this mapping.)
@@ -372,6 +387,7 @@ impl Builder {
         self.pattern_id = None;
         self.states.clear();
         self.start_pattern.clear();
+        self.start_look_behind.clear();
         self.captures.clear();
         self.memory_states = 0;
     }
@@ -436,6 +452,7 @@ impl Builder {
         remap.resize(self.states.len(), StateID::ZERO);
 
         nfa.set_starts(start_anchored, start_unanchored, &self.start_pattern);
+        nfa.set_look_behind_starts(self.start_look_behind.as_slice());
         nfa.set_captures(&self.captures).map_err(BuildError::captures)?;
         // The idea here is to convert our intermediate states to their final
         // form. The only real complexity here is the process of converting
@@ -469,6 +486,21 @@ impl Builder {
                 }
                 State::Look { look, next } => {
                     remap[sid] = nfa.add(nfa::State::Look { look, next });
+                }
+                State::WriteLookAround { lookaround_index } => {
+                    remap[sid] = nfa
+                        .add(nfa::State::WriteLookAround { lookaround_index });
+                }
+                State::CheckLookAround {
+                    lookaround_index,
+                    positive,
+                    next,
+                } => {
+                    remap[sid] = nfa.add(nfa::State::CheckLookAround {
+                        lookaround_index,
+                        positive,
+                        next,
+                    });
                 }
                 State::CaptureStart { pattern_id, group_index, next } => {
                     // We can't remove this empty state because of the side
@@ -678,6 +710,12 @@ impl Builder {
         self.start_pattern.len()
     }
 
+    /// Adds the `start_id` to the set of starting states that is used when
+    /// running look-behind expressions.
+    pub fn start_look_behind(&mut self, start_id: StateID) {
+        self.start_look_behind.push(start_id);
+    }
+
     /// Add an "empty" NFA state.
     ///
     /// An "empty" NFA state is a state with a single unconditional epsilon
@@ -691,6 +729,30 @@ impl Builder {
     /// the configured heap size limit has been exceeded.
     pub fn add_empty(&mut self) -> Result<StateID, BuildError> {
         self.add(State::Empty { next: StateID::ZERO })
+    }
+
+    /// Add a state which will record that the look-around with the given index
+    /// is satisfied at the current position.
+    pub fn add_write_lookaround(
+        &mut self,
+        index: SmallIndex,
+    ) -> Result<StateID, BuildError> {
+        self.add(State::WriteLookAround { lookaround_index: index })
+    }
+
+    /// Add a state which will check whether the look-around with the given
+    /// index is satisfied at the current position.
+    pub fn add_check_lookaround(
+        &mut self,
+        index: SmallIndex,
+        positive: bool,
+        next: StateID,
+    ) -> Result<StateID, BuildError> {
+        self.add(State::CheckLookAround {
+            lookaround_index: index,
+            positive,
+            next,
+        })
     }
 
     /// Add a "union" NFA state.
@@ -1159,6 +1221,9 @@ impl Builder {
             State::Look { ref mut next, .. } => {
                 *next = to;
             }
+            State::CheckLookAround { ref mut next, .. } => {
+                *next = to;
+            }
             State::Union { ref mut alternates } => {
                 alternates.push(to);
                 self.memory_states += mem::size_of::<StateID>();
@@ -1173,6 +1238,7 @@ impl Builder {
             State::CaptureEnd { ref mut next, .. } => {
                 *next = to;
             }
+            State::WriteLookAround { .. } => {}
             State::Fail => {}
             State::Match { .. } => {}
         }

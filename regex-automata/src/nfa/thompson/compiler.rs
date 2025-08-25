@@ -3,7 +3,7 @@ use core::{borrow::Borrow, cell::RefCell};
 use alloc::{sync::Arc, vec, vec::Vec};
 
 use regex_syntax::{
-    hir::{self, Hir},
+    hir::{self, Hir, LookAround},
     utf8::{Utf8Range, Utf8Sequences},
     ParserBuilder,
 };
@@ -19,7 +19,7 @@ use crate::{
     },
     util::{
         look::{Look, LookMatcher},
-        primitives::{PatternID, StateID},
+        primitives::{PatternID, SmallIndex, StateID},
     },
 };
 
@@ -711,6 +711,8 @@ pub struct Compiler {
     /// State used for caching common suffixes when compiling reverse UTF-8
     /// automata (for Unicode character classes).
     utf8_suffix: RefCell<Utf8SuffixMap>,
+    /// The next index to use for a look-around expression.
+    lookaround_index: RefCell<SmallIndex>,
 }
 
 impl Compiler {
@@ -723,6 +725,7 @@ impl Compiler {
             utf8_state: RefCell::new(Utf8State::new()),
             trie_state: RefCell::new(RangeTrie::new()),
             utf8_suffix: RefCell::new(Utf8SuffixMap::new(1000)),
+            lookaround_index: RefCell::new(SmallIndex::ZERO),
         }
     }
 
@@ -945,6 +948,13 @@ impl Compiler {
         {
             return Err(BuildError::unsupported_captures());
         }
+        if self.config.get_reverse()
+            && exprs.iter().any(|e| {
+                (e.borrow() as &Hir).properties().contains_lookaround_expr()
+            })
+        {
+            return Err(BuildError::unsupported_lookarounds());
+        }
 
         self.builder.borrow_mut().clear();
         self.builder.borrow_mut().set_utf8(self.config.get_utf8());
@@ -955,6 +965,7 @@ impl Compiler {
         self.builder
             .borrow_mut()
             .set_size_limit(self.config.get_nfa_size_limit())?;
+        *self.lookaround_index.borrow_mut() = SmallIndex::ZERO;
 
         // We always add an unanchored prefix unless we were specifically told
         // not to (for tests only), or if we know that the regex is anchored
@@ -1003,11 +1014,38 @@ impl Compiler {
             Class(Class::Bytes(ref c)) => self.c_byte_class(c),
             Class(Class::Unicode(ref c)) => self.c_unicode_class(c),
             Look(ref look) => self.c_look(look),
+            LookAround(ref lookaround) => self.c_lookaround(lookaround),
             Repetition(ref rep) => self.c_repetition(rep),
             Capture(ref c) => self.c_cap(c.index, c.name.as_deref(), &c.sub),
             Concat(ref es) => self.c_concat(es.iter().map(|e| self.c(e))),
             Alternation(ref es) => self.c_alt_slice(es),
         }
+    }
+
+    fn c_lookaround(
+        &self,
+        lookaround: &LookAround,
+    ) -> Result<ThompsonRef, BuildError> {
+        let idx = *self.lookaround_index.borrow();
+        *self.lookaround_index.borrow_mut() = SmallIndex::new(idx.one_more())
+            .map_err(|e| {
+                BuildError::too_many_lookarounds(e.attempted() as usize)
+            })?;
+        let pos = match lookaround {
+            LookAround::NegativeLookBehind(_) => false,
+            LookAround::PositiveLookBehind(_) => true,
+        };
+        let check = self.add_check_lookaround(idx, pos)?;
+
+        let unanchored =
+            self.c_at_least(&Hir::dot(hir::Dot::AnyByte), false, 0)?;
+        self.builder.borrow_mut().start_look_behind(unanchored.start);
+
+        let sub = self.c(lookaround.sub())?;
+        let write = self.add_write_lookaround(idx)?;
+        self.patch(unanchored.end, sub.start)?;
+        self.patch(sub.end, write)?;
+        Ok(ThompsonRef { start: check, end: check })
     }
 
     /// Compile a concatenation of the sub-expressions yielded by the given
@@ -1630,6 +1668,25 @@ impl Compiler {
         self.builder.borrow_mut().add_empty()
     }
 
+    fn add_write_lookaround(
+        &self,
+        index: SmallIndex,
+    ) -> Result<StateID, BuildError> {
+        self.builder.borrow_mut().add_write_lookaround(index)
+    }
+
+    fn add_check_lookaround(
+        &self,
+        index: SmallIndex,
+        positive: bool,
+    ) -> Result<StateID, BuildError> {
+        self.builder.borrow_mut().add_check_lookaround(
+            index,
+            positive,
+            StateID::ZERO,
+        )
+    }
+
     fn add_range(&self, start: u8, end: u8) -> Result<StateID, BuildError> {
         self.builder.borrow_mut().add_range(Transition {
             start,
@@ -1958,6 +2015,22 @@ mod tests {
         }
     }
 
+    fn s_write_lookaround(id: usize) -> State {
+        State::WriteLookAround {
+            lookaround_index: SmallIndex::new(id)
+                .expect("look-around index too large"),
+        }
+    }
+
+    fn s_check_lookaround(id: usize, positive: bool, next: usize) -> State {
+        State::CheckLookAround {
+            lookaround_index: SmallIndex::new(id)
+                .expect("look-around index too large"),
+            positive,
+            next: sid(next),
+        }
+    }
+
     fn s_fail() -> State {
         State::Fail
     }
@@ -2056,6 +2129,28 @@ mod tests {
                 s_byte(b'a', 2),
                 s_match(0),
             ],
+        );
+    }
+
+    #[test]
+    fn compile_yes_unanchored_prefix_with_start_anchor_in_lookaround() {
+        let nfa = NFA::compiler()
+            .configure(NFA::config().which_captures(WhichCaptures::None))
+            .build(r"(?<=^)a")
+            .unwrap();
+        assert_eq!(
+            nfa.states(),
+            &[
+                s_bin_union(2, 1),
+                s_range(0, 255, 0),
+                s_check_lookaround(0, true, 7),
+                s_bin_union(5, 4),
+                s_range(0, 255, 3),
+                s_look(Look::Start, 6),
+                s_write_lookaround(0),
+                s_byte(b'a', 8),
+                s_match(0)
+            ]
         );
     }
 
@@ -2180,6 +2275,37 @@ mod tests {
         assert_eq!(
             build(r"a|").states(),
             &[s_byte(b'a', 2), s_bin_union(0, 2), s_match(0)]
+        );
+    }
+
+    #[test]
+    fn compile_lookbehind() {
+        assert_eq!(
+            build(r"(?<=a)").states(),
+            &[
+                s_check_lookaround(0, true, 5),
+                s_bin_union(3, 2),
+                s_range(b'\x00', b'\xFF', 1),
+                s_byte(b'a', 4),
+                s_write_lookaround(0),
+                s_match(0)
+            ]
+        );
+        assert_eq!(
+            build(r"(?<=a(?<!b))").states(),
+            &[
+                s_check_lookaround(0, true, 10),
+                s_bin_union(3, 2),
+                s_range(b'\x00', b'\xFF', 1),
+                s_byte(b'a', 4),
+                s_check_lookaround(1, false, 9),
+                s_bin_union(7, 6),
+                s_range(b'\x00', b'\xFF', 5),
+                s_byte(b'b', 8),
+                s_write_lookaround(1),
+                s_write_lookaround(0),
+                s_match(0)
+            ]
         );
     }
 

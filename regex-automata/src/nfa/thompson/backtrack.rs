@@ -301,6 +301,9 @@ impl Builder {
         nfa: NFA,
     ) -> Result<BoundedBacktracker, BuildError> {
         nfa.look_set_any().available().map_err(BuildError::word)?;
+        if nfa.lookaround_count() > 0 {
+            return Err(BuildError::unsupported_lookarounds());
+        }
         Ok(BoundedBacktracker { config: self.config.clone(), nfa })
     }
 
@@ -1453,7 +1456,7 @@ impl BoundedBacktracker {
     /// Execute a "step" in the backtracing algorithm.
     ///
     /// A "step" is somewhat of a misnomer, because this routine keeps going
-    /// until it either runs out of things to try or fins a match. In the
+    /// until it either runs out of things to try or finds a match. In the
     /// former case, it may have pushed some things on to the backtracking
     /// stack, in which case, those will be tried next as part of the
     /// 'backtrack' routine above.
@@ -1518,6 +1521,12 @@ impl BoundedBacktracker {
                         return None;
                     }
                     sid = next;
+                }
+                State::WriteLookAround { .. }
+                | State::CheckLookAround { .. } => {
+                    unimplemented!(
+                        "backtracking engine does not support look-arounds"
+                    );
                 }
                 State::Union { ref alternates } => {
                     sid = match alternates.get(0) {

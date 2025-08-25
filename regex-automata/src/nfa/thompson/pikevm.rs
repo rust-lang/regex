@@ -891,6 +891,7 @@ impl PikeVM {
         cache: &'c mut Cache,
         input: I,
     ) -> FindMatches<'r, 'c, 'h> {
+        cache.keep_lookaround_state(true);
         let caps = Captures::matches(self.get_nfa().group_info().clone());
         let it = iter::Searcher::new(input.into());
         FindMatches { re: self, cache, caps, it }
@@ -934,6 +935,7 @@ impl PikeVM {
         cache: &'c mut Cache,
         input: I,
     ) -> CapturesMatches<'r, 'c, 'h> {
+        cache.keep_lookaround_state(true);
         let caps = self.create_captures();
         let it = iter::Searcher::new(input.into());
         CapturesMatches { re: self, cache, caps, it }
@@ -1216,6 +1218,10 @@ impl PikeVM {
 }
 
 impl PikeVM {
+    fn lookaround_count(&self) -> usize {
+        self.nfa.lookaround_count()
+    }
+
     /// The implementation of standard leftmost search.
     ///
     /// Capturing group spans are written to `slots`, but only if requested.
@@ -1254,7 +1260,51 @@ impl PikeVM {
 
         let pre =
             if anchored { None } else { self.get_config().get_prefilter() };
-        let Cache { ref mut stack, ref mut curr, ref mut next } = cache;
+        let Cache {
+            ref mut stack,
+            ref mut curr,
+            ref mut next,
+            ref mut lookaround,
+            ref mut curr_lookaround,
+            ref mut next_lookaround,
+            ref mut match_lookaround,
+            ref keep_lookaround_state,
+        } = cache;
+
+        if let Some(active) = match_lookaround {
+            *curr_lookaround = active.clone();
+        } else if self.lookaround_count() > 0 {
+            // This initializes the look-behind threads from the start of the input
+            // Note: since capture groups are not allowed inside look-behinds,
+            // there won't be any Capture epsilon transitions and hence it is ok to
+            // use &mut [] for the slots parameter. We need to add the start states
+            // in reverse because more deeply nested look-behinds have a higher index
+            // but must be executed first, so that the result is available for the
+            // outer expression.
+            for look_behind_start in self.nfa.look_behind_starts().iter().rev()
+            {
+                self.epsilon_closure(
+                    stack,
+                    &mut [],
+                    curr_lookaround,
+                    lookaround,
+                    input,
+                    0,
+                    *look_behind_start,
+                );
+            }
+            // This is necessary for look-behinds to be able to match outside of the
+            // input span.
+            self.fast_forward_lookbehinds(
+                Span { start: 0, end: input.start() },
+                input,
+                stack,
+                curr_lookaround,
+                next_lookaround,
+                lookaround,
+            );
+        }
+
         let mut hm = None;
         // Yes, our search doesn't end at input.end(), but includes it. This
         // is necessary because matches are delayed by one byte, just like
@@ -1294,7 +1344,21 @@ impl PikeVM {
                     let span = Span::from(at..input.end());
                     match pre.find(input.haystack(), span) {
                         None => break,
-                        Some(ref span) => at = span.start,
+                        Some(ref span) => {
+                            if self.lookaround_count() > 0 {
+                                // We are jumping ahead due to the pre-filter, thus we must bring
+                                // the look-behind threads to the new position.
+                                self.fast_forward_lookbehinds(
+                                    Span { start: at, end: span.start },
+                                    input,
+                                    stack,
+                                    curr_lookaround,
+                                    next_lookaround,
+                                    lookaround,
+                                );
+                            }
+                            at = span.start
+                        }
                     }
                 }
             }
@@ -1361,11 +1425,28 @@ impl PikeVM {
                 // transitions, and thus must be able to write offsets to the
                 // slots given which are later copied to slot values in 'curr'.
                 let slots = next.slot_table.all_absent();
-                self.epsilon_closure(stack, slots, curr, input, at, start_id);
+                self.epsilon_closure(
+                    stack, slots, curr, lookaround, input, at, start_id,
+                );
             }
-            if let Some(pid) = self.nexts(stack, curr, next, input, at, slots)
+            // The look-behind states must be processed first, since their
+            // result must be available for the processing of the main states.
+            self.nexts(
+                stack,
+                curr_lookaround,
+                next_lookaround,
+                lookaround,
+                input,
+                at,
+                &mut [],
+            );
+            if let Some(pid) =
+                self.nexts(stack, curr, next, lookaround, input, at, slots)
             {
                 hm = Some(HalfMatch::new(pid, at));
+                if *keep_lookaround_state {
+                    *match_lookaround = Some(curr_lookaround.clone());
+                }
             }
             // Unless the caller asked us to return early, we need to mush on
             // to see if we can extend our match. (But note that 'nexts' will
@@ -1375,11 +1456,43 @@ impl PikeVM {
                 break;
             }
             core::mem::swap(curr, next);
+            core::mem::swap(curr_lookaround, next_lookaround);
             next.set.clear();
+            next_lookaround.set.clear();
             at += 1;
         }
         instrument!(|c| c.eprint(&self.nfa));
         hm
+    }
+
+    /// This brings the look-behind threads into the state they must be for
+    /// starting at [forward_span.end]. The assumption is that they are currently
+    /// at [forward_span.start].
+    fn fast_forward_lookbehinds(
+        &self,
+        forward_span: Span,
+        input: &Input<'_>,
+        stack: &mut Vec<FollowEpsilon>,
+        curr_lookaround: &mut ActiveStates,
+        next_lookaround: &mut ActiveStates,
+        lookaround: &mut Vec<Option<NonMaxUsize>>,
+    ) {
+        for lb_at in forward_span.start..forward_span.end {
+            self.nexts(
+                stack,
+                curr_lookaround,
+                next_lookaround,
+                lookaround,
+                input,
+                lb_at,
+                // Since capture groups are not allowed inside look-arounds,
+                // there won't be any Capture epsilon transitions and hence it is ok to
+                // use &mut [] for the slots parameter.
+                &mut [],
+            );
+            core::mem::swap(curr_lookaround, next_lookaround);
+            next_lookaround.set.clear();
+        }
     }
 
     /// The implementation for the 'which_overlapping_matches' API. Basically,
@@ -1425,7 +1538,39 @@ impl PikeVM {
             Some(config) => config,
         };
 
-        let Cache { ref mut stack, ref mut curr, ref mut next } = cache;
+        let Cache {
+            ref mut stack,
+            ref mut curr,
+            ref mut next,
+            ref mut lookaround,
+            ref mut curr_lookaround,
+            ref mut next_lookaround,
+            // It makes no sense to keep any look-behind state for this version of
+            // the search, since the caller receives no information about
+            // where the search ended.
+            keep_lookaround_state: _,
+            match_lookaround: _,
+        } = cache;
+
+        for look_behind_start in self.nfa.look_behind_starts().iter().rev() {
+            self.epsilon_closure(
+                stack,
+                &mut [],
+                curr_lookaround,
+                lookaround,
+                input,
+                0,
+                *look_behind_start,
+            );
+        }
+        self.fast_forward_lookbehinds(
+            Span { start: 0, end: input.start() },
+            input,
+            stack,
+            curr_lookaround,
+            next_lookaround,
+            lookaround,
+        );
         for at in input.start()..=input.end() {
             let any_matches = !patset.is_empty();
             if curr.set.is_empty() {
@@ -1438,9 +1583,22 @@ impl PikeVM {
             }
             if !any_matches || allmatches {
                 let slots = &mut [];
-                self.epsilon_closure(stack, slots, curr, input, at, start_id);
+                self.epsilon_closure(
+                    stack, slots, curr, lookaround, input, at, start_id,
+                );
             }
-            self.nexts_overlapping(stack, curr, next, input, at, patset);
+            self.nexts(
+                stack,
+                curr_lookaround,
+                next_lookaround,
+                lookaround,
+                input,
+                at,
+                &mut [],
+            );
+            self.nexts_overlapping(
+                stack, curr, next, lookaround, input, at, patset,
+            );
             // If we found a match and filled our set, then there is no more
             // additional info that we can provide. Thus, we can quit. We also
             // quit if the caller asked us to stop at the earliest point that
@@ -1449,7 +1607,9 @@ impl PikeVM {
                 break;
             }
             core::mem::swap(curr, next);
+            core::mem::swap(curr_lookaround, next_lookaround);
             next.set.clear();
+            next_lookaround.set.clear();
         }
         instrument!(|c| c.eprint(&self.nfa));
     }
@@ -1469,6 +1629,7 @@ impl PikeVM {
         stack: &mut Vec<FollowEpsilon>,
         curr: &mut ActiveStates,
         next: &mut ActiveStates,
+        lookarounds: &mut Vec<Option<NonMaxUsize>>,
         input: &Input<'_>,
         at: usize,
         slots: &mut [Option<NonMaxUsize>],
@@ -1477,7 +1638,15 @@ impl PikeVM {
         let mut pid = None;
         let ActiveStates { ref set, ref mut slot_table } = *curr;
         for sid in set.iter() {
-            pid = match self.next(stack, slot_table, next, input, at, sid) {
+            pid = match self.next(
+                stack,
+                slot_table,
+                next,
+                lookarounds,
+                input,
+                at,
+                sid,
+            ) {
                 None => continue,
                 Some(pid) => Some(pid),
             };
@@ -1497,6 +1666,7 @@ impl PikeVM {
         stack: &mut Vec<FollowEpsilon>,
         curr: &mut ActiveStates,
         next: &mut ActiveStates,
+        lookarounds: &mut Vec<Option<NonMaxUsize>>,
         input: &Input<'_>,
         at: usize,
         patset: &mut PatternSet,
@@ -1505,8 +1675,15 @@ impl PikeVM {
         let utf8empty = self.get_nfa().has_empty() && self.get_nfa().is_utf8();
         let ActiveStates { ref set, ref mut slot_table } = *curr;
         for sid in set.iter() {
-            let pid = match self.next(stack, slot_table, next, input, at, sid)
-            {
+            let pid = match self.next(
+                stack,
+                slot_table,
+                next,
+                lookarounds,
+                input,
+                at,
+                sid,
+            ) {
                 None => continue,
                 Some(pid) => pid,
             };
@@ -1543,6 +1720,7 @@ impl PikeVM {
         stack: &mut Vec<FollowEpsilon>,
         curr_slot_table: &mut SlotTable,
         next: &mut ActiveStates,
+        lookarounds: &mut Vec<Option<NonMaxUsize>>,
         input: &Input<'_>,
         at: usize,
         sid: StateID,
@@ -1553,7 +1731,9 @@ impl PikeVM {
             | State::Look { .. }
             | State::Union { .. }
             | State::BinaryUnion { .. }
-            | State::Capture { .. } => None,
+            | State::Capture { .. }
+            | State::WriteLookAround { .. }
+            | State::CheckLookAround { .. } => None,
             State::ByteRange { ref trans } => {
                 if trans.matches(input.haystack(), at) {
                     let slots = curr_slot_table.for_state(sid);
@@ -1561,7 +1741,13 @@ impl PikeVM {
                     // adding 1 will never wrap.
                     let at = at.wrapping_add(1);
                     self.epsilon_closure(
-                        stack, slots, next, input, at, trans.next,
+                        stack,
+                        slots,
+                        next,
+                        lookarounds,
+                        input,
+                        at,
+                        trans.next,
                     );
                 }
                 None
@@ -1573,7 +1759,13 @@ impl PikeVM {
                     // adding 1 will never wrap.
                     let at = at.wrapping_add(1);
                     self.epsilon_closure(
-                        stack, slots, next, input, at, next_sid,
+                        stack,
+                        slots,
+                        next,
+                        lookarounds,
+                        input,
+                        at,
+                        next_sid,
                     );
                 }
                 None
@@ -1585,7 +1777,13 @@ impl PikeVM {
                     // adding 1 will never wrap.
                     let at = at.wrapping_add(1);
                     self.epsilon_closure(
-                        stack, slots, next, input, at, next_sid,
+                        stack,
+                        slots,
+                        next,
+                        lookarounds,
+                        input,
+                        at,
+                        next_sid,
                     );
                 }
                 None
@@ -1613,6 +1811,7 @@ impl PikeVM {
         stack: &mut Vec<FollowEpsilon>,
         curr_slots: &mut [Option<NonMaxUsize>],
         next: &mut ActiveStates,
+        lookarounds: &mut Vec<Option<NonMaxUsize>>,
         input: &Input<'_>,
         at: usize,
         sid: StateID,
@@ -1629,7 +1828,13 @@ impl PikeVM {
                 }
                 FollowEpsilon::Explore(sid) => {
                     self.epsilon_closure_explore(
-                        stack, curr_slots, next, input, at, sid,
+                        stack,
+                        curr_slots,
+                        next,
+                        lookarounds,
+                        input,
+                        at,
+                        sid,
                     );
                 }
             }
@@ -1666,6 +1871,7 @@ impl PikeVM {
         stack: &mut Vec<FollowEpsilon>,
         curr_slots: &mut [Option<NonMaxUsize>],
         next: &mut ActiveStates,
+        lookarounds: &mut Vec<Option<NonMaxUsize>>,
         input: &Input<'_>,
         at: usize,
         mut sid: StateID,
@@ -1701,6 +1907,25 @@ impl PikeVM {
                         input.haystack(),
                         at,
                     ) {
+                        return;
+                    }
+                    sid = next;
+                }
+                State::WriteLookAround { lookaround_index } => {
+                    // This is ok since `at` is always less than `usize::MAX`.
+                    lookarounds[lookaround_index] = NonMaxUsize::new(at);
+                    return;
+                }
+                State::CheckLookAround {
+                    lookaround_index,
+                    positive,
+                    next,
+                } => {
+                    let state = match lookarounds[lookaround_index] {
+                        None => usize::MAX,
+                        Some(pos) => pos.get(),
+                    };
+                    if (state == at) != positive {
                         return;
                     }
                     sid = next;
@@ -1813,10 +2038,14 @@ impl<'r, 'c, 'h> Iterator for FindMatches<'r, 'c, 'h> {
             *self;
         // 'advance' converts errors into panics, which is OK here because
         // the PikeVM can never return an error.
-        it.advance(|input| {
+        let result = it.advance(|input| {
             re.search(cache, input, caps);
             Ok(caps.get_match())
-        })
+        });
+        if result.is_none() {
+            cache.keep_lookaround_state(false);
+        }
+        result
     }
 }
 
@@ -1858,6 +2087,7 @@ impl<'r, 'c, 'h> Iterator for CapturesMatches<'r, 'c, 'h> {
         if caps.is_match() {
             Some(caps.clone())
         } else {
+            cache.keep_lookaround_state(false);
             None
         }
     }
@@ -1886,6 +2116,22 @@ pub struct Cache {
     /// The next set of states we're building that will be explored for the
     /// next byte in the haystack.
     next: ActiveStates,
+    /// This answers the question: "What is the maximum position in the
+    /// haystack at which look-around indexed x holds and which is <= to the
+    /// current position".
+    lookaround: Vec<Option<NonMaxUsize>>,
+    /// The current active states for look-behind subexpressions.
+    curr_lookaround: ActiveStates,
+    /// The next set of states to be explored for look-behind subexpressions.
+    next_lookaround: ActiveStates,
+    /// The set of active threads, belonging to look-behind expressions,
+    /// when a match was found. This is needed to resume a search after a match
+    /// was found (to look for further matches), without having to re-scan the
+    /// beginning of the haystack.
+    match_lookaround: Option<ActiveStates>,
+    /// When true, use the states of `match_lookaround` to initialize a search,
+    /// otherwise recompute from the beginning of the haystack.
+    keep_lookaround_state: bool,
 }
 
 impl Cache {
@@ -1902,6 +2148,11 @@ impl Cache {
             stack: vec![],
             curr: ActiveStates::new(re),
             next: ActiveStates::new(re),
+            lookaround: vec![None; re.lookaround_count()],
+            curr_lookaround: ActiveStates::new(re),
+            next_lookaround: ActiveStates::new(re),
+            match_lookaround: None,
+            keep_lookaround_state: false,
         }
     }
 
@@ -1945,6 +2196,28 @@ impl Cache {
     pub fn reset(&mut self, re: &PikeVM) {
         self.curr.reset(re);
         self.next.reset(re);
+        self.curr_lookaround.reset(re);
+        self.next_lookaround.reset(re);
+        self.lookaround = vec![None; re.lookaround_count()];
+        self.match_lookaround = None;
+        self.keep_lookaround_state = false;
+    }
+
+    /// Set this cache to store a copy of the active threads belonging
+    /// to look-behind assertions upon a match being found.
+    ///
+    /// This is a performance optimization and must only be called with a
+    /// value of `true` when intending to start a new search at the end of
+    /// a previously found match. Otherwise, the result of look-behind
+    /// sub-expressions will be out of sync with the main regex.
+    ///
+    /// Calling this function with a value of `false` will clear any previously
+    /// stored look-behind state.
+    pub fn keep_lookaround_state(&mut self, keep: bool) {
+        self.keep_lookaround_state = keep;
+        if !keep {
+            self.match_lookaround = None;
+        }
     }
 
     /// Returns the heap memory usage, in bytes, of this cache.
@@ -1953,9 +2226,16 @@ impl Cache {
     /// compute that, use `std::mem::size_of::<Cache>()`.
     pub fn memory_usage(&self) -> usize {
         use core::mem::size_of;
+        let match_lookaround_memory = match &self.match_lookaround {
+            Some(ml) => ml.memory_usage(),
+            None => 0,
+        };
         (self.stack.len() * size_of::<FollowEpsilon>())
             + self.curr.memory_usage()
             + self.next.memory_usage()
+            + self.curr_lookaround.memory_usage()
+            + self.next_lookaround.memory_usage()
+            + match_lookaround_memory
     }
 
     /// Clears this cache. This should be called at the start of every search
@@ -1972,6 +2252,10 @@ impl Cache {
         self.stack.clear();
         self.curr.setup_search(captures_slot_len);
         self.next.setup_search(captures_slot_len);
+        // capture groups are not allowed inside look-arounds, so we
+        // set the slot-length to zero.
+        self.curr_lookaround.setup_search(0);
+        self.next_lookaround.setup_search(0);
     }
 }
 

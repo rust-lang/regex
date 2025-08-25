@@ -172,7 +172,9 @@ impl Extractor {
         use crate::hir::HirKind::*;
 
         match *hir.kind() {
-            Empty | Look(_) => Seq::singleton(self::Literal::exact(vec![])),
+            Empty | Look(_) | LookAround(_) => {
+                Seq::singleton(self::Literal::exact(vec![]))
+            }
             Literal(hir::Literal(ref bytes)) => {
                 let mut seq =
                     Seq::singleton(self::Literal::exact(bytes.to_vec()));
@@ -2451,6 +2453,21 @@ mod tests {
 
         let expected = (seq([I("aZ"), E("ab")]), seq([I("Zb"), E("ab")]));
         assert_eq!(expected, e(r"^aZ*b"));
+    }
+
+    #[test]
+    fn lookaround() {
+        assert_eq!(exact([E("ab")]), e(r"a(?<=qwa)b"));
+        assert_eq!(exact([E("ab")]), e(r"a(?<!qw1)b"));
+
+        assert_eq!(exact([E("ab")]), e(r"(?<=qwe)ab"));
+        assert_eq!(exact([E("ab")]), e(r"(?<!qwe)ab"));
+
+        assert_eq!(exact([E("ab")]), e(r"ab(?<=qab)"));
+        assert_eq!(exact([E("ab")]), e(r"ab(?<!qwe)"));
+
+        let expected = (seq([I("aZ"), E("ab")]), seq([I("Zb"), E("ab")]));
+        assert_eq!(expected, e(r"(?<=foo)aZ*b"));
     }
 
     #[test]

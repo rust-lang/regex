@@ -219,6 +219,10 @@ impl<'a> Runner<'a> {
             return Err(BuildError::unsupported_dfa_word_boundary_unicode());
         }
 
+        if self.nfa.lookaround_count() > 0 {
+            return Err(BuildError::unsupported_lookaround());
+        }
+
         // A sequence of "representative" bytes drawn from each equivalence
         // class. These representative bytes are fed to the NFA to compute
         // state transitions. This allows us to avoid re-computing state

@@ -611,7 +611,8 @@ impl Regex {
         &'r self,
         input: I,
     ) -> FindMatches<'r, 'h> {
-        let cache = self.pool.get();
+        let mut cache = self.pool.get();
+        cache.keep_lookaround_state(true);
         let it = iter::Searcher::new(input.into());
         FindMatches { re: self, cache, it }
     }
@@ -652,7 +653,8 @@ impl Regex {
         &'r self,
         input: I,
     ) -> CapturesMatches<'r, 'h> {
-        let cache = self.pool.get();
+        let mut cache = self.pool.get();
+        cache.keep_lookaround_state(true);
         let caps = self.create_captures();
         let it = iter::Searcher::new(input.into());
         CapturesMatches { re: self, cache, caps, it }
@@ -2076,7 +2078,11 @@ impl<'r, 'h> Iterator for FindMatches<'r, 'h> {
     #[inline]
     fn next(&mut self) -> Option<Match> {
         let FindMatches { re, ref mut cache, ref mut it } = *self;
-        it.advance(|input| Ok(re.search_with(cache, input)))
+        let result = it.advance(|input| Ok(re.search_with(cache, input)));
+        if result.is_none() {
+            cache.keep_lookaround_state(false);
+        }
+        result
     }
 
     #[inline]
@@ -2149,6 +2155,7 @@ impl<'r, 'h> Iterator for CapturesMatches<'r, 'h> {
         if caps.is_match() {
             Some(caps.clone())
         } else {
+            cache.keep_lookaround_state(false);
             None
         }
     }
@@ -2383,6 +2390,19 @@ impl Cache {
     /// ```
     pub fn reset(&mut self, re: &Regex) {
         re.imp.strat.reset_cache(self)
+    }
+
+    /// Set this cache to keep the state of look-behind assertions upon a
+    /// match being found.
+    ///
+    /// This must only be called with a value of `true` when a new search is
+    /// started at the end of a previously found match, otherwise the result
+    /// of any search after this call will most likely be wrong.
+    ///
+    /// Calling this function with a value of `false` will clear any previously
+    /// stored look-behind state.
+    pub fn keep_lookaround_state(&mut self, keep: bool) {
+        self.pikevm.keep_lookaround_state(keep);
     }
 
     /// Returns the heap memory usage, in bytes, of this cache.

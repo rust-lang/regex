@@ -4056,6 +4056,9 @@ impl Builder {
         &self,
         nfa: thompson::NFA,
     ) -> Result<DFA, BuildError> {
+        if nfa.lookaround_count() > 0 {
+            return Err(BuildError::unsupported_lookaround());
+        }
         let quitset = self.config.quit_set_from_nfa(&nfa)?;
         let classes = self.config.byte_classes_from_nfa(&nfa, &quitset);
         // Check that we can fit at least a few states into our cache,

@@ -412,6 +412,9 @@ fn count_capturing_groups_ast(ast: &regex_syntax::ast::Ast) -> usize {
             let this = if group.is_capturing() { 1 } else { 0 };
             this + count_capturing_groups_ast(&*group.ast)
         }
+        Ast::LookAround(ref lookaround) => {
+            count_capturing_groups_ast(&lookaround.ast)
+        }
         Ast::Alternation(ref alt) => {
             alt.asts.iter().map(count_capturing_groups_ast).sum()
         }

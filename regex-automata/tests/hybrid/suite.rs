@@ -180,6 +180,12 @@ fn compiler(
                 }
             }
         }
+        // Or look-around expressions.
+        for hir in hirs.iter() {
+            if hir.properties().contains_lookaround_expr() {
+                return Ok(CompiledRegex::skip());
+            }
+        }
         if !configure_regex_builder(test, &mut builder) {
             return Ok(CompiledRegex::skip());
         }

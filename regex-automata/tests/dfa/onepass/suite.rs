@@ -79,7 +79,10 @@ fn compiler(
                 // Since our error types are all generally opaque, we just
                 // look for an error string. Not great, but not the end of the
                 // world.
-                if test.compiles() && msg.contains("not one-pass") {
+                if test.compiles()
+                    && (msg.contains("not one-pass")
+                        || msg.contains("look-around"))
+                {
                     return Ok(CompiledRegex::skip());
                 }
                 return Err(err.into());

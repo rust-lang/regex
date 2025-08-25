@@ -65,6 +65,7 @@ fn suite() -> anyhow::Result<regex_test::RegexTests> {
     load!("fowler/basic");
     load!("fowler/nullsubexpr");
     load!("fowler/repetition");
+    load!("lookaround");
 
     Ok(tests)
 }
