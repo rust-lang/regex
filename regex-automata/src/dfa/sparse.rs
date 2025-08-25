@@ -299,8 +299,7 @@ impl DFA<Vec<u8>> {
             );
             assert!(
                 transition_len <= 257,
-                "expected transition length {} to be <= 257",
-                transition_len,
+                "expected transition length {transition_len} to be <= 257",
             );
 
             // Fill in the transition length.
@@ -2158,7 +2157,7 @@ impl<T: AsMut<[u8]>> StartTable<T> {
                 let len = self
                     .pattern_len
                     .expect("start states for each pattern enabled");
-                assert!(pid < len, "invalid pattern ID {:?}", pid);
+                assert!(pid < len, "invalid pattern ID {pid:?}");
                 self.stride
                     .checked_mul(pid)
                     .unwrap()
