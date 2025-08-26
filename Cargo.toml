@@ -34,11 +34,7 @@ default = ["std", "perf", "unicode", "regex-syntax/default"]
 
 # ECOSYSTEM FEATURES
 
-# The 'std' feature permits the regex crate to use the standard library. This
-# is intended to support future use cases where the regex crate may be able
-# to compile without std, and instead just rely on 'core' and 'alloc' (for
-# example). Currently, this isn't supported, and removing the 'std' feature
-# will prevent regex from compiling.
+# The 'std' feature permits the regex crate to use the standard library.
 std = [
   "aho-corasick?/std",
   "memchr?/std",
