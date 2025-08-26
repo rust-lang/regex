@@ -23,6 +23,6 @@ pub fn run(p: &mut lexopt::Parser) -> anyhow::Result<()> {
         "fowler" => fowler::run(p),
         "serialize" => serialize::run(p),
         "unicode" => unicode::run(p),
-        unk => anyhow::bail!("unrecognized command '{}'", unk),
+        unk => anyhow::bail!("unrecognized command '{unk}'"),
     }
 }

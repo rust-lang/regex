@@ -39,7 +39,7 @@ COMMANDS:
         "onepass" => run_onepass(p),
         "sparse" => dfa::run_sparse(p),
         "thompson" => run_thompson(p),
-        unk => anyhow::bail!("unrecognized command '{}'", unk),
+        unk => anyhow::bail!("unrecognized command '{unk}'"),
     }
 }
 
@@ -181,7 +181,7 @@ OPTIONS:
         if common.table() {
             writeln!(stdout(), "")?;
         }
-        writeln!(stdout(), "{:?}", dfa)?;
+        writeln!(stdout(), "{dfa:?}")?;
     }
     Ok(())
 }
@@ -238,7 +238,7 @@ OPTIONS:
         if common.table() {
             writeln!(stdout(), "")?;
         }
-        writeln!(stdout(), "{:?}", nfa)?;
+        writeln!(stdout(), "{nfa:?}")?;
     }
     Ok(())
 }

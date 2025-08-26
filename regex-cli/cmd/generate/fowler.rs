@@ -50,7 +50,7 @@ USAGE:
             Some(stem) => stem.to_string_lossy(),
             None => anyhow::bail!("{}: has no file stem", datfile.display()),
         };
-        let tomlfile = outdir.join(format!("{}.toml", stem));
+        let tomlfile = outdir.join(format!("{stem}.toml"));
 
         let mut rdr = File::open(datfile)
             .with_context(|| datfile.display().to_string())?;
@@ -112,7 +112,7 @@ fn convert(
     src: &mut dyn Read,
     dst: &mut dyn Write,
 ) -> anyhow::Result<()> {
-    log::trace!("processing {}", group_name);
+    log::trace!("processing {group_name}");
     let src = std::io::BufReader::new(src);
 
     writeln!(
@@ -129,7 +129,7 @@ fn convert(
     for (i, result) in src.lines().enumerate() {
         // Every usize can fit into a u64... Right?
         let line_number = u64::try_from(i).unwrap().checked_add(1).unwrap();
-        let line = result.with_context(|| format!("line {}", line_number))?;
+        let line = result.with_context(|| format!("line {line_number}"))?;
         // The last group of tests in 'repetition' take quite a lot of time
         // when using them to build and minimize a DFA. So we tag them with
         // 'expensive' so that we can skip those tests when we need to minimize
@@ -146,7 +146,7 @@ fn convert(
             Some(dat) => dat,
         };
         let toml = TomlTest::from_dat_test(group_name, &dat)?;
-        writeln!(dst, "{}", toml)?;
+        writeln!(dst, "{toml}")?;
         prev = Some(dat);
     }
     Ok(())
@@ -220,7 +220,7 @@ impl TomlTest {
 impl core::fmt::Display for TomlTest {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         if let Some(ref comment) = self.comment {
-            writeln!(f, "# {}", comment)?;
+            writeln!(f, "# {comment}")?;
         }
         writeln!(f, "[[test]]")?;
         writeln!(f, "name = \"{}{}\"", self.group_name, self.line_number)?;
@@ -236,7 +236,7 @@ impl core::fmt::Display for TomlTest {
                 }
                 match group {
                     None => write!(f, "[]")?,
-                    Some((start, end)) => write!(f, "[{}, {}]", start, end)?,
+                    Some((start, end)) => write!(f, "[{start}, {end}]")?,
                 }
             }
             writeln!(f, "]]")?;
@@ -297,7 +297,7 @@ impl DatTest {
         // First field contains terse one-letter flags.
         let mut flags: HashSet<char> = fields[0].chars().collect();
         if !flags.contains(&'E') {
-            log::trace!("skipping {}: does not contain 'E' flag", line_number);
+            log::trace!("skipping {line_number}: does not contain 'E' flag");
             return Ok(None);
         }
 
@@ -307,10 +307,7 @@ impl DatTest {
         if regex == "SAME" {
             regex = match prev {
                 Some(test) => test.regex.clone(),
-                None => anyhow::bail!(
-                    "line {}: wants previous pattern but none is available",
-                    line_number,
-                ),
+                None => anyhow::bail!("line {line_number}: wants previous pattern but none is available"),
             };
         }
 
@@ -341,8 +338,7 @@ impl DatTest {
             // yet, just adding support for them here.
             if !fields[3].contains(',') {
                 log::trace!(
-                    "skipping {}: malformed capturing group",
-                    line_number
+                    "skipping {line_number}: malformed capturing group"
                 );
                 return Ok(None);
             }
@@ -390,7 +386,7 @@ impl DatTest {
 fn count_capturing_groups(pattern: &str) -> anyhow::Result<usize> {
     let ast = regex_syntax::ast::parse::Parser::new()
         .parse(pattern)
-        .with_context(|| format!("failed to parse '{}'", pattern))?;
+        .with_context(|| format!("failed to parse '{pattern}'"))?;
     // We add 1 to account for the capturing group for the entire
     // pattern.
     Ok(1 + count_capturing_groups_ast(&ast))

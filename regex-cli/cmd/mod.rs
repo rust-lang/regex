@@ -23,6 +23,6 @@ pub fn run(p: &mut lexopt::Parser) -> anyhow::Result<()> {
         "find" => find::run(p),
         "debug" => debug::run(p),
         "generate" => generate::run(p),
-        unk => anyhow::bail!("unrecognized command '{}'", unk),
+        unk => anyhow::bail!("unrecognized command '{unk}'"),
     }
 }

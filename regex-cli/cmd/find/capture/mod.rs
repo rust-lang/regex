@@ -46,7 +46,7 @@ ENGINES:
         "onepass" => dfa::run_onepass(p),
         "pikevm" => nfa::run_pikevm(p),
         "regex" => run_regex(p),
-        unk => anyhow::bail!("unrecognized command '{}'", unk),
+        unk => anyhow::bail!("unrecognized command '{unk}'"),
     }
 }
 
@@ -388,9 +388,9 @@ fn run_counts(
                     }
                     let count = pattern_counts[group_index];
                     if let Some(name) = maybe_name {
-                        write!(out, "{}/{}: {}", group_index, name, count)?;
+                        write!(out, "{group_index}/{name}: {count}")?;
                     } else {
-                        write!(out, "{}: {}", group_index, count)?;
+                        write!(out, "{group_index}: {count}")?;
                     }
                 }
                 write!(out, " }}\n")?;
@@ -440,9 +440,9 @@ fn run_search(
                         write!(out, ", ")?;
                     }
                     if let Some(name) = maybe_name {
-                        write!(out, "{}/{}: ", group_index, name)?;
+                        write!(out, "{group_index}/{name}: ")?;
                     } else {
-                        write!(out, "{}: ", group_index)?;
+                        write!(out, "{group_index}: ")?;
                     }
                     match caps.get_group(group_index) {
                         None => write!(out, "NONE")?,

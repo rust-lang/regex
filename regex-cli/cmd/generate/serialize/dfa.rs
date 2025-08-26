@@ -42,7 +42,7 @@ ENGINES:
     match &*args::next_as_command(USAGE, p)? {
         "dfa" => run_dense_dfa(p),
         "regex" => run_dense_regex(p),
-        unk => anyhow::bail!("unrecognized command '{}'", unk),
+        unk => anyhow::bail!("unrecognized command '{unk}'"),
     }
 }
 
@@ -154,7 +154,7 @@ ENGINES:
     match &*args::next_as_command(USAGE, p)? {
         "dfa" => run_sparse_dfa(p),
         "regex" => run_sparse_regex(p),
-        unk => anyhow::bail!("unrecognized command '{}'", unk),
+        unk => anyhow::bail!("unrecognized command '{unk}'"),
     }
 }
 
@@ -389,7 +389,7 @@ impl std::str::FromStr for RustKind {
             "once-cell" => Ok(RustKind::OnceCell),
             "lazy-static" => Ok(RustKind::LazyStatic),
             "none" => Ok(RustKind::None),
-            unk => anyhow::bail!("unrecognized rust output kind: '{}'", unk),
+            unk => anyhow::bail!("unrecognized rust output kind: '{unk}'"),
         }
     }
 }

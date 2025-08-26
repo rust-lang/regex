@@ -127,11 +127,11 @@ OPTIONS:
         } else {
             write!(wtr, "regex,")?;
         }
-        write!(wtr, "{},", revision)?;
+        write!(wtr, "{revision},")?;
         write!(wtr, "{},", tdir.test.profile.as_str())?;
         write!(wtr, "{:?},", m.duration)?;
         write!(wtr, "{:?},", m.size)?;
-        write!(wtr, "{:?}", relative_size)?;
+        write!(wtr, "{relative_size:?}")?;
         write!(wtr, "\n")?;
     }
     Ok(())
@@ -439,7 +439,7 @@ impl Test {
         let features = self
             .features
             .iter()
-            .map(|f| format!(r#""{}""#, f))
+            .map(|f| format!(r#""{f}""#))
             .collect::<Vec<String>>()
             .join(", ");
         format!(
@@ -480,7 +480,7 @@ strip = "symbols"
         let features = self
             .features
             .iter()
-            .map(|f| format!(r#""{}""#, f))
+            .map(|f| format!(r#""{f}""#))
             .collect::<Vec<String>>()
             .join(", ");
         format!(
@@ -521,7 +521,7 @@ strip = "symbols"
         let features = self
             .features
             .iter()
-            .map(|f| format!(r#""{}""#, f))
+            .map(|f| format!(r#""{f}""#))
             .collect::<Vec<String>>()
             .join(", ");
         format!(
@@ -800,8 +800,7 @@ fn baseline_size(parent_dir: &Path, profile: Profile) -> anyhow::Result<u64> {
         .with_context(|| format!("'cargo clean' failed for baseline"))?;
     anyhow::ensure!(
         status.success(),
-        "'cargo clean' got an error exit code of {:?} for baseline",
-        status,
+        "'cargo clean' got an error exit code of {status:?} for baseline",
     );
     let status = Command::new("cargo")
         .arg("build")
@@ -814,8 +813,7 @@ fn baseline_size(parent_dir: &Path, profile: Profile) -> anyhow::Result<u64> {
         .with_context(|| format!("'cargo build' failed for baseline"))?;
     anyhow::ensure!(
         status.success(),
-        "'cargo build' got an error exit code of {:?} for baseline",
-        status,
+        "'cargo build' got an error exit code of {status:?} for baseline",
     );
     let bin = dir
         .join("target")

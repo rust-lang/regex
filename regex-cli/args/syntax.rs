@@ -45,7 +45,7 @@ impl Config {
             .map(|(i, p)| {
                 let p = p.as_ref();
                 self.ast(p).with_context(|| {
-                    format!("failed to parse pattern {} to AST: '{}'", i, p,)
+                    format!("failed to parse pattern {i} to AST: '{p}'",)
                 })
             })
             .collect()
@@ -80,10 +80,7 @@ impl Config {
             .map(|(i, (pat, ast))| {
                 let (pat, ast) = (pat.as_ref(), ast.borrow());
                 self.hir(pat, ast).with_context(|| {
-                    format!(
-                        "failed to translate pattern {} to HIR: '{}'",
-                        i, pat,
-                    )
+                    format!("failed to translate pattern {i} to HIR: '{pat}'",)
                 })
             })
             .collect()

@@ -45,7 +45,7 @@ ENGINES:
         "meta" => run_meta(p),
         "regex" => run_regex(p),
         "sparse" => dfa::run_sparse(p),
-        unk => anyhow::bail!("unrecognized command '{}'", unk),
+        unk => anyhow::bail!("unrecognized command '{unk}'"),
     }
 }
 

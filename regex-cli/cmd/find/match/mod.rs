@@ -44,7 +44,7 @@ ENGINES:
         "pikevm" => nfa::run_pikevm(p),
         "regex" => run_regex(p),
         "sparse" => dfa::run_sparse(p),
-        unk => anyhow::bail!("unrecognized command '{}'", unk),
+        unk => anyhow::bail!("unrecognized command '{unk}'"),
     }
 }
 
