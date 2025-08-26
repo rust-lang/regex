@@ -71,7 +71,7 @@ impl core::fmt::Display for Error {
             Error::Syntax(ref err) => err.fmt(f),
             Error::CompiledTooBig(limit) => write!(
                 f,
-                "Compiled regex exceeds size limit of {limit} bytes."
+                "Compiled regex exceeds size limit of {limit} bytes.",
             ),
         }
     }

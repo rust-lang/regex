@@ -23,7 +23,7 @@ fn run_test(re: &Regex, test: &RegexTest) -> TestResult {
         Ok(hay) => hay,
         Err(err) => {
             return TestResult::fail(&format!(
-                "haystack is not valid UTF-8: {err}"
+                "haystack is not valid UTF-8: {err}",
             ));
         }
     };
