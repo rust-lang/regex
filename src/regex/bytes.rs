@@ -1665,6 +1665,26 @@ impl<'h> Captures<'h> {
             .map(|sp| Match::new(self.haystack, sp.start, sp.end))
     }
 
+    /// Return the overall match for the capture.
+    ///
+    /// This returns the match for index `0`. That is it is equivalent to
+    /// `m.get(0).unwrap()`
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use regex::bytes::Regex;
+    ///
+    /// let re = Regex::new(r"[a-z]+([0-9]+)").unwrap();
+    /// let caps = re.captures(b"   abc123-def").unwrap();
+    ///
+    /// assert_eq!(caps.get_match().as_bytes(), b"abc123");
+    /// ```
+    #[inline]
+    pub fn get_match(&self) -> Match {
+        self.get(0).unwrap()
+    }
+
     /// Returns the `Match` associated with the capture group named `name`. If
     /// `name` isn't a valid capture group or it refers to a group that didn't
     /// match, then `None` is returned.
