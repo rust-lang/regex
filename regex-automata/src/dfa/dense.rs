@@ -2344,10 +2344,17 @@ impl<'a> DFA<&'a [u32]> {
         // table, match states and accelerators below. If any validation fails,
         // then we return an error.
         let (dfa, nread) = unsafe { DFA::from_bytes_unchecked(slice)? };
+        // Note that validation order is important here:
+        //
+        // * `MatchState::validate` can be called with an untrusted DFA.
+        // * `TransistionTable::validate` uses `dfa.ms` through `match_len`.
+        // * `StartTable::validate` needs a valid transition table.
+        //
+        // So... validate the match states first.
+        dfa.accels.validate()?;
+        dfa.ms.validate(&dfa)?;
         dfa.tt.validate(&dfa)?;
         dfa.st.validate(&dfa)?;
-        dfa.ms.validate(&dfa)?;
-        dfa.accels.validate()?;
         // N.B. dfa.special doesn't have a way to do unchecked deserialization,
         // so it has already been validated.
         for state in dfa.states() {
@@ -5235,7 +5242,10 @@ mod tests {
         assert_eq!(Err(expected), got);
     }
 
-    // This panics in TransitionTable::validate if the match states are not validated first.
+    // This panics in `TransitionTable::validate` if the match states are not
+    // validated first.
+    //
+    // See: https://github.com/rust-lang/regex/pull/1295
     #[test]
     fn regression_validation_order() {
         let mut dfa = DFA::new("abc").unwrap();

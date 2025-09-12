@@ -8,6 +8,8 @@ Bug fixes:
 Fixes a memory usage regression for large regexes (introduced in `regex 1.9`).
 * [BUG #1165](https://github.com/rust-lang/regex/issues/1083):
 Fixes a panic in the lazy DFA (can only occur for especially large regexes).
+* [BUG #1295](https://github.com/rust-lang/regex/pull/1295):
+Fixes a panic when deserializing a corrupted dense DFA.
 
 
 1.11.3 (2025-09-25)
