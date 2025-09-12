@@ -5234,4 +5234,17 @@ mod tests {
         let got = dfa.try_search_rev(&input);
         assert_eq!(Err(expected), got);
     }
+
+    // This panics in TransitionTable::validate if the match states are not validated first.
+    #[test]
+    fn regression_validation_order() {
+        let mut dfa = DFA::new("abc").unwrap();
+        dfa.ms = MatchStates {
+            slices: vec![],
+            pattern_ids: vec![],
+            pattern_len: 1,
+        };
+        let (buf, _) = dfa.to_bytes_native_endian();
+        DFA::from_bytes(&buf).unwrap_err();
+    }
 }
