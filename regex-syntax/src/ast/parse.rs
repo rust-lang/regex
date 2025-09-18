@@ -2328,6 +2328,8 @@ impl<'p, 's, P: Borrow<Parser>> ast::Visitor for NestLimiter<'p, 's, P> {
             Ast::ClassBracketed(ref x) => &x.span,
             Ast::Repetition(ref x) => &x.span,
             Ast::Group(ref x) => &x.span,
+            #[cfg(feature = "look-behinds")]
+            Ast::LookAround(ref x) => &x.span,
             Ast::Alternation(ref x) => &x.span,
             Ast::Concat(ref x) => &x.span,
         };
@@ -2351,6 +2353,11 @@ impl<'p, 's, P: Borrow<Parser>> ast::Visitor for NestLimiter<'p, 's, P> {
             | Ast::Group(_)
             | Ast::Alternation(_)
             | Ast::Concat(_) => {
+                self.decrement_depth();
+                Ok(())
+            }
+            #[cfg(feature = "look-behinds")]
+            Ast::LookAround(_) => {
                 self.decrement_depth();
                 Ok(())
             }
