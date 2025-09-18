@@ -144,6 +144,11 @@ pub enum ErrorKind {
     ///
     /// The span of this error corresponds to the unclosed parenthesis.
     GroupUnclosed,
+    /// An unclosed look-around, e.g., `(?<ab`.
+    ///
+    /// The span of this error corresponds to the unclosed parenthesis.
+    #[cfg(feature = "look-behinds")]
+    LookAroundUnclosed,
     /// An unopened group, e.g., `ab)`.
     GroupUnopened,
     /// The nest limit was exceeded. The limit stored here is the limit
@@ -186,7 +191,19 @@ pub enum ErrorKind {
     /// not necessarily limited to, `(?=re)`, `(?!re)`, `(?<=re)` and
     /// `(?<!re)`. Note that all of these syntaxes are otherwise invalid; this
     /// error is used to improve the user experience.
+    #[cfg(not(feature = "look-behinds"))]
     UnsupportedLookAround,
+    /// When syntax similar to PCRE's look-ahead is used, this error is
+    /// returned. Some example syntaxes that are rejected include, but are
+    /// not necessarily limited to, `(?=re)` and `(?!re)`.
+    /// Note that all of these syntaxes are otherwise invalid; this
+    /// error is used to improve the user experience.
+    #[cfg(feature = "look-behinds")]
+    UnsupportedLookAhead,
+    /// When a capture group is used in a look-behind assertion, this error is
+    /// returned. Look-behind assertions do not support capturing groups.
+    #[cfg(feature = "look-behinds")]
+    UnsupportedCaptureInLookBehind,
 }
 
 #[cfg(feature = "std")]
@@ -251,6 +268,8 @@ impl core::fmt::Display for ErrorKind {
             GroupNameInvalid => write!(f, "invalid capture group character"),
             GroupNameUnexpectedEof => write!(f, "unclosed capture group name"),
             GroupUnclosed => write!(f, "unclosed group"),
+            #[cfg(feature = "look-behinds")]
+            LookAroundUnclosed => write!(f, "unclosed look-around"),
             GroupUnopened => write!(f, "unopened group"),
             NestLimitExceeded(limit) => write!(
                 f,
@@ -301,11 +320,18 @@ impl core::fmt::Display for ErrorKind {
             UnsupportedBackreference => {
                 write!(f, "backreferences are not supported")
             }
+            #[cfg(not(feature = "look-behinds"))]
             UnsupportedLookAround => write!(
                 f,
                 "look-around, including look-ahead and look-behind, \
                  is not supported"
             ),
+            #[cfg(feature = "look-behinds")]
+            UnsupportedLookAhead => write!(f, "look-aheads are not supported"),
+            #[cfg(feature = "look-behinds")]
+            UnsupportedCaptureInLookBehind => {
+                write!(f, "capture groups are not supported in look-behinds")
+            }
         }
     }
 }
