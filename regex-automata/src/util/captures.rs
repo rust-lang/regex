@@ -1606,6 +1606,9 @@ impl GroupInfo {
             }
         }
         group_info.fixup_slot_ranges()?;
+        group_info.slot_ranges.shrink_to_fit();
+        group_info.name_to_index.shrink_to_fit();
+        group_info.index_to_name.shrink_to_fit();
         Ok(GroupInfo(Arc::new(group_info)))
     }
 

@@ -1274,6 +1274,10 @@ impl Builder {
         }
         // Look for and set the universal starting states.
         dfa.set_universal_starts();
+        dfa.tt.table.shrink_to_fit();
+        dfa.st.table.shrink_to_fit();
+        dfa.ms.slices.shrink_to_fit();
+        dfa.ms.pattern_ids.shrink_to_fit();
         Ok(dfa)
     }
 

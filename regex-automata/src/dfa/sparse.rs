@@ -393,6 +393,8 @@ impl DFA<Vec<u8>> {
                 new_state.set_next_at(i, next);
             }
         }
+        new.tt.sparse.shrink_to_fit();
+        new.st.table.shrink_to_fit();
         debug!(
             "created sparse DFA, memory usage: {} (dense memory usage: {})",
             new.memory_usage(),
