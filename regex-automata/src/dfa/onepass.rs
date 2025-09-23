@@ -722,6 +722,8 @@ impl<'a> InternalBuilder<'a> {
             }
         }
         self.shuffle_states();
+        self.dfa.starts.shrink_to_fit();
+        self.dfa.table.shrink_to_fit();
         Ok(self.dfa)
     }
 

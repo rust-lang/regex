@@ -1,3 +1,13 @@
+1.11.3 (TBD)
+============
+TODO
+
+Improvements:
+
+* [BUG #1297](https://github.com/rust-lang/regex/issues/1297):
+Improve memory usage by trimming excess memory capacity in some spots.
+
+
 1.11.2 (2025-08-24)
 ===================
 This is a new patch release of `regex` with some minor fixes. A larger number

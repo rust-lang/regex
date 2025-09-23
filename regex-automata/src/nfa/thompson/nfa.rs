@@ -1338,6 +1338,8 @@ impl Inner {
             self.look_set_prefix_any =
                 self.look_set_prefix_any.union(prefix_any);
         }
+        self.states.shrink_to_fit();
+        self.start_pattern.shrink_to_fit();
         NFA(Arc::new(self))
     }
 
