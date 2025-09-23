@@ -144,6 +144,10 @@ pub enum ErrorKind {
     ///
     /// The span of this error corresponds to the unclosed parenthesis.
     GroupUnclosed,
+    /// An unclosed look-around, e.g., `(?<ab`.
+    ///
+    /// The span of this error corresponds to the unclosed parenthesis.
+    LookAroundUnclosed,
     /// An unopened group, e.g., `ab)`.
     GroupUnopened,
     /// The nest limit was exceeded. The limit stored here is the limit
@@ -181,12 +185,15 @@ pub enum ErrorKind {
     /// escape is used. The octal escape is assumed to be an invocation of
     /// a backreference, which is the common case.
     UnsupportedBackreference,
-    /// When syntax similar to PCRE's look-around is used, this error is
+    /// When syntax similar to PCRE's look-ahead is used, this error is
     /// returned. Some example syntaxes that are rejected include, but are
-    /// not necessarily limited to, `(?=re)`, `(?!re)`, `(?<=re)` and
-    /// `(?<!re)`. Note that all of these syntaxes are otherwise invalid; this
+    /// not necessarily limited to, `(?=re)` and `(?!re)`.
+    /// Note that all of these syntaxes are otherwise invalid; this
     /// error is used to improve the user experience.
-    UnsupportedLookAround,
+    UnsupportedLookAhead,
+    /// When a capture group is used in a look-behind assertion, this error is
+    /// returned. Look-behind assertions do not support capturing groups.
+    UnsupportedCaptureInLookBehind,
 }
 
 #[cfg(feature = "std")]
@@ -251,6 +258,7 @@ impl core::fmt::Display for ErrorKind {
             GroupNameInvalid => write!(f, "invalid capture group character"),
             GroupNameUnexpectedEof => write!(f, "unclosed capture group name"),
             GroupUnclosed => write!(f, "unclosed group"),
+            LookAroundUnclosed => write!(f, "unclosed look-around"),
             GroupUnopened => write!(f, "unopened group"),
             NestLimitExceeded(limit) => write!(
                 f,
@@ -301,11 +309,10 @@ impl core::fmt::Display for ErrorKind {
             UnsupportedBackreference => {
                 write!(f, "backreferences are not supported")
             }
-            UnsupportedLookAround => write!(
-                f,
-                "look-around, including look-ahead and look-behind, \
-                 is not supported"
-            ),
+            UnsupportedLookAhead => write!(f, "look-aheads are not supported"),
+            UnsupportedCaptureInLookBehind => {
+                write!(f, "capture groups are not supported in look-behinds")
+            }
         }
     }
 }
@@ -477,6 +484,8 @@ pub enum Ast {
     Dot(Box<Span>),
     /// A single zero-width assertion.
     Assertion(Box<Assertion>),
+    /// A single look-around regular expression.
+    LookAround(Box<LookAround>),
     /// A single Unicode character class, e.g., `\pL` or `\p{Greek}`.
     ClassUnicode(Box<ClassUnicode>),
     /// A single perl character class, e.g., `\d` or `\W`.
@@ -519,6 +528,11 @@ impl Ast {
     /// Create a "assertion" AST item.
     pub fn assertion(e: Assertion) -> Ast {
         Ast::Assertion(Box::new(e))
+    }
+
+    /// Create a "look-around" AST item.
+    pub fn lookaround(e: LookAround) -> Ast {
+        Ast::LookAround(Box::new(e))
     }
 
     /// Create a "Unicode class" AST item.
@@ -564,6 +578,7 @@ impl Ast {
             Ast::Literal(ref x) => &x.span,
             Ast::Dot(ref span) => span,
             Ast::Assertion(ref x) => &x.span,
+            Ast::LookAround(ref x) => &x.span,
             Ast::ClassUnicode(ref x) => &x.span,
             Ast::ClassPerl(ref x) => &x.span,
             Ast::ClassBracketed(ref x) => &x.span,
@@ -596,6 +611,7 @@ impl Ast {
             Ast::ClassBracketed(_)
             | Ast::Repetition(_)
             | Ast::Group(_)
+            | Ast::LookAround(_)
             | Ast::Alternation(_)
             | Ast::Concat(_) => true,
         }
@@ -1342,6 +1358,28 @@ pub enum AssertionKind {
     WordBoundaryEndHalf,
 }
 
+/// A single zero-width look-around.
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
+pub struct LookAround {
+    /// The span of this look-around.
+    pub span: Span,
+    /// The look-around kind, e.g. negative/positive look-behind.
+    pub kind: LookAroundKind,
+    /// The regular expression inside the look-around.
+    pub ast: Box<Ast>,
+}
+
+/// A look-around kind.
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
+pub enum LookAroundKind {
+    /// `(?<=...)`
+    PositiveLookBehind,
+    /// `(?<!...)`
+    NegativeLookBehind,
+}
+
 /// A repetition operation applied to a regular expression.
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
@@ -1647,6 +1685,7 @@ impl Drop for Ast {
             | Ast::ClassBracketed(_) => return,
             Ast::Repetition(ref x) if !x.ast.has_subexprs() => return,
             Ast::Group(ref x) if !x.ast.has_subexprs() => return,
+            Ast::LookAround(ref x) if !x.ast.has_subexprs() => return,
             Ast::Alternation(ref x) if x.asts.is_empty() => return,
             Ast::Concat(ref x) if x.asts.is_empty() => return,
             _ => {}
@@ -1671,6 +1710,9 @@ impl Drop for Ast {
                     stack.push(mem::replace(&mut x.ast, empty_ast()));
                 }
                 Ast::Group(ref mut x) => {
+                    stack.push(mem::replace(&mut x.ast, empty_ast()));
+                }
+                Ast::LookAround(ref mut x) => {
                     stack.push(mem::replace(&mut x.ast, empty_ast()));
                 }
                 Ast::Alternation(ref mut x) => {

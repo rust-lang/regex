@@ -133,6 +133,12 @@ impl PikeVMCache {
         PikeVMCache(Some(builder.get().0.create_cache()))
     }
 
+    pub(crate) fn keep_lookaround_state(&mut self, keep: bool) {
+        if let Some(cache) = self.0.as_mut() {
+            cache.keep_lookaround_state(keep);
+        }
+    }
+
     pub(crate) fn reset(&mut self, builder: &PikeVM) {
         self.0.as_mut().unwrap().reset(&builder.get().0);
     }
@@ -204,6 +210,8 @@ impl BoundedBacktrackerEngine {
         {
             if !info.config().get_backtrack()
                 || info.config().get_match_kind() != MatchKind::LeftmostFirst
+                // TODO: remove once look-around support is added.
+                || nfa.lookaround_count() > 0
             {
                 return Ok(None);
             }

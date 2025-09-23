@@ -1,6 +1,6 @@
 use crate::util::{
     captures, look,
-    primitives::{PatternID, StateID},
+    primitives::{PatternID, SmallIndex, StateID},
 };
 
 /// An error that can occurred during the construction of a thompson NFA.
@@ -55,6 +55,14 @@ enum BuildErrorKind {
         /// The limit on the number of states.
         limit: usize,
     },
+    /// An error that occurs if too many indices need to be generated for
+    /// look-around sub-expressions while building an NFA.
+    TooManyLookArounds {
+        /// The number of sub-expressions that exceeded the limit.
+        given: usize,
+        /// The limit on the number of sub-expressions.
+        limit: usize,
+    },
     /// An error that occurs when NFA compilation exceeds a configured heap
     /// limit.
     ExceededSizeLimit {
@@ -73,6 +81,13 @@ enum BuildErrorKind {
     /// should support it at some point.
     #[cfg(feature = "syntax")]
     UnsupportedCaptures,
+    /// An error that occurs when one tries to build a reverse NFA with
+    /// look-around sub-expressions. Currently, this isn't supported, but we
+    /// probably should support it at some point.
+    ///
+    /// This is also emmitted by the backtracking engine which does not
+    /// support look-around sub-expressions.
+    UnsupportedLookArounds,
 }
 
 impl BuildError {
@@ -115,6 +130,13 @@ impl BuildError {
         BuildError { kind: BuildErrorKind::TooManyStates { given, limit } }
     }
 
+    pub(crate) fn too_many_lookarounds(given: usize) -> BuildError {
+        let limit = SmallIndex::LIMIT;
+        BuildError {
+            kind: BuildErrorKind::TooManyLookArounds { given, limit },
+        }
+    }
+
     pub(crate) fn exceeded_size_limit(limit: usize) -> BuildError {
         BuildError { kind: BuildErrorKind::ExceededSizeLimit { limit } }
     }
@@ -126,6 +148,10 @@ impl BuildError {
     #[cfg(feature = "syntax")]
     pub(crate) fn unsupported_captures() -> BuildError {
         BuildError { kind: BuildErrorKind::UnsupportedCaptures }
+    }
+
+    pub(crate) fn unsupported_lookarounds() -> BuildError {
+        BuildError { kind: BuildErrorKind::UnsupportedLookArounds }
     }
 }
 
@@ -162,6 +188,12 @@ impl core::fmt::Display for BuildError {
                 "attempted to compile {given} NFA states, \
                  which exceeds the limit of {limit}",
             ),
+            BuildErrorKind::TooManyLookArounds { given, limit } => write!(
+                f,
+                "attempted to compile {} look-around expressions, \
+                 which exceeds the limit of {}",
+                given, limit,
+            ),
             BuildErrorKind::ExceededSizeLimit { limit } => write!(
                 f,
                 "heap usage during NFA compilation exceeded limit of {limit}",
@@ -176,6 +208,11 @@ impl core::fmt::Display for BuildError {
                 f,
                 "currently captures must be disabled when compiling \
                  a reverse NFA",
+            ),
+            BuildErrorKind::UnsupportedLookArounds => write!(
+                f,
+                "currently look-around sub-expressions cannot be in the pattern \
+                 when compiling a reverse NFA or using the backtracking engine",
             ),
         }
     }

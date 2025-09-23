@@ -602,6 +602,9 @@ impl<'a> InternalBuilder<'a> {
             ));
         }
         assert_eq!(DEAD, self.add_empty_state()?);
+        if self.nfa.lookaround_count() > 0 {
+            return Err(BuildError::unsupported_lookaround());
+        }
 
         // This is where the explicit slots start. We care about this because
         // we only need to track explicit slots. The implicit slots---two for
@@ -638,6 +641,10 @@ impl<'a> InternalBuilder<'a> {
             self.stack_push(nfa_id, Epsilons::empty())?;
             while let Some((id, epsilons)) = self.stack.pop() {
                 match *self.nfa.state(id) {
+                    thompson::State::WriteLookAround { .. }
+                    | thompson::State::CheckLookAround { .. } => {
+                        return Err(BuildError::unsupported_lookaround());
+                    }
                     thompson::State::ByteRange { ref trans } => {
                         self.compile_transition(dfa_id, trans, epsilons)?;
                     }
@@ -2998,6 +3005,7 @@ enum BuildErrorKind {
     UnsupportedLook { look: Look },
     ExceededSizeLimit { limit: usize },
     NotOnePass { msg: &'static str },
+    UnsupportedLookAround,
 }
 
 impl BuildError {
@@ -3027,6 +3035,10 @@ impl BuildError {
 
     fn not_one_pass(msg: &'static str) -> BuildError {
         BuildError { kind: BuildErrorKind::NotOnePass { msg } }
+    }
+
+    fn unsupported_lookaround() -> BuildError {
+        BuildError { kind: BuildErrorKind::UnsupportedLookAround }
     }
 }
 
@@ -3074,6 +3086,9 @@ impl core::fmt::Display for BuildError {
                  pattern is not one-pass: {}",
                 msg,
             ),
+            UnsupportedLookAround => {
+                write!(f, "one-pass DFA does not support look-arounds")
+            }
         }
     }
 }
