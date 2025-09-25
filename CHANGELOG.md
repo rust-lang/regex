@@ -1,6 +1,7 @@
-1.11.3 (TBD)
-============
-TODO
+1.11.3 (2025-09-25)
+===================
+This is a small patch release with an improvement in memory usage in some
+cases.
 
 Improvements:
 
