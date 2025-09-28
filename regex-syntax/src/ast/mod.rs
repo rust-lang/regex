@@ -839,7 +839,7 @@ pub enum ClassAsciiKind {
     Lower,
     /// `[ -~]`
     Print,
-    /// `[!-/:-@\[-`{-~]`
+    /// ``[!-/:-@\[-`{-~]``
     Punct,
     /// `[\t\n\v\f\r ]`
     Space,
