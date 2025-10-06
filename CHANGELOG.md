@@ -1,3 +1,13 @@
+1.11.4 (TBD)
+============
+TODO
+
+Bug fixes:
+
+* [BUG #1165](https://github.com/rust-lang/regex/issues/1083):
+Fixes a panic in the lazy DFA (can only occur for especially large regexes).
+
+
 1.11.3 (2025-09-25)
 ===================
 This is a small patch release with an improvement in memory usage in some
