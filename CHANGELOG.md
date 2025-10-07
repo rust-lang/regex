@@ -4,6 +4,8 @@ TODO
 
 Bug fixes:
 
+* [BUG #1116](https://github.com/rust-lang/regex/issues/1116):
+Fixes a memory usage regression for large regexes (introduced in `regex 1.9`).
 * [BUG #1165](https://github.com/rust-lang/regex/issues/1083):
 Fixes a panic in the lazy DFA (can only occur for especially large regexes).
 
