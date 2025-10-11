@@ -1692,7 +1692,7 @@ impl<'h> Captures<'h> {
     ///
     /// ```
     #[inline]
-    pub fn get_match(&self) -> Match {
+    pub fn get_match(&self) -> Match<'h> {
         self.get(0).unwrap()
     }
 

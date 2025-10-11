@@ -1681,7 +1681,7 @@ impl<'h> Captures<'h> {
     /// assert_eq!(caps.get_match().as_bytes(), b"abc123");
     /// ```
     #[inline]
-    pub fn get_match(&self) -> Match {
+    pub fn get_match(&self) -> Match<'h> {
         self.get(0).unwrap()
     }
 
