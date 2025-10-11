@@ -1,3 +1,12 @@
+1.12.1 (2025-10-10)
+===================
+This release makes a bug fix in the new `regex::Captures::get_match` API
+introduced in `1.12.0`. There was an oversight with the lifetime parameter
+for the `Match` returned. This is technically a breaking change, but given
+that it was caught almost immediately and I've yanked the `1.12.0` release,
+I think this is fine.
+
+
 1.12.0 (2025-10-10)
 ===================
 This release contains a smattering of bug fixes, a fix for excessive memory
