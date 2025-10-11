@@ -1,6 +1,6 @@
 [package]
 name = "regex-lite"
-version = "0.1.7"  #:version
+version = "0.1.8"  #:version
 authors = ["The Rust Project Developers", "Andrew Gallant <jamslam@gmail.com>"]
 license = "MIT OR Apache-2.0"
 homepage = "https://github.com/rust-lang/regex/tree/master/regex-lite"
