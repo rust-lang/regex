@@ -45,7 +45,7 @@ string may not have the intended semantics, but the interpolation procedure
 itself can never fail.
 */
 
-use alloc::string::String;
+use alloc::{string::String, vec::Vec};
 
 /// Accepts a replacement string and interpolates capture references with their
 /// corresponding values.
@@ -106,10 +106,6 @@ pub fn string(
     dst.push_str(replacement);
 }
 
-/*
-This should be uncommented and used if we ever provide public APIs for
-searching `&[u8]`.
-
 /// Accepts a replacement byte string and interpolates capture references with
 /// their corresponding values.
 ///
@@ -168,7 +164,6 @@ pub fn bytes(
     }
     dst.extend_from_slice(replacement);
 }
-*/
 
 /// `CaptureRef` represents a reference to a capture group inside some text.
 /// The reference is either a capture group name or a number.
