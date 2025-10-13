@@ -1319,6 +1319,9 @@ this for literal optimizations.
 #![no_std]
 #![deny(missing_docs)]
 #![cfg_attr(feature = "pattern", feature(pattern))]
+// This adds Cargo feature annotations to items in the rustdoc output. Which is
+// sadly hugely beneficial for this crate due to the number of features.
+#![cfg_attr(docsrs_regex, feature(doc_cfg))]
 #![warn(missing_debug_implementations)]
 
 #[cfg(doctest)]
