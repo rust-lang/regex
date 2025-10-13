@@ -1,3 +1,14 @@
+1.12.2 (2025-10-13)
+===================
+This release fixes a `cargo doc` breakage on nightly when `--cfg docsrs` is
+enabled. This caused documentation to fail to build on docs.rs.
+
+Bug fixes:
+
+* [BUG #1305](https://github.com/rust-lang/regex/issues/1305):
+Switches the `doc_auto_cfg` feature to `doc_cfg` on nightly for docs.rs builds.
+
+
 1.12.1 (2025-10-10)
 ===================
 This release makes a bug fix in the new `regex::Captures::get_match` API
