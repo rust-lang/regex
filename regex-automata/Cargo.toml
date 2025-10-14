@@ -13,6 +13,7 @@ categories = ["text-processing"]
 edition = "2021"
 autoexamples = false
 rust-version = "1.65"
+include = ["src/**/*.rs", "Cargo.toml", "/README.md", "LICENSE-APACHE", "LICENSE-MIT"]
 
 [lib]
 bench = false
