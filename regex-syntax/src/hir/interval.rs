@@ -80,15 +80,43 @@ impl<I: Interval> IntervalSet<I> {
     }
 
     /// Add a new interval to this set.
-    pub fn push(&mut self, interval: I) {
-        // TODO: This could be faster. e.g., Push the interval such that
-        // it preserves canonicalization.
-        self.ranges.push(interval);
-        self.canonicalize();
-        // We don't know whether the new interval added here is considered
-        // case folded, so we conservatively assume that the entire set is
-        // no longer case folded if it was previously.
-        self.folded = false;
+    pub fn push(&mut self, mut interval: I) {
+        match self.ranges.binary_search(&interval) {
+            // Interval is an exact duplicate of one that exists
+            Ok(_) => {}
+            Err(i) => {
+                // The search finds us the first index where the previous interval start is less
+                // than the new interval start. Since the existing intervals are non-overlapping
+                // we only need to try to union this single preceding interval
+                let mut start = i;
+                if let Some(before_i) = i.checked_sub(1) {
+                    let before = &self.ranges[before_i];
+                    if let Some(union) = before.union(&interval) {
+                        interval = union;
+                        start = before_i;
+                    }
+                }
+                // `interval` may overlap any number of intervals following the insertion point
+                // so will union each of them until we reach the first non-overlapping interval
+                let mut end = i;
+                for after_i in i..self.ranges.len() {
+                    let after = &self.ranges[after_i];
+                    if let Some(union) = interval.union(after) {
+                        interval = union;
+                        end = after_i + 1;
+                    } else {
+                        break;
+                    }
+                }
+
+                self.ranges.splice(start..end, core::iter::once(interval));
+
+                // We don't know whether the new interval added here is considered
+                // case folded, so we conservatively assume that the entire set is
+                // no longer case folded if it was previously.
+                self.folded = false;
+            }
+        }
     }
 
     /// Return an iterator over all intervals in this set.
