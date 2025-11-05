@@ -225,7 +225,7 @@ The full set of features one can disable are
 
 ### Performance
 
-One of the goals of this crate is for the regex engine to be "fast." What that
+One of the goals of this crate is for the regex engine to be "fast." While that
 is a somewhat nebulous goal, it is usually interpreted in one of two ways.
 First, it means that all searches take worst case `O(m * n)` time, where
 `m` is proportional to `len(regex)` and `n` is proportional to `len(haystack)`.
@@ -234,7 +234,7 @@ searches are "fast" in practice.
 
 While the first interpretation is pretty unambiguous, the second one remains
 nebulous. While nebulous, it guides this crate's architecture and the sorts of
-the trade-offs it makes. For example, here are some general architectural
+trade-offs it makes. For example, here are some general architectural
 statements that follow as a result of the goal to be "fast":
 
 * When given the choice between faster regex searches and faster _Rust compile
@@ -247,7 +247,7 @@ the speed of `Regex::new` needs to remain somewhat reasonable. But this is why
 one should avoid re-compiling the same regex over and over again.)
 * When given the choice between faster regex searches and simpler API
 design, this crate will generally choose faster regex searches. For example,
-if one didn't care about performance, we could like get rid of both of
+if one didn't care about performance, we could likely get rid of both of
 the `Regex::is_match` and `Regex::find` APIs and instead just rely on
 `Regex::captures`.
 
