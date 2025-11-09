@@ -1324,8 +1324,9 @@ this for literal optimizations.
 #![cfg_attr(docsrs_regex, feature(doc_cfg))]
 #![warn(missing_debug_implementations)]
 
+#[doc = include_str!("../README.md")]
 #[cfg(doctest)]
-doc_comment::doctest!("../README.md");
+pub struct ReadmeDoctests;
 
 extern crate alloc;
 #[cfg(any(test, feature = "std"))]

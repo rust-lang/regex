@@ -630,8 +630,9 @@ extern crate std;
 #[cfg(feature = "alloc")]
 extern crate alloc;
 
+#[doc = include_str!("../README.md")]
 #[cfg(doctest)]
-doc_comment::doctest!("../README.md");
+pub struct ReadmeDoctests;
 
 #[doc(inline)]
 pub use crate::util::primitives::PatternID;

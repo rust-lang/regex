@@ -189,8 +189,6 @@ default-features = false
 [dev-dependencies]
 # For property based tests.
 quickcheck = { version = "1.0.3", default-features = false }
-# To check README's example
-doc-comment = "0.3"
 # For easy error handling in integration tests.
 anyhow = "1.0.69"
 # A library for testing regex engines.
