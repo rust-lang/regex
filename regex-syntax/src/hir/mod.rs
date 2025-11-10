@@ -1804,6 +1804,7 @@ impl Look {
 /// Currently, only lookbehind assertions are supported.
 /// Furthermore, capture groups inside assertions are not supported.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg(feature = "look-behinds")]
 pub enum LookAround {
     /// A positive lookbehind assertion.
     PositiveLookBehind(Box<Hir>),
@@ -1811,6 +1812,7 @@ pub enum LookAround {
     NegativeLookBehind(Box<Hir>),
 }
 
+#[cfg(feature = "look-behinds")]
 impl LookAround {
     /// Returns a reference to the inner expression that must match for this
     /// look-around assertion to hold.

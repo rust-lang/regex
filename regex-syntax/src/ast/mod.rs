@@ -503,8 +503,8 @@ pub enum Ast {
     Dot(Box<Span>),
     /// A single zero-width assertion.
     Assertion(Box<Assertion>),
-    #[cfg(feature = "look-behinds")]
     /// A single look-around regular expression.
+    #[cfg(feature = "look-behinds")]
     LookAround(Box<LookAround>),
     /// A single Unicode character class, e.g., `\pL` or `\p{Greek}`.
     ClassUnicode(Box<ClassUnicode>),
@@ -1384,6 +1384,7 @@ pub enum AssertionKind {
 /// A single zero-width look-around.
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
+#[cfg(feature = "look-behinds")]
 pub struct LookAround {
     /// The span of this look-around.
     pub span: Span,
@@ -1396,6 +1397,7 @@ pub struct LookAround {
 /// A look-around kind.
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
+#[cfg(feature = "look-behinds")]
 pub enum LookAroundKind {
     /// `(?<=...)`
     PositiveLookBehind,
