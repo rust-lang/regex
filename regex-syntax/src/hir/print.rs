@@ -227,6 +227,14 @@ impl<W: fmt::Write> Visitor for Writer<W> {
                     self.wtr.write_str(r"\b{end-half}")?;
                 }
             },
+            #[cfg(feature = "look-behinds")]
+            HirKind::LookAround(hir::LookAround::PositiveLookBehind(_)) => {
+                self.wtr.write_str(r"(?<=")?;
+            }
+            #[cfg(feature = "look-behinds")]
+            HirKind::LookAround(hir::LookAround::NegativeLookBehind(_)) => {
+                self.wtr.write_str(r"(?<!")?;
+            }
             HirKind::Capture(hir::Capture { ref name, .. }) => {
                 self.wtr.write_str("(")?;
                 if let Some(ref name) = *name {
@@ -294,6 +302,10 @@ impl<W: fmt::Write> Visitor for Writer<W> {
             HirKind::Capture(_)
             | HirKind::Concat(_)
             | HirKind::Alternation(_) => {
+                self.wtr.write_str(r")")?;
+            }
+            #[cfg(feature = "look-behinds")]
+            HirKind::LookAround(_) => {
                 self.wtr.write_str(r")")?;
             }
         }
@@ -475,6 +487,18 @@ mod tests {
         roundtrip("(?:a)", "a");
 
         roundtrip("((((a))))", "((((a))))");
+    }
+
+    #[test]
+    #[cfg(feature = "look-behinds")]
+    fn print_look_around() {
+        roundtrip("(?<=)", "(?<=(?:))");
+        roundtrip("(?<!)", "(?<!(?:))");
+
+        roundtrip("(?<=a)", "(?<=a)");
+        roundtrip("(?<!a)", "(?<!a)");
+
+        roundtrip("(?<=(?<!(?<!(?<=a))))", "(?<=(?<!(?<!(?<=a))))");
     }
 
     #[test]
