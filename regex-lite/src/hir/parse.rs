@@ -313,21 +313,15 @@ impl<'a> Parser<'a> {
         if self.is_done() {
             return None;
         }
-        let mut start = self.pos() + self.char().len_utf8();
+        let start = self.pos() + self.char().len_utf8();
         let mut in_comment = false;
-        for (i, ch) in self.pattern()[start..].char_indices() {
-            if ch.is_whitespace() {
-                continue;
-            } else if !in_comment && ch == '#' {
-                in_comment = true;
-            } else if in_comment && ch == '\n' {
-                in_comment = false;
-            } else {
-                start += i;
-                break;
-            }
-        }
-        self.pattern()[start..].chars().next()
+        let char_offset = self.pattern[start..].chars().position(|ch| {
+            let ori_in_command = in_comment;
+            // detailed representation: (in_comment && ch != '\n') || (!in_comment || ch == '#')
+            in_comment = in_comment && ch != '\n' || ch == '#';
+            !in_comment && !ori_in_command && !ch.is_whitespace()
+        })?;
+        self.pattern[start..].chars().nth(char_offset)
     }
 
     /// Return the next capturing index. Each subsequent call increments the
@@ -1084,10 +1078,7 @@ impl<'a> Parser<'a> {
         // operation. (Which we don't support in regex-lite, but error about
         // specifically in an effort to be loud about differences between the
         // main regex crate where possible.)
-        if self.char() != '-'
-            || self.peek_space() == Some(']')
-            || self.peek_space() == Some('-')
-        {
+        if self.char() != '-' || matches!(self.peek_space(), Some(']' | '-')) {
             union.extend_from_slice(&into_class_item_ranges(prim1)?);
             return Ok(());
         }
@@ -2235,6 +2226,40 @@ bar
                     })
                 ),
             ])
+        );
+    }
+
+    #[test]
+    fn hash_followed_by_hyphen_or_right_square_bracket_in_class() {
+        use crate::Regex;
+
+        // these three patterns should be consistent in their behavior
+        let hyphen_pattern = "(?x)[0-#-contrived comment!\n9]+";
+        let right_square_bracket_pattern = "(?x)[0-#]contrived comment!\n9]+";
+        let another_pattern = "(?x)[0-# contrived comment!\n9]+";
+
+        let hyphen_hir = p(hyphen_pattern);
+        let right_square_bracket_hir = p(right_square_bracket_pattern);
+        let another_hir = p(another_pattern);
+        assert!(
+            hyphen_hir == right_square_bracket_hir
+                && hyphen_hir == another_hir
+        );
+
+        let haystack = "0123456789";
+
+        let hyphen_match =
+            Regex::new(hyphen_pattern).unwrap().find(haystack).unwrap();
+        let right_square_bracket_match =
+            Regex::new(right_square_bracket_pattern)
+                .unwrap()
+                .find(haystack)
+                .unwrap();
+        let another_match =
+            Regex::new(another_pattern).unwrap().find(haystack).unwrap();
+        assert!(
+            hyphen_match == right_square_bracket_match
+                && hyphen_match == another_match
         );
     }
 }
