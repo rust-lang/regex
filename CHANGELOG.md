@@ -1,3 +1,16 @@
+1.12.3 (2025-02-03)
+===================
+This release excludes some unnecessary things from the archive published to
+crates.io. Specifically, fuzzing data and various shell scripts are now
+excluded. If you run into problems, please file an issue.
+
+Improvements:
+
+* [#1319](https://github.com/rust-lang/regex/pull/1319):
+Switch from a Cargo `exclude` list to an `include` list, and exclude some
+unnecessary stuff.
+
+
 1.12.2 (2025-10-13)
 ===================
 This release fixes a `cargo doc` breakage on nightly when `--cfg docsrs` is

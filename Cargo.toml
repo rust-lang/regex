@@ -13,7 +13,7 @@ finite automata and guarantees linear time matching on all inputs.
 """
 categories = ["text-processing"]
 autotests = false
-exclude = ["/fuzz/*", "/record/*", "/scripts/*", "tests/fuzz/*", "/.github/*"]
+include.workspace = true
 edition = "2021"
 rust-version = "1.65"
 
@@ -25,6 +25,23 @@ members = [
   "regex-lite",
   "regex-syntax",
   "regex-test",
+]
+
+[workspace.package]
+include = [
+  "/CHANGELOG.md",
+  "/Cargo.toml",
+  "/LICENSE-MIT",
+  "/LICENSE-APACHE",
+  "/README.md",
+  "/UNICODE.md",
+  "bench/README.md",
+  "src/**/*.rs",
+  "testdata/**.toml",
+  "tests/**/*.rs",
+  "bench/**/*.rs",
+  "LICENSE-UNICODE",
+  "!/tests/fuzz/mod.rs",
 ]
 
 # Features are documented in the "Crate features" section of the crate docs:
