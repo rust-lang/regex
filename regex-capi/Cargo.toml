@@ -13,6 +13,19 @@ A C API for Rust's regular expression library.
 workspace = ".."
 edition = "2021"
 rust-version = "1.65"
+include = [
+  "/Cargo.toml", 
+  "/LICENSE-MIT", 
+  "/LICENSE-APACHE",
+  "/README.md",
+  "/UNICODE.md",
+  "bench/README.md",
+  "src/**/*.rs",
+  "tests/**/*.rs",
+  "include/**/*.h",
+  "ctest/**/*.c",
+  "examples/**/*.{c,txt}",
+]
 
 [lib]
 name = "rure"
