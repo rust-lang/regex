@@ -2218,8 +2218,19 @@ impl DFA {
             // NOTE: The 'cache.explicit_slots()' slice is setup at the
             // beginning of every search such that it is guaranteed to return a
             // slice of length equivalent to 'slots[explicit_slot_start..]'.
-            slots[self.explicit_slot_start..]
-                .copy_from_slice(cache.explicit_slots());
+
+            // There is an edge case when a regex has capture groups with zero
+            // repetition (e.g., (abc){0}), the cache may have fewer explicit
+            // slots than what the caller provided.
+            // So we copy only the slots that exist in the cache.
+            let cache_slots = cache.explicit_slots();
+            let available = core::cmp::min(
+                cache_slots.len(),
+                slots.len().saturating_sub(self.explicit_slot_start),
+            );
+            slots[self.explicit_slot_start
+                ..self.explicit_slot_start + available]
+                .copy_from_slice(&cache_slots[..available]);
             epsilons.slots().apply(at, &mut slots[self.explicit_slot_start..]);
         }
         *matched_pid = Some(pid);
@@ -2577,7 +2588,8 @@ impl Cache {
     }
 
     fn setup_search(&mut self, explicit_slot_len: usize) {
-        self.explicit_slot_len = explicit_slot_len;
+        self.explicit_slot_len =
+            core::cmp::min(explicit_slot_len, self.explicit_slots.len());
     }
 }
 
