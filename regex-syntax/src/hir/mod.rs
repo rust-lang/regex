@@ -1920,9 +1920,9 @@ impl Drop for Hir {
         use core::mem;
 
         if matches!(self, Hir { kind: HirKind::Empty, .. }) {
-            // Currently, it's imposible to destructure a struct if the 
-            // struct has a custom drop implementation. This means that 
-            // `Hir::into_kind` still calls into `Hir::drop`. To prevent 
+            // Currently, it's imposible to destructure a struct if the
+            // struct has a custom drop implementation. This means that
+            // `Hir::into_kind` still calls into `Hir::drop`. To prevent
             // this from causing an infine loop, we have an early return here.
             // TODO: Either make `Hir::into_kind` not call us, or remove
             // all calls to it from us.
@@ -1930,10 +1930,12 @@ impl Drop for Hir {
         }
 
         #[cfg(debug_assertions)]
-        if NO_RECURSE_GUARD.replace(true){panic!(
+        if NO_RECURSE_GUARD.replace(true) {
+            panic!(
             "regex_syntax::hir::Hir::drop() called from within itself \n\
              Please raise an issue at https://github.com/10-hard-problems/regex"
-        )};
+        )
+        };
 
         /// Sometimes a simple loop is enough to destroy a `HirKind`.
         /// If so, we do it here.
@@ -1970,7 +1972,6 @@ impl Drop for Hir {
             }
         }
 
-
         let this = mem::replace(&mut self.kind, HirKind::Empty);
         let Some(children) = try_simple_drop(this) else {
             #[cfg(debug_assertions)]
@@ -1996,7 +1997,7 @@ impl Drop for Hir {
                         &mut interm.kind,
                         HirKind::Alternation(children),
                     );
-                    
+
                     curr.insert(0, interm);
                 }
                 None => {
