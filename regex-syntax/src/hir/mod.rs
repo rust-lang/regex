@@ -1929,7 +1929,7 @@ impl Drop for Hir {
             return;
         }
 
-        #[cfg(debug_assertions)]
+        #[cfg(all(debug_assertions, feature = "std"))]
         if NO_RECURSE_GUARD.replace(true) {
             panic!(
             "regex_syntax::hir::Hir::drop() called from within itself \n\
