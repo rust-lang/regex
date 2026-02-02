@@ -1908,7 +1908,7 @@ pub enum Dot {
     AnyByteExceptCRLF,
 }
 
-#[cfg(debug_assertions, feature = "std")]
+#[cfg(all(debug_assertions, feature = "std"))]
 std::thread_local! {
     static NO_RECURSE_GUARD: std::cell::Cell<bool> = const{std::cell::Cell::new(false)};
 }
@@ -1974,7 +1974,7 @@ impl Drop for Hir {
 
         let this = mem::replace(&mut self.kind, HirKind::Empty);
         let Some(children) = try_simple_drop(this) else {
-            #[cfg(debug_assertions, feature = "std")]
+            #[cfg(all(debug_assertions, feature = "std"))]
             NO_RECURSE_GUARD.set(false);
             return;
         };
@@ -2002,7 +2002,7 @@ impl Drop for Hir {
                 }
                 None => {
                     let Some(target_) = curr.pop() else {
-                        #[cfg(debug_assertions, feature = "std")]
+                        #[cfg(all(debug_assertions, feature = "std"))]
                         NO_RECURSE_GUARD.set(false);
                         return;
                     };
