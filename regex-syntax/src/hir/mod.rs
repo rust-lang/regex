@@ -1917,7 +1917,10 @@ impl Drop for Hir {
     fn drop(&mut self) {
         use core::mem;
 
-        
+        if matches!(self, Hir { kind: HirKind::Empty, .. }) {
+            std::dbg!("Hit empty");
+            return; // Base case
+        }
 
         #[cfg(debug_assertions)]
         let _guard = NO_RECURE_GUARD.lock().unwrap();
