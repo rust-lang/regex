@@ -1909,7 +1909,9 @@ pub enum Dot {
 }
 
 #[cfg(debug_assertions)]
-static NO_RECURE_GUARD: std::sync::Mutex<()> = std::sync::Mutex::new(());
+std::thread_local! {
+    static NO_RECURSE_GUARD: std::cell::Cell<bool> = const{std::cell::Cell::new(false)};
+}
 
 /// A custom `Drop` impl is used for `HirKind` such that it uses constant stack
 /// space but heap space proportional to the depth of the total `Hir`.
@@ -1918,15 +1920,20 @@ impl Drop for Hir {
         use core::mem;
 
         if matches!(self, Hir { kind: HirKind::Empty, .. }) {
-            std::dbg!("Hit empty");
-            return; // Base case
+            // Currently, it's imposible to destructure a struct if the 
+            // struct has a custom drop implementation. This means that 
+            // `Hir::into_kind` still calls into `Hir::drop`. To prevent 
+            // this from causing an infine loop, we have an early return here.
+            // TODO: Either make `Hir::into_kind` not call us, or remove
+            // all calls to it from us.
+            return;
         }
 
         #[cfg(debug_assertions)]
-        let _guard = NO_RECURE_GUARD.lock().unwrap();
-
-        std::dbg!("Starting drop of:");
-        std::dbg!(&mut *self);
+        if NO_RECURSE_GUARD.replace(true){panic!(
+            "regex_syntax::hir::Hir::drop() called from within itself \n\
+             Please raise an issue at https://github.com/10-hard-problems/regex"
+        )};
 
         /// Sometimes a simple loop is enough to destroy a `HirKind`.
         /// If so, we do it here.
@@ -1963,37 +1970,39 @@ impl Drop for Hir {
             }
         }
 
+
         let this = mem::replace(&mut self.kind, HirKind::Empty);
         let Some(children) = try_simple_drop(this) else {
-            std::dbg!("Quickdropped");
+            #[cfg(debug_assertions)]
+            NO_RECURSE_GUARD.set(false);
             return;
         };
-
-        std::dbg!("Failed simple drop for:");
-        std::dbg!(&children);
 
         let mut curr = children;
         let mut target = curr.pop().unwrap().into_kind();
         loop {
             match try_simple_drop(target) {
                 Some(mut children) => {
-                    // Minor suttlety: We must pop the next value
+                    // Minor subtlety: We must pop the next value
                     // before we do the tree rotation to guarantee
                     // the vec will have enough capacity.
                     let mut interm = children.pop().unwrap();
                     mem::swap(&mut curr, &mut children);
+
+                    // Reusing properties for an unrelated Hir node
+                    // is fine here; we're in the destructor, so no
+                    // other code can observe the broken invarient.
                     target = mem::replace(
                         &mut interm.kind,
                         HirKind::Alternation(children),
                     );
-                    // Reusing properties for an unrelated Hir node
-                    // is fine here; we're in the destructor, so no
-                    // other code can observe the broken invarient.
+                    
                     curr.insert(0, interm);
                 }
                 None => {
                     let Some(target_) = curr.pop() else {
-                        std::dbg!("Did slow drop");
+                        #[cfg(debug_assertions)]
+                        NO_RECURSE_GUARD.set(false);
                         return;
                     };
                     target = target_.into_kind();
