@@ -40,6 +40,7 @@ include = [
   "testdata/**.toml",
   "tests/**/*.rs",
   "bench/**/*.rs",
+  "benches/**/*.rs",
   "LICENSE-UNICODE",
   "!/tests/fuzz/mod.rs",
 ]
