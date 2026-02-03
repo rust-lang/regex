@@ -20,6 +20,7 @@ features=(
     unicode-perl
     unicode-script
     unicode-segment
+    look-behinds
 )
 for f in "${features[@]}"; do
     echo "=== FEATURE: $f ==="
