@@ -1337,8 +1337,8 @@ pub struct PatternSetInsertError {
     capacity: usize,
 }
 
-#[cfg(feature = "std")]
-impl std::error::Error for PatternSetInsertError {}
+#[cfg(feature = "alloc")]
+impl core::error::Error for PatternSetInsertError {}
 
 #[cfg(feature = "alloc")]
 impl core::fmt::Display for PatternSetInsertError {
@@ -1889,8 +1889,7 @@ pub enum MatchErrorKind {
     },
 }
 
-#[cfg(feature = "std")]
-impl std::error::Error for MatchError {}
+impl core::error::Error for MatchError {}
 
 impl core::fmt::Display for MatchError {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
