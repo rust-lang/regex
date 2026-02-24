@@ -30,8 +30,7 @@ pub enum Error {
 #[derive(Debug)]
 pub struct CaseFoldError(());
 
-#[cfg(feature = "std")]
-impl std::error::Error for CaseFoldError {}
+impl core::error::Error for CaseFoldError {}
 
 impl core::fmt::Display for CaseFoldError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
@@ -51,8 +50,7 @@ impl core::fmt::Display for CaseFoldError {
 #[derive(Debug)]
 pub struct UnicodeWordError(());
 
-#[cfg(feature = "std")]
-impl std::error::Error for UnicodeWordError {}
+impl core::error::Error for UnicodeWordError {}
 
 impl core::fmt::Display for UnicodeWordError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
