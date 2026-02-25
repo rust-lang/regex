@@ -105,6 +105,19 @@ typedef struct rure_iter rure_iter;
 typedef struct rure_iter_capture_names rure_iter_capture_names;
 
 /*
+ * rure_iter_split is an iterator over substrings in the haystack passed,
+ * delimited by a match of the rure. Namely, each element of the iterator corresponds
+ * to a part of the haystack that isn’t matched by the regular expression.
+ *
+ * An rure_iter_split value may not outlive its corresponding rure,
+ * and should be freed before its corresponding rure is freed.
+ *
+ * It is not safe to use from multiple threads simultaneously.
+ */
+typedef struct rure_iter_split rure_iter_split;
+
+
+/*
  * rure_error is an error that caused compilation to fail.
  *
  * Most errors are syntax errors but an error can be returned if the compiled
@@ -293,6 +306,32 @@ void rure_iter_capture_names_free(rure_iter_capture_names *it);
  * The value of the capture group name is written to the provided pointer.
  */
 bool rure_iter_capture_names_next(rure_iter_capture_names *it, char **name);
+
+/*
+ * rure_iter_split_new creates an iterator of substrings of the haystack given,
+ * delimited by a match of the regex. Namely, each element of the iterator corresponds
+ * to a part of the haystack that isn’t matched by the regular expression.
+ *
+ * haystack may contain arbitrary bytes, but ASCII compatible text is more
+ * useful. UTF-8 is even more useful. Other text encodings aren't supported.
+ * length should be the number of bytes in haystack.
+ */
+rure_iter_split *rure_iter_split_new(rure *re, const uint8_t *haystack, size_t length);
+
+/*
+ * rure_iter_split_free frees the iterator given.
+ *
+ * It must be called at most once.
+ */
+void rure_iter_split_free(rure_iter_split *it);
+
+/*
+ * rure_iter_split_next advances the iterator and returns true if and only if a
+ * match was found. The value of the next item is written to the provided pointer.
+ *
+ * If no match is found, then subsequent calls will return false indefinitely.
+ */
+bool rure_iter_split_next(rure_iter_split *it, char *const *next);
 
 /*
  * rure_iter_new creates a new iterator.
