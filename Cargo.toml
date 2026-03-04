@@ -37,7 +37,7 @@ include = [
   "/UNICODE.md",
   "bench/README.md",
   "src/**/*.rs",
-  "testdata/**.toml",
+  "testdata/**/*.toml",
   "tests/**/*.rs",
   "bench/**/*.rs",
   "benches/**/*.rs",
