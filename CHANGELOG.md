@@ -1,4 +1,4 @@
-1.12.3 (2025-02-03)
+1.12.3 (2026-02-03)
 ===================
 This release excludes some unnecessary things from the archive published to
 crates.io. Specifically, fuzzing data and various shell scripts are now
