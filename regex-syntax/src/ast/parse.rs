@@ -2283,7 +2283,7 @@ impl<'p, 's, P: Borrow<Parser>> NestLimiter<'p, 's, P> {
     fn increment_depth(&mut self, span: &Span) -> Result<()> {
         let new = self.depth.checked_add(1).ok_or_else(|| {
             self.p.error(
-                span.clone(),
+                *span,
                 ast::ErrorKind::NestLimitExceeded(u32::MAX),
             )
         })?;
