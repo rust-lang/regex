@@ -938,6 +938,55 @@ impl Regex {
             return Cow::Owned(new);
         }
 
+        // When the replacement is exactly a single capture reference
+        // (`$N` / `${N}`), each match's output is just the captured slice
+        // — no `Captures::expand`. For a single match covering the whole
+        // haystack (common with anchored regexes), this returns a
+        // `Cow::Borrowed` with no output allocation at all.
+        if let Some(group_idx) = rep.single_capture_ref() {
+            if limit == 1 {
+                let Some(cap) = self.captures(haystack) else {
+                    return Cow::Borrowed(haystack);
+                };
+                let m = cap.get(0).unwrap();
+                let g = cap.get(group_idx);
+                if m.start() == 0 && m.end() == haystack.len() {
+                    return match g {
+                        Some(g) => {
+                            Cow::Borrowed(&haystack[g.start()..g.end()])
+                        }
+                        None => Cow::Borrowed(""),
+                    };
+                }
+                let mut new = String::with_capacity(haystack.len());
+                new.push_str(&haystack[..m.start()]);
+                if let Some(g) = g {
+                    new.push_str(&haystack[g.start()..g.end()]);
+                }
+                new.push_str(&haystack[m.end()..]);
+                return Cow::Owned(new);
+            }
+            let mut it = self.captures_iter(haystack).enumerate().peekable();
+            if it.peek().is_none() {
+                return Cow::Borrowed(haystack);
+            }
+            let mut new = String::with_capacity(haystack.len());
+            let mut last_match = 0;
+            for (i, cap) in it {
+                let m = cap.get(0).unwrap();
+                new.push_str(&haystack[last_match..m.start()]);
+                if let Some(g) = cap.get(group_idx) {
+                    new.push_str(&haystack[g.start()..g.end()]);
+                }
+                last_match = m.end();
+                if limit > 0 && i + 1 >= limit {
+                    break;
+                }
+            }
+            new.push_str(&haystack[last_match..]);
+            return Cow::Owned(new);
+        }
+
         // The slower path, which we use if the replacement may need access to
         // capture groups.
         let mut it = self.captures_iter(haystack).enumerate().peekable();
@@ -2470,6 +2519,17 @@ pub trait Replacer {
         None
     }
 
+    /// Returns `Some(group_index)` if this replacement is *exactly* a single
+    /// capture reference (`$N` or `${N}`) with no surrounding text.
+    ///
+    /// Replacement routines use this to skip [`Captures::expand`] entirely
+    /// — each match's output is just the captured slice, and when the
+    /// match covers the whole haystack the result is a `Cow::Borrowed`
+    /// with no output allocation.
+    fn single_capture_ref(&mut self) -> Option<usize> {
+        None
+    }
+
     /// Returns a type that implements `Replacer`, but that borrows and wraps
     /// this `Replacer`.
     ///
@@ -2505,6 +2565,10 @@ impl<'a> Replacer for &'a str {
     fn no_expansion(&mut self) -> Option<Cow<'_, str>> {
         no_expansion(self)
     }
+
+    fn single_capture_ref(&mut self) -> Option<usize> {
+        single_capture_ref(self)
+    }
 }
 
 impl<'a> Replacer for &'a String {
@@ -2514,6 +2578,10 @@ impl<'a> Replacer for &'a String {
 
     fn no_expansion(&mut self) -> Option<Cow<'_, str>> {
         no_expansion(self)
+    }
+
+    fn single_capture_ref(&mut self) -> Option<usize> {
+        single_capture_ref(self)
     }
 }
 
@@ -2525,6 +2593,10 @@ impl Replacer for String {
     fn no_expansion(&mut self) -> Option<Cow<'_, str>> {
         no_expansion(self)
     }
+
+    fn single_capture_ref(&mut self) -> Option<usize> {
+        single_capture_ref(self)
+    }
 }
 
 impl<'a> Replacer for Cow<'a, str> {
@@ -2535,6 +2607,10 @@ impl<'a> Replacer for Cow<'a, str> {
     fn no_expansion(&mut self) -> Option<Cow<'_, str>> {
         no_expansion(self)
     }
+
+    fn single_capture_ref(&mut self) -> Option<usize> {
+        single_capture_ref(self)
+    }
 }
 
 impl<'a> Replacer for &'a Cow<'a, str> {
@@ -2544,6 +2620,10 @@ impl<'a> Replacer for &'a Cow<'a, str> {
 
     fn no_expansion(&mut self) -> Option<Cow<'_, str>> {
         no_expansion(self)
+    }
+
+    fn single_capture_ref(&mut self) -> Option<usize> {
+        single_capture_ref(self)
     }
 }
 
@@ -2622,4 +2702,27 @@ fn no_expansion<T: AsRef<str>>(replacement: &T) -> Option<Cow<'_, str>> {
         Some(_) => None,
         None => Some(Cow::Borrowed(replacement)),
     }
+}
+
+/// Returns `Some(N)` iff the replacement is *exactly* a single capture
+/// reference of the form `$N` or `${N}` for a numeric group index. Named
+/// refs (`${name}`) and `$$` (escaped `$`) are rejected.
+///
+/// This is meant to be used to implement the [`Replacer::single_capture_ref`]
+/// method in its various trait impls.
+fn single_capture_ref<T: AsRef<str>>(replacement: &T) -> Option<usize> {
+    let rest = replacement.as_ref().strip_prefix('$')?;
+    if rest.starts_with('$') {
+        return None;
+    }
+    let digits = match rest.strip_prefix('{') {
+        Some(inner) => inner.strip_suffix('}')?,
+        None => rest,
+    };
+    // `parse::<usize>` accepts a leading `+`, which would let `${+1}`
+    // masquerade as group 1; check explicitly.
+    if digits.is_empty() || digits.bytes().any(|b| !b.is_ascii_digit()) {
+        return None;
+    }
+    digits.parse().ok()
 }

@@ -3,9 +3,9 @@ use core::{
     panic::{RefUnwindSafe, UnwindSafe},
 };
 
-use alloc::sync::Arc;
+use alloc::{boxed::Box, sync::Arc, vec, vec::Vec};
 
-use regex_syntax::hir::{literal, Hir};
+use regex_syntax::hir::{literal, Class, Hir, HirKind, Literal, Look};
 
 use crate::{
     meta::{
@@ -160,6 +160,13 @@ pub(super) fn new(
     // might give up or quit for reasons. If we had, e.g., a PikeVM that
     // supported reverse searching, then we could avoid building a full Core
     // engine for this case.
+    core = match LiteralPrefixCapture::new(core, hirs) {
+        Err(core) => core,
+        Ok(lpc) => {
+            debug!("using literal-prefix-capture strategy");
+            return Ok(Arc::new(lpc));
+        }
+    };
     core = match ReverseAnchored::new(core) {
         Err(core) => core,
         Ok(ra) => {
@@ -1901,5 +1908,361 @@ fn copy_match_to_slots(m: Match, slots: &mut [Option<NonMaxUsize>]) {
     }
     if let Some(slot) = slots.get_mut(slot_end) {
         *slot = NonMaxUsize::new(m.end());
+    }
+}
+
+/// A specialized strategy for anchored, fully-bounded regexes of the form
+///
+/// ```text
+///     ^<literal-prefix-set>([^X]+)X.*$
+/// ```
+///
+/// where the prefix reduces to a finite set of literal byte alternatives,
+/// the capture is a greedy `[^X]+` for a single ASCII byte X, and the trailing
+/// `.*$` is the standard "rest of line, then end of haystack" tail. The
+/// motivating instance is the ClickBench Q28 pattern
+/// `^https?://(?:www\.)?([^/]+)/.*$` -> `${1}`, but the recognizer applies to
+/// any pattern of this shape (single-literal prefixes, alternation, and
+/// `?`-optional segments).
+///
+/// For inputs that match, capture 1's bounds are structurally trivial — skip
+/// the prefix, find the terminator with `memchr` — so we can avoid the full
+/// engine's capture-tracking entirely. For inputs that don't match (e.g., a
+/// newline in the tail breaks `.*$`, or no prefix matches), we report no
+/// match: that result is identical to what the full engine would compute, so
+/// no fallback is required.
+#[derive(Debug)]
+struct LiteralPrefixCapture {
+    core: Core,
+    /// Distinct literal byte prefixes, longest-first so the runtime probe
+    /// is greedy. Bounded to `MAX_PREFIX_VARIANTS` at construction time.
+    prefixes: Box<[Box<[u8]>]>,
+    /// Single ASCII byte ending the capture (also the literal that must
+    /// follow the capture in the original regex).
+    terminator: u8,
+}
+
+/// Each `(?:...)?` doubles the count and each `(a|b|c)` multiplies it,
+/// so this caps the explosion for adversarial patterns. 32 fits roughly
+/// 8 levels of optional/alternation past Q28's 4 variants on one cache
+/// line of `Box<[u8]>`.
+const MAX_PREFIX_VARIANTS: usize = 32;
+
+impl LiteralPrefixCapture {
+    fn new(core: Core, hirs: &[&Hir]) -> Result<Self, Core> {
+        if hirs.len() != 1 {
+            return Err(core);
+        }
+        if !core.info.is_always_anchored_start()
+            || !core.info.is_always_anchored_end()
+        {
+            return Err(core);
+        }
+        // `.*$` excludes the line terminator; the runtime newline check
+        // hard-codes `b'\n'`, so reject non-default line terminators.
+        if core.info.config().get_line_terminator() != b'\n' {
+            return Err(core);
+        }
+        let Some((prefixes, terminator)) =
+            try_recognize_prefix_capture(hirs[0])
+        else {
+            return Err(core);
+        };
+        Ok(LiteralPrefixCapture { core, prefixes, terminator })
+    }
+
+    /// Returns capture 1's byte offsets if the input matches, else `None`.
+    /// The overall match always spans `0..input.haystack().len()` because
+    /// the regex is `^...$`.
+    #[cfg_attr(feature = "perf-inline", inline(always))]
+    fn try_fast_match(&self, input: &Input<'_>) -> Option<(usize, usize)> {
+        if input.start() != 0 || input.end() != input.haystack().len() {
+            return None;
+        }
+        let bytes = input.haystack();
+        for prefix in self.prefixes.iter() {
+            if !bytes.starts_with(prefix) {
+                continue;
+            }
+            let cap_start = prefix.len();
+            // Fused scan: the first byte that matters in the tail is either
+            // the terminator (success) or `\n` (failure for `.*$`).
+            let off = crate::util::memchr::memchr2(
+                self.terminator,
+                b'\n',
+                &bytes[cap_start..],
+            )?;
+            if bytes[cap_start + off] != self.terminator {
+                return None;
+            }
+            if off == 0 {
+                // `[^X]+` requires >= 1 byte; try a shorter prefix.
+                continue;
+            }
+            let cap_end = cap_start + off;
+            // Anything past the terminator must also be `\n`-free for
+            // `.*$` to reach end-of-haystack.
+            if crate::util::memchr::memchr(b'\n', &bytes[cap_end + 1..])
+                .is_some()
+            {
+                return None;
+            }
+            return Some((cap_start, cap_end));
+        }
+        None
+    }
+}
+
+impl Strategy for LiteralPrefixCapture {
+    #[cfg_attr(feature = "perf-inline", inline(always))]
+    fn group_info(&self) -> &GroupInfo {
+        self.core.group_info()
+    }
+
+    #[cfg_attr(feature = "perf-inline", inline(always))]
+    fn create_cache(&self) -> Cache {
+        self.core.create_cache()
+    }
+
+    #[cfg_attr(feature = "perf-inline", inline(always))]
+    fn reset_cache(&self, cache: &mut Cache) {
+        self.core.reset_cache(cache);
+    }
+
+    fn is_accelerated(&self) -> bool {
+        true
+    }
+
+    fn memory_usage(&self) -> usize {
+        let prefix_bytes: usize = self.prefixes.iter().map(|p| p.len()).sum();
+        self.core.memory_usage()
+            + self.prefixes.len() * core::mem::size_of::<Box<[u8]>>()
+            + prefix_bytes
+    }
+
+    #[cfg_attr(feature = "perf-inline", inline(always))]
+    fn search(&self, _cache: &mut Cache, input: &Input<'_>) -> Option<Match> {
+        self.try_fast_match(input)?;
+        Some(Match::new(PatternID::ZERO, 0..input.haystack().len()))
+    }
+
+    #[cfg_attr(feature = "perf-inline", inline(always))]
+    fn search_half(
+        &self,
+        _cache: &mut Cache,
+        input: &Input<'_>,
+    ) -> Option<HalfMatch> {
+        self.try_fast_match(input)?;
+        Some(HalfMatch::new(PatternID::ZERO, input.haystack().len()))
+    }
+
+    #[cfg_attr(feature = "perf-inline", inline(always))]
+    fn is_match(&self, _cache: &mut Cache, input: &Input<'_>) -> bool {
+        self.try_fast_match(input).is_some()
+    }
+
+    #[cfg_attr(feature = "perf-inline", inline(always))]
+    fn search_slots(
+        &self,
+        _cache: &mut Cache,
+        input: &Input<'_>,
+        slots: &mut [Option<NonMaxUsize>],
+    ) -> Option<PatternID> {
+        let (cap_start, cap_end) = self.try_fast_match(input)?;
+        let match_end = input.haystack().len();
+        if let Some(slot) = slots.get_mut(0) {
+            *slot = NonMaxUsize::new(0);
+        }
+        if let Some(slot) = slots.get_mut(1) {
+            *slot = NonMaxUsize::new(match_end);
+        }
+        if let Some(slot) = slots.get_mut(2) {
+            *slot = NonMaxUsize::new(cap_start);
+        }
+        if let Some(slot) = slots.get_mut(3) {
+            *slot = NonMaxUsize::new(cap_end);
+        }
+        Some(PatternID::ZERO)
+    }
+
+    fn which_overlapping_matches(
+        &self,
+        cache: &mut Cache,
+        input: &Input<'_>,
+        patset: &mut PatternSet,
+    ) {
+        self.core.which_overlapping_matches(cache, input, patset)
+    }
+}
+
+/// Recognizes `^<prefix-set>([^X]+)X.*$` (default flags) and returns the
+/// enumerated prefix set together with the terminator byte X.
+fn try_recognize_prefix_capture(hir: &Hir) -> Option<(Box<[Box<[u8]>]>, u8)> {
+    let HirKind::Concat(parts) = hir.kind() else {
+        return None;
+    };
+    let mut iter = parts.iter();
+
+    // Multiline `(?m)` lowers `^` to `Look::StartLF`, which would break
+    // the byte-level fast path; require text-start specifically.
+    if !matches!(iter.next()?.kind(), HirKind::Look(Look::Start)) {
+        return None;
+    }
+
+    let mut prefixes: Vec<Vec<u8>> = vec![Vec::new()];
+    let capture = loop {
+        let part = iter.next()?;
+        if matches!(part.kind(), HirKind::Capture(_)) {
+            break part;
+        }
+        extend_prefix(&mut prefixes, part)?;
+        if prefixes.len() > MAX_PREFIX_VARIANTS {
+            return None;
+        }
+    };
+
+    let HirKind::Capture(cap) = capture.kind() else { unreachable!() };
+    if cap.index != 1 {
+        return None;
+    }
+    let terminator = capture_terminator_byte(&cap.sub)?;
+
+    let HirKind::Literal(Literal(lit)) = iter.next()?.kind() else {
+        return None;
+    };
+    if lit.as_ref() != [terminator] {
+        return None;
+    }
+
+    if !is_dot_star(iter.next()?) {
+        return None;
+    }
+
+    if !matches!(iter.next()?.kind(), HirKind::Look(Look::End)) {
+        return None;
+    }
+    if iter.next().is_some() {
+        return None;
+    }
+
+    prefixes.sort_unstable();
+    prefixes.dedup();
+    let mut prefixes: Vec<Box<[u8]>> =
+        prefixes.into_iter().map(Vec::into_boxed_slice).collect();
+    prefixes.sort_unstable_by_key(|p| core::cmp::Reverse(p.len()));
+
+    Some((prefixes.into_boxed_slice(), terminator))
+}
+
+/// Extend the accumulator with one prefix segment. Returns `None` if the
+/// segment isn't a finite literal shape (literal / concat / alternation /
+/// `?`-optional combination of those).
+fn extend_prefix(variants: &mut Vec<Vec<u8>>, hir: &Hir) -> Option<()> {
+    match hir.kind() {
+        HirKind::Literal(Literal(bytes)) => {
+            for v in variants.iter_mut() {
+                v.extend_from_slice(bytes);
+            }
+            Some(())
+        }
+        HirKind::Concat(parts) => {
+            for part in parts {
+                extend_prefix(variants, part)?;
+                if variants.len() > MAX_PREFIX_VARIANTS {
+                    return None;
+                }
+            }
+            Some(())
+        }
+        HirKind::Repetition(rep) if rep.min == 0 && rep.max == Some(1) => {
+            let mut with = variants.clone();
+            extend_prefix(&mut with, &rep.sub)?;
+            if variants.len() + with.len() > MAX_PREFIX_VARIANTS {
+                return None;
+            }
+            variants.extend(with);
+            Some(())
+        }
+        HirKind::Alternation(branches) => {
+            let base = core::mem::take(variants);
+            for branch in branches {
+                let mut local = base.clone();
+                extend_prefix(&mut local, branch)?;
+                if variants.len() + local.len() > MAX_PREFIX_VARIANTS {
+                    return None;
+                }
+                variants.extend(local);
+            }
+            Some(())
+        }
+        _ => None,
+    }
+}
+
+/// Capture must be a greedy `[^X]+` over a single ASCII byte X.
+fn capture_terminator_byte(hir: &Hir) -> Option<u8> {
+    let HirKind::Repetition(rep) = hir.kind() else {
+        return None;
+    };
+    if rep.min < 1 || rep.max.is_some() || !rep.greedy {
+        return None;
+    }
+    let HirKind::Class(class) = rep.sub.kind() else {
+        return None;
+    };
+    single_excluded_ascii_byte(class)
+}
+
+/// `.*` for default-flag regexes: any byte except `\n`, zero or more, greedy.
+fn is_dot_star(hir: &Hir) -> bool {
+    let HirKind::Repetition(rep) = hir.kind() else {
+        return false;
+    };
+    if rep.min != 0 || rep.max.is_some() || !rep.greedy {
+        return false;
+    }
+    let HirKind::Class(class) = rep.sub.kind() else {
+        return false;
+    };
+    single_excluded_ascii_byte(class) == Some(b'\n')
+}
+
+/// Returns `Some(b)` iff `class` matches every codepoint or byte except a
+/// single ASCII byte `b`. ASCII-only because the runtime matcher uses
+/// `memchr` over byte slices.
+fn single_excluded_ascii_byte(class: &Class) -> Option<u8> {
+    match class {
+        Class::Unicode(uc) => {
+            let ranges = uc.ranges();
+            if ranges.len() != 2 {
+                return None;
+            }
+            let (r0, r1) = (&ranges[0], &ranges[1]);
+            if (r0.start() as u32) != 0 || (r1.end() as u32) != 0x10FFFF {
+                return None;
+            }
+            let gap_start = r0.end() as u32 + 1;
+            let gap_end = r1.start() as u32 - 1;
+            if gap_start != gap_end || gap_start > 0x7F {
+                return None;
+            }
+            Some(gap_start as u8)
+        }
+        Class::Bytes(bc) => {
+            let ranges = bc.ranges();
+            if ranges.len() != 2 {
+                return None;
+            }
+            let (r0, r1) = (&ranges[0], &ranges[1]);
+            if r0.start() != 0 || r1.end() != 0xFF {
+                return None;
+            }
+            let gap_start = r0.end() as u16 + 1;
+            let gap_end = r1.start() as u16 - 1;
+            if gap_start != gap_end || gap_start > 0x7F {
+                return None;
+            }
+            Some(gap_start as u8)
+        }
     }
 }
