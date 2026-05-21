@@ -86,9 +86,10 @@ impl<I: Interval> IntervalSet<I> {
             return;
         };
 
-        // The search finds us the first index where the previous interval start is less
-        // than or equal to the new interval start. Since the existing intervals are non-overlapping
-        // we only need to try to union this single preceding interval
+        // The search finds us the first index where the previous interval
+        // start is less than or equal to the new interval start. Since the
+        // existing intervals are non-overlapping we only need to try to union
+        // this single preceding interval
         let mut start = i;
         if let Some(before_i) = i.checked_sub(1) {
             let before = &self.ranges[before_i];
@@ -97,19 +98,18 @@ impl<I: Interval> IntervalSet<I> {
                 start = before_i;
             }
         }
-        // `interval` may overlap any number of intervals following the insertion point
-        // so will union each of them until we reach the first non-overlapping interval
+        // `interval` may overlap any number of intervals following the
+        // insertion point so will union each of them until we reach the
+        // first non-overlapping interval
         let mut end = i;
         for after_i in i..self.ranges.len() {
             let after = &self.ranges[after_i];
-            if let Some(union) = interval.union(after) {
-                interval = union;
-                end = after_i + 1;
-            } else {
+            let Some(union) = interval.union(after) else {
                 break;
-            }
+            };
+            interval = union;
+            end = after_i + 1;
         }
-
         self.ranges.splice(start..end, core::iter::once(interval));
 
         // We don't know whether the new interval added here is considered
