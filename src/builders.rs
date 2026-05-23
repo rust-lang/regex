@@ -85,7 +85,8 @@ impl Builder {
                 info: crate::RegexInfo {
                     syntax_config: self.syntaxc,
                     pattern,
-                }.into(),
+                }
+                .into(),
             })
             .map_err(Error::from_meta_build_error)
     }
