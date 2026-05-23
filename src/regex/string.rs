@@ -101,6 +101,7 @@ use crate::{error::Error, RegexBuilder};
 pub struct Regex {
     pub(crate) meta: meta::Regex,
     pub(crate) pattern: Arc<str>,
+    pub(crate) syntaxc: Arc<regex_automata::util::syntax::Config>,
 }
 
 impl core::fmt::Display for Regex {
@@ -1274,6 +1275,31 @@ impl Regex {
     #[inline]
     pub fn as_str(&self) -> &str {
         &self.pattern
+    }
+
+    /// Compares the source strings and compile options of two regexes,
+    /// returning true iff both are equal.
+    /// Such result implies equivalence of the regexes, but the contrary
+    /// provides no information about their equivalence.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use regex::{Regex, RegexBuilder};
+    ///
+    /// let r1 = Regex::new(r"a+").unwrap();
+    /// let r2 = Regex::new(r"aa*").unwrap();
+    /// assert!(!r1.source_and_options_equals(&r2));
+    ///
+    /// let r3 = RegexBuilder::new(r"a+")
+    ///     .case_insensitive(true)
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(!r1.source_and_options_equals(&r3));
+    /// ```
+    #[inline]
+    pub fn source_and_options_equals(&self, other: &Self) -> bool {
+        self.pattern == other.pattern && self.syntaxc == other.syntaxc
     }
 
     /// Returns an iterator over the capture names in this regex.

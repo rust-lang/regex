@@ -80,7 +80,11 @@ impl Builder {
             .configure(metac)
             .syntax(syntaxc)
             .build(&pattern)
-            .map(|meta| crate::Regex { meta, pattern })
+            .map(|meta| crate::Regex {
+                meta,
+                pattern,
+                syntaxc: Arc::new(self.syntaxc),
+            })
             .map_err(Error::from_meta_build_error)
     }
 
