@@ -100,8 +100,13 @@ use crate::{error::Error, RegexBuilder};
 #[derive(Clone)]
 pub struct Regex {
     pub(crate) meta: meta::Regex,
+    pub(crate) info: Arc<RegexInfo>,
+}
+
+#[derive(PartialEq)]
+pub(crate) struct RegexInfo {
+    pub(crate) syntax_config: regex_automata::util::syntax::Config,
     pub(crate) pattern: Arc<str>,
-    pub(crate) syntaxc: Arc<regex_automata::util::syntax::Config>,
 }
 
 impl core::fmt::Display for Regex {
@@ -1274,10 +1279,10 @@ impl Regex {
     /// ```
     #[inline]
     pub fn as_str(&self) -> &str {
-        &self.pattern
+        &self.info.pattern
     }
 
-    /// Compares the source strings and compile options of two regexes,
+    /// Compares the source strings and syntax compile options of two regexes,
     /// returning true iff both are equal.
     /// Such result implies equivalence of the regexes, but the contrary
     /// provides no information about their equivalence.
@@ -1299,7 +1304,7 @@ impl Regex {
     /// ```
     #[inline]
     pub fn source_and_options_equals(&self, other: &Self) -> bool {
-        self.pattern == other.pattern && self.syntaxc == other.syntaxc
+        self.info == other.info
     }
 
     /// Returns an iterator over the capture names in this regex.

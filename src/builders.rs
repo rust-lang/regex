@@ -82,8 +82,10 @@ impl Builder {
             .build(&pattern)
             .map(|meta| crate::Regex {
                 meta,
-                pattern,
-                syntaxc: Arc::new(self.syntaxc),
+                info: crate::RegexInfo {
+                    syntax_config: self.syntaxc,
+                    pattern,
+                }.into(),
             })
             .map_err(Error::from_meta_build_error)
     }
