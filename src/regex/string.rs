@@ -262,7 +262,10 @@ impl Regex {
     /// ```
     #[inline]
     pub fn find_iter<'r, 'h>(&'r self, haystack: &'h str) -> Matches<'r, 'h> {
-        Matches { haystack, it: self.meta.find_iter(haystack) }
+        Matches {
+            haystack,
+            it: self.meta.find_iter(Input::new_utf8(haystack)),
+        }
     }
 
     /// This routine searches for the first match of this regex in the haystack
@@ -421,7 +424,10 @@ impl Regex {
         &'r self,
         haystack: &'h str,
     ) -> CaptureMatches<'r, 'h> {
-        CaptureMatches { haystack, it: self.meta.captures_iter(haystack) }
+        CaptureMatches {
+            haystack,
+            it: self.meta.captures_iter(Input::new_utf8(haystack)),
+        }
     }
 
     /// Returns an iterator of substrings of the haystack given, delimited by a
@@ -551,7 +557,7 @@ impl Regex {
     /// ```
     #[inline]
     pub fn split<'r, 'h>(&'r self, haystack: &'h str) -> Split<'r, 'h> {
-        Split { haystack, it: self.meta.split(haystack) }
+        Split { haystack, it: self.meta.split(Input::new_utf8(haystack)) }
     }
 
     /// Returns an iterator of at most `limit` substrings of the haystack
@@ -630,7 +636,10 @@ impl Regex {
         haystack: &'h str,
         limit: usize,
     ) -> SplitN<'r, 'h> {
-        SplitN { haystack, it: self.meta.splitn(haystack, limit) }
+        SplitN {
+            haystack,
+            it: self.meta.splitn(Input::new_utf8(haystack), limit),
+        }
     }
 
     /// Replaces the leftmost-first match in the given haystack with the
@@ -1088,8 +1097,9 @@ impl Regex {
         haystack: &str,
         start: usize,
     ) -> Option<usize> {
-        let input =
-            Input::new(haystack).earliest(true).span(start..haystack.len());
+        let input = Input::new_utf8(haystack)
+            .earliest(true)
+            .span(start..haystack.len());
         self.meta.search_half(&input).map(|hm| hm.offset())
     }
 
@@ -1122,8 +1132,9 @@ impl Regex {
     /// ```
     #[inline]
     pub fn is_match_at(&self, haystack: &str, start: usize) -> bool {
-        let input =
-            Input::new(haystack).earliest(true).span(start..haystack.len());
+        let input = Input::new_utf8(haystack)
+            .earliest(true)
+            .span(start..haystack.len());
         self.meta.search_half(&input).is_some()
     }
 
@@ -1160,7 +1171,7 @@ impl Regex {
         haystack: &'h str,
         start: usize,
     ) -> Option<Match<'h>> {
-        let input = Input::new(haystack).span(start..haystack.len());
+        let input = Input::new_utf8(haystack).span(start..haystack.len());
         self.meta
             .search(&input)
             .map(|m| Match::new(haystack, m.start(), m.end()))
@@ -1199,7 +1210,7 @@ impl Regex {
         haystack: &'h str,
         start: usize,
     ) -> Option<Captures<'h>> {
-        let input = Input::new(haystack).span(start..haystack.len());
+        let input = Input::new_utf8(haystack).span(start..haystack.len());
         let mut caps = self.meta.create_captures();
         self.meta.search_captures(&input, &mut caps);
         if caps.is_match() {
@@ -1290,7 +1301,7 @@ impl Regex {
         haystack: &'h str,
         start: usize,
     ) -> Option<Match<'h>> {
-        let input = Input::new(haystack).span(start..haystack.len());
+        let input = Input::new_utf8(haystack).span(start..haystack.len());
         self.meta.search_captures(&input, &mut locs.0);
         locs.0.get_match().map(|m| Match::new(haystack, m.start(), m.end()))
     }

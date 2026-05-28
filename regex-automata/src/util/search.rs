@@ -104,6 +104,7 @@ pub struct Input<'h> {
     span: Span,
     anchored: Anchored,
     earliest: bool,
+    haystack_known_valid_utf8: bool,
 }
 
 impl<'h> Input<'h> {
@@ -120,6 +121,24 @@ impl<'h> Input<'h> {
             span: Span { start: 0, end: haystack.len() },
             anchored: Anchored::No,
             earliest: false,
+            haystack_known_valid_utf8: false,
+        }
+    }
+
+    /// Create a new search configuration for the given UTF-8 haystack.
+    ///
+    /// This is like [`Input::new`], but records the fact that the haystack is
+    /// already known to be valid UTF-8. This lets regex engines avoid
+    /// redundant UTF-8 validation when Unicode matching semantics require it.
+    #[inline]
+    pub fn new_utf8(haystack: &'h str) -> Input<'h> {
+        let haystack = haystack.as_bytes();
+        Input {
+            haystack,
+            span: Span { start: 0, end: haystack.len() },
+            anchored: Anchored::No,
+            earliest: false,
+            haystack_known_valid_utf8: true,
         }
     }
 
@@ -766,6 +785,11 @@ impl<'h> Input<'h> {
     #[inline]
     pub fn is_char_boundary(&self, offset: usize) -> bool {
         utf8::is_boundary(self.haystack(), offset)
+    }
+
+    #[inline]
+    pub(crate) fn haystack_is_known_valid_utf8(&self) -> bool {
+        self.haystack_known_valid_utf8
     }
 }
 

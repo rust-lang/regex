@@ -1997,6 +1997,8 @@ impl LiteralPrefixCapture {
             return None;
         }
         let bytes = input.haystack();
+        let must_validate_utf8 =
+            self.requires_valid_utf8 && !input.haystack_is_known_valid_utf8();
         'prefix: for prefix in self.prefixes.iter() {
             if !bytes.starts_with(prefix) {
                 continue;
@@ -2029,8 +2031,7 @@ impl LiteralPrefixCapture {
             {
                 continue;
             }
-            if self.requires_valid_utf8 && core::str::from_utf8(bytes).is_err()
-            {
+            if must_validate_utf8 && core::str::from_utf8(bytes).is_err() {
                 return None;
             }
             return Some((cap_start, cap_end));
