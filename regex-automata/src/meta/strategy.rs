@@ -1984,16 +1984,25 @@ impl LiteralPrefixCapture {
             return None;
         }
         let bytes = input.haystack();
-        for prefix in self.prefixes.iter() {
+        'prefix: for prefix in self.prefixes.iter() {
             if !bytes.starts_with(prefix) {
                 continue;
             }
             let cap_start = prefix.len();
-            let Some(off) = crate::util::memchr::memchr(
-                self.terminator,
-                &bytes[cap_start..],
-            ) else {
-                continue;
+            let mut scan_start = cap_start;
+            let off = loop {
+                let Some(next) = crate::util::memchr::memchr2(
+                    self.terminator,
+                    b'\n',
+                    &bytes[scan_start..],
+                ) else {
+                    continue 'prefix;
+                };
+                let found = scan_start + next;
+                if bytes[found] == self.terminator {
+                    break found - cap_start;
+                }
+                scan_start = found + 1;
             };
             if off == 0 {
                 // `[^X]+` requires >= 1 byte; try the next possible prefix.
