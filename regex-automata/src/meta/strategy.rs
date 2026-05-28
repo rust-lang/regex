@@ -1934,8 +1934,8 @@ fn copy_match_to_slots(m: Match, slots: &mut [Option<NonMaxUsize>]) {
 #[derive(Debug)]
 struct LiteralPrefixCapture {
     core: Core,
-    /// Distinct literal byte prefixes, longest-first so the runtime probe
-    /// is greedy. Bounded to `MAX_PREFIX_VARIANTS` at construction time.
+    /// Distinct literal byte prefixes in regex-priority order. Bounded to
+    /// `MAX_PREFIX_VARIANTS` at construction time.
     prefixes: Box<[Box<[u8]>]>,
     /// Single ASCII byte ending the capture (also the literal that must
     /// follow the capture in the original regex).
@@ -1953,6 +1953,9 @@ impl LiteralPrefixCapture {
         if hirs.len() != 1 {
             return Err(core);
         }
+        if core.info.config().get_match_kind() != MatchKind::LeftmostFirst {
+            return Err(core);
+        }
         if !core.info.is_always_anchored_start()
             || !core.info.is_always_anchored_end()
         {
@@ -1963,8 +1966,9 @@ impl LiteralPrefixCapture {
         if core.info.config().get_line_terminator() != b'\n' {
             return Err(core);
         }
+        let allow_unicode_classes = core.info.config().get_utf8_empty();
         let Some((prefixes, terminator)) =
-            try_recognize_prefix_capture(hirs[0])
+            try_recognize_prefix_capture(hirs[0], allow_unicode_classes)
         else {
             return Err(core);
         };
@@ -1985,18 +1989,14 @@ impl LiteralPrefixCapture {
                 continue;
             }
             let cap_start = prefix.len();
-            // Fused scan: the first byte that matters in the tail is either
-            // the terminator (success) or `\n` (failure for `.*$`).
-            let off = crate::util::memchr::memchr2(
+            let Some(off) = crate::util::memchr::memchr(
                 self.terminator,
-                b'\n',
                 &bytes[cap_start..],
-            )?;
-            if bytes[cap_start + off] != self.terminator {
-                return None;
-            }
+            ) else {
+                continue;
+            };
             if off == 0 {
-                // `[^X]+` requires >= 1 byte; try a shorter prefix.
+                // `[^X]+` requires >= 1 byte; try the next possible prefix.
                 continue;
             }
             let cap_end = cap_start + off;
@@ -2005,7 +2005,7 @@ impl LiteralPrefixCapture {
             if crate::util::memchr::memchr(b'\n', &bytes[cap_end + 1..])
                 .is_some()
             {
-                return None;
+                continue;
             }
             return Some((cap_start, cap_end));
         }
@@ -2097,7 +2097,10 @@ impl Strategy for LiteralPrefixCapture {
 
 /// Recognizes `^<prefix-set>([^X]+)X.*$` (default flags) and returns the
 /// enumerated prefix set together with the terminator byte X.
-fn try_recognize_prefix_capture(hir: &Hir) -> Option<(Box<[Box<[u8]>]>, u8)> {
+fn try_recognize_prefix_capture(
+    hir: &Hir,
+    allow_unicode_classes: bool,
+) -> Option<(Box<[Box<[u8]>]>, u8)> {
     let HirKind::Concat(parts) = hir.kind() else {
         return None;
     };
@@ -2125,7 +2128,7 @@ fn try_recognize_prefix_capture(hir: &Hir) -> Option<(Box<[Box<[u8]>]>, u8)> {
     if cap.index != 1 {
         return None;
     }
-    let terminator = capture_terminator_byte(&cap.sub)?;
+    let terminator = capture_terminator_byte(&cap.sub, allow_unicode_classes)?;
 
     let HirKind::Literal(Literal(lit)) = iter.next()?.kind() else {
         return None;
@@ -2134,7 +2137,7 @@ fn try_recognize_prefix_capture(hir: &Hir) -> Option<(Box<[Box<[u8]>]>, u8)> {
         return None;
     }
 
-    if !is_dot_star(iter.next()?) {
+    if !is_dot_star(iter.next()?, allow_unicode_classes) {
         return None;
     }
 
@@ -2145,11 +2148,14 @@ fn try_recognize_prefix_capture(hir: &Hir) -> Option<(Box<[Box<[u8]>]>, u8)> {
         return None;
     }
 
-    prefixes.sort_unstable();
-    prefixes.dedup();
-    let mut prefixes: Vec<Box<[u8]>> =
-        prefixes.into_iter().map(Vec::into_boxed_slice).collect();
-    prefixes.sort_unstable_by_key(|p| core::cmp::Reverse(p.len()));
+    let mut deduped = Vec::with_capacity(prefixes.len());
+    for prefix in prefixes {
+        if !deduped.iter().any(|seen| seen == &prefix) {
+            deduped.push(prefix);
+        }
+    }
+    let prefixes: Vec<Box<[u8]>> =
+        deduped.into_iter().map(Vec::into_boxed_slice).collect();
 
     Some((prefixes.into_boxed_slice(), terminator))
 }
@@ -2180,7 +2186,12 @@ fn extend_prefix(variants: &mut Vec<Vec<u8>>, hir: &Hir) -> Option<()> {
             if variants.len() + with.len() > MAX_PREFIX_VARIANTS {
                 return None;
             }
-            variants.extend(with);
+            if rep.greedy {
+                let without = core::mem::replace(variants, with);
+                variants.extend(without);
+            } else {
+                variants.extend(with);
+            }
             Some(())
         }
         HirKind::Alternation(branches) => {
@@ -2200,21 +2211,24 @@ fn extend_prefix(variants: &mut Vec<Vec<u8>>, hir: &Hir) -> Option<()> {
 }
 
 /// Capture must be a greedy `[^X]+` over a single ASCII byte X.
-fn capture_terminator_byte(hir: &Hir) -> Option<u8> {
+fn capture_terminator_byte(
+    hir: &Hir,
+    allow_unicode_classes: bool,
+) -> Option<u8> {
     let HirKind::Repetition(rep) = hir.kind() else {
         return None;
     };
-    if rep.min < 1 || rep.max.is_some() || !rep.greedy {
+    if rep.min != 1 || rep.max.is_some() || !rep.greedy {
         return None;
     }
     let HirKind::Class(class) = rep.sub.kind() else {
         return None;
     };
-    single_excluded_ascii_byte(class)
+    single_excluded_ascii_byte(class, allow_unicode_classes)
 }
 
 /// `.*` for default-flag regexes: any byte except `\n`, zero or more, greedy.
-fn is_dot_star(hir: &Hir) -> bool {
+fn is_dot_star(hir: &Hir, allow_unicode_classes: bool) -> bool {
     let HirKind::Repetition(rep) = hir.kind() else {
         return false;
     };
@@ -2224,15 +2238,21 @@ fn is_dot_star(hir: &Hir) -> bool {
     let HirKind::Class(class) = rep.sub.kind() else {
         return false;
     };
-    single_excluded_ascii_byte(class) == Some(b'\n')
+    single_excluded_ascii_byte(class, allow_unicode_classes) == Some(b'\n')
 }
 
 /// Returns `Some(b)` iff `class` matches every codepoint or byte except a
 /// single ASCII byte `b`. ASCII-only because the runtime matcher uses
 /// `memchr` over byte slices.
-fn single_excluded_ascii_byte(class: &Class) -> Option<u8> {
+fn single_excluded_ascii_byte(
+    class: &Class,
+    allow_unicode_classes: bool,
+) -> Option<u8> {
     match class {
         Class::Unicode(uc) => {
+            if !allow_unicode_classes {
+                return None;
+            }
             let ranges = uc.ranges();
             if ranges.len() != 2 {
                 return None;

@@ -181,3 +181,41 @@ fn replacen_with_captures() {
     let re = regex::Regex::new(r"([0-9])").unwrap();
     assert_eq!(re.replacen("age: 1234", 2, "${1}Z"), "age: 1Z2Z34");
 }
+
+#[test]
+fn replace_single_capture_ref_borrow_contract() {
+    let re = regex::Regex::new(r"^a([^/]+)/.*$").unwrap();
+    let got = re.replace("abc/x", "$1");
+    assert_eq!(got, "bc");
+    assert!(matches!(got, std::borrow::Cow::Owned(_)));
+}
+
+#[test]
+fn replace_literal_prefix_capture_allows_newline_in_capture() {
+    let re = regex::Regex::new(r"^a([^/]+)/.*$").unwrap();
+    assert_eq!(re.replace("a\nb/x", "$1"), "\nb");
+}
+
+#[test]
+fn replace_literal_prefix_capture_respects_prefix_priority() {
+    let re = regex::Regex::new(r"^(?:a|ab)([^/]+)/.*$").unwrap();
+    assert_eq!(re.replace("abc/x", "$1"), "bc");
+}
+
+#[test]
+fn replace_literal_prefix_capture_respects_ungreedy_optional() {
+    let re = regex::Regex::new(r"^a??([^/]+)/.*$").unwrap();
+    assert_eq!(re.replace("abc/x", "$1"), "abc");
+}
+
+#[test]
+fn replace_literal_prefix_capture_backtracks_greedy_optional() {
+    let re = regex::Regex::new(r"^a?([^/]+)/.*$").unwrap();
+    assert_eq!(re.replace("a/x", "$1"), "a");
+}
+
+#[test]
+fn replace_literal_prefix_capture_backtracks_after_tail_newline() {
+    let re = regex::Regex::new(r"^(?:a|ab/b\nc)([^/]+)/.*$").unwrap();
+    assert_eq!(re.replace("ab/b\ncd/e", "$1"), "d");
+}

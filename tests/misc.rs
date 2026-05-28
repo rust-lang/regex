@@ -141,3 +141,21 @@ fn dfa_handles_pathological_case() {
     };
     assert!(re.is_match(&text));
 }
+
+#[test]
+fn literal_prefix_capture_requires_exact_plus() {
+    let re = regex!(r"^a([^/]{2,})/.*$");
+    assert!(!re.is_match("ab/x"));
+}
+
+#[test]
+fn literal_prefix_capture_bytes_unicode_rejects_invalid_utf8() {
+    let re = regex::bytes::Regex::new(r"^a([^/]+)/.*$").unwrap();
+    assert!(!re.is_match(b"a\xFF/x"));
+
+    let re = regex::bytes::RegexBuilder::new(r"^a([^/]+)/.*$")
+        .unicode(false)
+        .build()
+        .unwrap();
+    assert!(re.is_match(b"a\xFF/x"));
+}

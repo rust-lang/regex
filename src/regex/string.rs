@@ -939,10 +939,8 @@ impl Regex {
         }
 
         // When the replacement is exactly a single capture reference
-        // (`$N` / `${N}`), each match's output is just the captured slice
-        // — no `Captures::expand`. For a single match covering the whole
-        // haystack (common with anchored regexes), this returns a
-        // `Cow::Borrowed` with no output allocation at all.
+        // (`$N` / `${N}`), each match's output is just the captured slice,
+        // so we can skip `Captures::expand`.
         if let Some(group_idx) = rep.single_capture_ref() {
             if limit == 1 {
                 let Some(cap) = self.captures(haystack) else {
@@ -953,9 +951,15 @@ impl Regex {
                 if m.start() == 0 && m.end() == haystack.len() {
                     return match g {
                         Some(g) => {
-                            Cow::Borrowed(&haystack[g.start()..g.end()])
+                            if g.start() == 0 && g.end() == haystack.len() {
+                                Cow::Borrowed(haystack)
+                            } else {
+                                Cow::Owned(String::from(
+                                    &haystack[g.start()..g.end()],
+                                ))
+                            }
                         }
-                        None => Cow::Borrowed(""),
+                        None => Cow::Owned(String::new()),
                     };
                 }
                 let mut new = String::with_capacity(haystack.len());
@@ -2522,10 +2526,8 @@ pub trait Replacer {
     /// Returns `Some(group_index)` if this replacement is *exactly* a single
     /// capture reference (`$N` or `${N}`) with no surrounding text.
     ///
-    /// Replacement routines use this to skip [`Captures::expand`] entirely
-    /// — each match's output is just the captured slice, and when the
-    /// match covers the whole haystack the result is a `Cow::Borrowed`
-    /// with no output allocation.
+    /// Replacement routines use this to skip [`Captures::expand`] entirely:
+    /// each match's output is just the captured slice.
     fn single_capture_ref(&mut self) -> Option<usize> {
         None
     }
@@ -2653,6 +2655,10 @@ impl<'a, R: Replacer + ?Sized + 'a> Replacer for ReplacerRef<'a, R> {
 
     fn no_expansion(&mut self) -> Option<Cow<'_, str>> {
         self.0.no_expansion()
+    }
+
+    fn single_capture_ref(&mut self) -> Option<usize> {
+        self.0.single_capture_ref()
     }
 }
 
