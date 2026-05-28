@@ -215,6 +215,12 @@ fn replace_literal_prefix_capture_backtracks_greedy_optional() {
 }
 
 #[test]
+fn replace_literal_prefix_capture_concat_optional_priority() {
+    let re = regex::Regex::new(r"^a?(?:ab)?([^/]+)/.*$").unwrap();
+    assert_eq!(re.replace("abx/y", "$1"), "bx");
+}
+
+#[test]
 fn replace_literal_prefix_capture_backtracks_after_tail_newline() {
     let re = regex::Regex::new(r"^(?:a|ab/b\nc)([^/]+)/.*$").unwrap();
     assert_eq!(re.replace("ab/b\ncd/e", "$1"), "d");

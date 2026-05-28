@@ -1980,6 +1980,11 @@ impl LiteralPrefixCapture {
     /// the regex is `^...$`.
     #[cfg_attr(feature = "perf-inline", inline(always))]
     fn try_fast_match(&self, input: &Input<'_>) -> Option<(usize, usize)> {
+        if let Some(pid) = input.get_anchored().pattern() {
+            if pid != PatternID::ZERO {
+                return None;
+            }
+        }
         if input.start() != 0 || input.end() != input.haystack().len() {
             return None;
         }
@@ -2127,10 +2132,7 @@ fn try_recognize_prefix_capture(
         if matches!(part.kind(), HirKind::Capture(_)) {
             break part;
         }
-        extend_prefix(&mut prefixes, part)?;
-        if prefixes.len() > MAX_PREFIX_VARIANTS {
-            return None;
-        }
+        prefixes = concat_prefix_variants(prefixes, prefix_variants(part)?)?;
     };
 
     let HirKind::Capture(cap) = capture.kind() else { unreachable!() };
@@ -2169,54 +2171,67 @@ fn try_recognize_prefix_capture(
     Some((prefixes.into_boxed_slice(), terminator))
 }
 
-/// Extend the accumulator with one prefix segment. Returns `None` if the
-/// segment isn't a finite literal shape (literal / concat / alternation /
-/// `?`-optional combination of those).
-fn extend_prefix(variants: &mut Vec<Vec<u8>>, hir: &Hir) -> Option<()> {
+/// Return all literal variants for one prefix segment in regex-priority
+/// order. Returns `None` if the segment isn't a finite literal shape
+/// (literal / concat / alternation / `?`-optional combination of those).
+fn prefix_variants(hir: &Hir) -> Option<Vec<Vec<u8>>> {
     match hir.kind() {
-        HirKind::Literal(Literal(bytes)) => {
-            for v in variants.iter_mut() {
-                v.extend_from_slice(bytes);
-            }
-            Some(())
-        }
+        HirKind::Literal(Literal(bytes)) => Some(vec![bytes.to_vec()]),
         HirKind::Concat(parts) => {
+            let mut variants = vec![Vec::new()];
             for part in parts {
-                extend_prefix(variants, part)?;
-                if variants.len() > MAX_PREFIX_VARIANTS {
-                    return None;
-                }
+                variants =
+                    concat_prefix_variants(variants, prefix_variants(part)?)?;
             }
-            Some(())
+            Some(variants)
         }
         HirKind::Repetition(rep) if rep.min == 0 && rep.max == Some(1) => {
-            let mut with = variants.clone();
-            extend_prefix(&mut with, &rep.sub)?;
-            if variants.len() + with.len() > MAX_PREFIX_VARIANTS {
+            let mut variants = prefix_variants(&rep.sub)?;
+            if variants.len() + 1 > MAX_PREFIX_VARIANTS {
                 return None;
             }
             if rep.greedy {
-                let without = core::mem::replace(variants, with);
-                variants.extend(without);
+                variants.push(Vec::new());
             } else {
-                variants.extend(with);
+                variants.insert(0, Vec::new());
             }
-            Some(())
+            Some(variants)
         }
         HirKind::Alternation(branches) => {
-            let base = core::mem::take(variants);
+            let mut variants = Vec::new();
             for branch in branches {
-                let mut local = base.clone();
-                extend_prefix(&mut local, branch)?;
+                let local = prefix_variants(branch)?;
                 if variants.len() + local.len() > MAX_PREFIX_VARIANTS {
                     return None;
                 }
                 variants.extend(local);
             }
-            Some(())
+            Some(variants)
         }
         _ => None,
     }
+}
+
+/// Concatenate two already-prioritized prefix variant lists. For regex
+/// concatenation, every suffix priority is exhausted before backtracking to
+/// the next prefix priority.
+fn concat_prefix_variants(
+    prefixes: Vec<Vec<u8>>,
+    suffixes: Vec<Vec<u8>>,
+) -> Option<Vec<Vec<u8>>> {
+    if prefixes.len().checked_mul(suffixes.len())? > MAX_PREFIX_VARIANTS {
+        return None;
+    }
+    let mut variants = Vec::with_capacity(prefixes.len() * suffixes.len());
+    for prefix in prefixes {
+        for suffix in &suffixes {
+            let mut variant = Vec::with_capacity(prefix.len() + suffix.len());
+            variant.extend_from_slice(&prefix);
+            variant.extend_from_slice(suffix);
+            variants.push(variant);
+        }
+    }
+    Some(variants)
 }
 
 /// Capture must be a greedy `[^X]+` over a single ASCII byte X.
