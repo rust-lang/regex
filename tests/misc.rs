@@ -159,6 +159,12 @@ fn literal_prefix_capture_respects_invalid_pattern_id() {
 }
 
 #[test]
+fn literal_prefix_capture_meta_unicode_rejects_invalid_utf8() {
+    let re = regex_automata::meta::Regex::new(r"^a([^/]+)/.*$").unwrap();
+    assert!(!re.is_match(regex_automata::Input::new(b"a\xFF/x")));
+}
+
+#[test]
 fn literal_prefix_capture_bytes_unicode_rejects_invalid_utf8() {
     let re = regex::bytes::Regex::new(r"^a([^/]+)/.*$").unwrap();
     assert!(!re.is_match(b"a\xFF/x"));

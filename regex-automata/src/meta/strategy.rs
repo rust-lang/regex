@@ -1940,6 +1940,9 @@ struct LiteralPrefixCapture {
     /// Single ASCII byte ending the capture (also the literal that must
     /// follow the capture in the original regex).
     terminator: u8,
+    /// Whether capture/tail classes were Unicode classes. When true, the
+    /// byte fast path must still reject invalid UTF-8 haystacks.
+    requires_valid_utf8: bool,
 }
 
 /// Each `(?:...)?` doubles the count and each `(a|b|c)` multiplies it,
@@ -1967,12 +1970,17 @@ impl LiteralPrefixCapture {
             return Err(core);
         }
         let allow_unicode_classes = core.info.config().get_utf8_empty();
-        let Some((prefixes, terminator)) =
+        let Some((prefixes, terminator, requires_valid_utf8)) =
             try_recognize_prefix_capture(hirs[0], allow_unicode_classes)
         else {
             return Err(core);
         };
-        Ok(LiteralPrefixCapture { core, prefixes, terminator })
+        Ok(LiteralPrefixCapture {
+            core,
+            prefixes,
+            terminator,
+            requires_valid_utf8,
+        })
     }
 
     /// Returns capture 1's byte offsets if the input matches, else `None`.
@@ -2020,6 +2028,10 @@ impl LiteralPrefixCapture {
                 .is_some()
             {
                 continue;
+            }
+            if self.requires_valid_utf8 && core::str::from_utf8(bytes).is_err()
+            {
+                return None;
             }
             return Some((cap_start, cap_end));
         }
@@ -2114,7 +2126,7 @@ impl Strategy for LiteralPrefixCapture {
 fn try_recognize_prefix_capture(
     hir: &Hir,
     allow_unicode_classes: bool,
-) -> Option<(Box<[Box<[u8]>]>, u8)> {
+) -> Option<(Box<[Box<[u8]>]>, u8, bool)> {
     let HirKind::Concat(parts) = hir.kind() else {
         return None;
     };
@@ -2139,7 +2151,8 @@ fn try_recognize_prefix_capture(
     if cap.index != 1 {
         return None;
     }
-    let terminator = capture_terminator_byte(&cap.sub, allow_unicode_classes)?;
+    let (terminator, capture_requires_utf8) =
+        capture_terminator_byte(&cap.sub, allow_unicode_classes)?;
 
     let HirKind::Literal(Literal(lit)) = iter.next()?.kind() else {
         return None;
@@ -2148,9 +2161,8 @@ fn try_recognize_prefix_capture(
         return None;
     }
 
-    if !is_dot_star(iter.next()?, allow_unicode_classes) {
-        return None;
-    }
+    let dot_star_requires_utf8 =
+        dot_star_requires_valid_utf8(iter.next()?, allow_unicode_classes)?;
 
     if !matches!(iter.next()?.kind(), HirKind::Look(Look::End)) {
         return None;
@@ -2168,7 +2180,8 @@ fn try_recognize_prefix_capture(
     let prefixes: Vec<Box<[u8]>> =
         deduped.into_iter().map(Vec::into_boxed_slice).collect();
 
-    Some((prefixes.into_boxed_slice(), terminator))
+    let requires_valid_utf8 = capture_requires_utf8 || dot_star_requires_utf8;
+    Some((prefixes.into_boxed_slice(), terminator, requires_valid_utf8))
 }
 
 /// Return all literal variants for one prefix segment in regex-priority
@@ -2238,7 +2251,7 @@ fn concat_prefix_variants(
 fn capture_terminator_byte(
     hir: &Hir,
     allow_unicode_classes: bool,
-) -> Option<u8> {
+) -> Option<(u8, bool)> {
     let HirKind::Repetition(rep) = hir.kind() else {
         return None;
     };
@@ -2252,17 +2265,26 @@ fn capture_terminator_byte(
 }
 
 /// `.*` for default-flag regexes: any byte except `\n`, zero or more, greedy.
-fn is_dot_star(hir: &Hir, allow_unicode_classes: bool) -> bool {
+fn dot_star_requires_valid_utf8(
+    hir: &Hir,
+    allow_unicode_classes: bool,
+) -> Option<bool> {
     let HirKind::Repetition(rep) = hir.kind() else {
-        return false;
+        return None;
     };
     if rep.min != 0 || rep.max.is_some() || !rep.greedy {
-        return false;
+        return None;
     }
     let HirKind::Class(class) = rep.sub.kind() else {
-        return false;
+        return None;
     };
-    single_excluded_ascii_byte(class, allow_unicode_classes) == Some(b'\n')
+    let (excluded, requires_valid_utf8) =
+        single_excluded_ascii_byte(class, allow_unicode_classes)?;
+    if excluded == b'\n' {
+        Some(requires_valid_utf8)
+    } else {
+        None
+    }
 }
 
 /// Returns `Some(b)` iff `class` matches every codepoint or byte except a
@@ -2271,7 +2293,7 @@ fn is_dot_star(hir: &Hir, allow_unicode_classes: bool) -> bool {
 fn single_excluded_ascii_byte(
     class: &Class,
     allow_unicode_classes: bool,
-) -> Option<u8> {
+) -> Option<(u8, bool)> {
     match class {
         Class::Unicode(uc) => {
             if !allow_unicode_classes {
@@ -2290,7 +2312,7 @@ fn single_excluded_ascii_byte(
             if gap_start != gap_end || gap_start > 0x7F {
                 return None;
             }
-            Some(gap_start as u8)
+            Some((gap_start as u8, true))
         }
         Class::Bytes(bc) => {
             let ranges = bc.ranges();
@@ -2306,7 +2328,7 @@ fn single_excluded_ascii_byte(
             if gap_start != gap_end || gap_start > 0x7F {
                 return None;
             }
-            Some(gap_start as u8)
+            Some((gap_start as u8, false))
         }
     }
 }
