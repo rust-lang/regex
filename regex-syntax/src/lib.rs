@@ -199,7 +199,8 @@ pub mod utf8;
 /// Escapes all regular expression meta characters in `text`.
 ///
 /// The string returned may be safely used as a literal in a regular
-/// expression.
+/// expression, including inside a verbose-mode group `(?x:...)` where
+/// unescaped ASCII whitespace would otherwise be ignored.
 pub fn escape(text: &str) -> String {
     let mut quoted = String::new();
     escape_into(text, &mut quoted);
@@ -209,14 +210,24 @@ pub fn escape(text: &str) -> String {
 /// Escapes all meta characters in `text` and writes the result into `buf`.
 ///
 /// This will append escape characters into the given buffer. The characters
-/// that are appended are safe to use as a literal in a regular expression.
+/// that are appended are safe to use as a literal in a regular expression,
+/// including inside verbose (`(?x)`) mode where unescaped whitespace is
+/// ignored.
 pub fn escape_into(text: &str, buf: &mut String) {
     buf.reserve(text.len());
     for c in text.chars() {
         if is_meta_character(c) {
             buf.push('\\');
+            buf.push(c);
+        } else if c.is_ascii_whitespace() {
+            // Whitespace is insignificant inside (?x) verbose mode, so we
+            // escape it with a hex literal to make the escaped string safe
+            // in all regex contexts.
+            use core::fmt::Write;
+            write!(buf, "\\x{:02X}", c as u32).unwrap();
+        } else {
+            buf.push(c);
         }
-        buf.push(c);
     }
 }
 
