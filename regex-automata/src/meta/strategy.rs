@@ -1215,9 +1215,10 @@ impl ReverseSuffix {
     ) -> Result<Option<HalfMatch>, RetryError> {
         let mut span = input.get_span();
         let mut min_start = 0;
+        let mut first: Option<HalfMatch> = None;
         loop {
             let litmatch = match self.pre.find(input.haystack(), span) {
-                None => return Ok(None),
+                None => break,
                 Some(span) => span,
             };
             trace!("reverse suffix scan found suffix match at {litmatch:?}");
@@ -1228,7 +1229,13 @@ impl ReverseSuffix {
             if let Some(hm) =
                 self.try_search_half_rev_limited(cache, &revinput, min_start)?
             {
-                return Ok(Some(hm));
+                // We only track the first half-match. We can never find a
+                // half-match with lower offset than the first half-match, it
+                // would mean quadratic behavior. We can only confirm this
+                // half-match or return a quadratic error.
+                if first.is_none() {
+                    first = Some(hm);
+                }
             }
 
             if span.start >= span.end {
@@ -1237,7 +1244,7 @@ impl ReverseSuffix {
             span.start = litmatch.start.checked_add(1).unwrap();
             min_start = litmatch.end;
         }
-        Ok(None)
+        Ok(first)
     }
 
     #[cfg_attr(feature = "perf-inline", inline(always))]
@@ -1623,9 +1630,10 @@ impl ReverseInner {
         let mut span = input.get_span();
         let mut min_match_start = 0;
         let mut min_pre_start = 0;
+        let mut first: Option<Match> = None;
         loop {
             let litmatch = match self.preinner.find(input.haystack(), span) {
-                None => return Ok(None),
+                None => break,
                 Some(span) => span,
             };
             if litmatch.start < min_pre_start {
@@ -1662,10 +1670,12 @@ impl ReverseInner {
                         span.start = litmatch.start.checked_add(1).unwrap();
                     }
                     Ok(hm_end) => {
-                        return Ok(Some(Match::new(
-                            hm_start.pattern(),
-                            hm_start.offset()..hm_end.offset(),
-                        )))
+                        if first.is_none() {
+                            first = Some(Match::new(
+                                hm_start.pattern(),
+                                hm_start.offset()..hm_end.offset(),
+                            ));
+                        }
                     }
                 }
             }
@@ -1676,7 +1686,7 @@ impl ReverseInner {
             span.start = litmatch.start.checked_add(1).unwrap();
             min_match_start = litmatch.end;
         }
-        Ok(None)
+        Ok(first)
     }
 
     #[cfg_attr(feature = "perf-inline", inline(always))]
