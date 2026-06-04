@@ -424,6 +424,14 @@ regex = '.abb|b'
 haystack = 'zzzabbz'
 matches = [[2, 6]]
 
+# See: https://github.com/rust-lang/regex/issues/1354
+[[test]]
+name = 'reverse-suffix-all-no-early-matches-010'
+regex = '.abb|b'
+haystack = 'xxfoobarbar'
+match-kind = 'all'
+matches = [[8, 9]]
+
 # See: https://github.com/BurntSushi/ripgrep/issues/1247
 [[test]]
 name = "stops"
