@@ -1882,8 +1882,11 @@ pub enum MatchErrorKind {
     /// When this error occurs with [`Anchored::Pattern`], then one common
     /// cause is that the underlying regex engine was built without support
     /// for anchored starting states for each pattern. For DFA engines, this
-    /// typically means enabling the `starts_for_each_pattern` configuration
-    /// option when building the searcher.
+    /// typically means enabling the
+    /// [`hybrid::dfa::Config::starts_for_each_pattern`](crate::hybrid::dfa::Config::starts_for_each_pattern)
+    /// or
+    /// [`dfa::dense::Config::starts_for_each_pattern`](crate::dfa::dense::Config::starts_for_each_pattern)
+    /// configuration option when building the searcher.
     ///
     /// Note that this error should not be returned by a regex engine simply
     /// because the pattern ID is invalid (i.e., equal to or exceeds the number
