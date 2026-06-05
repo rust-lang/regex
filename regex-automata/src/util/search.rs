@@ -1886,7 +1886,7 @@ pub enum MatchErrorKind {
     /// [`hybrid::dfa::Config::starts_for_each_pattern`](crate::hybrid::dfa::Config::starts_for_each_pattern)
     /// or
     /// [`dfa::dense::Config::starts_for_each_pattern`](crate::dfa::dense::Config::starts_for_each_pattern)
-    /// configuration option when building the searcher.
+    /// configuration option, depending on which regex engine is being built.
     ///
     /// Note that this error should not be returned by a regex engine simply
     /// because the pattern ID is invalid (i.e., equal to or exceeds the number
