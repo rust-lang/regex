@@ -3659,7 +3659,7 @@ impl<T: AsRef<[u32]>> TransitionTable<T> {
     fn as_ref(&self) -> TransitionTable<&'_ [u32]> {
         TransitionTable {
             table: self.table.as_ref(),
-            classes: self.classes.clone(),
+            classes: self.classes,
             stride2: self.stride2,
         }
     }
@@ -3669,7 +3669,7 @@ impl<T: AsRef<[u32]>> TransitionTable<T> {
     fn to_owned(&self) -> TransitionTable<alloc::vec::Vec<u32>> {
         TransitionTable {
             table: self.table.as_ref().to_vec(),
-            classes: self.classes.clone(),
+            classes: self.classes,
             stride2: self.stride2,
         }
     }
