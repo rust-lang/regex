@@ -364,6 +364,8 @@ The precise set of differences at the syntax level:
 
 * The Perl character classes are limited to ASCII codepoints. That is,
 `\d` is `[0-9]`, `\s` is `[\t\n\v\f\r ]` and `\w` is `[0-9A-Za-z_]`.
+* Word boundary assertions are also limited to ASCII codepoints. For example,
+`\b` is defined in terms of `\w` which is itself ASCII-only.
 * Unicode character classes of the form `\p{...}` and `\P{...}` are not
 supported at all. Note though that things like `[^β]` are still supported and
 will match any Unicode scalar value except for `β`.
