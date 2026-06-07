@@ -3,7 +3,7 @@ use core::{
     panic::{RefUnwindSafe, UnwindSafe},
 };
 
-use alloc::{borrow::Cow, format, sync::Arc, vec, vec::Vec};
+use alloc::{borrow::Cow, format, sync::Arc};
 
 use regex_syntax::hir::{literal, Hir};
 
@@ -11,7 +11,7 @@ use crate::{
     meta::{
         error::{BuildError, RetryError, RetryFailError, RetryQuadraticError},
         regex::{Cache, RegexInfo},
-        reverse_inner, wrappers,
+        reverse_inner, reverse_suffix, wrappers,
     },
     nfa::thompson::{self, WhichCaptures, NFA},
     util::{
@@ -1225,6 +1225,14 @@ impl ReverseSuffix {
             );
             return Err(core);
         }
+        if !reverse_suffix::has_no_earlier_match(hirs, &lcs) {
+            debug!(
+                "skipping reverse suffix optimization because \
+                 an earlier suffix match could be a complete match \
+                 inside of a larger match"
+            );
+            return Err(core);
+        }
         Ok(ReverseSuffix { core, pre })
     }
 
@@ -1595,6 +1603,16 @@ impl ReverseInner {
             // why we bailed out here.
             None => return Err(core),
         };
+        if !reverse_inner::has_no_earlier_match(
+            &prefilter.prefix,
+            &prefilter.literals,
+        ) {
+            debug!(
+                "skipping reverse inner optimization because an inner \
+                 literal match could be confirmed before an earlier match"
+            );
+            return Err(core);
+        }
         debug!("building reverse NFA for prefix before inner literal");
         let thompson_config = core
             .info
@@ -1927,17 +1945,27 @@ fn copy_match_to_slots(m: Match, slots: &mut [Option<NonMaxUsize>]) {
 
 // We only test which strategy we get when all literal features are enabled.
 // Other cases are less substantially less interesting.
+//
+// We also don't test this on miri since it takes forever.
+//
+// We also require `unicode-perl` since some regexes use `\w`, `\d` and `\s`.
 #[cfg(all(
     feature = "perf-literal-substring",
-    feature = "perf-literal-multisubstring"
+    feature = "perf-literal-multisubstring",
+    feature = "unicode-perl",
+    not(miri),
 ))]
 #[cfg(test)]
-mod which_strategy_tests {
-    use alloc::{format, string::String};
+mod tests {
+    use alloc::{format, string::String, vec::Vec};
 
     use crate::{meta::regex::Config, util::syntax};
 
     use super::*;
+
+    fn teddy_probably_available() -> bool {
+        cfg!(any(target_arch = "x86_64", target_arch = "aarch64"))
+    }
 
     #[track_caller]
     fn strategy_with(patterns: &[&str], config: Config) -> Arc<dyn Strategy> {
@@ -1979,7 +2007,12 @@ mod which_strategy_tests {
         assert_strategy("prefilter memchr2", &["a|b"]);
         assert_strategy("prefilter memchr3", &["a|b|c"]);
         assert_strategy("prefilter memmem", &["Sherlock"]);
-        assert_strategy("prefilter teddy", &["Samwise|Gandalf|Holmes|Watson"]);
+        if teddy_probably_available() {
+            assert_strategy(
+                "prefilter teddy",
+                &["Samwise|Gandalf|Holmes|Watson"],
+            );
+        }
     }
 
     #[test]
@@ -2121,21 +2154,48 @@ mod which_strategy_tests {
     #[test]
     fn reverse_suffix_accepts_prefix_without_internal_suffix() {
         assert_strategy("reverse suffix", &[r"\d+XYZ"]);
+        assert_strategy("reverse suffix", &[r"[a-q][^u-z]{13}x"]);
     }
 
     #[test]
-    fn reverse_suffix_accepts_guarded_internal_suffix() {
-        assert_strategy("reverse suffix", &[r"\b\w+nn\b"]);
+    fn reverse_suffix_rejects_internal_suffix_with_word_boundary() {
+        assert_strategy("core", &[r"\b\w+nn\b"]);
     }
 
     #[test]
-    fn reverse_suffix_accepts_safe_nfa_overlap() {
-        assert_strategy("reverse suffix", &[r"(a|aa)b"]);
+    fn reverse_suffix_accepts_disjoint_class_separator() {
+        assert_strategy("reverse suffix", &[r"\w+\s+Holmes"]);
+        assert_strategy("reverse suffix", &[r"\w+\d*\s+Holmes"]);
+        assert_strategy("reverse suffix", &[r"(?:\w+|[.-]+)+\s+Holmes"]);
+        assert_strategy("reverse suffix", &[r"\b\w+\s+Holmes"]);
+        assert_strategy("reverse suffix", &[r"\w+\sHolmes"]);
+        assert_strategy("reverse suffix", &[r"[a-z]+[0-9]+Holmes"]);
+        assert_strategy("reverse suffix", &[r"(\w+)(\s+)Holmes"]);
+        assert_strategy("reverse suffix", &[r"(?-u:[A-Za-z]+[0-9]+Holmes)"]);
     }
 
     #[test]
-    fn reverse_suffix_accepts_multiple_patterns_with_common_suffix() {
-        assert_strategy("reverse suffix", &[r"\d+XYZ", r"\w+XYZ"]);
+    fn reverse_suffix_class_separator_is_conservative() {
+        assert_strategy("core", &[r"\w+\w+Holmes"]);
+        assert_strategy("core", &[r"\w+\s*Holmes"]);
+        assert_strategy("core", &[r"[a-z]+[0-9a]+xyz"]);
+        assert_strategy("core", &[r"[a-z]+[0-9]+a1"]);
+        assert_strategy("core", &[r"(?:.abc)?[a]+[b]+c"]);
+    }
+
+    #[test]
+    fn reverse_suffix_rejects_safe_nfa_overlap() {
+        assert_strategy("reverse inner", &[r"(a|aa)b"]);
+    }
+
+    #[test]
+    fn reverse_suffix_accepts_fixed_length_prefix() {
+        assert_strategy("reverse suffix", &[r"[A-Z][0-9]XYZ"]);
+    }
+
+    #[test]
+    fn reverse_suffix_rejects_multiple_patterns_with_common_suffix() {
+        assert_strategy("core", &[r"\d+XYZ", r"\w+XYZ"]);
     }
 
     #[test]
@@ -2159,6 +2219,11 @@ mod which_strategy_tests {
     #[test]
     fn reverse_suffix_rejects_anchored_start() {
         assert_strategy("core", &[r"^\d+XYZ"]);
+    }
+
+    #[test]
+    fn reverse_suffix_rejects_variable_length_prefix() {
+        assert_strategy("core", &[r"(?:[A-Za-z]ab)?b"]);
     }
 
     #[test]
@@ -2186,19 +2251,71 @@ mod which_strategy_tests {
     }
 
     #[test]
+    fn reverse_suffix_rejects_multiple_patterns_when_first_looks_safe() {
+        assert_strategy("core", &[r"\d+b", r".bb|b"]);
+        assert_strategy("core", &[r"\d+b", r"ab"]);
+    }
+
+    #[test]
     fn reverse_suffix_rejects_unsafe_overlap() {
         assert_strategy("core", &[r".abb|b"]);
         assert_strategy("core", &[r".bb|b"]);
     }
 
     #[test]
-    fn reverse_inner_accepts_disjoint_inner_literal() {
-        assert_strategy("reverse inner", &[r"\w+@\w+"]);
+    fn reverse_suffix_rejects_fully_absorbed_literal() {
+        assert_strategy("core", &[r"(?:[a-wyz]{3}|[a-wyz]).b"]);
     }
 
     #[test]
-    fn reverse_inner_accepts_prefix_with_look_states() {
-        assert_strategy("reverse inner", &[r"\b\w+\s+Holmes\s+\w+\b"]);
+    fn reverse_suffix_rejects_disjoint_trailing_component() {
+        assert_strategy("core", &[r"(?:[ac-z]{2}b[ac-z])?[ac-z]b"]);
+    }
+
+    #[test]
+    fn reverse_suffix_rejects_internal_candidate_before_absorber() {
+        assert_strategy("core", &[r"(?:[a-z]cb|c)[a-z]*b"]);
+    }
+
+    #[test]
+    fn reverse_inner_accepts_disjoint_inner_literal() {
+        assert_strategy("reverse inner", &[r"\w+@\w+"]);
+        assert_strategy(
+            "reverse inner",
+            &[r"(?P<email>[.\pL]+@(?P<domain>[.\pL]+))"],
+        );
+    }
+
+    #[test]
+    fn reverse_inner_accepts_fixed_length_prefix() {
+        assert_strategy("reverse inner", &[r"[A-Z][0-9]@(foo|bar)"]);
+    }
+
+    #[test]
+    fn reverse_inner_accepts_disjoint_class_separator() {
+        assert_strategy("reverse inner", &[r"\w+\s+Holmes\s+\w+"]);
+        assert_strategy("reverse inner", &[r"\w+\d*\s+Holmes\s+\w+"]);
+        assert_strategy("reverse inner", &[r"\b\w+\s+Holmes\s+\w+"]);
+        if teddy_probably_available() {
+            assert_strategy(
+                "reverse inner",
+                &[r"\w+\s+(?:Holmes|Watson)\s+\w+"],
+            );
+        }
+    }
+
+    #[test]
+    fn reverse_inner_accepts_leading_disjoint_class_separator() {
+        assert_strategy("reverse inner", &[r"\s[A-Za-z]{0,12}ing\s"]);
+        assert_strategy("reverse inner", &[r"\s[A-Za-z]*ing\s"]);
+        assert_strategy("reverse inner", &[r"\b\s[A-Za-z]{0,12}ing\s"]);
+        assert_strategy("reverse inner", &[r"(\s)([A-Za-z]{0,12})ing\s"]);
+    }
+
+    #[test]
+    fn reverse_inner_leading_class_separator_is_conservative() {
+        assert_strategy("core", &[r"\s[\sA-Za-z]{0,12}ing\s"]);
+        assert_strategy("core", &[r"\s*[A-Za-z]{0,12}ing\s"]);
     }
 
     #[test]
@@ -2254,7 +2371,18 @@ mod which_strategy_tests {
     }
 
     #[test]
-    fn reverse_inner_rejects_absorbing_bounded_repeat() {
-        assert_strategy("core", &[r"[\s\S]{0,100}@\w+"]);
+    fn reverse_inner_rejects_literal_crossing_prefix_boundary() {
+        assert_strategy("core", &[r"(?:[ac-z]{3}|[ac-z])(?:aba|baa)"]);
+    }
+
+    #[test]
+    fn reverse_inner_rejects_internal_separator_alignment() {
+        assert_strategy("core", &[r"(?:.abc)?[a]+[b]+c.*"]);
+    }
+
+    #[test]
+    fn rebar_benchmarks() {
+        assert_strategy("reverse suffix", &[r"[a-z]shing"]);
+        assert_strategy("reverse suffix", &[r"[a-q][^u-z]{23}x"]);
     }
 }
