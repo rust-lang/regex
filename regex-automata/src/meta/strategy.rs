@@ -1,11 +1,15 @@
 use core::{
+    any::Any,
     fmt::Debug,
     panic::{RefUnwindSafe, UnwindSafe},
 };
 
 use alloc::{borrow::Cow, format, sync::Arc, vec, vec::Vec};
 
-use regex_syntax::hir::{literal, Hir};
+use regex_syntax::hir::{
+    literal::{self, Literal},
+    Class, Hir, HirKind, Look as HirLook,
+};
 
 use crate::{
     meta::{
@@ -1206,7 +1210,7 @@ impl ReverseSuffix {
             }
             Some(lcs) => lcs,
         };
-        let pre = match Prefilter::new(kind, &[lcs]) {
+        let pre = match Prefilter::new(kind, core::slice::from_ref(&lcs)) {
             Some(pre) => pre,
             None => {
                 debug!(
@@ -1225,7 +1229,274 @@ impl ReverseSuffix {
             );
             return Err(core);
         }
+        if !ReverseSuffix::is_early_return_safe(hirs, &lcs) {
+            debug!(
+                "skipping reverse suffix optimization because \
+                 an earlier suffix match could be a complete match \
+                 inside of a larger match"
+            );
+            return Err(core);
+        }
         Ok(ReverseSuffix { core, pre })
+    }
+
+    fn is_early_return_safe(hirs: &[&Hir], suffix: &[u8]) -> bool {
+        ReverseSuffixSafety::new(hirs, suffix)
+            .map_or(false, |safety| safety.is_early_return_safe())
+    }
+
+    fn strip_trailing_looks(hir: &Hir) -> Option<(Hir, Vec<HirLook>)> {
+        match hir.kind() {
+            HirKind::Capture(capture) => {
+                ReverseSuffix::strip_trailing_looks(&capture.sub)
+            }
+            HirKind::Concat(hirs) => {
+                let prefix_len = hirs
+                    .iter()
+                    .rposition(|hir| !matches!(hir.kind(), HirKind::Look(_)))
+                    .map_or(0, |i| i + 1);
+                let looks = hirs[prefix_len..]
+                    .iter()
+                    .filter_map(|hir| match hir.kind() {
+                        HirKind::Look(look) => Some(*look),
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>();
+                if looks.is_empty() {
+                    return None;
+                }
+                Some((Hir::concat(hirs[..prefix_len].to_vec()), looks))
+            }
+            HirKind::Look(look) => Some((Hir::empty(), vec![*look])),
+            _ => None,
+        }
+    }
+
+    fn hir_consumes_only_word(hir: &Hir, word: WordKind) -> bool {
+        match hir.kind() {
+            HirKind::Empty | HirKind::Look(_) => true,
+            HirKind::Literal(lit) => {
+                ReverseSuffix::literal_is_word(&lit.0, word)
+            }
+            HirKind::Class(Class::Bytes(cls)) => {
+                for range in cls.ranges() {
+                    for byte in range.start()..=range.end() {
+                        if !ReverseSuffix::byte_is_word(byte, word) {
+                            return false;
+                        }
+                    }
+                }
+                true
+            }
+            HirKind::Class(Class::Unicode(cls)) => {
+                for range in cls.ranges() {
+                    let start = u32::from(range.start());
+                    let end = u32::from(range.end());
+                    for cp in start..=end {
+                        let ch = match char::from_u32(cp) {
+                            None => continue,
+                            Some(ch) => ch,
+                        };
+                        if !ReverseSuffix::char_is_word(ch, word) {
+                            return false;
+                        }
+                    }
+                }
+                true
+            }
+            HirKind::Repetition(rep) => {
+                ReverseSuffix::hir_consumes_only_word(&rep.sub, word)
+            }
+            HirKind::Capture(capture) => {
+                ReverseSuffix::hir_consumes_only_word(&capture.sub, word)
+            }
+            HirKind::Concat(hirs) | HirKind::Alternation(hirs) => hirs
+                .iter()
+                .all(|hir| ReverseSuffix::hir_consumes_only_word(hir, word)),
+        }
+    }
+
+    fn look_word_kind(look: HirLook) -> Option<WordKind> {
+        match look {
+            HirLook::WordUnicode
+            | HirLook::WordEndUnicode
+            | HirLook::WordEndHalfUnicode
+            | HirLook::WordStartUnicode
+            | HirLook::WordStartHalfUnicode => Some(WordKind::Unicode),
+            HirLook::WordAscii
+            | HirLook::WordEndAscii
+            | HirLook::WordEndHalfAscii
+            | HirLook::WordStartAscii
+            | HirLook::WordStartHalfAscii => Some(WordKind::Ascii),
+            _ => None,
+        }
+    }
+
+    fn literal_is_word(lit: &[u8], word: WordKind) -> bool {
+        match word {
+            WordKind::Ascii => {
+                lit.iter().all(|&byte| regex_syntax::is_word_byte(byte))
+            }
+            WordKind::Unicode => core::str::from_utf8(lit)
+                .map_or(false, |s| {
+                    s.chars().all(|ch| ReverseSuffix::char_is_word(ch, word))
+                }),
+        }
+    }
+
+    fn byte_is_word(byte: u8, word: WordKind) -> bool {
+        match word {
+            WordKind::Ascii => regex_syntax::is_word_byte(byte),
+            WordKind::Unicode => {
+                byte.is_ascii() && regex_syntax::is_word_byte(byte)
+            }
+        }
+    }
+
+    fn char_is_word(ch: char, word: WordKind) -> bool {
+        match word {
+            WordKind::Ascii => {
+                ch.is_ascii()
+                    && regex_syntax::is_word_byte(u8::try_from(ch).unwrap())
+            }
+            WordKind::Unicode => {
+                regex_syntax::try_is_word_character(ch).unwrap_or(false)
+            }
+        }
+    }
+
+    fn strip_literal_suffix(hir: &Hir, suffix: &[u8]) -> Option<Hir> {
+        let (prefix, suffix_end) =
+            ReverseSuffix::strip_literal_suffix_at(hir, suffix, suffix.len())?;
+        if suffix_end == 0 {
+            Some(prefix)
+        } else {
+            None
+        }
+    }
+
+    /// Strip `suffix[..suffix_end]` from the end of `hir`.
+    ///
+    /// This peels a required literal suffix from right-to-left without
+    /// expanding repetitions. When it returns with a non-zero suffix end, the
+    /// returned HIR must not be able to consume anything. This permits callers
+    /// to continue stripping from the previous concatenation child while
+    /// preserving adjacency.
+    fn strip_literal_suffix_at(
+        hir: &Hir,
+        suffix: &[u8],
+        suffix_end: usize,
+    ) -> Option<(Hir, usize)> {
+        if suffix_end == 0 {
+            return Some((hir.clone(), 0));
+        }
+        match hir.kind() {
+            HirKind::Literal(lit) => {
+                let bytes = &lit.0;
+                let mut len = 0;
+                while len < bytes.len()
+                    && len < suffix_end
+                    && bytes[bytes.len() - len - 1]
+                        == suffix[suffix_end - len - 1]
+                {
+                    len += 1;
+                }
+                if len == 0 || (len < bytes.len() && len < suffix_end) {
+                    return None;
+                }
+                Some((
+                    Hir::literal(bytes[..bytes.len() - len].to_vec()),
+                    suffix_end - len,
+                ))
+            }
+            HirKind::Capture(capture) => {
+                ReverseSuffix::strip_literal_suffix_at(
+                    &capture.sub,
+                    suffix,
+                    suffix_end,
+                )
+            }
+            HirKind::Concat(hirs) => {
+                let mut prefix = hirs.to_vec();
+                let mut end = suffix_end;
+                for i in (0..prefix.len()).rev() {
+                    let before = end;
+                    let (stripped, after) =
+                        ReverseSuffix::strip_literal_suffix_at(
+                            &prefix[i], suffix, end,
+                        )?;
+                    if after == before {
+                        return None;
+                    }
+                    if after > 0
+                        && !ReverseSuffix::matches_empty_only(&stripped)
+                    {
+                        return None;
+                    }
+                    prefix[i] = stripped;
+                    end = after;
+                    if end == 0 {
+                        break;
+                    }
+                }
+                Some((Hir::concat(prefix), end))
+            }
+            HirKind::Repetition(rep) => {
+                ReverseSuffix::strip_repetition_literal_suffix(
+                    rep, suffix, suffix_end,
+                )
+            }
+            _ => None,
+        }
+    }
+
+    fn strip_repetition_literal_suffix(
+        rep: &regex_syntax::hir::Repetition,
+        suffix: &[u8],
+        suffix_end: usize,
+    ) -> Option<(Hir, usize)> {
+        let mut min = rep.min;
+        let mut max = rep.max;
+        let mut end = suffix_end;
+        let mut tail = Vec::new();
+        while end > 0 {
+            if min == 0 {
+                return None;
+            }
+            let before = end;
+            let (stripped, after) =
+                ReverseSuffix::strip_literal_suffix_at(&rep.sub, suffix, end)?;
+            if after == before {
+                return None;
+            }
+            min = min.saturating_sub(1);
+            max = max.map(|max| max.saturating_sub(1));
+            if after > 0 && !ReverseSuffix::matches_empty_only(&stripped) {
+                return None;
+            }
+            if !matches!(stripped.kind(), HirKind::Empty) {
+                tail.push(stripped);
+            }
+            end = after;
+        }
+
+        let rest = Hir::repetition(regex_syntax::hir::Repetition {
+            min,
+            max,
+            greedy: rep.greedy,
+            sub: rep.sub.clone(),
+        });
+        let mut prefix = Vec::with_capacity(tail.len() + 1);
+        if !matches!(rest.kind(), HirKind::Empty) {
+            prefix.push(rest);
+        }
+        tail.reverse();
+        prefix.extend(tail);
+        Some((Hir::concat(prefix), 0))
+    }
+
+    fn matches_empty_only(hir: &Hir) -> bool {
+        hir.properties().maximum_len() == Some(0)
     }
 
     #[cfg_attr(feature = "perf-inline", inline(always))]
@@ -1238,7 +1509,7 @@ impl ReverseSuffix {
         let mut min_start = 0;
         loop {
             let litmatch = match self.pre.find(input.haystack(), span) {
-                None => return Ok(None),
+                None => break,
                 Some(span) => span,
             };
             trace!("reverse suffix scan found suffix match at {litmatch:?}");
@@ -1246,17 +1517,16 @@ impl ReverseSuffix {
                 .clone()
                 .anchored(Anchored::Yes)
                 .span(input.start()..litmatch.end);
-            match self
-                .try_search_half_rev_limited(cache, &revinput, min_start)?
+            if let Some(hm) =
+                self.try_search_half_rev_limited(cache, &revinput, min_start)?
             {
-                None => {
-                    if span.start >= span.end {
-                        break;
-                    }
-                    span.start = litmatch.start.checked_add(1).unwrap();
-                }
-                Some(hm) => return Ok(Some(hm)),
+                return Ok(Some(hm));
             }
+
+            if span.start >= span.end {
+                break;
+            }
+            span.start = litmatch.start.checked_add(1).unwrap();
             min_start = litmatch.end;
         }
         Ok(None)
@@ -1311,6 +1581,589 @@ impl ReverseSuffix {
         } else {
             unreachable!("ReverseSuffix always has a DFA")
         }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+enum WordKind {
+    Ascii,
+    Unicode,
+}
+
+#[derive(Clone, Debug)]
+struct ReverseSuffixSafety<'a> {
+    hir: &'a Hir,
+    suffix: &'a [u8],
+    literals: LiteralSet<'a>,
+    prefix: Option<Hir>,
+}
+
+impl<'a> ReverseSuffixSafety<'a> {
+    fn new(hirs: &[&'a Hir], suffix: &'a [u8]) -> Option<Self> {
+        if hirs.len() != 1 || suffix.is_empty() {
+            return None;
+        }
+        let hir = hirs[0];
+        let prefix = ReverseSuffix::strip_literal_suffix(hir, suffix);
+        let literals = LiteralSet::one(suffix);
+        Some(ReverseSuffixSafety { hir, suffix, literals, prefix })
+    }
+
+    fn is_early_return_safe(&self) -> bool {
+        let fixed_length = self.has_fixed_length_prefix();
+        debug!("reverse suffix has fixed length prefix? {fixed_length}");
+        if fixed_length {
+            return true;
+        }
+
+        let disjoint_trailing = self.has_disjoint_trailing_prefix();
+        debug!(
+            "reverse suffix has disjoint trailing prefix? {disjoint_trailing}"
+        );
+        if disjoint_trailing {
+            return true;
+        }
+
+        let absorbing = self.has_absorbing_prefix();
+        debug!("reverse suffix has absorbing prefix? {absorbing}");
+        if absorbing {
+            return true;
+        }
+
+        let guarded = self.has_guarded_internal_suffix();
+        debug!("reverse suffix has guarded internal suffix? {guarded}");
+        if guarded {
+            return true;
+        }
+
+        let internal = self.has_internal_suffix().unwrap_or(true);
+        debug!("reverse suffix has internal suffix? {internal}");
+        !internal
+    }
+
+    fn prefix(&self) -> Option<&Hir> {
+        self.prefix.as_ref()
+    }
+
+    fn has_internal_suffix(&self) -> Option<bool> {
+        let prefix = self.prefix()?;
+        Some(!PrefixSafety::hir_cannot_contain_literals(
+            prefix,
+            &self.literals,
+        ))
+    }
+
+    fn has_fixed_length_prefix(&self) -> bool {
+        self.prefix().map_or(false, PrefixSafety::hir_has_fixed_length)
+    }
+
+    fn has_disjoint_trailing_prefix(&self) -> bool {
+        self.prefix().map_or(false, |prefix| {
+            PrefixSafety::has_disjoint_trailing_prefix(prefix, &self.literals)
+        })
+    }
+
+    fn has_absorbing_prefix(&self) -> bool {
+        self.prefix().map_or(false, |prefix| {
+            PrefixSafety::has_absorbing_prefix(prefix, &self.literals)
+        })
+    }
+
+    fn has_guarded_internal_suffix(&self) -> bool {
+        let (core, looks) = match ReverseSuffix::strip_trailing_looks(self.hir)
+        {
+            None => return false,
+            Some(x) => x,
+        };
+        let word = match looks
+            .iter()
+            .find_map(|&look| ReverseSuffix::look_word_kind(look))
+        {
+            None => return false,
+            Some(word) => word,
+        };
+        if !ReverseSuffix::literal_is_word(self.suffix, word) {
+            return false;
+        }
+        let prefix =
+            match ReverseSuffix::strip_literal_suffix(&core, self.suffix) {
+                None => return false,
+                Some(prefix) => prefix,
+            };
+        ReverseSuffix::hir_consumes_only_word(&prefix, word)
+    }
+}
+
+#[derive(Clone, Debug)]
+struct LiteralSet<'a> {
+    lits: Vec<&'a [u8]>,
+}
+
+impl<'a> LiteralSet<'a> {
+    fn one(lit: &'a [u8]) -> LiteralSet<'a> {
+        LiteralSet { lits: vec![lit] }
+    }
+
+    fn many(lits: &'a [Literal]) -> LiteralSet<'a> {
+        LiteralSet { lits: lits.iter().map(|lit| lit.as_bytes()).collect() }
+    }
+
+    fn is_empty(&self) -> bool {
+        self.lits.is_empty()
+    }
+
+    fn any_empty(&self) -> bool {
+        self.lits.iter().any(|lit| lit.is_empty())
+    }
+
+    fn all_empty(&self) -> bool {
+        self.lits.iter().all(|lit| lit.is_empty())
+    }
+
+    fn without_empty(&self) -> LiteralSet<'a> {
+        LiteralSet {
+            lits: self
+                .lits
+                .iter()
+                .copied()
+                .filter(|lit| !lit.is_empty())
+                .collect(),
+        }
+    }
+
+    fn all(&self, mut predicate: impl FnMut(&[u8]) -> bool) -> bool {
+        self.lits.iter().copied().all(|lit| predicate(lit))
+    }
+
+    fn strip_first_units(&self, absorber: &Hir) -> Option<LiteralSet<'a>> {
+        let mut lits = Vec::with_capacity(self.lits.len());
+        for &lit in self.lits.iter() {
+            let len =
+                PrefixSafety::absorber_covers_first_unit_len(absorber, lit)?;
+            lits.push(&lit[len..]);
+        }
+        Some(LiteralSet { lits })
+    }
+}
+
+/// Cheap HIR proofs that literal candidate order is compatible with regex
+/// match order.
+///
+/// The reverse suffix and reverse inner strategies both scan for a required
+/// literal before confirming the surrounding regex. These proofs are all
+/// conservative. If they cannot establish that the first confirmed candidate
+/// is the match the regex engine would report, then the corresponding reverse
+/// strategy is not used.
+struct PrefixSafety;
+
+impl PrefixSafety {
+    fn is_safe(prefix: &Hir, literals: &LiteralSet<'_>) -> bool {
+        if literals.is_empty() || literals.any_empty() {
+            return false;
+        }
+        PrefixSafety::hir_cannot_contain_literals(prefix, literals)
+            || PrefixSafety::hir_has_fixed_length(prefix)
+            || PrefixSafety::has_disjoint_trailing_prefix(prefix, literals)
+            || PrefixSafety::has_disjoint_nullable_trailing_prefix(
+                prefix, literals,
+            )
+            || PrefixSafety::has_absorbing_prefix(prefix, literals)
+    }
+
+    fn is_safe_after_absorption(
+        prefix: &Hir,
+        literals: &LiteralSet<'_>,
+    ) -> bool {
+        if literals.all_empty() {
+            return true;
+        }
+        if literals.any_empty() {
+            return PrefixSafety::is_safe(prefix, &literals.without_empty());
+        }
+        PrefixSafety::is_safe(prefix, literals)
+    }
+
+    /// Return true when `hir` cannot match any string containing every byte in
+    /// each literal.
+    ///
+    /// This is deliberately low precision. If every byte in a literal can be
+    /// consumed somewhere in the HIR, this gives up and reports that the
+    /// literal might occur internally.
+    fn hir_cannot_contain_literals(
+        hir: &Hir,
+        literals: &LiteralSet<'_>,
+    ) -> bool {
+        literals.all(|lit| {
+            !lit.is_empty()
+                && lit.iter().any(|&byte| {
+                    !PrefixSafety::hir_can_consume_byte(hir, byte)
+                })
+        })
+    }
+
+    fn hir_has_fixed_length(hir: &Hir) -> bool {
+        let props = hir.properties();
+        props.minimum_len().is_some()
+            && props.minimum_len() == props.maximum_len()
+    }
+
+    /// Return true when the literals are preceded by a required component that
+    /// cannot consume any byte from any of the literals.
+    ///
+    /// This is enough to prove that an earlier occurrence of a literal inside
+    /// the prefix cannot be the match to report. Any actual full match ending
+    /// at a later literal must pass through this required component
+    /// immediately before it, and that component acts as a separator from the
+    /// prior prefix.
+    fn has_disjoint_trailing_prefix(
+        prefix: &Hir,
+        literals: &LiteralSet<'_>,
+    ) -> bool {
+        let component = match PrefixSafety::trailing_required_component(prefix)
+        {
+            None => return false,
+            Some(component) => component,
+        };
+        literals.all(|lit| {
+            lit.iter().all(|&byte| {
+                !PrefixSafety::hir_can_consume_byte(component, byte)
+            })
+        })
+    }
+
+    /// Return the final required component in `hir`.
+    ///
+    /// Empty HIRs and look-around assertions consume nothing, so they may be
+    /// skipped at the very end. Nullable consuming HIRs are not skipped: if a
+    /// nullable component sits between the required component and the literal,
+    /// then that nullable component might itself consume part of the literal.
+    fn trailing_required_component(hir: &Hir) -> Option<&Hir> {
+        match hir.kind() {
+            HirKind::Capture(capture) => {
+                PrefixSafety::trailing_required_component(&capture.sub)
+            }
+            HirKind::Concat(hirs) => {
+                let last = hirs.iter().rev().find(|hir| {
+                    !matches!(hir.kind(), HirKind::Empty | HirKind::Look(_))
+                })?;
+                PrefixSafety::trailing_required_component(last)
+            }
+            HirKind::Empty | HirKind::Look(_) => None,
+            _ if hir
+                .properties()
+                .minimum_len()
+                .map_or(false, |len| len > 0) =>
+            {
+                Some(hir)
+            }
+            _ => None,
+        }
+    }
+
+    fn has_absorbing_prefix(prefix: &Hir, literals: &LiteralSet<'_>) -> bool {
+        if let Some(absorber) = PrefixSafety::trailing_absorber(prefix) {
+            if literals.all(|lit| {
+                PrefixSafety::absorber_covers_literal(absorber, lit)
+            }) && PrefixSafety::absorber_covers_hir(absorber, prefix)
+            {
+                return true;
+            }
+        }
+        let (rest, absorber) =
+            match PrefixSafety::split_trailing_unit_absorber(prefix) {
+                None => return false,
+                Some(x) => x,
+            };
+        let literals = match literals.strip_first_units(&absorber) {
+            None => return false,
+            Some(literals) => literals,
+        };
+        PrefixSafety::is_safe_after_absorption(&rest, &literals)
+    }
+
+    /// Return true when the prefix ends with a nullable component that cannot
+    /// begin consuming any of the required literals, and the rest of the
+    /// prefix is safe.
+    ///
+    /// This lets the reverse inner proof look through things like `\s*` in
+    /// `\w+\s*Holmes`: the optional spaces cannot consume the `H`, so they
+    /// cannot be responsible for an internal `Holmes` occurrence.
+    fn has_disjoint_nullable_trailing_prefix(
+        prefix: &Hir,
+        literals: &LiteralSet<'_>,
+    ) -> bool {
+        let (rest, tail) = match PrefixSafety::split_trailing_component(prefix)
+        {
+            None => return false,
+            Some(x) => x,
+        };
+        if !tail.properties().minimum_len().map_or(false, |len| len == 0) {
+            return false;
+        }
+        if !literals.all(|lit| {
+            lit.first().map_or(false, |&byte| {
+                !PrefixSafety::hir_can_consume_byte(&tail, byte)
+            })
+        }) {
+            return false;
+        }
+        PrefixSafety::is_safe(&rest, literals)
+    }
+
+    /// Return a trailing unbounded repetition body that can absorb more input.
+    ///
+    /// This intentionally only recognizes single-unit character classes as
+    /// absorbers. For example, the `\pL` in `\pL{50,}ABC` qualifies, but an
+    /// arbitrary repeated sub-expression does not. That keeps the proof
+    /// simple: once the prefix has reached this repetition, every extra unit
+    /// accepted by the absorber can be folded into the same match.
+    fn trailing_absorber(hir: &Hir) -> Option<&Hir> {
+        match hir.kind() {
+            HirKind::Repetition(rep) if rep.max.is_none() => {
+                PrefixSafety::unit_absorber(&rep.sub)
+            }
+            HirKind::Capture(capture) => {
+                PrefixSafety::trailing_absorber(&capture.sub)
+            }
+            HirKind::Concat(hirs) => hirs
+                .iter()
+                .rev()
+                .find(|hir| !matches!(hir.kind(), HirKind::Empty))
+                .and_then(PrefixSafety::trailing_absorber),
+            HirKind::Alternation(hirs) => {
+                let mut alts = hirs.iter();
+                let first = PrefixSafety::trailing_absorber(alts.next()?)?;
+                if alts.all(|hir| {
+                    PrefixSafety::trailing_absorber(hir)
+                        .map_or(false, |absorber| absorber == first)
+                }) {
+                    Some(first)
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }
+    }
+
+    fn split_trailing_unit_absorber(hir: &Hir) -> Option<(Hir, Hir)> {
+        if PrefixSafety::unit_absorber(hir).is_some() {
+            return Some((Hir::empty(), hir.clone()));
+        }
+        match hir.kind() {
+            HirKind::Repetition(rep) => {
+                let absorber = PrefixSafety::unit_absorber(&rep.sub)?;
+                if rep.max == Some(0) {
+                    return None;
+                }
+                let rest = PrefixSafety::decrement_repetition(rep);
+                Some((rest, absorber.clone()))
+            }
+            HirKind::Concat(hirs) => {
+                let (last, init) = hirs.split_last()?;
+                let (last_rest, absorber) =
+                    PrefixSafety::split_trailing_unit_absorber(last)?;
+                let mut rest = init.to_vec();
+                if !matches!(last_rest.kind(), HirKind::Empty) {
+                    rest.push(last_rest);
+                }
+                Some((Hir::concat(rest), absorber))
+            }
+            HirKind::Capture(capture) => {
+                let (rest, absorber) =
+                    PrefixSafety::split_trailing_unit_absorber(&capture.sub)?;
+                Some((rest, absorber))
+            }
+            HirKind::Alternation(hirs) => {
+                let mut rests = Vec::with_capacity(hirs.len());
+                let mut absorber = None;
+                for hir in hirs.iter() {
+                    let (rest, got) =
+                        PrefixSafety::split_trailing_unit_absorber(hir)?;
+                    if absorber.as_ref().map_or(false, |set| set != &got) {
+                        return None;
+                    }
+                    absorber = Some(got);
+                    rests.push(rest);
+                }
+                Some((Hir::alternation(rests), absorber?))
+            }
+            _ => None,
+        }
+    }
+
+    fn split_trailing_component(hir: &Hir) -> Option<(Hir, Hir)> {
+        match hir.kind() {
+            HirKind::Capture(capture) => {
+                PrefixSafety::split_trailing_component(&capture.sub)
+            }
+            HirKind::Concat(hirs) => {
+                let (last, init) = hirs.split_last()?;
+                if matches!(last.kind(), HirKind::Empty | HirKind::Look(_)) {
+                    return None;
+                }
+                Some((Hir::concat(init.to_vec()), last.clone()))
+            }
+            HirKind::Empty | HirKind::Look(_) => None,
+            _ => Some((Hir::empty(), hir.clone())),
+        }
+    }
+
+    fn decrement_repetition(rep: &regex_syntax::hir::Repetition) -> Hir {
+        let max = rep.max.map(|max| max.saturating_sub(1));
+        if max == Some(0) {
+            return Hir::empty();
+        }
+        Hir::repetition(regex_syntax::hir::Repetition {
+            min: rep.min.saturating_sub(1),
+            max,
+            greedy: rep.greedy,
+            sub: rep.sub.clone(),
+        })
+    }
+
+    /// Return a single input unit that can be repeated as an absorber.
+    fn unit_absorber(hir: &Hir) -> Option<&Hir> {
+        match hir.kind() {
+            HirKind::Class(_) => Some(hir),
+            HirKind::Capture(capture) => {
+                PrefixSafety::unit_absorber(&capture.sub)
+            }
+            _ => None,
+        }
+    }
+
+    fn absorber_covers_first_unit_len(
+        absorber: &Hir,
+        literal: &[u8],
+    ) -> Option<usize> {
+        match absorber.kind() {
+            HirKind::Class(Class::Bytes(cls)) => {
+                let &byte = literal.first()?;
+                PrefixSafety::byte_class_contains(cls, byte).then_some(1)
+            }
+            HirKind::Class(Class::Unicode(cls)) => {
+                let mut chars = match core::str::from_utf8(literal) {
+                    Err(_) => return None,
+                    Ok(s) => s.chars(),
+                };
+                let ch = match chars.next() {
+                    None => return None,
+                    Some(ch) => ch,
+                };
+                PrefixSafety::unicode_class_contains(cls, ch)
+                    .then_some(ch.len_utf8())
+            }
+            _ => None,
+        }
+    }
+
+    /// Return true when every unit consumed by `hir` is accepted by
+    /// `absorber`.
+    ///
+    /// This is a byte/character coverage check, not a language equivalence
+    /// check. It is only used after `trailing_absorber` has found an
+    /// unbounded class repetition at the end of the prefix.
+    fn absorber_covers_hir(absorber: &Hir, hir: &Hir) -> bool {
+        if absorber == hir {
+            return true;
+        }
+        match hir.kind() {
+            HirKind::Empty => true,
+            HirKind::Literal(lit) => {
+                PrefixSafety::absorber_covers_literal(absorber, &lit.0)
+            }
+            HirKind::Class(cls) => {
+                PrefixSafety::absorber_covers_class(absorber, cls)
+            }
+            HirKind::Repetition(rep) => {
+                PrefixSafety::absorber_covers_hir(absorber, &rep.sub)
+            }
+            HirKind::Capture(capture) => {
+                PrefixSafety::absorber_covers_hir(absorber, &capture.sub)
+            }
+            HirKind::Concat(hirs) | HirKind::Alternation(hirs) => hirs
+                .iter()
+                .all(|hir| PrefixSafety::absorber_covers_hir(absorber, hir)),
+            HirKind::Look(_) => false,
+        }
+    }
+
+    fn absorber_covers_literal(absorber: &Hir, literal: &[u8]) -> bool {
+        match absorber.kind() {
+            HirKind::Class(Class::Bytes(cls)) => literal
+                .iter()
+                .all(|&byte| PrefixSafety::byte_class_contains(cls, byte)),
+            HirKind::Class(Class::Unicode(cls)) => {
+                core::str::from_utf8(literal).map_or(false, |s| {
+                    s.chars().all(|ch| {
+                        PrefixSafety::unicode_class_contains(cls, ch)
+                    })
+                })
+            }
+            _ => false,
+        }
+    }
+
+    fn absorber_covers_class(absorber: &Hir, class: &Class) -> bool {
+        match (absorber.kind(), class) {
+            (HirKind::Class(Class::Bytes(absorber)), Class::Bytes(cls)) => {
+                cls.ranges().iter().all(|range| {
+                    (range.start()..=range.end()).all(|byte| {
+                        PrefixSafety::byte_class_contains(absorber, byte)
+                    })
+                })
+            }
+            (
+                HirKind::Class(Class::Unicode(absorber)),
+                Class::Unicode(cls),
+            ) => absorber == cls,
+            _ => false,
+        }
+    }
+
+    fn hir_can_consume_byte(hir: &Hir, byte: u8) -> bool {
+        match hir.kind() {
+            HirKind::Empty | HirKind::Look(_) => false,
+            HirKind::Literal(lit) => lit.0.contains(&byte),
+            HirKind::Class(Class::Bytes(cls)) => {
+                PrefixSafety::byte_class_contains(cls, byte)
+            }
+            HirKind::Class(Class::Unicode(cls)) => {
+                if byte > 0x7F {
+                    return true;
+                }
+                let ch = char::from(byte);
+                PrefixSafety::unicode_class_contains(cls, ch)
+            }
+            HirKind::Repetition(rep) => {
+                PrefixSafety::hir_can_consume_byte(&rep.sub, byte)
+            }
+            HirKind::Capture(capture) => {
+                PrefixSafety::hir_can_consume_byte(&capture.sub, byte)
+            }
+            HirKind::Concat(hirs) | HirKind::Alternation(hirs) => hirs
+                .iter()
+                .any(|hir| PrefixSafety::hir_can_consume_byte(hir, byte)),
+        }
+    }
+
+    fn byte_class_contains(
+        cls: &regex_syntax::hir::ClassBytes,
+        byte: u8,
+    ) -> bool {
+        cls.ranges()
+            .iter()
+            .any(|range| range.start() <= byte && byte <= range.end())
+    }
+
+    fn unicode_class_contains(
+        cls: &regex_syntax::hir::ClassUnicode,
+        ch: char,
+    ) -> bool {
+        cls.ranges()
+            .iter()
+            .any(|range| range.start() <= ch && ch <= range.end())
     }
 }
 
@@ -1590,12 +2443,22 @@ impl ReverseInner {
                  use reverse inner prefilter"
             );
         }
-        let (concat_prefix, preinner) = match reverse_inner::extract(hirs) {
-            Some(x) => x,
-            // N.B. the 'extract' function emits debug messages explaining
+        let prefilter = match reverse_inner::InnerPrefilter::new(hirs) {
+            Some(prefilter) => prefilter,
+            // N.B. the 'new' function emits debug messages explaining
             // why we bailed out here.
             None => return Err(core),
         };
+        if !ReverseInner::is_early_return_safe(
+            &prefilter.prefix,
+            &prefilter.literals,
+        ) {
+            debug!(
+                "skipping reverse inner optimization because an inner \
+                 literal match could be confirmed before an earlier match"
+            );
+            return Err(core);
+        }
         debug!("building reverse NFA for prefix before inner literal");
         let thompson_config = core
             .info
@@ -1605,7 +2468,7 @@ impl ReverseInner {
             .which_captures(WhichCaptures::None);
         let result = thompson::Compiler::new()
             .configure(thompson_config)
-            .build_from_hir(&concat_prefix);
+            .build_from_hir(&prefilter.prefix);
         let nfarev = match result {
             Ok(nfarev) => nfarev,
             Err(_err) => {
@@ -1634,7 +2497,67 @@ impl ReverseInner {
         } else {
             wrappers::ReverseHybrid::new(&core.info, &nfarev)
         };
-        Ok(ReverseInner { core, preinner, nfarev, hybrid, dfa })
+        Ok(ReverseInner { core, preinner: prefilter.pre, nfarev, hybrid, dfa })
+    }
+
+    fn is_early_return_safe(
+        concat_prefix: &Hir,
+        inner_literals: &[Literal],
+    ) -> bool {
+        let literals = LiteralSet::many(inner_literals);
+        if literals.is_empty() || literals.any_empty() {
+            debug!(
+                "reverse inner is not early return safe because \
+                 no non-empty inner literals were found"
+            );
+            return false;
+        }
+        let prefix_cannot_contain = PrefixSafety::hir_cannot_contain_literals(
+            concat_prefix,
+            &literals,
+        );
+        debug!(
+            "reverse inner prefix cannot contain inner literals? \
+             {prefix_cannot_contain}"
+        );
+        if prefix_cannot_contain {
+            return true;
+        }
+
+        let fixed_length = PrefixSafety::hir_has_fixed_length(concat_prefix);
+        debug!("reverse inner has fixed length prefix? {fixed_length}");
+        if fixed_length {
+            return true;
+        }
+
+        let disjoint_trailing = PrefixSafety::has_disjoint_trailing_prefix(
+            concat_prefix,
+            &literals,
+        );
+        debug!(
+            "reverse inner has disjoint trailing prefix? {disjoint_trailing}"
+        );
+        if disjoint_trailing {
+            return true;
+        }
+
+        let disjoint_nullable_trailing =
+            PrefixSafety::has_disjoint_nullable_trailing_prefix(
+                concat_prefix,
+                &literals,
+            );
+        debug!(
+            "reverse inner has disjoint nullable trailing prefix? \
+             {disjoint_nullable_trailing}"
+        );
+        if disjoint_nullable_trailing {
+            return true;
+        }
+
+        let absorbing =
+            PrefixSafety::has_absorbing_prefix(concat_prefix, &literals);
+        debug!("reverse inner has absorbing prefix? {absorbing}");
+        absorbing
     }
 
     #[cfg_attr(feature = "perf-inline", inline(always))]
@@ -1648,7 +2571,7 @@ impl ReverseInner {
         let mut min_pre_start = 0;
         loop {
             let litmatch = match self.preinner.find(input.haystack(), span) {
-                None => return Ok(None),
+                None => break,
                 Some(span) => span,
             };
             if litmatch.start < min_pre_start {
@@ -1670,37 +2593,33 @@ impl ReverseInner {
             // reverse scan goes past the minimum start point. That is, the
             // literal search might not, but the reverse regex search for the
             // prefix might!
-            match self.try_search_half_rev_limited(
+            if let Some(hm_start) = self.try_search_half_rev_limited(
                 cache,
                 &revinput,
                 min_match_start,
             )? {
-                None => {
-                    if span.start >= span.end {
-                        break;
+                let fwdinput = input
+                    .clone()
+                    .anchored(Anchored::Pattern(hm_start.pattern()))
+                    .span(hm_start.offset()..input.end());
+                match self.try_search_half_fwd_stopat(cache, &fwdinput)? {
+                    Err(stopat) => {
+                        min_pre_start = stopat;
+                        span.start = litmatch.start.checked_add(1).unwrap();
                     }
-                    span.start = litmatch.start.checked_add(1).unwrap();
-                }
-                Some(hm_start) => {
-                    let fwdinput = input
-                        .clone()
-                        .anchored(Anchored::Pattern(hm_start.pattern()))
-                        .span(hm_start.offset()..input.end());
-                    match self.try_search_half_fwd_stopat(cache, &fwdinput)? {
-                        Err(stopat) => {
-                            min_pre_start = stopat;
-                            span.start =
-                                litmatch.start.checked_add(1).unwrap();
-                        }
-                        Ok(hm_end) => {
-                            return Ok(Some(Match::new(
-                                hm_start.pattern(),
-                                hm_start.offset()..hm_end.offset(),
-                            )))
-                        }
+                    Ok(hm_end) => {
+                        return Ok(Some(Match::new(
+                            hm_start.pattern(),
+                            hm_start.offset()..hm_end.offset(),
+                        )));
                     }
                 }
             }
+
+            if span.start >= span.end {
+                break;
+            }
+            span.start = litmatch.start.checked_add(1).unwrap();
             min_match_start = litmatch.end;
         }
         Ok(None)
@@ -1886,7 +2805,7 @@ impl Strategy for ReverseInner {
         };
         trace!(
             "match found at {}..{} in capture search, \
-		  	 using another engine to find captures",
+             using another engine to find captures",
             m.start(),
             m.end(),
         );
@@ -1932,9 +2851,12 @@ fn copy_match_to_slots(m: Match, slots: &mut [Option<NonMaxUsize>]) {
 
 // We only test which strategy we get when all literal features are enabled.
 // Other cases are less substantially less interesting.
+//
+// We also don't test this on miri since it takes forever.
 #[cfg(all(
     feature = "perf-literal-substring",
-    feature = "perf-literal-multisubstring"
+    feature = "perf-literal-multisubstring",
+    not(miri),
 ))]
 #[cfg(test)]
 mod which_strategy_tests {
@@ -1943,6 +2865,10 @@ mod which_strategy_tests {
     use crate::{meta::regex::Config, util::syntax};
 
     use super::*;
+
+    fn teddy_available() -> bool {
+        cfg!(any(target_arch = "x86_64", target_arch = "aarch64"))
+    }
 
     #[track_caller]
     fn strategy_with(patterns: &[&str], config: Config) -> Arc<dyn Strategy> {
@@ -1967,6 +2893,48 @@ mod which_strategy_tests {
         assert_eq!(name, strategy.name().as_ref());
     }
 
+    #[track_caller]
+    fn assert_absorbing_prefix(yes: bool, pattern: &str, suffix: &[u8]) {
+        let hirs = syntax::parse_many(&[pattern]).unwrap();
+        let hirs: Vec<&Hir> = hirs.iter().collect();
+        let safety = ReverseSuffixSafety::new(&hirs, suffix);
+        assert_eq!(yes, safety.map_or(false, |s| s.has_absorbing_prefix()));
+    }
+
+    #[track_caller]
+    fn assert_fixed_length_prefix(yes: bool, pattern: &str, suffix: &[u8]) {
+        let hirs = syntax::parse_many(&[pattern]).unwrap();
+        let hirs: Vec<&Hir> = hirs.iter().collect();
+        let safety = ReverseSuffixSafety::new(&hirs, suffix);
+        assert_eq!(yes, safety.map_or(false, |s| s.has_fixed_length_prefix()));
+    }
+
+    #[track_caller]
+    fn assert_disjoint_trailing_prefix(
+        yes: bool,
+        pattern: &str,
+        suffix: &[u8],
+    ) {
+        let hirs = syntax::parse_many(&[pattern]).unwrap();
+        let hirs: Vec<&Hir> = hirs.iter().collect();
+        let safety = ReverseSuffixSafety::new(&hirs, suffix);
+        assert_eq!(
+            yes,
+            safety.map_or(false, |s| s.has_disjoint_trailing_prefix())
+        );
+    }
+
+    #[track_caller]
+    fn assert_internal_suffix(yes: bool, pattern: &str, suffix: &[u8]) {
+        let hirs = syntax::parse_many(&[pattern]).unwrap();
+        let hirs: Vec<&Hir> = hirs.iter().collect();
+        let safety = ReverseSuffixSafety::new(&hirs, suffix);
+        assert_eq!(
+            yes,
+            safety.and_then(|s| s.has_internal_suffix()).unwrap_or(true)
+        );
+    }
+
     fn literal_alternation(count: usize) -> String {
         let mut pattern = String::new();
         for i in 0..count {
@@ -1984,7 +2952,12 @@ mod which_strategy_tests {
         assert_strategy("prefilter memchr2", &["a|b"]);
         assert_strategy("prefilter memchr3", &["a|b|c"]);
         assert_strategy("prefilter memmem", &["Sherlock"]);
-        assert_strategy("prefilter teddy", &["Samwise|Gandalf|Holmes|Watson"]);
+        if teddy_available() {
+            assert_strategy(
+                "prefilter teddy",
+                &["Samwise|Gandalf|Holmes|Watson"],
+            );
+        }
     }
 
     #[test]
@@ -2125,7 +3098,10 @@ mod which_strategy_tests {
 
     #[test]
     fn reverse_suffix_accepts_prefix_without_internal_suffix() {
+        assert_internal_suffix(false, r"\d+XYZ", b"XYZ");
+        assert_internal_suffix(false, r"[a-q][^u-z]{13}x", b"x");
         assert_strategy("reverse suffix", &[r"\d+XYZ"]);
+        assert_strategy("reverse suffix", &[r"[a-q][^u-z]{13}x"]);
     }
 
     #[test]
@@ -2134,13 +3110,107 @@ mod which_strategy_tests {
     }
 
     #[test]
-    fn reverse_suffix_accepts_safe_nfa_overlap() {
-        assert_strategy("reverse suffix", &[r"(a|aa)b"]);
+    fn reverse_suffix_rejects_safe_nfa_overlap() {
+        assert_strategy("reverse inner", &[r"(a|aa)b"]);
     }
 
     #[test]
-    fn reverse_suffix_accepts_multiple_patterns_with_common_suffix() {
-        assert_strategy("reverse suffix", &[r"\d+XYZ", r"\w+XYZ"]);
+    fn reverse_suffix_accepts_single_unit_absorbing_prefix() {
+        assert_internal_suffix(true, r".y", b"y");
+        assert_absorbing_prefix(true, r".y", b"y");
+        assert_strategy("reverse suffix", &[r".y"]);
+        assert_internal_suffix(true, r".yy", b"yy");
+        assert_absorbing_prefix(true, r".yy", b"yy");
+        assert_strategy("reverse suffix", &[r".yy"]);
+    }
+
+    #[test]
+    fn reverse_suffix_accepts_fixed_length_prefix() {
+        assert_fixed_length_prefix(true, r"(?:ab|cd)XYZ", b"XYZ");
+        assert_internal_suffix(true, r"[A-Z][0-9]XYZ", b"XYZ");
+        assert_fixed_length_prefix(true, r"[A-Z][0-9]XYZ", b"XYZ");
+        assert_strategy("reverse suffix", &[r"[A-Z][0-9]XYZ"]);
+    }
+
+    #[test]
+    fn reverse_suffix_accepts_absorbed_fixed_length_prefix() {
+        assert_internal_suffix(true, r"a.yy", b"yy");
+        assert_absorbing_prefix(true, r"a.yy", b"yy");
+        assert_fixed_length_prefix(false, r"a.yy", b"yy");
+        assert_internal_suffix(true, r"[a-z].yy", b"yy");
+        assert_absorbing_prefix(true, r"[a-z].yy", b"yy");
+        assert_strategy("reverse suffix", &[r"[a-z].yy"]);
+    }
+
+    #[test]
+    fn reverse_suffix_accepts_disjoint_trailing_prefix() {
+        assert_internal_suffix(true, r"\w+\s+Holmes", b"Holmes");
+        assert_disjoint_trailing_prefix(true, r"\w+\s+Holmes", b"Holmes");
+        assert_strategy("reverse suffix", &[r"\w+\s+Holmes"]);
+
+        assert_disjoint_trailing_prefix(true, r"\w+\s+\bHolmes", b"Holmes");
+        assert_strategy("reverse suffix", &[r"\w+\s+\bHolmes"]);
+    }
+
+    #[test]
+    fn reverse_suffix_accepts_absorbing_prefix() {
+        assert_absorbing_prefix(
+            true,
+            r"\pL{50,}ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+            b"ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+        );
+        assert_strategy(
+            "reverse suffix",
+            &[r"\pL{50,}ABCDEFGHIJKLMNOPQRSTUVWXYZ"],
+        );
+        assert_absorbing_prefix(true, r"[a-z]\d{50,}123", b"123");
+        assert_strategy("reverse suffix", &[r"[a-z]\d{50,}123"]);
+    }
+
+    #[test]
+    fn reverse_suffix_accepts_absorbing_prefix_after_required_repetition() {
+        assert_absorbing_prefix(true, r"(.*?,){13}z", b",z");
+        assert_strategy("reverse suffix", &[r"(.*?,){13}z"]);
+    }
+
+    #[test]
+    fn reverse_suffix_accepts_absorbing_then_disjoint_prefix() {
+        assert_absorbing_prefix(true, r"\w+\s+.Holmes", b"Holmes");
+        assert_strategy("reverse suffix", &[r"\w+\s+.Holmes"]);
+    }
+
+    #[test]
+    fn reverse_suffix_accepts_absorbing_prefix_in_alternation() {
+        assert_absorbing_prefix(true, r"(?:\pL{50,}|\pL{60,})ABC", b"ABC");
+        assert_strategy("reverse suffix", &[r"(?:[A-Z]{50,}|[A-Z]{60,})ABC"]);
+    }
+
+    #[test]
+    fn reverse_suffix_absorbing_prefix_is_conservative() {
+        assert_absorbing_prefix(true, r"foo\d{50,}123", b"123");
+        assert_absorbing_prefix(false, r"(.*?,)*z", b",z");
+        assert_absorbing_prefix(false, r"\pL{50,}\bABC", b"ABC");
+        assert_internal_suffix(true, r"foo\d{50,}123", b"123");
+    }
+
+    #[test]
+    fn reverse_suffix_fixed_length_prefix_is_conservative() {
+        assert_fixed_length_prefix(false, r"a{1,3}yy", b"yy");
+        assert_fixed_length_prefix(false, r"a*yy", b"yy");
+    }
+
+    #[test]
+    fn reverse_suffix_disjoint_trailing_prefix_is_conservative() {
+        assert_disjoint_trailing_prefix(false, r"\w+\s*Holmes", b"Holmes");
+        assert_disjoint_trailing_prefix(false, r"\s+\w*Holmes", b"Holmes");
+        assert_disjoint_trailing_prefix(false, r"H[^H]+Holmes", b"Holmes");
+        assert_strategy("reverse inner", &[r"\w+\s*Holmes"]);
+        assert_strategy("reverse suffix", &[r"\s+\w*Holmes"]);
+    }
+
+    #[test]
+    fn reverse_suffix_rejects_multiple_patterns_with_common_suffix() {
+        assert_strategy("core", &[r"\d+XYZ", r"\w+XYZ"]);
     }
 
     #[test]
@@ -2164,6 +3234,11 @@ mod which_strategy_tests {
     #[test]
     fn reverse_suffix_rejects_anchored_start() {
         assert_strategy("core", &[r"^\d+XYZ"]);
+    }
+
+    #[test]
+    fn reverse_suffix_rejects_variable_length_prefix() {
+        assert_strategy("core", &[r"(?:[A-Za-z]ab)?b"]);
     }
 
     #[test]
@@ -2191,6 +3266,17 @@ mod which_strategy_tests {
     }
 
     #[test]
+    fn reverse_suffix_rejects_multiple_patterns_when_first_looks_safe() {
+        assert_strategy("core", &[r"\d+b", r".bb|b"]);
+        assert_strategy("core", &[r"\d+b", r"ab"]);
+    }
+
+    #[test]
+    fn reverse_suffix_rejects_multiple_patterns_when_first_looks_guarded() {
+        assert_strategy("core", &[r"\b\w+nn\b", r".nn|nn"]);
+    }
+
+    #[test]
     fn reverse_suffix_rejects_unsafe_overlap() {
         assert_strategy("core", &[r".abb|b"]);
         assert_strategy("core", &[r".bb|b"]);
@@ -2204,6 +3290,16 @@ mod which_strategy_tests {
     #[test]
     fn reverse_inner_accepts_prefix_with_look_states() {
         assert_strategy("reverse inner", &[r"\b\w+\s+Holmes\s+\w+\b"]);
+    }
+
+    #[test]
+    fn reverse_inner_accepts_fixed_length_prefix() {
+        assert_strategy("reverse inner", &[r"[A-Z][0-9]@(foo|bar)"]);
+    }
+
+    #[test]
+    fn reverse_inner_accepts_disjoint_nullable_trailing_prefix() {
+        assert_strategy("reverse inner", &[r"\w+\s*Holmes"]);
     }
 
     #[test]
@@ -2259,7 +3355,57 @@ mod which_strategy_tests {
     }
 
     #[test]
-    fn reverse_inner_rejects_absorbing_bounded_repeat() {
-        assert_strategy("core", &[r"[\s\S]{0,100}@\w+"]);
+    fn reverse_inner_accepts_absorbing_bounded_repeat() {
+        assert_strategy("reverse inner", &[r"[\s\S]{0,100}@\w+"]);
+        if teddy_available() {
+            assert_strategy(
+                "reverse inner",
+                &[r".{2,4}(Tom|Sawyer|Huckleberry|Finn)"],
+            );
+        }
+    }
+
+    #[test]
+    fn rebar_benchmarks() {
+        assert_strategy(
+            "reverse inner",
+            &[
+                r#"(?:(?:"|'|\]|\}|\\|\d|(?:nan|infinity|true|false|null|undefined|symbol|math)|`|-|\+)+[)]*;?((?:\s|-|~|!|\{\}|\|\||\+)*.*(?:.*=.*)))"#,
+            ],
+        );
+        assert_strategy("reverse inner", &[r".*.*=.*"]);
+        assert_strategy("reverse suffix", &[r"\w+\s+Holmes"]);
+        assert_strategy("reverse suffix", &[r".y"]);
+        assert_strategy(
+            "reverse inner",
+            &[r"[ -~]*ABCDEFGHIJKLMNOPQRSTUVWXYZ.*"],
+        );
+        assert_strategy("reverse suffix", &[r"[a-zA-Z]+ing"]);
+        assert_strategy("reverse inner", &[r"\s[a-zA-Z]{0,12}ing\s"]);
+        assert_strategy("reverse suffix", &[r"[a-z]shing"]);
+        assert_strategy("reverse suffix", &[r"[a-zA-Z]+ing"]);
+        assert_strategy("reverse inner", &[r"\s[a-zA-Z]{0,12}ing\s"]);
+        assert_strategy("reverse inner", &[r"[A-Z].*bcdefghijklmnopq[a-z]+"]);
+        assert_strategy("reverse suffix", &[r"[a-q][^u-z]{23}x"]);
+        assert_strategy("reverse suffix", &[r"(.*?,){13}z"]);
+
+        if teddy_available() {
+            assert_strategy(
+                "reverse inner",
+                &[r"([A-Za-z]awyer|[A-Za-z]inn)\s"],
+            );
+            assert_strategy(
+                "reverse inner",
+                &[r"\pL+herloc\pL+|\pL+olme\pL+"],
+            );
+            assert_strategy(
+                "reverse inner",
+                &[r".{0,2}(Tom|Sawyer|Huckleberry|Finn)"],
+            );
+            assert_strategy(
+                "reverse inner",
+                &[r".{2,4}(Tom|Sawyer|Huckleberry|Finn)"],
+            );
+        }
     }
 }
