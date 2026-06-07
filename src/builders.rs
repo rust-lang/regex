@@ -82,7 +82,7 @@ impl Builder {
             .build(&pattern)
             .map(|meta| crate::Regex {
                 meta,
-                info: crate::RegexInfo {
+                info: crate::regex::string::RegexInfo {
                     syntax_config: self.syntaxc,
                     pattern,
                 }
@@ -104,7 +104,14 @@ impl Builder {
             .configure(metac)
             .syntax(syntaxc)
             .build(&pattern)
-            .map(|meta| crate::bytes::Regex { meta, pattern })
+            .map(|meta| crate::bytes::Regex {
+                meta,
+                info: crate::regex::bytes::RegexInfo {
+                    syntax_config: syntaxc,
+                    pattern,
+                }
+                .into(),
+            })
             .map_err(Error::from_meta_build_error)
     }
 
@@ -121,7 +128,14 @@ impl Builder {
             .configure(metac)
             .syntax(syntaxc)
             .build_many(&patterns)
-            .map(|meta| crate::RegexSet { meta, patterns })
+            .map(|meta| crate::RegexSet {
+                meta,
+                info: crate::regexset::string::RegexSetInfo {
+                    syntax_config: syntaxc,
+                    patterns,
+                }
+                .into(),
+            })
             .map_err(Error::from_meta_build_error)
     }
 
@@ -138,7 +152,14 @@ impl Builder {
             .configure(metac)
             .syntax(syntaxc)
             .build_many(&patterns)
-            .map(|meta| crate::bytes::RegexSet { meta, patterns })
+            .map(|meta| crate::bytes::RegexSet {
+                meta,
+                info: crate::regexset::bytes::RegexSetInfo {
+                    syntax_config: syntaxc,
+                    patterns,
+                }
+                .into(),
+            })
             .map_err(Error::from_meta_build_error)
     }
 
