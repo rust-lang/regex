@@ -1,15 +1,20 @@
 use core::{
+    any::Any,
     fmt::Debug,
     panic::{RefUnwindSafe, UnwindSafe},
 };
 
 use alloc::{borrow::Cow, format, sync::Arc, vec, vec::Vec};
 
-use regex_syntax::hir::{literal, Hir};
+use regex_syntax::hir::{
+    literal::{self, Literal},
+    Class, Hir, HirKind, Look as HirLook,
+};
 
 use crate::{
     meta::{
         error::{BuildError, RetryError, RetryFailError, RetryQuadraticError},
+        overlap,
         regex::{Cache, RegexInfo},
         reverse_inner, wrappers,
     },
@@ -1206,7 +1211,7 @@ impl ReverseSuffix {
             }
             Some(lcs) => lcs,
         };
-        let pre = match Prefilter::new(kind, &[lcs]) {
+        let pre = match Prefilter::new(kind, core::slice::from_ref(&lcs)) {
             Some(pre) => pre,
             None => {
                 debug!(
@@ -1225,7 +1230,230 @@ impl ReverseSuffix {
             );
             return Err(core);
         }
+        let has_internal_suffix = || {
+            let yes =
+                ReverseSuffix::has_internal_suffix(&core.info, hirs, &lcs)
+                    .unwrap_or(true);
+            debug!("reverse suffix has internal suffix? {yes}");
+            yes
+        };
+        let has_guarded_internal_suffix = || {
+            let yes = ReverseSuffix::has_guarded_internal_suffix(hirs, &lcs);
+            debug!("reverse suffix has guarded internal suffix? {yes}");
+            yes
+        };
+        let is_early_return_safe = || {
+            let yes = ReverseSuffix::is_early_return_safe(&core.nfa);
+            debug!("reverse suffix is early return safe? {yes}");
+            yes
+        };
+        if has_internal_suffix()
+            && !has_guarded_internal_suffix()
+            && !is_early_return_safe()
+        {
+            debug!(
+                "skipping reverse suffix optimization because \
+                 an earlier suffix match could be a complete match \
+                 inside of a larger match"
+            );
+            return Err(core);
+        }
         Ok(ReverseSuffix { core, pre })
+    }
+
+    fn is_early_return_safe(nfa: &NFA) -> bool {
+        overlap::reverse_suffix_is_safe(nfa)
+    }
+
+    fn has_internal_suffix(
+        info: &RegexInfo,
+        hirs: &[&Hir],
+        suffix: &[u8],
+    ) -> Option<bool> {
+        if hirs.len() != 1 || suffix.is_empty() {
+            return None;
+        }
+        let prefix = ReverseSuffix::strip_literal_suffix(hirs[0], suffix)?;
+        let thompson_config = info
+            .config()
+            .to_thompson_config()
+            // We don't care about capture states for this analysis.
+            .which_captures(WhichCaptures::None);
+        let prefix_nfa = thompson::Compiler::new()
+            .configure(thompson_config)
+            .build_from_hir(&prefix)
+            .ok()?;
+        Some(overlap::prefix_contains_literal(&prefix_nfa, suffix))
+    }
+
+    fn has_guarded_internal_suffix(hirs: &[&Hir], suffix: &[u8]) -> bool {
+        if hirs.len() != 1 || suffix.is_empty() {
+            return false;
+        }
+        let (core, looks) = match ReverseSuffix::strip_trailing_looks(hirs[0])
+        {
+            None => return false,
+            Some(x) => x,
+        };
+        let word = match looks
+            .iter()
+            .find_map(|&look| ReverseSuffix::look_word_kind(look))
+        {
+            None => return false,
+            Some(word) => word,
+        };
+        if !ReverseSuffix::literal_is_word(suffix, word) {
+            return false;
+        }
+        let prefix = match ReverseSuffix::strip_literal_suffix(&core, suffix) {
+            None => return false,
+            Some(prefix) => prefix,
+        };
+        ReverseSuffix::hir_consumes_only_word(&prefix, word)
+    }
+
+    fn strip_trailing_looks(hir: &Hir) -> Option<(Hir, Vec<HirLook>)> {
+        match hir.kind() {
+            HirKind::Capture(capture) => {
+                ReverseSuffix::strip_trailing_looks(&capture.sub)
+            }
+            HirKind::Concat(hirs) => {
+                let prefix_len = hirs
+                    .iter()
+                    .rposition(|hir| !matches!(hir.kind(), HirKind::Look(_)))
+                    .map_or(0, |i| i + 1);
+                let looks = hirs[prefix_len..]
+                    .iter()
+                    .filter_map(|hir| match hir.kind() {
+                        HirKind::Look(look) => Some(*look),
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>();
+                if looks.is_empty() {
+                    return None;
+                }
+                Some((Hir::concat(hirs[..prefix_len].to_vec()), looks))
+            }
+            HirKind::Look(look) => Some((Hir::empty(), vec![*look])),
+            _ => None,
+        }
+    }
+
+    fn hir_consumes_only_word(hir: &Hir, word: WordKind) -> bool {
+        match hir.kind() {
+            HirKind::Empty | HirKind::Look(_) => true,
+            HirKind::Literal(lit) => {
+                ReverseSuffix::literal_is_word(&lit.0, word)
+            }
+            HirKind::Class(Class::Bytes(cls)) => {
+                for range in cls.ranges() {
+                    for byte in range.start()..=range.end() {
+                        if !ReverseSuffix::byte_is_word(byte, word) {
+                            return false;
+                        }
+                    }
+                }
+                true
+            }
+            HirKind::Class(Class::Unicode(cls)) => {
+                for range in cls.ranges() {
+                    let start = u32::from(range.start());
+                    let end = u32::from(range.end());
+                    for cp in start..=end {
+                        let ch = match char::from_u32(cp) {
+                            None => continue,
+                            Some(ch) => ch,
+                        };
+                        if !ReverseSuffix::char_is_word(ch, word) {
+                            return false;
+                        }
+                    }
+                }
+                true
+            }
+            HirKind::Repetition(rep) => {
+                ReverseSuffix::hir_consumes_only_word(&rep.sub, word)
+            }
+            HirKind::Capture(capture) => {
+                ReverseSuffix::hir_consumes_only_word(&capture.sub, word)
+            }
+            HirKind::Concat(hirs) | HirKind::Alternation(hirs) => hirs
+                .iter()
+                .all(|hir| ReverseSuffix::hir_consumes_only_word(hir, word)),
+        }
+    }
+
+    fn look_word_kind(look: HirLook) -> Option<WordKind> {
+        match look {
+            HirLook::WordUnicode
+            | HirLook::WordEndUnicode
+            | HirLook::WordEndHalfUnicode
+            | HirLook::WordStartUnicode
+            | HirLook::WordStartHalfUnicode => Some(WordKind::Unicode),
+            HirLook::WordAscii
+            | HirLook::WordEndAscii
+            | HirLook::WordEndHalfAscii
+            | HirLook::WordStartAscii
+            | HirLook::WordStartHalfAscii => Some(WordKind::Ascii),
+            _ => None,
+        }
+    }
+
+    fn literal_is_word(lit: &[u8], word: WordKind) -> bool {
+        match word {
+            WordKind::Ascii => {
+                lit.iter().all(|&byte| regex_syntax::is_word_byte(byte))
+            }
+            WordKind::Unicode => core::str::from_utf8(lit)
+                .map_or(false, |s| {
+                    s.chars().all(|ch| ReverseSuffix::char_is_word(ch, word))
+                }),
+        }
+    }
+
+    fn byte_is_word(byte: u8, word: WordKind) -> bool {
+        match word {
+            WordKind::Ascii => regex_syntax::is_word_byte(byte),
+            WordKind::Unicode => {
+                byte.is_ascii() && regex_syntax::is_word_byte(byte)
+            }
+        }
+    }
+
+    fn char_is_word(ch: char, word: WordKind) -> bool {
+        match word {
+            WordKind::Ascii => {
+                ch.is_ascii()
+                    && regex_syntax::is_word_byte(u8::try_from(ch).unwrap())
+            }
+            WordKind::Unicode => {
+                regex_syntax::try_is_word_character(ch).unwrap_or(false)
+            }
+        }
+    }
+
+    fn strip_literal_suffix(hir: &Hir, suffix: &[u8]) -> Option<Hir> {
+        match hir.kind() {
+            HirKind::Literal(lit) => {
+                let bytes = &lit.0;
+                let prefix_len = bytes.len().checked_sub(suffix.len())?;
+                if !bytes[prefix_len..].eq(suffix) {
+                    return None;
+                }
+                Some(Hir::literal(bytes[..prefix_len].to_vec()))
+            }
+            HirKind::Capture(capture) => {
+                ReverseSuffix::strip_literal_suffix(&capture.sub, suffix)
+            }
+            HirKind::Concat(hirs) => {
+                let (last, init) = hirs.split_last()?;
+                let last = ReverseSuffix::strip_literal_suffix(last, suffix)?;
+                let mut prefix = init.to_vec();
+                prefix.push(last);
+                Some(Hir::concat(prefix))
+            }
+            _ => None,
+        }
     }
 
     #[cfg_attr(feature = "perf-inline", inline(always))]
@@ -1238,7 +1466,7 @@ impl ReverseSuffix {
         let mut min_start = 0;
         loop {
             let litmatch = match self.pre.find(input.haystack(), span) {
-                None => return Ok(None),
+                None => break,
                 Some(span) => span,
             };
             trace!("reverse suffix scan found suffix match at {litmatch:?}");
@@ -1246,17 +1474,16 @@ impl ReverseSuffix {
                 .clone()
                 .anchored(Anchored::Yes)
                 .span(input.start()..litmatch.end);
-            match self
-                .try_search_half_rev_limited(cache, &revinput, min_start)?
+            if let Some(hm) =
+                self.try_search_half_rev_limited(cache, &revinput, min_start)?
             {
-                None => {
-                    if span.start >= span.end {
-                        break;
-                    }
-                    span.start = litmatch.start.checked_add(1).unwrap();
-                }
-                Some(hm) => return Ok(Some(hm)),
+                return Ok(Some(hm));
             }
+
+            if span.start >= span.end {
+                break;
+            }
+            span.start = litmatch.start.checked_add(1).unwrap();
             min_start = litmatch.end;
         }
         Ok(None)
@@ -1312,6 +1539,12 @@ impl ReverseSuffix {
             unreachable!("ReverseSuffix always has a DFA")
         }
     }
+}
+
+#[derive(Clone, Copy, Debug)]
+enum WordKind {
+    Ascii,
+    Unicode,
 }
 
 impl Strategy for ReverseSuffix {
@@ -1525,6 +1758,11 @@ struct ReverseInner {
 }
 
 impl ReverseInner {
+    // The reverse inner early-return proof can get expensive when it explores
+    // prefixes with large bounded repeats over broad classes. Small bounded
+    // repeats are cheap enough to leave to the precise NFA product analysis.
+    const ABSORBING_BOUNDED_REPEAT_LIMIT: u32 = 32;
+
     fn new(core: Core, hirs: &[&Hir]) -> Result<ReverseInner, Core> {
         if !core.info.config().get_auto_prefilter() {
             debug!(
@@ -1590,12 +1828,23 @@ impl ReverseInner {
                  use reverse inner prefilter"
             );
         }
-        let (concat_prefix, preinner) = match reverse_inner::extract(hirs) {
-            Some(x) => x,
-            // N.B. the 'extract' function emits debug messages explaining
+        let prefilter = match reverse_inner::InnerPrefilter::new(hirs) {
+            Some(prefilter) => prefilter,
+            // N.B. the 'new' function emits debug messages explaining
             // why we bailed out here.
             None => return Err(core),
         };
+        if !ReverseInner::is_early_return_safe(
+            &core.info,
+            &prefilter.prefix,
+            &prefilter.literals,
+        ) {
+            debug!(
+                "skipping reverse inner optimization because an inner \
+                 literal match could be confirmed before an earlier match"
+            );
+            return Err(core);
+        }
         debug!("building reverse NFA for prefix before inner literal");
         let thompson_config = core
             .info
@@ -1605,7 +1854,7 @@ impl ReverseInner {
             .which_captures(WhichCaptures::None);
         let result = thompson::Compiler::new()
             .configure(thompson_config)
-            .build_from_hir(&concat_prefix);
+            .build_from_hir(&prefilter.prefix);
         let nfarev = match result {
             Ok(nfarev) => nfarev,
             Err(_err) => {
@@ -1634,7 +1883,199 @@ impl ReverseInner {
         } else {
             wrappers::ReverseHybrid::new(&core.info, &nfarev)
         };
-        Ok(ReverseInner { core, preinner, nfarev, hybrid, dfa })
+        Ok(ReverseInner { core, preinner: prefilter.pre, nfarev, hybrid, dfa })
+    }
+
+    fn is_early_return_safe(
+        info: &RegexInfo,
+        concat_prefix: &Hir,
+        inner_literals: &[Literal],
+    ) -> bool {
+        if ReverseInner::prefix_cannot_consume_inner_literals(
+            concat_prefix,
+            inner_literals,
+        ) {
+            return true;
+        }
+        if ReverseInner::has_absorbing_bounded_repeat(
+            concat_prefix,
+            inner_literals,
+        ) {
+            return false;
+        }
+        let mut lookm = LookMatcher::new();
+        lookm.set_line_terminator(info.config().get_line_terminator());
+        // The proof below starts every prefix run at a candidate match start.
+        // For an earlier real match, leading look-around assertions have
+        // already been satisfied. For later suffix candidates, dropping them
+        // can only add candidates to check, which is conservative.
+        let concat_prefix = ReverseInner::strip_leading_looks(concat_prefix);
+        let thompson_config = info
+            .config()
+            .to_thompson_config()
+            .which_captures(WhichCaptures::None);
+        let prefix_nfa = match thompson::Compiler::new()
+            .configure(thompson_config)
+            .build_from_hir(&concat_prefix)
+        {
+            Err(_) => return false,
+            Ok(prefix_nfa) => prefix_nfa,
+        };
+        overlap::reverse_inner_is_safe(&prefix_nfa, inner_literals)
+    }
+
+    fn has_absorbing_bounded_repeat(hir: &Hir, literals: &[Literal]) -> bool {
+        match hir.kind() {
+            HirKind::Repetition(rep) => {
+                if let Some(max) = rep.max.filter(|&max| {
+                    max >= ReverseInner::ABSORBING_BOUNDED_REPEAT_LIMIT
+                }) {
+                    if let Some(cls) = ReverseInner::class(&rep.sub) {
+                        if literals.iter().any(|lit| {
+                            ReverseInner::class_can_consume_literal(
+                                cls, max, lit,
+                            )
+                        }) {
+                            return true;
+                        }
+                    }
+                }
+                ReverseInner::has_absorbing_bounded_repeat(&rep.sub, literals)
+            }
+            HirKind::Capture(capture) => {
+                ReverseInner::has_absorbing_bounded_repeat(
+                    &capture.sub,
+                    literals,
+                )
+            }
+            HirKind::Concat(hirs) | HirKind::Alternation(hirs) => {
+                hirs.iter().any(|hir| {
+                    ReverseInner::has_absorbing_bounded_repeat(hir, literals)
+                })
+            }
+            HirKind::Empty
+            | HirKind::Literal(_)
+            | HirKind::Class(_)
+            | HirKind::Look(_) => false,
+        }
+    }
+
+    fn prefix_cannot_consume_inner_literals(
+        hir: &Hir,
+        literals: &[Literal],
+    ) -> bool {
+        literals.iter().all(|lit| {
+            !lit.is_empty()
+                && lit.as_bytes().iter().any(|&byte| {
+                    !ReverseInner::hir_can_consume_byte(hir, byte)
+                })
+        })
+    }
+
+    fn hir_can_consume_byte(hir: &Hir, byte: u8) -> bool {
+        match hir.kind() {
+            HirKind::Empty | HirKind::Look(_) => false,
+            HirKind::Literal(lit) => lit.0.contains(&byte),
+            HirKind::Class(Class::Bytes(cls)) => {
+                ReverseInner::byte_class_contains(cls, byte)
+            }
+            HirKind::Class(Class::Unicode(cls)) => {
+                if byte > 0x7F {
+                    return true;
+                }
+                let ch = char::from(byte);
+                ReverseInner::unicode_class_contains(cls, ch)
+            }
+            HirKind::Repetition(rep) => {
+                ReverseInner::hir_can_consume_byte(&rep.sub, byte)
+            }
+            HirKind::Capture(capture) => {
+                ReverseInner::hir_can_consume_byte(&capture.sub, byte)
+            }
+            HirKind::Concat(hirs) | HirKind::Alternation(hirs) => hirs
+                .iter()
+                .any(|hir| ReverseInner::hir_can_consume_byte(hir, byte)),
+        }
+    }
+
+    fn class(hir: &Hir) -> Option<&Class> {
+        match hir.kind() {
+            HirKind::Class(cls) => Some(cls),
+            HirKind::Capture(capture) => ReverseInner::class(&capture.sub),
+            _ => None,
+        }
+    }
+
+    fn class_can_consume_literal(
+        cls: &Class,
+        max: u32,
+        lit: &Literal,
+    ) -> bool {
+        let lit = lit.as_bytes();
+        if lit.is_empty() {
+            return false;
+        }
+        match *cls {
+            Class::Bytes(ref cls) => {
+                let len = match u32::try_from(lit.len()) {
+                    Err(_) => return false,
+                    Ok(len) => len,
+                };
+                len <= max
+                    && lit.iter().all(|&byte| {
+                        ReverseInner::byte_class_contains(cls, byte)
+                    })
+            }
+            Class::Unicode(ref cls) => {
+                let lit = match core::str::from_utf8(lit) {
+                    Err(_) => return false,
+                    Ok(lit) => lit,
+                };
+                let len = match u32::try_from(lit.chars().count()) {
+                    Err(_) => return false,
+                    Ok(len) => len,
+                };
+                len <= max
+                    && lit.chars().all(|ch| {
+                        ReverseInner::unicode_class_contains(cls, ch)
+                    })
+            }
+        }
+    }
+
+    fn byte_class_contains(
+        cls: &regex_syntax::hir::ClassBytes,
+        byte: u8,
+    ) -> bool {
+        cls.ranges()
+            .iter()
+            .any(|range| range.start() <= byte && byte <= range.end())
+    }
+
+    fn unicode_class_contains(
+        cls: &regex_syntax::hir::ClassUnicode,
+        ch: char,
+    ) -> bool {
+        cls.ranges()
+            .iter()
+            .any(|range| range.start() <= ch && ch <= range.end())
+    }
+
+    fn strip_leading_looks(hir: &Hir) -> Hir {
+        match hir.kind() {
+            HirKind::Concat(hirs) => {
+                let hirs = hirs
+                    .iter()
+                    .skip_while(|hir| {
+                        matches!(hir.kind(), HirKind::Empty | HirKind::Look(_))
+                    })
+                    .cloned()
+                    .collect();
+                Hir::concat(hirs)
+            }
+            HirKind::Empty | HirKind::Look(_) => Hir::empty(),
+            _ => hir.clone(),
+        }
     }
 
     #[cfg_attr(feature = "perf-inline", inline(always))]
@@ -1648,7 +2089,7 @@ impl ReverseInner {
         let mut min_pre_start = 0;
         loop {
             let litmatch = match self.preinner.find(input.haystack(), span) {
-                None => return Ok(None),
+                None => break,
                 Some(span) => span,
             };
             if litmatch.start < min_pre_start {
@@ -1670,37 +2111,33 @@ impl ReverseInner {
             // reverse scan goes past the minimum start point. That is, the
             // literal search might not, but the reverse regex search for the
             // prefix might!
-            match self.try_search_half_rev_limited(
+            if let Some(hm_start) = self.try_search_half_rev_limited(
                 cache,
                 &revinput,
                 min_match_start,
             )? {
-                None => {
-                    if span.start >= span.end {
-                        break;
+                let fwdinput = input
+                    .clone()
+                    .anchored(Anchored::Pattern(hm_start.pattern()))
+                    .span(hm_start.offset()..input.end());
+                match self.try_search_half_fwd_stopat(cache, &fwdinput)? {
+                    Err(stopat) => {
+                        min_pre_start = stopat;
+                        span.start = litmatch.start.checked_add(1).unwrap();
                     }
-                    span.start = litmatch.start.checked_add(1).unwrap();
-                }
-                Some(hm_start) => {
-                    let fwdinput = input
-                        .clone()
-                        .anchored(Anchored::Pattern(hm_start.pattern()))
-                        .span(hm_start.offset()..input.end());
-                    match self.try_search_half_fwd_stopat(cache, &fwdinput)? {
-                        Err(stopat) => {
-                            min_pre_start = stopat;
-                            span.start =
-                                litmatch.start.checked_add(1).unwrap();
-                        }
-                        Ok(hm_end) => {
-                            return Ok(Some(Match::new(
-                                hm_start.pattern(),
-                                hm_start.offset()..hm_end.offset(),
-                            )))
-                        }
+                    Ok(hm_end) => {
+                        return Ok(Some(Match::new(
+                            hm_start.pattern(),
+                            hm_start.offset()..hm_end.offset(),
+                        )));
                     }
                 }
             }
+
+            if span.start >= span.end {
+                break;
+            }
+            span.start = litmatch.start.checked_add(1).unwrap();
             min_match_start = litmatch.end;
         }
         Ok(None)
@@ -1886,7 +2323,7 @@ impl Strategy for ReverseInner {
         };
         trace!(
             "match found at {}..{} in capture search, \
-		  	 using another engine to find captures",
+             using another engine to find captures",
             m.start(),
             m.end(),
         );
@@ -2188,6 +2625,17 @@ mod which_strategy_tests {
     #[test]
     fn reverse_suffix_rejects_multiple_patterns_without_common_suffix() {
         assert_strategy("core", &[r"\d+XYZ", r"\w+ABC"]);
+    }
+
+    #[test]
+    fn reverse_suffix_rejects_multiple_patterns_when_first_looks_safe() {
+        assert_strategy("core", &[r"\d+b", r".bb|b"]);
+        assert_strategy("reverse suffix", &[r"\d+b", r"ab"]);
+    }
+
+    #[test]
+    fn reverse_suffix_rejects_multiple_patterns_when_first_looks_guarded() {
+        assert_strategy("core", &[r"\b\w+nn\b", r".nn|nn"]);
     }
 
     #[test]
