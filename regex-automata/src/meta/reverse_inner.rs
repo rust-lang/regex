@@ -40,7 +40,65 @@ use regex_syntax::hir::{
     Hir, HirKind,
 };
 
-use crate::{util::prefilter::Prefilter, MatchKind};
+use crate::{meta::prefix, util::prefilter::Prefilter, MatchKind};
+
+/// Returns true when it's impossible for an earlier match to be detected after
+/// a literal candidate (corresponding to anything in `literals`) has
+/// been found.
+///
+/// Specifically, that there is no earlier match than what a reverse scan of
+/// `concat_prefix` after a match of `literals` reports.
+///
+/// Since this requires a single `Hir`, this implies the reverse inner optimization
+/// only works with a single regex.
+pub(super) fn has_no_earlier_match(
+    concat_prefix: &Hir,
+    literals: &[Literal],
+) -> bool {
+    // let literals = prefix::LiteralSet::many(literals);
+    if literals.is_empty() || literals.iter().any(|lit| lit.is_empty()) {
+        debug!(
+            "reverse inner is not early return safe because \
+                 no non-empty inner literals were found"
+        );
+        return false;
+    }
+    // With one literal, an occurrence crossing the prefix boundary must
+    // overlap another occurrence of that same literal. Such an overlap
+    // requires the prefix to consume every distinct byte in the literal.
+    // This reasoning does not apply when one extracted literal can cross
+    // the boundary into a different extracted literal.
+    if literals.len() == 1 {
+        let prefix_may_contain = prefix::hir_can_contain_literal(
+            concat_prefix,
+            literals[0].as_bytes(),
+        );
+        debug!(
+            "reverse inner prefix can contain inner literals? \
+             {prefix_may_contain}"
+        );
+        if !prefix_may_contain {
+            return true;
+        }
+    }
+
+    let fixed_length = prefix::hir_has_fixed_length(concat_prefix);
+    debug!("reverse inner has fixed length prefix? {fixed_length}");
+    if fixed_length {
+        return true;
+    }
+
+    let class_separator =
+        prefix::has_disjoint_class_separator(concat_prefix, &literals);
+    debug!("reverse inner has disjoint class separator? {class_separator}");
+    if class_separator {
+        return true;
+    }
+
+    // We couldn't prove that the reverse inner optimization
+    // was safe, so bail out.
+    false
+}
 
 /// This attempts to extract an "inner" prefilter from the given HIR
 /// expressions. If one was found, then a concatenation of the HIR expressions
