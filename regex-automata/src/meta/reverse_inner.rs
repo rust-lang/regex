@@ -50,7 +50,9 @@ use crate::{util::prefilter::Prefilter, MatchKind};
 ///
 /// Note that this assumes leftmost-first match semantics, so callers must
 /// not call this otherwise.
-pub(crate) fn extract(hirs: &[&Hir]) -> Option<(Hir, Prefilter)> {
+pub(crate) fn extract(
+    hirs: &[&Hir],
+) -> Option<(Hir, Prefilter, Vec<Vec<u8>>)> {
     if hirs.len() != 1 {
         debug!(
             "skipping reverse inner optimization since it only \
@@ -73,7 +75,7 @@ pub(crate) fn extract(hirs: &[&Hir]) -> Option<(Hir, Prefilter)> {
     // we probably wouldn't be here looking for an inner prefilter.
     for i in 1..concat.len() {
         let hir = &concat[i];
-        let pre = match prefilter(hir) {
+        let (pre, lits) = match prefilter(hir) {
             None => continue,
             Some(pre) => pre,
         };
@@ -96,17 +98,17 @@ pub(crate) fn extract(hirs: &[&Hir]) -> Option<(Hir, Prefilter)> {
         // something better and more discriminatory by looking at the entire
         // suffix. We don't do this above to avoid making this loop worst case
         // quadratic in the length of 'concat'.
-        let pre2 = match prefilter(&concat_suffix) {
-            None => pre,
-            Some(pre2) => {
+        let (pre2, lits2) = match prefilter(&concat_suffix) {
+            None => (pre, lits),
+            Some((pre2, lits2)) => {
                 if pre2.is_fast() {
-                    pre2
+                    (pre2, lits2)
                 } else {
-                    pre
+                    (pre, lits)
                 }
             }
         };
-        return Some((concat_prefix, pre2));
+        return Some((concat_prefix, pre2, lits2));
     }
     debug!(
         "skipping reverse inner optimization because a top-level \
@@ -124,7 +126,7 @@ pub(crate) fn extract(hirs: &[&Hir]) -> Option<(Hir, Prefilter)> {
 ///
 /// Note that this assumes leftmost-first match semantics, so callers must
 /// not call this otherwise.
-fn prefilter(hir: &Hir) -> Option<Prefilter> {
+fn prefilter(hir: &Hir) -> Option<(Prefilter, Vec<Vec<u8>>)> {
     let mut extractor = literal::Extractor::new();
     extractor.kind(literal::ExtractKind::Prefix);
     let mut prefixes = extractor.extract(hir);
@@ -148,9 +150,10 @@ fn prefilter(hir: &Hir) -> Option<Prefilter> {
         prefixes.len(),
         prefixes
     );
-    prefixes
-        .literals()
-        .and_then(|lits| Prefilter::new(MatchKind::LeftmostFirst, lits))
+    let lits = prefixes.literals()?;
+    let pre = Prefilter::new(MatchKind::LeftmostFirst, lits)?;
+    let lits = lits.iter().map(|lit| lit.as_bytes().to_vec()).collect();
+    Some((pre, lits))
 }
 
 /// Looks for a "top level" HirKind::Concat item in the given HIR. This will
