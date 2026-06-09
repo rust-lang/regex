@@ -1127,6 +1127,16 @@ impl ReverseSuffix {
             );
             return Err(core);
         }
+        // Also like the reverse inner optimization, a reverse suffix encodes
+        // leftmost-first match semantics.
+        if core.info.config().get_match_kind() != MatchKind::LeftmostFirst {
+            debug!(
+                "skipping reverse suffix optimization because \
+				 match kind is {:?} but this only supports leftmost-first",
+                core.info.config().get_match_kind(),
+            );
+            return Err(core);
+        }
         // Like the reverse inner optimization, we don't do this for regexes
         // that are always anchored. It could lead to scanning too much, but
         // could say "no match" much more quickly than running the regex
@@ -1215,9 +1225,10 @@ impl ReverseSuffix {
     ) -> Result<Option<HalfMatch>, RetryError> {
         let mut span = input.get_span();
         let mut min_start = 0;
+        let mut first: Option<HalfMatch> = None;
         loop {
             let litmatch = match self.pre.find(input.haystack(), span) {
-                None => return Ok(None),
+                None => break,
                 Some(span) => span,
             };
             trace!("reverse suffix scan found suffix match at {litmatch:?}");
@@ -1225,20 +1236,25 @@ impl ReverseSuffix {
                 .clone()
                 .anchored(Anchored::Yes)
                 .span(input.start()..litmatch.end);
-            match self
-                .try_search_half_rev_limited(cache, &revinput, min_start)?
+            if let Some(hm) =
+                self.try_search_half_rev_limited(cache, &revinput, min_start)?
             {
-                None => {
-                    if span.start >= span.end {
-                        break;
-                    }
-                    span.start = litmatch.start.checked_add(1).unwrap();
+                // We only track the first half-match. We can never find a
+                // half-match with lower offset than the first half-match, it
+                // would mean quadratic behavior. We can only confirm this
+                // half-match or return a quadratic error.
+                if first.is_none() {
+                    first = Some(hm);
                 }
-                Some(hm) => return Ok(Some(hm)),
             }
+
+            if span.start >= span.end {
+                break;
+            }
+            span.start = litmatch.start.checked_add(1).unwrap();
             min_start = litmatch.end;
         }
-        Ok(None)
+        Ok(first)
     }
 
     #[cfg_attr(feature = "perf-inline", inline(always))]
@@ -1624,9 +1640,10 @@ impl ReverseInner {
         let mut span = input.get_span();
         let mut min_match_start = 0;
         let mut min_pre_start = 0;
+        let mut first: Option<Match> = None;
         loop {
             let litmatch = match self.preinner.find(input.haystack(), span) {
-                None => return Ok(None),
+                None => break,
                 Some(span) => span,
             };
             if litmatch.start < min_pre_start {
@@ -1648,40 +1665,38 @@ impl ReverseInner {
             // reverse scan goes past the minimum start point. That is, the
             // literal search might not, but the reverse regex search for the
             // prefix might!
-            match self.try_search_half_rev_limited(
+            if let Some(hm_start) = self.try_search_half_rev_limited(
                 cache,
                 &revinput,
                 min_match_start,
             )? {
-                None => {
-                    if span.start >= span.end {
-                        break;
+                let fwdinput = input
+                    .clone()
+                    .anchored(Anchored::Pattern(hm_start.pattern()))
+                    .span(hm_start.offset()..input.end());
+                match self.try_search_half_fwd_stopat(cache, &fwdinput)? {
+                    Err(stopat) => {
+                        min_pre_start = stopat;
+                        span.start = litmatch.start.checked_add(1).unwrap();
                     }
-                    span.start = litmatch.start.checked_add(1).unwrap();
-                }
-                Some(hm_start) => {
-                    let fwdinput = input
-                        .clone()
-                        .anchored(Anchored::Pattern(hm_start.pattern()))
-                        .span(hm_start.offset()..input.end());
-                    match self.try_search_half_fwd_stopat(cache, &fwdinput)? {
-                        Err(stopat) => {
-                            min_pre_start = stopat;
-                            span.start =
-                                litmatch.start.checked_add(1).unwrap();
-                        }
-                        Ok(hm_end) => {
-                            return Ok(Some(Match::new(
+                    Ok(hm_end) => {
+                        if first.is_none() {
+                            first = Some(Match::new(
                                 hm_start.pattern(),
                                 hm_start.offset()..hm_end.offset(),
-                            )))
+                            ));
                         }
                     }
                 }
             }
+
+            if span.start >= span.end {
+                break;
+            }
+            span.start = litmatch.start.checked_add(1).unwrap();
             min_match_start = litmatch.end;
         }
-        Ok(None)
+        Ok(first)
     }
 
     #[cfg_attr(feature = "perf-inline", inline(always))]
