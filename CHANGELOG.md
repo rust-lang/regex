@@ -1,3 +1,14 @@
+1.12.4 (2025-06-09)
+===================
+This release includes a performance optimization for compilation of regexes
+with very large character classes.
+
+Improvements:
+
+* [#1308](https://github.com/rust-lang/regex/pull/1308):
+Avoid re-canonicalizing the entire interval set when pushing new class ranges.
+
+
 1.12.3 (2025-02-03)
 ===================
 This release excludes some unnecessary things from the archive published to
