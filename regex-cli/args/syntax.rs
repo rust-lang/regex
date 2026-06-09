@@ -19,7 +19,7 @@ pub struct Config {
 impl Config {
     /// Return a `syntax::Config` object from this configuration.
     pub fn syntax(&self) -> anyhow::Result<syntax::Config> {
-        Ok(self.syntax.clone())
+        Ok(self.syntax)
     }
 
     /// Parses the given pattern into an `Ast`.

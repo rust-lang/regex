@@ -150,7 +150,7 @@ pub(super) fn new(
         debug!("skipping literal extraction since prefilters were disabled");
         None
     };
-    let mut core = Core::new(info.clone(), pre.clone(), hirs)?;
+    let mut core = Core::new(info.clone(), pre, hirs)?;
     // Now that we have our core regex engines built, there are a few cases
     // where we can do a little bit better than just a normal "search forward
     // and maybe use a prefilter when in a start state." However, these cases
@@ -512,7 +512,6 @@ impl Core {
                     // the lazy DFA ignores capturing groups in all cases.
                     .configure(
                         thompson_config
-                            .clone()
                             .which_captures(WhichCaptures::None)
                             .reverse(true),
                     )
