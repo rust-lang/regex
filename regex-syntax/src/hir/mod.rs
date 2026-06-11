@@ -2268,10 +2268,10 @@ impl Properties {
     /// assert_eq!(Some(4), hir3.properties().maximum_len());
     ///
     /// let unioned = Properties::union([
-    ///		hir1.properties(),
-    ///		hir2.properties(),
-    ///		hir3.properties(),
-    ///	]);
+    ///     hir1.properties(),
+    ///     hir2.properties(),
+    ///     hir3.properties(),
+    /// ]);
     /// assert_eq!(None, unioned.minimum_len());
     /// assert_eq!(None, unioned.maximum_len());
     ///
@@ -2298,10 +2298,10 @@ impl Properties {
     /// assert_eq!(Some(4), hir3.properties().maximum_len());
     ///
     /// let unioned = Properties::union([
-    ///		hir1.properties(),
-    ///		hir2.properties(),
-    ///		hir3.properties(),
-    ///	]);
+    ///     hir1.properties(),
+    ///     hir2.properties(),
+    ///     hir3.properties(),
+    /// ]);
     /// assert_eq!(Some(1), unioned.minimum_len());
     /// assert_eq!(None, unioned.maximum_len());
     ///
