@@ -16,10 +16,11 @@ use crate::{
         strategy::{self, Strategy},
         wrappers,
     },
-    nfa::thompson::WhichCaptures,
+    nfa::thompson::{self, WhichCaptures},
     util::{
         captures::{Captures, GroupInfo},
         iter,
+        look::LookMatcher,
         pool::{Pool, PoolGuard},
         prefilter::Prefilter,
         primitives::{NonMaxUsize, PatternID},
@@ -3259,6 +3260,27 @@ impl Config {
         {
             false
         }
+    }
+
+    /// Returns a "baseline" Thompson configuration for constructing NFAs based
+    /// on this configuration.
+    ///
+    /// This is just a convenience routine to avoid repeating configuration
+    /// construction.
+    ///
+    /// Callers may still need to set other things, like whether the NFA should
+    /// be compiled in reverse. Callers may also override settings, like
+    /// forcing no capture states to be included.
+    pub(crate) fn to_thompson_config(&self) -> thompson::Config {
+        let mut lookm = LookMatcher::new();
+        lookm.set_line_terminator(self.get_line_terminator());
+        thompson::Config::new()
+            .utf8(self.get_utf8_empty())
+            .reverse(false)
+            .nfa_size_limit(self.get_nfa_size_limit())
+            .shrink(false)
+            .which_captures(self.get_which_captures())
+            .look_matcher(lookm)
     }
 
     /// Overwrite the default configuration such that the options in `o` are

@@ -460,12 +460,7 @@ impl Core {
     ) -> Result<Core, BuildError> {
         let mut lookm = LookMatcher::new();
         lookm.set_line_terminator(info.config().get_line_terminator());
-        let thompson_config = thompson::Config::new()
-            .utf8(info.config().get_utf8_empty())
-            .nfa_size_limit(info.config().get_nfa_size_limit())
-            .shrink(false)
-            .which_captures(info.config().get_which_captures())
-            .look_matcher(lookm);
+        let thompson_config = info.config().to_thompson_config();
         let nfa = thompson::Compiler::new()
             .configure(thompson_config.clone())
             .build_many_from_hir(hirs)
@@ -512,7 +507,6 @@ impl Core {
                     // the lazy DFA ignores capturing groups in all cases.
                     .configure(
                         thompson_config
-                            .clone()
                             .which_captures(WhichCaptures::None)
                             .reverse(true),
                     )
@@ -1572,15 +1566,12 @@ impl ReverseInner {
             None => return Err(core),
         };
         debug!("building reverse NFA for prefix before inner literal");
-        let mut lookm = LookMatcher::new();
-        lookm.set_line_terminator(core.info.config().get_line_terminator());
-        let thompson_config = thompson::Config::new()
+        let thompson_config = core
+            .info
+            .config()
+            .to_thompson_config()
             .reverse(true)
-            .utf8(core.info.config().get_utf8_empty())
-            .nfa_size_limit(core.info.config().get_nfa_size_limit())
-            .shrink(false)
-            .which_captures(WhichCaptures::None)
-            .look_matcher(lookm);
+            .which_captures(WhichCaptures::None);
         let result = thompson::Compiler::new()
             .configure(thompson_config)
             .build_from_hir(&concat_prefix);
