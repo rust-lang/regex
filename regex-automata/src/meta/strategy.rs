@@ -1138,6 +1138,16 @@ impl ReverseSuffix {
             );
             return Err(core);
         }
+        // Also like the reverse inner optimization, a reverse suffix encodes
+        // leftmost-first match semantics.
+        if core.info.config().get_match_kind() != MatchKind::LeftmostFirst {
+            debug!(
+                "skipping reverse suffix optimization because \
+                 match kind is {:?} but this only supports leftmost-first",
+                core.info.config().get_match_kind(),
+            );
+            return Err(core);
+        }
         // Like the reverse inner optimization, we don't do this for regexes
         // that are always anchored. It could lead to scanning too much, but
         // could say "no match" much more quickly than running the regex
