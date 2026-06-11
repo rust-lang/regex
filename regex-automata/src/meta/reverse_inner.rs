@@ -63,8 +63,8 @@ pub(crate) fn extract(hirs: &[&Hir]) -> Option<(Hir, Prefilter)> {
         Some(concat) => concat,
         None => {
             debug!(
-                "skipping reverse inner optimization because a top-level \
-		 	     concatenation could not found",
+                "skipping reverse inner optimization since it only \
+supports 1 pattern, {} were given",
             );
             return None;
         }
