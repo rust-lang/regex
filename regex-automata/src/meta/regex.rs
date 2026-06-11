@@ -1936,7 +1936,11 @@ struct RegexInfoI {
 }
 
 impl RegexInfo {
-    fn new(config: Config, hirs: &[&Hir]) -> RegexInfo {
+    /// Creates a new `RegexInfo` from the configuration and HIRs that make up
+    /// a meta regex.
+    ///
+    /// This is exported for use in some tests.
+    pub(super) fn new(config: Config, hirs: &[&Hir]) -> RegexInfo {
         // Collect all of the properties from each of the HIRs, and also
         // union them into one big set of properties representing all HIRs
         // as if they were in one big alternation.
