@@ -850,7 +850,7 @@ impl Strategy for Core {
         // match bounds and not the entire haystack.
         trace!(
             "match found at {}..{} in capture search, \
-		  	 using another engine to find captures",
+             using another engine to find captures",
             m.start(),
             m.end(),
         );
@@ -917,7 +917,7 @@ impl ReverseAnchored {
         if !core.info.is_always_anchored_end() {
             debug!(
                 "skipping reverse anchored optimization because \
-				 the regex is not always anchored at the end"
+                 the regex is not always anchored at the end"
             );
             return Err(core);
         }
@@ -932,7 +932,7 @@ impl ReverseAnchored {
         if core.info.is_always_anchored_start() {
             debug!(
                 "skipping reverse anchored optimization because \
-				 the regex is also anchored at the start"
+                 the regex is also anchored at the start"
             );
             return Err(core);
         }
@@ -942,7 +942,7 @@ impl ReverseAnchored {
         if !core.hybrid.is_some() && !core.dfa.is_some() {
             debug!(
                 "skipping reverse anchored optimization because \
-				 we don't have a lazy DFA or a full DFA"
+                 we don't have a lazy DFA or a full DFA"
             );
             return Err(core);
         }
@@ -1156,7 +1156,7 @@ impl ReverseSuffix {
         if core.info.is_always_anchored_start() {
             debug!(
                 "skipping reverse suffix optimization because \
-				 the regex is always anchored at the start",
+                 the regex is always anchored at the start",
             );
             return Err(core);
         }
@@ -1166,14 +1166,14 @@ impl ReverseSuffix {
         if !core.hybrid.is_some() && !core.dfa.is_some() {
             debug!(
                 "skipping reverse suffix optimization because \
-				 we don't have a lazy DFA or a full DFA"
+                 we don't have a lazy DFA or a full DFA"
             );
             return Err(core);
         }
         if core.pre.as_ref().map_or(false, |p| p.is_fast()) {
             debug!(
                 "skipping reverse suffix optimization because \
-				 we already have a prefilter that we think is fast"
+                 we already have a prefilter that we think is fast"
             );
             return Err(core);
         }
@@ -1210,8 +1210,8 @@ impl ReverseSuffix {
         if !pre.is_fast() {
             debug!(
                 "skipping reverse suffix optimization because \
-				 while we have a suffix prefilter, it is not \
-				 believed to be 'fast'"
+                 while we have a suffix prefilter, it is not \
+                 believed to be 'fast'"
             );
             return Err(core);
         }
@@ -1362,7 +1362,7 @@ impl Strategy for ReverseSuffix {
                     Ok(None) => {
                         unreachable!(
                             "suffix match plus reverse match implies \
-						     there must be a match",
+                             there must be a match",
                         )
                     }
                     Ok(Some(hm_end)) => Some(Match::new(
@@ -1419,7 +1419,7 @@ impl Strategy for ReverseSuffix {
                     Ok(None) => {
                         unreachable!(
                             "suffix match plus reverse match implies \
-						     there must be a match",
+                             there must be a match",
                         )
                     }
                     Ok(Some(hm_end)) => Some(hm_end),
@@ -1473,7 +1473,7 @@ impl Strategy for ReverseSuffix {
             Err(RetryError::Fail(_err)) => {
                 trace!(
                     "reverse suffix reverse fast captures search failed: \
-                        {_err}"
+                     {_err}"
                 );
                 return self.core.search_slots_nofail(cache, input, slots);
             }
@@ -1482,7 +1482,7 @@ impl Strategy for ReverseSuffix {
         };
         trace!(
             "match found at {}..{} in capture search, \
-		  	 using another engine to find captures",
+             using another engine to find captures",
             hm_start.offset(),
             input.end(),
         );
@@ -1530,7 +1530,7 @@ impl ReverseInner {
         if core.info.config().get_match_kind() != MatchKind::LeftmostFirst {
             debug!(
                 "skipping reverse inner optimization because \
-				 match kind is {:?} but this only supports leftmost-first",
+                 match kind is {:?} but this only supports leftmost-first",
                 core.info.config().get_match_kind(),
             );
             return Err(core);
@@ -1553,7 +1553,7 @@ impl ReverseInner {
         if core.info.is_always_anchored_start() {
             debug!(
                 "skipping reverse inner optimization because \
-				 the regex is always anchored at the start",
+                 the regex is always anchored at the start",
             );
             return Err(core);
         }
@@ -1563,14 +1563,14 @@ impl ReverseInner {
         if !core.hybrid.is_some() && !core.dfa.is_some() {
             debug!(
                 "skipping reverse inner optimization because \
-				 we don't have a lazy DFA or a full DFA"
+                 we don't have a lazy DFA or a full DFA"
             );
             return Err(core);
         }
         if core.pre.as_ref().map_or(false, |p| p.is_fast()) {
             debug!(
                 "skipping reverse inner optimization because \
-				 we already have a prefilter that we think is fast"
+                 we already have a prefilter that we think is fast"
             );
             return Err(core);
         } else if core.pre.is_some() {
@@ -1601,7 +1601,7 @@ impl ReverseInner {
             Err(_err) => {
                 debug!(
                     "skipping reverse inner optimization because the \
-					 reverse NFA failed to build: {}",
+                     reverse NFA failed to build: {}",
                     _err,
                 );
                 return Err(core);
@@ -1618,7 +1618,7 @@ impl ReverseInner {
         } else if dfa.is_some() {
             debug!(
                 "skipping lazy DFA for reverse inner optimization \
-				 because we have a full DFA"
+                 because we have a full DFA"
             );
             wrappers::ReverseHybrid::none()
         } else {
@@ -1644,8 +1644,8 @@ impl ReverseInner {
             if litmatch.start < min_pre_start {
                 trace!(
                     "found inner prefilter match at {litmatch:?}, which starts \
-					 before the end of the last forward scan at {min_pre_start}, \
-					 quitting to avoid quadratic behavior",
+                     before the end of the last forward scan at {min_pre_start}, \
+                     quitting to avoid quadratic behavior",
                 );
                 return Err(RetryError::Quadratic(RetryQuadraticError::new()));
             }
