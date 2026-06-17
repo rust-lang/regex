@@ -100,7 +100,7 @@ OPTIONS:
         "'which' command does not support reporting counts",
     );
 
-    let pats = patterns.get()?;
+    let pats = patterns.get(&syntax)?;
     let syn = syntax.syntax()?;
     let mut table = Table::empty();
     let (re, time) = util::timeitr(|| api.from_patterns_set(&syn, &pats))?;
@@ -169,7 +169,7 @@ OPTIONS:
         "'which' command does not support reporting counts",
     );
 
-    let pats = patterns.get()?;
+    let pats = patterns.get(&syntax)?;
     let mut table = Table::empty();
 
     let re = if meta.build_from_patterns() {

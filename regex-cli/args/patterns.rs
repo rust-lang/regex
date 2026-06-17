@@ -52,23 +52,16 @@ impl Config {
     /// one pattern is returned.
     ///
     /// Note that it is legal for this to return zero patterns!
-    pub fn get(&self) -> anyhow::Result<Vec<String>> {
+    pub fn get(
+        &self,
+        syntax: &crate::args::syntax::Config,
+    ) -> anyhow::Result<Vec<String>> {
         let mut pats = self.patterns.clone();
         if self.fixed_strings {
             pats = pats.iter().map(|p| regex_syntax::escape(p)).collect();
         }
         if self.combine {
-            // FIXME: This is... not technically correct, since someone could
-            // provide a pattern `ab(cd` and then `ef)gh`. Neither are valid
-            // patterns, but by joining them with a |, we get `ab(cd|ef)gh`
-            // which is valid. The solution to this is I think to try and
-            // parse the regex to make sure it's valid, but we should be
-            // careful to only use the AST parser. The problem here is that
-            // we don't technically have the configuration of the parser at
-            // this point. We could *ask* for it. We could also just assume a
-            // default configuration since the AST parser doesn't have many
-            // configuration knobs. But probably we should just ask for the
-            // parser configuration here.
+            syntax.asts(&pats)?;
             pats = vec![pats.join("|")];
         }
         Ok(pats)
@@ -184,5 +177,54 @@ enum Mode {
 impl Default for Mode {
     fn default() -> Mode {
         Mode::OnlyFlags
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Config;
+
+    #[test]
+    fn combine_patterns_rejects_individually_invalid_patterns() {
+        let config = Config {
+            patterns: vec!["ab(cd".to_string(), "ef)gh".to_string()],
+            combine: true,
+            ..Config::default()
+        };
+
+        assert!(config.get(&crate::args::syntax::Config::default()).is_err());
+    }
+
+    #[test]
+    fn combine_patterns_accepts_individually_valid_patterns() {
+        let config = Config {
+            patterns: vec!["ab(cd)".to_string(), "ef(gh)".to_string()],
+            combine: true,
+            ..Config::default()
+        };
+
+        let got = config.get(&crate::args::syntax::Config::default()).unwrap();
+        assert_eq!(got, vec!["ab(cd)|ef(gh)".to_string()]);
+    }
+
+    #[test]
+    fn combine_patterns_respects_syntax_configuration() {
+        let mut syntax = crate::args::syntax::Config::default();
+        let config = Config {
+            patterns: vec![r"\141".to_string(), r"\142".to_string()],
+            combine: true,
+            ..Config::default()
+        };
+
+        assert!(config.get(&syntax).is_err());
+        let mut parser = lexopt::Parser::from_args(["--octal"]);
+        crate::args::configure(
+            &mut parser,
+            "",
+            &mut [&mut syntax as &mut dyn crate::args::Configurable],
+        )
+        .unwrap();
+        let got = config.get(&syntax).unwrap();
+        assert_eq!(got, vec![r"\141|\142".to_string()]);
     }
 }
