@@ -875,6 +875,7 @@ extern crate std;
 pub use self::string::*;
 pub use self::{error::Error, hir::escape};
 
+pub mod bytes;
 mod error;
 mod hir;
 mod int;
