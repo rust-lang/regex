@@ -242,7 +242,8 @@ impl RegexSet {
     /// ```
     #[inline]
     pub fn is_match_at(&self, haystack: &str, start: usize) -> bool {
-        self.meta.is_match(Input::new(haystack).span(start..haystack.len()))
+        self.meta
+            .is_match(Input::new_utf8(haystack).span(start..haystack.len()))
     }
 
     /// Returns the set of regexes that match in the given haystack.
@@ -323,7 +324,7 @@ impl RegexSet {
     /// ```
     #[inline]
     pub fn matches_at(&self, haystack: &str, start: usize) -> SetMatches {
-        let input = Input::new(haystack).span(start..haystack.len());
+        let input = Input::new_utf8(haystack).span(start..haystack.len());
         let mut patset = PatternSet::new(self.meta.pattern_len());
         self.meta.which_overlapping_matches(&input, &mut patset);
         SetMatches(patset)
@@ -357,7 +358,7 @@ impl RegexSet {
         // is in regex-automata, not regex. So maybe we should just accept a
         // 'SetMatches', which is basically just a newtype around PatternSet.
         let mut patset = PatternSet::new(self.meta.pattern_len());
-        let mut input = Input::new(haystack);
+        let mut input = Input::new_utf8(haystack);
         input.set_start(start);
         self.meta.which_overlapping_matches(&input, &mut patset);
         for pid in patset.iter() {

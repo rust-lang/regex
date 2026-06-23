@@ -141,3 +141,37 @@ fn dfa_handles_pathological_case() {
     };
     assert!(re.is_match(&text));
 }
+
+#[test]
+fn literal_prefix_capture_requires_exact_plus() {
+    let re = regex!(r"^a([^/]{2,})/.*$");
+    assert!(!re.is_match("ab/x"));
+}
+
+#[test]
+fn literal_prefix_capture_respects_invalid_pattern_id() {
+    let re = regex_automata::meta::Regex::new(r"^a([^/]+)/.*$").unwrap();
+    let input = regex_automata::Input::new("abc/x").anchored(
+        regex_automata::Anchored::Pattern(regex_automata::PatternID::must(1)),
+    );
+    let mut cache = re.create_cache();
+    assert_eq!(None, re.search_with(&mut cache, &input));
+}
+
+#[test]
+fn literal_prefix_capture_meta_unicode_rejects_invalid_utf8() {
+    let re = regex_automata::meta::Regex::new(r"^a([^/]+)/.*$").unwrap();
+    assert!(!re.is_match(regex_automata::Input::new(b"a\xFF/x")));
+}
+
+#[test]
+fn literal_prefix_capture_bytes_unicode_rejects_invalid_utf8() {
+    let re = regex::bytes::Regex::new(r"^a([^/]+)/.*$").unwrap();
+    assert!(!re.is_match(b"a\xFF/x"));
+
+    let re = regex::bytes::RegexBuilder::new(r"^a([^/]+)/.*$")
+        .unicode(false)
+        .build()
+        .unwrap();
+    assert!(re.is_match(b"a\xFF/x"));
+}
