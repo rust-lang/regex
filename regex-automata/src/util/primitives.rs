@@ -384,8 +384,7 @@ impl SmallIndexError {
     }
 }
 
-#[cfg(feature = "std")]
-impl std::error::Error for SmallIndexError {}
+impl core::error::Error for SmallIndexError {}
 
 impl core::fmt::Display for SmallIndexError {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
@@ -646,8 +645,7 @@ macro_rules! index_type_impls {
             }
         }
 
-        #[cfg(feature = "std")]
-        impl std::error::Error for $err {}
+        impl core::error::Error for $err {}
 
         impl core::fmt::Display for $err {
             fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
