@@ -37,16 +37,6 @@ pub(crate) fn reverse_suffix_is_safe(nfa: &NFA) -> bool {
     ReverseSuffix::new(nfa).map_or(false, |mut x| x.is_safe())
 }
 
-/// Return true when `nfa` can match a string containing `literal`.
-///
-/// This is used to prove that the prefix before a reverse suffix literal
-/// cannot itself contain the suffix literal. If it can, then a suffix scan may
-/// see an interior occurrence before it sees the suffix that ends the leftmost
-/// match.
-pub(crate) fn prefix_contains_literal(nfa: &NFA, literal: &[u8]) -> bool {
-    PrefixLiteral::new(nfa, literal).map_or(true, |mut x| x.contains())
-}
-
 /// Return true when the reverse inner strategy can return after the first
 /// confirmed inner literal candidate.
 ///
@@ -122,100 +112,6 @@ struct ReverseSuffixState {
     main: StateSet,
     suffix: StateSet,
     consumed: bool,
-}
-
-#[derive(Debug)]
-struct PrefixLiteral<'a> {
-    prefix: NFAStateSets<'a>,
-    literal: &'a [u8],
-    literal_len: StateID,
-    fallback: Vec<StateID>,
-}
-
-impl<'a> PrefixLiteral<'a> {
-    const LIMIT: usize = 10_000;
-
-    fn new(nfa: &'a NFA, literal: &'a [u8]) -> Option<PrefixLiteral<'a>> {
-        if literal.is_empty() {
-            return None;
-        }
-        let literal_len = StateID::new(literal.len()).ok()?;
-        Some(PrefixLiteral {
-            prefix: NFAStateSets::new(nfa, true)?,
-            literal,
-            literal_len,
-            fallback: PrefixLiteral::kmp_fallback(literal),
-        })
-    }
-
-    fn contains(&mut self) -> bool {
-        let start = PrefixLiteralState {
-            prefix: self.prefix.start.clone(),
-            matched: StateID::ZERO,
-        };
-        let mut seen = BTreeSet::new();
-        seen.insert(start.clone());
-        let mut queue = vec![start];
-        let mut i = 0;
-        while let Some(state) = queue.get(i).cloned() {
-            i += 1;
-            for byte in 0..=u8::MAX {
-                let prefix = match self.prefix.step(&state.prefix, byte) {
-                    None => return true,
-                    Some(prefix) => prefix,
-                };
-                if !self.prefix.can_reach_match(&prefix) {
-                    continue;
-                }
-                let matched = self.next_match_len(state.matched, byte);
-                if matched == self.literal_len {
-                    return true;
-                }
-                let next = PrefixLiteralState { prefix, matched };
-                if seen.insert(next.clone()) {
-                    if seen.len() > Self::LIMIT {
-                        return true;
-                    }
-                    queue.push(next);
-                }
-            }
-        }
-        false
-    }
-
-    fn next_match_len(&self, mut len: StateID, byte: u8) -> StateID {
-        while len != StateID::ZERO && self.literal[len.as_usize()] != byte {
-            len = self.fallback[len.as_usize() - 1];
-        }
-        if self.literal[len.as_usize()] == byte {
-            len = StateID::new(len.as_usize() + 1)
-                .expect("matched length should fit in StateID");
-        }
-        len
-    }
-
-    fn kmp_fallback(literal: &[u8]) -> Vec<StateID> {
-        let mut fallback = vec![StateID::ZERO; literal.len()];
-        let mut len = StateID::ZERO;
-        for i in 1..literal.len() {
-            while len != StateID::ZERO && literal[i] != literal[len.as_usize()]
-            {
-                len = fallback[len.as_usize() - 1];
-            }
-            if literal[i] == literal[len.as_usize()] {
-                len = StateID::new(len.as_usize() + 1)
-                    .expect("fallback length should fit in StateID");
-                fallback[i] = len;
-            }
-        }
-        fallback
-    }
-}
-
-#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
-struct PrefixLiteralState {
-    prefix: StateSet,
-    matched: StateID,
 }
 
 #[derive(Debug)]

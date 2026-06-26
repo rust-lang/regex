@@ -1135,6 +1135,8 @@ struct ReverseSuffix {
 }
 
 impl ReverseSuffix {
+    const EARLY_RETURN_SAFE_NFA_STATE_LIMIT: usize = 1_000;
+
     fn new(core: Core, hirs: &[&Hir]) -> Result<ReverseSuffix, Core> {
         if !core.info.config().get_auto_prefilter() {
             debug!(
@@ -1232,8 +1234,7 @@ impl ReverseSuffix {
         }
         let has_internal_suffix = || {
             let yes =
-                ReverseSuffix::has_internal_suffix(&core.info, hirs, &lcs)
-                    .unwrap_or(true);
+                ReverseSuffix::has_internal_suffix(hirs, &lcs).unwrap_or(true);
             debug!("reverse suffix has internal suffix? {yes}");
             yes
         };
@@ -1242,13 +1243,19 @@ impl ReverseSuffix {
             debug!("reverse suffix has guarded internal suffix? {yes}");
             yes
         };
+        let has_absorbing_prefix = || {
+            let yes = ReverseSuffix::has_absorbing_prefix(hirs, &lcs);
+            debug!("reverse suffix has absorbing prefix? {yes}");
+            yes
+        };
         let is_early_return_safe = || {
             let yes = ReverseSuffix::is_early_return_safe(&core.nfa);
             debug!("reverse suffix is early return safe? {yes}");
             yes
         };
-        if has_internal_suffix()
+        if !has_absorbing_prefix()
             && !has_guarded_internal_suffix()
+            && has_internal_suffix()
             && !is_early_return_safe()
         {
             debug!(
@@ -1262,28 +1269,166 @@ impl ReverseSuffix {
     }
 
     fn is_early_return_safe(nfa: &NFA) -> bool {
+        if nfa.states().len() > Self::EARLY_RETURN_SAFE_NFA_STATE_LIMIT {
+            debug!(
+                "skipping reverse suffix early return safety analysis \
+                 because NFA has {} states, which exceeds the limit of {}",
+                nfa.states().len(),
+                Self::EARLY_RETURN_SAFE_NFA_STATE_LIMIT,
+            );
+            return false;
+        }
         overlap::reverse_suffix_is_safe(nfa)
     }
 
-    fn has_internal_suffix(
-        info: &RegexInfo,
-        hirs: &[&Hir],
-        suffix: &[u8],
-    ) -> Option<bool> {
+    fn has_internal_suffix(hirs: &[&Hir], suffix: &[u8]) -> Option<bool> {
         if hirs.len() != 1 || suffix.is_empty() {
             return None;
         }
         let prefix = ReverseSuffix::strip_literal_suffix(hirs[0], suffix)?;
-        let thompson_config = info
-            .config()
-            .to_thompson_config()
-            // We don't care about capture states for this analysis.
-            .which_captures(WhichCaptures::None);
-        let prefix_nfa = thompson::Compiler::new()
-            .configure(thompson_config)
-            .build_from_hir(&prefix)
-            .ok()?;
-        Some(overlap::prefix_contains_literal(&prefix_nfa, suffix))
+        Some(!ReverseSuffix::hir_cannot_contain_literal(&prefix, suffix))
+    }
+
+    /// Return true when `hir` cannot match any string containing `literal`.
+    ///
+    /// This is deliberately a low precision HIR proof. If every byte in the
+    /// literal can be consumed somewhere in the HIR, this gives up and reports
+    /// that an internal suffix might exist. The precise check used to compile
+    /// a prefix NFA and explore state sets, which is too expensive for a
+    /// construction-time optimization.
+    fn hir_cannot_contain_literal(hir: &Hir, literal: &[u8]) -> bool {
+        !literal.is_empty()
+            && literal
+                .iter()
+                .any(|&byte| !ReverseInner::hir_can_consume_byte(hir, byte))
+    }
+
+    fn has_absorbing_prefix(hirs: &[&Hir], suffix: &[u8]) -> bool {
+        if hirs.len() != 1 || suffix.is_empty() {
+            return false;
+        }
+        let prefix = match ReverseSuffix::strip_literal_suffix(hirs[0], suffix)
+        {
+            None => return false,
+            Some(prefix) => prefix,
+        };
+        let absorber = match ReverseSuffix::trailing_absorber(&prefix) {
+            None => return false,
+            Some(absorber) => absorber,
+        };
+        ReverseSuffix::absorber_covers_literal(absorber, suffix)
+            && ReverseSuffix::absorber_covers_hir(absorber, &prefix)
+    }
+
+    /// Return a trailing unbounded repetition body that can absorb more input.
+    ///
+    /// This intentionally only recognizes single-unit character classes as
+    /// absorbers. For example, the `\pL` in `\pL{50,}ABC` qualifies, but an
+    /// arbitrary repeated sub-expression does not. That keeps the proof
+    /// simple: once the prefix has reached this repetition, every extra unit
+    /// accepted by the absorber can be folded into the same match.
+    fn trailing_absorber(hir: &Hir) -> Option<&Hir> {
+        match hir.kind() {
+            HirKind::Repetition(rep) if rep.max.is_none() => {
+                ReverseSuffix::unit_absorber(&rep.sub)
+            }
+            HirKind::Capture(capture) => {
+                ReverseSuffix::trailing_absorber(&capture.sub)
+            }
+            HirKind::Concat(hirs) => hirs
+                .iter()
+                .rev()
+                .find(|hir| !matches!(hir.kind(), HirKind::Empty))
+                .and_then(ReverseSuffix::trailing_absorber),
+            HirKind::Alternation(hirs) => {
+                let mut alts = hirs.iter();
+                let first = ReverseSuffix::trailing_absorber(alts.next()?)?;
+                if alts.all(|hir| {
+                    ReverseSuffix::trailing_absorber(hir)
+                        .map_or(false, |absorber| absorber == first)
+                }) {
+                    Some(first)
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }
+    }
+
+    /// Return a single input unit that can be repeated as an absorber.
+    fn unit_absorber(hir: &Hir) -> Option<&Hir> {
+        match hir.kind() {
+            HirKind::Class(_) => Some(hir),
+            HirKind::Capture(capture) => {
+                ReverseSuffix::unit_absorber(&capture.sub)
+            }
+            _ => None,
+        }
+    }
+
+    /// Return true when every unit consumed by `hir` is accepted by
+    /// `absorber`.
+    ///
+    /// This is a byte/character coverage check, not a language equivalence
+    /// check. It is only used after `trailing_absorber` has found an
+    /// unbounded class repetition at the end of the prefix.
+    fn absorber_covers_hir(absorber: &Hir, hir: &Hir) -> bool {
+        if absorber == hir {
+            return true;
+        }
+        match hir.kind() {
+            HirKind::Empty => true,
+            HirKind::Literal(lit) => {
+                ReverseSuffix::absorber_covers_literal(absorber, &lit.0)
+            }
+            HirKind::Class(cls) => {
+                ReverseSuffix::absorber_covers_class(absorber, cls)
+            }
+            HirKind::Repetition(rep) => {
+                ReverseSuffix::absorber_covers_hir(absorber, &rep.sub)
+            }
+            HirKind::Capture(capture) => {
+                ReverseSuffix::absorber_covers_hir(absorber, &capture.sub)
+            }
+            HirKind::Concat(hirs) | HirKind::Alternation(hirs) => hirs
+                .iter()
+                .all(|hir| ReverseSuffix::absorber_covers_hir(absorber, hir)),
+            HirKind::Look(_) => false,
+        }
+    }
+
+    fn absorber_covers_literal(absorber: &Hir, literal: &[u8]) -> bool {
+        match absorber.kind() {
+            HirKind::Class(Class::Bytes(cls)) => literal
+                .iter()
+                .all(|&byte| ReverseInner::byte_class_contains(cls, byte)),
+            HirKind::Class(Class::Unicode(cls)) => {
+                core::str::from_utf8(literal).map_or(false, |s| {
+                    s.chars().all(|ch| {
+                        ReverseInner::unicode_class_contains(cls, ch)
+                    })
+                })
+            }
+            _ => false,
+        }
+    }
+
+    fn absorber_covers_class(absorber: &Hir, class: &Class) -> bool {
+        match (absorber.kind(), class) {
+            (HirKind::Class(Class::Bytes(absorber)), Class::Bytes(cls)) => {
+                cls.ranges().iter().all(|range| {
+                    (range.start()..=range.end()).all(|byte| {
+                        ReverseInner::byte_class_contains(absorber, byte)
+                    })
+                })
+            }
+            (
+                HirKind::Class(Class::Unicode(absorber)),
+                Class::Unicode(cls),
+            ) => absorber == cls,
+            _ => false,
+        }
     }
 
     fn has_guarded_internal_suffix(hirs: &[&Hir], suffix: &[u8]) -> bool {
@@ -2404,6 +2549,23 @@ mod which_strategy_tests {
         assert_eq!(name, strategy.name().as_ref());
     }
 
+    #[track_caller]
+    fn assert_absorbing_prefix(yes: bool, pattern: &str, suffix: &[u8]) {
+        let hirs = syntax::parse_many(&[pattern]).unwrap();
+        let hirs: Vec<&Hir> = hirs.iter().collect();
+        assert_eq!(yes, ReverseSuffix::has_absorbing_prefix(&hirs, suffix));
+    }
+
+    #[track_caller]
+    fn assert_internal_suffix(yes: bool, pattern: &str, suffix: &[u8]) {
+        let hirs = syntax::parse_many(&[pattern]).unwrap();
+        let hirs: Vec<&Hir> = hirs.iter().collect();
+        assert_eq!(
+            yes,
+            ReverseSuffix::has_internal_suffix(&hirs, suffix).unwrap_or(true)
+        );
+    }
+
     fn literal_alternation(count: usize) -> String {
         let mut pattern = String::new();
         for i in 0..count {
@@ -2562,7 +2724,10 @@ mod which_strategy_tests {
 
     #[test]
     fn reverse_suffix_accepts_prefix_without_internal_suffix() {
+        assert_internal_suffix(false, r"\d+XYZ", b"XYZ");
+        assert_internal_suffix(false, r"[a-q][^u-z]{13}x", b"x");
         assert_strategy("reverse suffix", &[r"\d+XYZ"]);
+        assert_strategy("reverse suffix", &[r"[a-q][^u-z]{13}x"]);
     }
 
     #[test]
@@ -2572,7 +2737,36 @@ mod which_strategy_tests {
 
     #[test]
     fn reverse_suffix_accepts_safe_nfa_overlap() {
+        assert_internal_suffix(true, r".y", b"y");
+        assert_strategy("reverse suffix", &[r".y"]);
         assert_strategy("reverse suffix", &[r"(a|aa)b"]);
+    }
+
+    #[test]
+    fn reverse_suffix_accepts_absorbing_prefix() {
+        assert_absorbing_prefix(
+            true,
+            r"\pL{50,}ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+            b"ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+        );
+        assert_strategy(
+            "reverse suffix",
+            &[r"\pL{50,}ABCDEFGHIJKLMNOPQRSTUVWXYZ"],
+        );
+    }
+
+    #[test]
+    fn reverse_suffix_accepts_absorbing_prefix_in_alternation() {
+        assert_absorbing_prefix(true, r"(?:\pL{50,}|\pL{60,})ABC", b"ABC");
+        assert_strategy("reverse suffix", &[r"(?:[A-Z]{50,}|[A-Z]{60,})ABC"]);
+    }
+
+    #[test]
+    fn reverse_suffix_absorbing_prefix_is_conservative() {
+        assert_absorbing_prefix(false, r".y", b"y");
+        assert_absorbing_prefix(false, r"foo\d{50,}123", b"123");
+        assert_absorbing_prefix(false, r"\pL{50,}\bABC", b"ABC");
+        assert_internal_suffix(true, r"foo\d{50,}123", b"123");
     }
 
     #[test]
