@@ -1246,12 +1246,18 @@ impl ReverseSuffix {
             debug!("reverse suffix has fixed length prefix? {yes}");
             yes
         };
+        let has_disjoint_trailing_prefix = || {
+            let yes = ReverseSuffix::has_disjoint_trailing_prefix(hirs, &lcs);
+            debug!("reverse suffix has disjoint trailing prefix? {yes}");
+            yes
+        };
         let has_absorbing_prefix = || {
             let yes = ReverseSuffix::has_absorbing_prefix(hirs, &lcs);
             debug!("reverse suffix has absorbing prefix? {yes}");
             yes
         };
         if !has_fixed_length_prefix()
+            && !has_disjoint_trailing_prefix()
             && !has_absorbing_prefix()
             && !has_guarded_internal_suffix()
             && has_internal_suffix()
@@ -1304,6 +1310,62 @@ impl ReverseSuffix {
         let props = hir.properties();
         props.minimum_len().is_some()
             && props.minimum_len() == props.maximum_len()
+    }
+
+    /// Return true when the suffix is preceded by a required component that
+    /// cannot consume any byte from the suffix literal.
+    ///
+    /// This is enough to prove that an earlier occurrence of the suffix inside
+    /// the prefix cannot be the leftmost-first match to report. Any actual
+    /// full match ending at the final suffix must pass through this required
+    /// component immediately before it, and that component acts as a separator
+    /// from the prior prefix.
+    fn has_disjoint_trailing_prefix(hirs: &[&Hir], suffix: &[u8]) -> bool {
+        if hirs.len() != 1 || suffix.is_empty() {
+            return false;
+        }
+        let prefix = match ReverseSuffix::strip_literal_suffix(hirs[0], suffix)
+        {
+            None => return false,
+            Some(prefix) => prefix,
+        };
+        let component =
+            match ReverseSuffix::trailing_required_component(&prefix) {
+                None => return false,
+                Some(component) => component,
+            };
+        suffix
+            .iter()
+            .all(|&byte| !ReverseInner::hir_can_consume_byte(component, byte))
+    }
+
+    /// Return the final required component in `hir`.
+    ///
+    /// Empty HIRs and look-around assertions consume nothing, so they may be
+    /// skipped at the very end. Nullable consuming HIRs are not skipped: if a
+    /// nullable component sits between the required component and the suffix,
+    /// then that nullable component might itself consume part of the suffix.
+    fn trailing_required_component(hir: &Hir) -> Option<&Hir> {
+        match hir.kind() {
+            HirKind::Capture(capture) => {
+                ReverseSuffix::trailing_required_component(&capture.sub)
+            }
+            HirKind::Concat(hirs) => {
+                let last = hirs.iter().rev().find(|hir| {
+                    !matches!(hir.kind(), HirKind::Empty | HirKind::Look(_))
+                })?;
+                ReverseSuffix::trailing_required_component(last)
+            }
+            HirKind::Empty | HirKind::Look(_) => None,
+            _ if hir
+                .properties()
+                .minimum_len()
+                .map_or(false, |len| len > 0) =>
+            {
+                Some(hir)
+            }
+            _ => None,
+        }
     }
 
     fn has_absorbing_prefix(hirs: &[&Hir], suffix: &[u8]) -> bool {
@@ -2660,6 +2722,20 @@ mod which_strategy_tests {
     }
 
     #[track_caller]
+    fn assert_disjoint_trailing_prefix(
+        yes: bool,
+        pattern: &str,
+        suffix: &[u8],
+    ) {
+        let hirs = syntax::parse_many(&[pattern]).unwrap();
+        let hirs: Vec<&Hir> = hirs.iter().collect();
+        assert_eq!(
+            yes,
+            ReverseSuffix::has_disjoint_trailing_prefix(&hirs, suffix)
+        );
+    }
+
+    #[track_caller]
     fn assert_internal_suffix(yes: bool, pattern: &str, suffix: &[u8]) {
         let hirs = syntax::parse_many(&[pattern]).unwrap();
         let hirs: Vec<&Hir> = hirs.iter().collect();
@@ -2872,6 +2948,16 @@ mod which_strategy_tests {
     }
 
     #[test]
+    fn reverse_suffix_accepts_disjoint_trailing_prefix() {
+        assert_internal_suffix(true, r"\w+\s+Holmes", b"Holmes");
+        assert_disjoint_trailing_prefix(true, r"\w+\s+Holmes", b"Holmes");
+        assert_strategy("reverse suffix", &[r"\w+\s+Holmes"]);
+
+        assert_disjoint_trailing_prefix(true, r"\w+\s+\bHolmes", b"Holmes");
+        assert_strategy("reverse suffix", &[r"\w+\s+\bHolmes"]);
+    }
+
+    #[test]
     fn reverse_suffix_accepts_absorbing_prefix() {
         assert_absorbing_prefix(
             true,
@@ -2901,6 +2987,15 @@ mod which_strategy_tests {
     fn reverse_suffix_fixed_length_prefix_is_conservative() {
         assert_fixed_length_prefix(false, r"a{1,3}yy", b"yy");
         assert_fixed_length_prefix(false, r"a*yy", b"yy");
+    }
+
+    #[test]
+    fn reverse_suffix_disjoint_trailing_prefix_is_conservative() {
+        assert_disjoint_trailing_prefix(false, r"\w+\s*Holmes", b"Holmes");
+        assert_disjoint_trailing_prefix(false, r"\s+\w*Holmes", b"Holmes");
+        assert_disjoint_trailing_prefix(false, r"H[^H]+Holmes", b"Holmes");
+        assert_strategy("reverse inner", &[r"\w+\s*Holmes"]);
+        assert_strategy("reverse inner", &[r"\s+\w*Holmes"]);
     }
 
     #[test]
