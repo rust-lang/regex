@@ -1135,8 +1135,6 @@ struct ReverseSuffix {
 }
 
 impl ReverseSuffix {
-    const EARLY_RETURN_SAFE_NFA_STATE_LIMIT: usize = 1_000;
-
     fn new(core: Core, hirs: &[&Hir]) -> Result<ReverseSuffix, Core> {
         if !core.info.config().get_auto_prefilter() {
             debug!(
@@ -1248,15 +1246,9 @@ impl ReverseSuffix {
             debug!("reverse suffix has absorbing prefix? {yes}");
             yes
         };
-        let is_early_return_safe = || {
-            let yes = ReverseSuffix::is_early_return_safe(&core.nfa);
-            debug!("reverse suffix is early return safe? {yes}");
-            yes
-        };
         if !has_absorbing_prefix()
             && !has_guarded_internal_suffix()
             && has_internal_suffix()
-            && !is_early_return_safe()
         {
             debug!(
                 "skipping reverse suffix optimization because \
@@ -1266,19 +1258,6 @@ impl ReverseSuffix {
             return Err(core);
         }
         Ok(ReverseSuffix { core, pre })
-    }
-
-    fn is_early_return_safe(nfa: &NFA) -> bool {
-        if nfa.states().len() > Self::EARLY_RETURN_SAFE_NFA_STATE_LIMIT {
-            debug!(
-                "skipping reverse suffix early return safety analysis \
-                 because NFA has {} states, which exceeds the limit of {}",
-                nfa.states().len(),
-                Self::EARLY_RETURN_SAFE_NFA_STATE_LIMIT,
-            );
-            return false;
-        }
-        overlap::reverse_suffix_is_safe(nfa)
     }
 
     fn has_internal_suffix(hirs: &[&Hir], suffix: &[u8]) -> Option<bool> {
@@ -2736,10 +2715,10 @@ mod which_strategy_tests {
     }
 
     #[test]
-    fn reverse_suffix_accepts_safe_nfa_overlap() {
+    fn reverse_suffix_rejects_safe_nfa_overlap() {
         assert_internal_suffix(true, r".y", b"y");
-        assert_strategy("reverse suffix", &[r".y"]);
-        assert_strategy("reverse suffix", &[r"(a|aa)b"]);
+        assert_strategy("reverse inner", &[r".y"]);
+        assert_strategy("reverse inner", &[r"(a|aa)b"]);
     }
 
     #[test]
@@ -2770,8 +2749,8 @@ mod which_strategy_tests {
     }
 
     #[test]
-    fn reverse_suffix_accepts_multiple_patterns_with_common_suffix() {
-        assert_strategy("reverse suffix", &[r"\d+XYZ", r"\w+XYZ"]);
+    fn reverse_suffix_rejects_multiple_patterns_with_common_suffix() {
+        assert_strategy("core", &[r"\d+XYZ", r"\w+XYZ"]);
     }
 
     #[test]
@@ -2824,7 +2803,7 @@ mod which_strategy_tests {
     #[test]
     fn reverse_suffix_rejects_multiple_patterns_when_first_looks_safe() {
         assert_strategy("core", &[r"\d+b", r".bb|b"]);
-        assert_strategy("reverse suffix", &[r"\d+b", r"ab"]);
+        assert_strategy("core", &[r"\d+b", r"ab"]);
     }
 
     #[test]
@@ -2903,5 +2882,22 @@ mod which_strategy_tests {
     #[test]
     fn reverse_inner_rejects_absorbing_bounded_repeat() {
         assert_strategy("core", &[r"[\s\S]{0,100}@\w+"]);
+    }
+
+    #[test]
+    fn rebar_benchmarks() {
+        assert_strategy("reverse suffix", &[r"[a-q][^u-z]{23}x"]);
+        assert_strategy("reverse suffix", &[r".y"]);
+
+        // assert_strategy(
+        // "reverse inner",
+        // &[r"[ -~]*ABCDEFGHIJKLMNOPQRSTUVWXYZ.*"],
+        // );
+        // assert_strategy("reverse suffix", &[r""]);
+        // assert_strategy("reverse suffix", &[r""]);
+        // assert_strategy("reverse suffix", &[r""]);
+        // assert_strategy("reverse suffix", &[r""]);
+        // assert_strategy("reverse suffix", &[r""]);
+        // assert_strategy("reverse suffix", &[r""]);
     }
 }

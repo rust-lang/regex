@@ -2,13 +2,13 @@
 Routines for proving when reverse meta strategies may return after the first
 confirmed candidate match.
 
-The reverse suffix and reverse inner strategies first search for a literal
-candidate and then confirm that candidate with another regex search. Returning
-after the first confirmed candidate is only correct when no earlier match can
-be skipped over by the literal scan. The checks in this module are conservative
-proofs for that condition. If any check gets confused, grows too large or sees
-a construct it doesn't model, it reports failure and the corresponding reverse
-strategy is not used.
+The reverse inner strategy first searches for a literal candidate and then
+confirms that candidate with another regex search. Returning after the first
+confirmed candidate is only correct when no earlier match can be skipped over
+by the literal scan. The checks in this module are conservative proofs for
+that condition. If any check gets confused, grows too large or sees a construct
+it doesn't model, it reports failure and the corresponding reverse strategy is
+not used.
 
 The analysis here is not part of matching. It only runs while building the
 meta regex, and it operates on small Thompson NFAs compiled only for the part
@@ -27,16 +27,6 @@ use crate::{
 /// A canonical, owned representation of an epsilon-closed set of NFA states.
 type StateSet = Vec<StateID>;
 
-/// Return true when the reverse suffix strategy can return after the first
-/// confirmed suffix candidate.
-///
-/// If this returns false, then some proper suffix of a non-matching proper
-/// prefix may itself be a complete match. In that case, the first confirmed
-/// suffix could be an interior match instead of the leftmost match.
-pub(crate) fn reverse_suffix_is_safe(nfa: &NFA) -> bool {
-    ReverseSuffix::new(nfa).map_or(false, |mut x| x.is_safe())
-}
-
 /// Return true when the reverse inner strategy can return after the first
 /// confirmed inner literal candidate.
 ///
@@ -49,69 +39,6 @@ pub(crate) fn reverse_inner_is_safe(
     literals: &[Literal],
 ) -> bool {
     ReverseInner::new(prefix, literals).map_or(false, |mut x| x.is_safe())
-}
-
-#[derive(Debug)]
-struct ReverseSuffix<'a> {
-    full: NFAStateSets<'a>,
-}
-
-impl<'a> ReverseSuffix<'a> {
-    const LIMIT: usize = 10_000;
-
-    fn new(nfa: &'a NFA) -> Option<ReverseSuffix<'a>> {
-        Some(ReverseSuffix { full: NFAStateSets::new(nfa, false)? })
-    }
-
-    fn is_safe(&mut self) -> bool {
-        let mut seen = BTreeSet::new();
-        let mut queue = vec![ReverseSuffixState {
-            main: self.full.start.clone(),
-            suffix: vec![],
-            consumed: false,
-        }];
-        let mut i = 0;
-        while let Some(state) = queue.get(i).cloned() {
-            i += 1;
-            for byte in 0..=u8::MAX {
-                let main = match self.full.step(&state.main, byte) {
-                    None => return false,
-                    Some(main) => main,
-                };
-                let mut suffix_base = state.suffix.clone();
-                if state.consumed {
-                    suffix_base.extend(self.full.start.iter().copied());
-                    suffix_base.sort_unstable();
-                    suffix_base.dedup();
-                }
-                let suffix = match self.full.step(&suffix_base, byte) {
-                    None => return false,
-                    Some(suffix) => suffix,
-                };
-                if self.full.is_match(&suffix)
-                    && !self.full.is_match(&main)
-                    && self.full.can_extend_nonempty(&main)
-                {
-                    return false;
-                }
-                let next = ReverseSuffixState { main, suffix, consumed: true };
-                if seen.insert(next.clone()) {
-                    if seen.len() > Self::LIMIT {
-                        return false;
-                    }
-                    queue.push(next);
-                }
-            }
-        }
-        true
-    }
-}
-
-#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
-struct ReverseSuffixState {
-    main: StateSet,
-    suffix: StateSet,
-    consumed: bool,
 }
 
 #[derive(Debug)]
@@ -429,15 +356,5 @@ impl<'a> NFAStateSets<'a> {
 
     fn can_reach_match(&self, set: &[StateID]) -> bool {
         set.iter().any(|&sid| self.can_reach_match[sid.as_usize()])
-    }
-
-    fn can_extend_nonempty(&mut self, set: &[StateID]) -> bool {
-        (0..=u8::MAX).any(|byte| {
-            let next = match self.step(set, byte) {
-                None => return true,
-                Some(next) => next,
-            };
-            self.can_reach_match(&next)
-        })
     }
 }
