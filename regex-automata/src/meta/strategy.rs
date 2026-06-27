@@ -1291,6 +1291,11 @@ impl ReverseSuffix {
             None => return false,
             Some(prefix) => prefix,
         };
+        if let Some(absorber) = ReverseSuffix::single_absorber(&prefix) {
+            return ReverseSuffix::absorber_covers_one_literal_unit(
+                absorber, suffix,
+            );
+        }
         let absorber = match ReverseSuffix::trailing_absorber(&prefix) {
             None => return false,
             Some(absorber) => absorber,
@@ -1335,6 +1340,11 @@ impl ReverseSuffix {
         }
     }
 
+    /// Return a single input unit that can absorb one suffix unit.
+    fn single_absorber(hir: &Hir) -> Option<&Hir> {
+        ReverseSuffix::unit_absorber(hir)
+    }
+
     /// Return a single input unit that can be repeated as an absorber.
     fn unit_absorber(hir: &Hir) -> Option<&Hir> {
         match hir.kind() {
@@ -1343,6 +1353,31 @@ impl ReverseSuffix {
                 ReverseSuffix::unit_absorber(&capture.sub)
             }
             _ => None,
+        }
+    }
+
+    fn absorber_covers_one_literal_unit(
+        absorber: &Hir,
+        literal: &[u8],
+    ) -> bool {
+        match absorber.kind() {
+            HirKind::Class(Class::Bytes(cls)) => {
+                literal.len() == 1
+                    && ReverseInner::byte_class_contains(cls, literal[0])
+            }
+            HirKind::Class(Class::Unicode(cls)) => {
+                let mut chars = match core::str::from_utf8(literal) {
+                    Err(_) => return false,
+                    Ok(s) => s.chars(),
+                };
+                let ch = match chars.next() {
+                    None => return false,
+                    Some(ch) => ch,
+                };
+                chars.next().is_none()
+                    && ReverseInner::unicode_class_contains(cls, ch)
+            }
+            _ => false,
         }
     }
 
@@ -2716,9 +2751,14 @@ mod which_strategy_tests {
 
     #[test]
     fn reverse_suffix_rejects_safe_nfa_overlap() {
-        assert_internal_suffix(true, r".y", b"y");
-        assert_strategy("reverse inner", &[r".y"]);
         assert_strategy("reverse inner", &[r"(a|aa)b"]);
+    }
+
+    #[test]
+    fn reverse_suffix_accepts_single_unit_absorbing_prefix() {
+        assert_internal_suffix(true, r".y", b"y");
+        assert_absorbing_prefix(true, r".y", b"y");
+        assert_strategy("reverse suffix", &[r".y"]);
     }
 
     #[test]
@@ -2742,7 +2782,7 @@ mod which_strategy_tests {
 
     #[test]
     fn reverse_suffix_absorbing_prefix_is_conservative() {
-        assert_absorbing_prefix(false, r".y", b"y");
+        assert_absorbing_prefix(false, r".yy", b"yy");
         assert_absorbing_prefix(false, r"foo\d{50,}123", b"123");
         assert_absorbing_prefix(false, r"\pL{50,}\bABC", b"ABC");
         assert_internal_suffix(true, r"foo\d{50,}123", b"123");
