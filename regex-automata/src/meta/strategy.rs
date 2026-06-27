@@ -3046,18 +3046,35 @@ mod which_strategy_tests {
 
     #[test]
     fn rebar_benchmarks() {
-        assert_strategy("reverse suffix", &[r"[a-q][^u-z]{23}x"]);
+        assert_strategy(
+            "reverse inner",
+            &[
+                r#"(?:(?:"|'|\]|\}|\\|\d|(?:nan|infinity|true|false|null|undefined|symbol|math)|`|-|\+)+[)]*;?((?:\s|-|~|!|\{\}|\|\||\+)*.*(?:.*=.*)))"#,
+            ],
+        );
+        assert_strategy("reverse inner", &[r".*.*=.*"]);
+        assert_strategy("reverse suffix", &[r"\w+\s+Holmes"]);
         assert_strategy("reverse suffix", &[r".y"]);
-
-        // assert_strategy(
-        // "reverse inner",
-        // &[r"[ -~]*ABCDEFGHIJKLMNOPQRSTUVWXYZ.*"],
-        // );
-        // assert_strategy("reverse suffix", &[r""]);
-        // assert_strategy("reverse suffix", &[r""]);
-        // assert_strategy("reverse suffix", &[r""]);
-        // assert_strategy("reverse suffix", &[r""]);
-        // assert_strategy("reverse suffix", &[r""]);
-        // assert_strategy("reverse suffix", &[r""]);
+        assert_strategy(
+            "reverse inner",
+            &[r"[ -~]*ABCDEFGHIJKLMNOPQRSTUVWXYZ.*"],
+        );
+        assert_strategy("reverse suffix", &[r"[a-zA-Z]+ing"]);
+        assert_strategy("reverse inner", &[r"\s[a-zA-Z]{0,12}ing\s"]);
+        assert_strategy("reverse suffix", &[r"[a-z]shing"]);
+        assert_strategy(
+            "reverse inner",
+            &[r".{0,2}(Tom|Sawyer|Huckleberry|Finn)"],
+        );
+        assert_strategy(
+            "reverse inner",
+            &[r".{2,4}(Tom|Sawyer|Huckleberry|Finn)"],
+        );
+        assert_strategy("reverse suffix", &[r"[a-zA-Z]+ing"]);
+        assert_strategy("reverse inner", &[r"\s[a-zA-Z]{0,12}ing\s"]);
+        assert_strategy("reverse inner", &[r"([A-Za-z]awyer|[A-Za-z]inn)\s"]);
+        assert_strategy("reverse inner", &[r"\pL+herloc\pL+|\pL+olme\pL+"]);
+        assert_strategy("reverse inner", &[r"[A-Z].*bcdefghijklmnopq[a-z]+"]);
+        assert_strategy("reverse suffix", &[r"[a-q][^u-z]{23}x"]);
     }
 }
