@@ -1241,12 +1241,18 @@ impl ReverseSuffix {
             debug!("reverse suffix has guarded internal suffix? {yes}");
             yes
         };
+        let has_fixed_length_prefix = || {
+            let yes = ReverseSuffix::has_fixed_length_prefix(hirs, &lcs);
+            debug!("reverse suffix has fixed length prefix? {yes}");
+            yes
+        };
         let has_absorbing_prefix = || {
             let yes = ReverseSuffix::has_absorbing_prefix(hirs, &lcs);
             debug!("reverse suffix has absorbing prefix? {yes}");
             yes
         };
-        if !has_absorbing_prefix()
+        if !has_fixed_length_prefix()
+            && !has_absorbing_prefix()
             && !has_guarded_internal_suffix()
             && has_internal_suffix()
         {
@@ -1282,6 +1288,24 @@ impl ReverseSuffix {
                 .any(|&byte| !ReverseInner::hir_can_consume_byte(hir, byte))
     }
 
+    fn has_fixed_length_prefix(hirs: &[&Hir], suffix: &[u8]) -> bool {
+        if hirs.len() != 1 || suffix.is_empty() {
+            return false;
+        }
+        let prefix = match ReverseSuffix::strip_literal_suffix(hirs[0], suffix)
+        {
+            None => return false,
+            Some(prefix) => prefix,
+        };
+        ReverseSuffix::hir_has_fixed_length(&prefix)
+    }
+
+    fn hir_has_fixed_length(hir: &Hir) -> bool {
+        let props = hir.properties();
+        props.minimum_len().is_some()
+            && props.minimum_len() == props.maximum_len()
+    }
+
     fn has_absorbing_prefix(hirs: &[&Hir], suffix: &[u8]) -> bool {
         if hirs.len() != 1 || suffix.is_empty() {
             return false;
@@ -1291,6 +1315,9 @@ impl ReverseSuffix {
             None => return false,
             Some(prefix) => prefix,
         };
+        if ReverseSuffix::has_absorbed_fixed_length_prefix(&prefix, suffix) {
+            return true;
+        }
         if let Some(absorber) = ReverseSuffix::single_absorber(&prefix) {
             return ReverseSuffix::absorber_covers_first_literal_unit(
                 absorber, suffix,
@@ -1302,6 +1329,29 @@ impl ReverseSuffix {
         };
         ReverseSuffix::absorber_covers_literal(absorber, suffix)
             && ReverseSuffix::absorber_covers_hir(absorber, &prefix)
+    }
+
+    fn has_absorbed_fixed_length_prefix(hir: &Hir, mut suffix: &[u8]) -> bool {
+        let mut hir = hir.clone();
+        while !suffix.is_empty() {
+            if ReverseSuffix::hir_has_fixed_length(&hir) {
+                return true;
+            }
+            let (rest, absorber) =
+                match ReverseSuffix::split_trailing_unit_absorber(&hir) {
+                    None => return false,
+                    Some(x) => x,
+                };
+            let consumed = match ReverseSuffix::absorber_covers_first_unit_len(
+                &absorber, suffix,
+            ) {
+                None => return false,
+                Some(consumed) => consumed,
+            };
+            hir = rest;
+            suffix = &suffix[consumed..];
+        }
+        ReverseSuffix::hir_has_fixed_length(&hir)
     }
 
     /// Return a trailing unbounded repetition body that can absorb more input.
@@ -1345,6 +1395,30 @@ impl ReverseSuffix {
         ReverseSuffix::unit_absorber(hir)
     }
 
+    fn split_trailing_unit_absorber(hir: &Hir) -> Option<(Hir, Hir)> {
+        if ReverseSuffix::unit_absorber(hir).is_some() {
+            return Some((Hir::empty(), hir.clone()));
+        }
+        match hir.kind() {
+            HirKind::Concat(hirs) => {
+                let (last, init) = hirs.split_last()?;
+                let (last_rest, absorber) =
+                    ReverseSuffix::split_trailing_unit_absorber(last)?;
+                let mut rest = init.to_vec();
+                if !matches!(last_rest.kind(), HirKind::Empty) {
+                    rest.push(last_rest);
+                }
+                Some((Hir::concat(rest), absorber))
+            }
+            HirKind::Capture(capture) => {
+                let (rest, absorber) =
+                    ReverseSuffix::split_trailing_unit_absorber(&capture.sub)?;
+                Some((rest, absorber))
+            }
+            _ => None,
+        }
+    }
+
     /// Return a single input unit that can be repeated as an absorber.
     fn unit_absorber(hir: &Hir) -> Option<&Hir> {
         match hir.kind() {
@@ -1360,24 +1434,32 @@ impl ReverseSuffix {
         absorber: &Hir,
         literal: &[u8],
     ) -> bool {
+        ReverseSuffix::absorber_covers_first_unit_len(absorber, literal)
+            .is_some()
+    }
+
+    fn absorber_covers_first_unit_len(
+        absorber: &Hir,
+        literal: &[u8],
+    ) -> Option<usize> {
         match absorber.kind() {
             HirKind::Class(Class::Bytes(cls)) => {
-                literal.first().map_or(false, |&byte| {
-                    ReverseInner::byte_class_contains(cls, byte)
-                })
+                let &byte = literal.first()?;
+                ReverseInner::byte_class_contains(cls, byte).then_some(1)
             }
             HirKind::Class(Class::Unicode(cls)) => {
                 let mut chars = match core::str::from_utf8(literal) {
-                    Err(_) => return false,
+                    Err(_) => return None,
                     Ok(s) => s.chars(),
                 };
                 let ch = match chars.next() {
-                    None => return false,
+                    None => return None,
                     Some(ch) => ch,
                 };
                 ReverseInner::unicode_class_contains(cls, ch)
+                    .then_some(ch.len_utf8())
             }
-            _ => false,
+            _ => None,
         }
     }
 
@@ -2571,6 +2653,13 @@ mod which_strategy_tests {
     }
 
     #[track_caller]
+    fn assert_fixed_length_prefix(yes: bool, pattern: &str, suffix: &[u8]) {
+        let hirs = syntax::parse_many(&[pattern]).unwrap();
+        let hirs: Vec<&Hir> = hirs.iter().collect();
+        assert_eq!(yes, ReverseSuffix::has_fixed_length_prefix(&hirs, suffix));
+    }
+
+    #[track_caller]
     fn assert_internal_suffix(yes: bool, pattern: &str, suffix: &[u8]) {
         let hirs = syntax::parse_many(&[pattern]).unwrap();
         let hirs: Vec<&Hir> = hirs.iter().collect();
@@ -2765,6 +2854,24 @@ mod which_strategy_tests {
     }
 
     #[test]
+    fn reverse_suffix_accepts_fixed_length_prefix() {
+        assert_fixed_length_prefix(true, r"(?:ab|cd)XYZ", b"XYZ");
+        assert_internal_suffix(true, r"[A-Z][0-9]XYZ", b"XYZ");
+        assert_fixed_length_prefix(true, r"[A-Z][0-9]XYZ", b"XYZ");
+        assert_strategy("reverse suffix", &[r"[A-Z][0-9]XYZ"]);
+    }
+
+    #[test]
+    fn reverse_suffix_accepts_absorbed_fixed_length_prefix() {
+        assert_internal_suffix(true, r"a.yy", b"yy");
+        assert_absorbing_prefix(true, r"a.yy", b"yy");
+        assert_fixed_length_prefix(false, r"a.yy", b"yy");
+        assert_internal_suffix(true, r"[a-z].yy", b"yy");
+        assert_absorbing_prefix(true, r"[a-z].yy", b"yy");
+        assert_strategy("reverse suffix", &[r"[a-z].yy"]);
+    }
+
+    #[test]
     fn reverse_suffix_accepts_absorbing_prefix() {
         assert_absorbing_prefix(
             true,
@@ -2785,10 +2892,15 @@ mod which_strategy_tests {
 
     #[test]
     fn reverse_suffix_absorbing_prefix_is_conservative() {
-        assert_absorbing_prefix(false, r"a.yy", b"yy");
         assert_absorbing_prefix(false, r"foo\d{50,}123", b"123");
         assert_absorbing_prefix(false, r"\pL{50,}\bABC", b"ABC");
         assert_internal_suffix(true, r"foo\d{50,}123", b"123");
+    }
+
+    #[test]
+    fn reverse_suffix_fixed_length_prefix_is_conservative() {
+        assert_fixed_length_prefix(false, r"a{1,3}yy", b"yy");
+        assert_fixed_length_prefix(false, r"a*yy", b"yy");
     }
 
     #[test]
@@ -2817,6 +2929,11 @@ mod which_strategy_tests {
     #[test]
     fn reverse_suffix_rejects_anchored_start() {
         assert_strategy("core", &[r"^\d+XYZ"]);
+    }
+
+    #[test]
+    fn reverse_suffix_rejects_variable_length_prefix() {
+        assert_strategy("core", &[r"(?:[A-Za-z]ab)?b"]);
     }
 
     #[test]
