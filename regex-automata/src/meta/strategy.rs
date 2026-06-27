@@ -1292,7 +1292,7 @@ impl ReverseSuffix {
             Some(prefix) => prefix,
         };
         if let Some(absorber) = ReverseSuffix::single_absorber(&prefix) {
-            return ReverseSuffix::absorber_covers_one_literal_unit(
+            return ReverseSuffix::absorber_covers_first_literal_unit(
                 absorber, suffix,
             );
         }
@@ -1356,14 +1356,15 @@ impl ReverseSuffix {
         }
     }
 
-    fn absorber_covers_one_literal_unit(
+    fn absorber_covers_first_literal_unit(
         absorber: &Hir,
         literal: &[u8],
     ) -> bool {
         match absorber.kind() {
             HirKind::Class(Class::Bytes(cls)) => {
-                literal.len() == 1
-                    && ReverseInner::byte_class_contains(cls, literal[0])
+                literal.first().map_or(false, |&byte| {
+                    ReverseInner::byte_class_contains(cls, byte)
+                })
             }
             HirKind::Class(Class::Unicode(cls)) => {
                 let mut chars = match core::str::from_utf8(literal) {
@@ -1374,8 +1375,7 @@ impl ReverseSuffix {
                     None => return false,
                     Some(ch) => ch,
                 };
-                chars.next().is_none()
-                    && ReverseInner::unicode_class_contains(cls, ch)
+                ReverseInner::unicode_class_contains(cls, ch)
             }
             _ => false,
         }
@@ -2759,6 +2759,9 @@ mod which_strategy_tests {
         assert_internal_suffix(true, r".y", b"y");
         assert_absorbing_prefix(true, r".y", b"y");
         assert_strategy("reverse suffix", &[r".y"]);
+        assert_internal_suffix(true, r".yy", b"yy");
+        assert_absorbing_prefix(true, r".yy", b"yy");
+        assert_strategy("reverse suffix", &[r".yy"]);
     }
 
     #[test]
@@ -2782,7 +2785,7 @@ mod which_strategy_tests {
 
     #[test]
     fn reverse_suffix_absorbing_prefix_is_conservative() {
-        assert_absorbing_prefix(false, r".yy", b"yy");
+        assert_absorbing_prefix(false, r"a.yy", b"yy");
         assert_absorbing_prefix(false, r"foo\d{50,}123", b"123");
         assert_absorbing_prefix(false, r"\pL{50,}\bABC", b"ABC");
         assert_internal_suffix(true, r"foo\d{50,}123", b"123");
