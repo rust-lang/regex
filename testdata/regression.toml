@@ -409,6 +409,29 @@ matches = []
 unicode = false
 utf8 = false
 
+# See: https://github.com/rust-lang/regex/issues/1354
+[[test]]
+name = 'reverse-suffix-start-of-match-failure-010'
+regex = '.abb|b'
+haystack = 'zabb'
+matches = [[0, 4]]
+
+# See: https://github.com/rust-lang/regex/issues/1354
+# See: https://github.com/rust-lang/regex/pull/1355
+[[test]]
+name = 'reverse-suffix-start-of-match-failure-011'
+regex = '.abb|b'
+haystack = 'zzzabbz'
+matches = [[2, 6]]
+
+# See: https://github.com/rust-lang/regex/issues/1354
+[[test]]
+name = 'reverse-suffix-all-no-early-matches-010'
+regex = '.abb|b'
+haystack = 'xxfoobarbar'
+match-kind = 'all'
+matches = [[8, 9]]
+
 # See: https://github.com/BurntSushi/ripgrep/issues/1247
 [[test]]
 name = "stops"
@@ -756,6 +779,21 @@ name = "reverse-inner-short"
 regex = '(?:([0-9][0-9][0-9]):)?([0-9][0-9]):([0-9][0-9])'
 haystack = '102:12:39'
 matches = [[[0, 9], [0, 3], [4, 6], [7, 9]]]
+
+
+# See: https://github.com/rust-lang/regex/issues/1354
+[[test]]
+name = 'reverse-inner-start-of-match-failure-010'
+regex = '(?:..acbb|b)a(?:c|d)'
+haystack = 'xzbacbbac'
+matches = [[1, 9]]
+
+# See: https://github.com/rust-lang/regex/issues/1354
+[[test]]
+name = 'reverse-inner-later-literal-010'
+regex = '(?:..acbb|b)a(?:c|d)'
+haystack = 'xzbacbbac'
+matches = [[1, 9]]
 
 # This regression test was found via the RegexSet APIs. It triggered a
 # particular code path where a regex was compiled with 'All' match semantics
