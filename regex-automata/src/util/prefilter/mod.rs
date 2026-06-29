@@ -629,6 +629,19 @@ impl Choice {
     }
 }
 
+/// A cap on the total number of literals accumulated when unioning the
+/// per-pattern literal sequences in `prefixes` and `suffixes` below.
+///
+/// The per-pattern `Extractor` already bounds the literals produced for a
+/// single pattern, but unioning those sequences across many patterns escapes
+/// that bound. This matters most for case insensitive regexes, where each
+/// pattern contributes an exponential number of *inexact* literals; without a
+/// cap, building a set of N such patterns is quadratic in N (every union
+/// re-scans the growing sequence) and yields a giant, useless prefilter. This
+/// value mirrors the default total limit used by `Extractor` itself.
+#[cfg(feature = "syntax")]
+const TOTAL_LIMIT: usize = 250;
+
 /// Extracts all of the prefix literals from the given HIR expressions into a
 /// single `Seq`. The literals in the sequence are ordered with respect to the
 /// order of the given HIR expressions and consistent with the match semantics
@@ -656,6 +669,33 @@ where
     let mut prefixes = literal::Seq::empty();
     for hir in hirs {
         prefixes.union(&mut extractor.extract(hir.borrow()));
+        // The per-pattern extractor above caps the literals produced for a
+        // single pattern, but unioning across patterns escapes that cap. This
+        // is most acute for case insensitive regexes, where every pattern adds
+        // an exponential number of *inexact* literals (e.g., `(?i)abc` yields
+        // ABC, ABc, AbC, ..., abc). Without a cap, building a set of N such
+        // patterns is quadratic in N and produces a giant, useless prefilter.
+        //
+        // We only cull *inexact* sequences: an exact sequence is a faithful
+        // enumeration of (a subset of) the language and tends to make a good
+        // prefilter (or even a complete matcher) even when large, so we leave
+        // exact-literal behavior completely unchanged.
+        if !prefixes.is_exact()
+            && prefixes.len().map_or(false, |len| len > TOTAL_LIMIT)
+        {
+            // Try to salvage a small prefilter by collapsing everything down
+            // to a short common-ish prefix. We keep 4 bytes since that is the
+            // maximum literal length supported by the Teddy matcher; this is
+            // the same trick used to keep literal sets in check within
+            // `regex-syntax`'s own `Extractor::union`. If even that is still
+            // too big, then we give up on a prefix prefilter entirely.
+            prefixes.keep_first_bytes(4);
+            prefixes.dedup();
+            if prefixes.len().map_or(false, |len| len > TOTAL_LIMIT) {
+                prefixes.make_infinite();
+                break;
+            }
+        }
     }
     debug!(
         "prefixes (len={:?}, exact={:?}) extracted before optimization: {:?}",
@@ -693,6 +733,19 @@ where
     let mut suffixes = literal::Seq::empty();
     for hir in hirs {
         suffixes.union(&mut extractor.extract(hir.borrow()));
+        // See the equivalent cap in `prefixes` above for the rationale. The
+        // only difference here is that suffix literals are collapsed by
+        // keeping their last bytes rather than their first.
+        if !suffixes.is_exact()
+            && suffixes.len().map_or(false, |len| len > TOTAL_LIMIT)
+        {
+            suffixes.keep_last_bytes(4);
+            suffixes.dedup();
+            if suffixes.len().map_or(false, |len| len > TOTAL_LIMIT) {
+                suffixes.make_infinite();
+                break;
+            }
+        }
     }
     debug!(
         "suffixes (len={:?}, exact={:?}) extracted before optimization: {:?}",
@@ -716,4 +769,76 @@ where
         suffixes
     );
     suffixes
+}
+
+// All of these tests exercise `prefixes`/`suffixes`, which only exist when the
+// `syntax` feature is enabled (which in turn enables `alloc`).
+#[cfg(all(test, feature = "syntax"))]
+mod tests {
+    use alloc::{format, vec};
+
+    use super::*;
+
+    // Regression test for https://github.com/rust-lang/regex/issues/1310.
+    //
+    // Unioning prefix literals across many case insensitive patterns used to
+    // produce an enormous (and quadratic-to-build) sequence: each pattern
+    // contributes ~2^k inexact literals, and the cross-pattern union had no
+    // total cap. Here we make sure the extracted sequence stays bounded.
+    #[test]
+    #[cfg(all(feature = "syntax", feature = "unicode-case"))]
+    fn prefixes_case_insensitive_is_bounded() {
+        let mut hirs = vec![];
+        for i in 0..50 {
+            let pat = format!(r"(?i)domain{i}\.com");
+            hirs.push(crate::util::syntax::parse(&pat).unwrap());
+        }
+        let seq = prefixes(MatchKind::All, &hirs);
+        // Without the cap, this would be ~50 * 128 = 6400 inexact literals.
+        // With it, the sequence is either dropped (infinite) or collapsed to a
+        // small shared prefix.
+        assert!(
+            seq.len().map_or(true, |len| len <= TOTAL_LIMIT),
+            "expected a bounded prefix sequence, got len={:?}",
+            seq.len(),
+        );
+    }
+
+    // Same as above, but for suffixes (used by the reverse-suffix strategy).
+    #[test]
+    #[cfg(all(feature = "syntax", feature = "unicode-case"))]
+    fn suffixes_case_insensitive_is_bounded() {
+        let mut hirs = vec![];
+        for i in 0..50 {
+            let pat = format!(r"(?i)www\.domain{i}");
+            hirs.push(crate::util::syntax::parse(&pat).unwrap());
+        }
+        let seq = suffixes(MatchKind::All, &hirs);
+        assert!(
+            seq.len().map_or(true, |len| len <= TOTAL_LIMIT),
+            "expected a bounded suffix sequence, got len={:?}",
+            seq.len(),
+        );
+    }
+
+    // A large *exact* literal alternation must NOT be culled by the cap: such
+    // sequences are faithful enumerations and make good prefilters (or even
+    // complete matchers) even when they exceed TOTAL_LIMIT. This guards the
+    // `is_exact()` guard so we don't regress plain-literal sets.
+    #[test]
+    #[cfg(feature = "syntax")]
+    fn prefixes_exact_set_is_preserved() {
+        let mut hirs = vec![];
+        for i in 0..(TOTAL_LIMIT + 50) {
+            let pat = format!(r"literal{i}");
+            hirs.push(crate::util::syntax::parse(&pat).unwrap());
+        }
+        let seq = prefixes(MatchKind::All, &hirs);
+        assert!(seq.is_exact(), "exact literal set should remain exact");
+        assert!(
+            seq.len().map_or(false, |len| len > TOTAL_LIMIT),
+            "exact literal set should not be culled, got len={:?}",
+            seq.len(),
+        );
+    }
 }

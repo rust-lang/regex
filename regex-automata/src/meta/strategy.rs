@@ -102,6 +102,24 @@ pub(super) fn new(
         // carry a 'Prefilter' with it, but I moved away from that.)
         debug!("skipping literal extraction since regex is anchored");
         None
+    } else if info.is_always_anchored_end() {
+        // If the regex is always anchored at the end, then the reverse
+        // anchored strategy (selected below) will be used. That strategy does
+        // a reverse anchored search and never makes use of a prefix prefilter.
+        // Building one---which can require constructing a potentially large
+        // Aho-Corasick automaton out of the extracted literals---is therefore
+        // pure wasted work. This mirrors the skip for regexes that are always
+        // anchored at the start above.
+        //
+        // In the rare event that the reverse anchored strategy can't actually
+        // be built (essentially only when neither a lazy DFA nor a full DFA is
+        // available), we just fall back to the core engine without a prefix
+        // prefilter, which is an acceptable trade-off for such a degenerate
+        // case.
+        debug!(
+            "skipping literal extraction since regex is anchored at the end"
+        );
+        None
     } else if let Some(pre) = info.config().get_prefilter() {
         debug!(
             "skipping literal extraction since the caller provided a prefilter"

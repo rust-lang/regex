@@ -828,3 +828,16 @@ name = 'improper-reverse-suffix-optimization'
 regex = '(\\N\{[^}]+})|([{}])'
 haystack = 'hiya \N{snowman} bye'
 matches = [[[5, 16], [5, 16], []]]
+
+# Regression test for the case-insensitive RegexSet build blowup. A regex that
+# is always anchored at the end (here, case insensitive) selects the reverse
+# anchored strategy, which never uses a prefix prefilter. We now skip building
+# one for such regexes; this makes sure matching is still correct afterwards.
+#
+# See: https://github.com/rust-lang/regex/discussions/1309
+# See: https://github.com/rust-lang/regex/issues/1311
+[[test]]
+name = "case-insensitive-anchored-end"
+regex = '(?i)domain\.com$'
+haystack = "go to DOMAIN.COM"
+matches = [[6, 16]]

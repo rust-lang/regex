@@ -639,3 +639,31 @@ match-kind = "leftmost-first"
 search-kind = "leftmost"
 unicode = false
 utf8 = false
+
+# Regression test for https://github.com/rust-lang/regex/issues/1311. A set of
+# case-insensitive, end-anchored patterns selects the reverse anchored
+# strategy, which does not use a prefix prefilter, so we now skip extracting
+# prefix literals for it. Matching must remain correct.
+[[test]]
+name = "case-insensitive-anchored-end-set"
+regex = ['(?i)domain1\.com$', '(?i)domain2\.com$']
+haystack = "DOMAIN2.COM"
+matches = [
+  { id = 1, span = [0, 11] },
+]
+match-kind = "all"
+search-kind = "overlapping"
+
+# Regression test for https://github.com/rust-lang/regex/issues/1310. A set of
+# case-insensitive (unanchored) patterns used to union an unbounded number of
+# prefix literals across patterns. After bounding that union, matching must
+# remain correct.
+[[test]]
+name = "case-insensitive-contains-set"
+regex = ['(?i)domain1\.com', '(?i)domain2\.com']
+haystack = "see DOMAIN1.COM now"
+matches = [
+  { id = 0, span = [4, 15] },
+]
+match-kind = "all"
+search-kind = "overlapping"

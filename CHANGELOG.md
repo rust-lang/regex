@@ -1,3 +1,20 @@
+1.12.5 (TBD)
+============
+This release fixes a performance problem when building a `RegexSet` (or even a
+single regex) out of many case-insensitive patterns. Literal extraction could
+blow up combinatorially and build a large prefilter that the chosen search
+strategy would then never use.
+
+Bug fixes:
+
+* [BUG #1310](https://github.com/rust-lang/regex/issues/1310):
+Bound the number of literals extracted across patterns. This fixes runaway
+literal generation (and quadratic build time) for case-insensitive regex sets.
+* [BUG #1311](https://github.com/rust-lang/regex/issues/1311):
+Skip building a prefix prefilter for regexes that are always anchored at the
+end, since those use the reverse anchored strategy and never consult it.
+
+
 1.12.4 (2025-06-09)
 ===================
 This release includes a performance optimization for compilation of regexes
