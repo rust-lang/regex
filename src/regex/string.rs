@@ -1432,6 +1432,15 @@ impl Regex {
     pub fn locations(&self) -> CaptureLocations {
         self.capture_locations()
     }
+
+    /// Returns the memory usage, in bytes, of this `Regex`.
+    ///
+    /// This does **not** include the stack size used up by this `Regex`.
+    /// To compute that, use `std::mem::size_of::<Regex>()`.
+    #[inline]
+    pub fn memory_usage(&self) -> usize {
+        self.meta.memory_usage()
+    }
 }
 
 /// Represents a single match of a regex in a haystack.
