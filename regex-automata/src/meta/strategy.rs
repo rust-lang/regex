@@ -14,7 +14,6 @@ use regex_syntax::hir::{
 use crate::{
     meta::{
         error::{BuildError, RetryError, RetryFailError, RetryQuadraticError},
-        overlap,
         regex::{Cache, RegexInfo},
         reverse_inner, wrappers,
     },
@@ -1277,21 +1276,8 @@ impl ReverseSuffix {
             return None;
         }
         let prefix = ReverseSuffix::strip_literal_suffix(hirs[0], suffix)?;
-        Some(!ReverseSuffix::hir_cannot_contain_literal(&prefix, suffix))
-    }
-
-    /// Return true when `hir` cannot match any string containing `literal`.
-    ///
-    /// This is deliberately a low precision HIR proof. If every byte in the
-    /// literal can be consumed somewhere in the HIR, this gives up and reports
-    /// that an internal suffix might exist. The precise check used to compile
-    /// a prefix NFA and explore state sets, which is too expensive for a
-    /// construction-time optimization.
-    fn hir_cannot_contain_literal(hir: &Hir, literal: &[u8]) -> bool {
-        !literal.is_empty()
-            && literal
-                .iter()
-                .any(|&byte| !ReverseInner::hir_can_consume_byte(hir, byte))
+        let literals = LiteralSet::one(suffix);
+        Some(!PrefixSafety::hir_cannot_contain_literals(&prefix, &literals))
     }
 
     fn has_fixed_length_prefix(hirs: &[&Hir], suffix: &[u8]) -> bool {
@@ -1303,23 +1289,9 @@ impl ReverseSuffix {
             None => return false,
             Some(prefix) => prefix,
         };
-        ReverseSuffix::hir_has_fixed_length(&prefix)
+        PrefixSafety::hir_has_fixed_length(&prefix)
     }
 
-    fn hir_has_fixed_length(hir: &Hir) -> bool {
-        let props = hir.properties();
-        props.minimum_len().is_some()
-            && props.minimum_len() == props.maximum_len()
-    }
-
-    /// Return true when the suffix is preceded by a required component that
-    /// cannot consume any byte from the suffix literal.
-    ///
-    /// This is enough to prove that an earlier occurrence of the suffix inside
-    /// the prefix cannot be the leftmost-first match to report. Any actual
-    /// full match ending at the final suffix must pass through this required
-    /// component immediately before it, and that component acts as a separator
-    /// from the prior prefix.
     fn has_disjoint_trailing_prefix(hirs: &[&Hir], suffix: &[u8]) -> bool {
         if hirs.len() != 1 || suffix.is_empty() {
             return false;
@@ -1329,43 +1301,8 @@ impl ReverseSuffix {
             None => return false,
             Some(prefix) => prefix,
         };
-        let component =
-            match ReverseSuffix::trailing_required_component(&prefix) {
-                None => return false,
-                Some(component) => component,
-            };
-        suffix
-            .iter()
-            .all(|&byte| !ReverseInner::hir_can_consume_byte(component, byte))
-    }
-
-    /// Return the final required component in `hir`.
-    ///
-    /// Empty HIRs and look-around assertions consume nothing, so they may be
-    /// skipped at the very end. Nullable consuming HIRs are not skipped: if a
-    /// nullable component sits between the required component and the suffix,
-    /// then that nullable component might itself consume part of the suffix.
-    fn trailing_required_component(hir: &Hir) -> Option<&Hir> {
-        match hir.kind() {
-            HirKind::Capture(capture) => {
-                ReverseSuffix::trailing_required_component(&capture.sub)
-            }
-            HirKind::Concat(hirs) => {
-                let last = hirs.iter().rev().find(|hir| {
-                    !matches!(hir.kind(), HirKind::Empty | HirKind::Look(_))
-                })?;
-                ReverseSuffix::trailing_required_component(last)
-            }
-            HirKind::Empty | HirKind::Look(_) => None,
-            _ if hir
-                .properties()
-                .minimum_len()
-                .map_or(false, |len| len > 0) =>
-            {
-                Some(hir)
-            }
-            _ => None,
-        }
+        let literals = LiteralSet::one(suffix);
+        PrefixSafety::has_disjoint_trailing_prefix(&prefix, &literals)
     }
 
     fn has_absorbing_prefix(hirs: &[&Hir], suffix: &[u8]) -> bool {
@@ -1377,216 +1314,8 @@ impl ReverseSuffix {
             None => return false,
             Some(prefix) => prefix,
         };
-        if ReverseSuffix::has_absorbed_fixed_length_prefix(&prefix, suffix) {
-            return true;
-        }
-        if let Some(absorber) = ReverseSuffix::single_absorber(&prefix) {
-            return ReverseSuffix::absorber_covers_first_literal_unit(
-                absorber, suffix,
-            );
-        }
-        let absorber = match ReverseSuffix::trailing_absorber(&prefix) {
-            None => return false,
-            Some(absorber) => absorber,
-        };
-        ReverseSuffix::absorber_covers_literal(absorber, suffix)
-            && ReverseSuffix::absorber_covers_hir(absorber, &prefix)
-    }
-
-    fn has_absorbed_fixed_length_prefix(hir: &Hir, mut suffix: &[u8]) -> bool {
-        let mut hir = hir.clone();
-        while !suffix.is_empty() {
-            if ReverseSuffix::hir_has_fixed_length(&hir) {
-                return true;
-            }
-            let (rest, absorber) =
-                match ReverseSuffix::split_trailing_unit_absorber(&hir) {
-                    None => return false,
-                    Some(x) => x,
-                };
-            let consumed = match ReverseSuffix::absorber_covers_first_unit_len(
-                &absorber, suffix,
-            ) {
-                None => return false,
-                Some(consumed) => consumed,
-            };
-            hir = rest;
-            suffix = &suffix[consumed..];
-        }
-        ReverseSuffix::hir_has_fixed_length(&hir)
-    }
-
-    /// Return a trailing unbounded repetition body that can absorb more input.
-    ///
-    /// This intentionally only recognizes single-unit character classes as
-    /// absorbers. For example, the `\pL` in `\pL{50,}ABC` qualifies, but an
-    /// arbitrary repeated sub-expression does not. That keeps the proof
-    /// simple: once the prefix has reached this repetition, every extra unit
-    /// accepted by the absorber can be folded into the same match.
-    fn trailing_absorber(hir: &Hir) -> Option<&Hir> {
-        match hir.kind() {
-            HirKind::Repetition(rep) if rep.max.is_none() => {
-                ReverseSuffix::unit_absorber(&rep.sub)
-            }
-            HirKind::Capture(capture) => {
-                ReverseSuffix::trailing_absorber(&capture.sub)
-            }
-            HirKind::Concat(hirs) => hirs
-                .iter()
-                .rev()
-                .find(|hir| !matches!(hir.kind(), HirKind::Empty))
-                .and_then(ReverseSuffix::trailing_absorber),
-            HirKind::Alternation(hirs) => {
-                let mut alts = hirs.iter();
-                let first = ReverseSuffix::trailing_absorber(alts.next()?)?;
-                if alts.all(|hir| {
-                    ReverseSuffix::trailing_absorber(hir)
-                        .map_or(false, |absorber| absorber == first)
-                }) {
-                    Some(first)
-                } else {
-                    None
-                }
-            }
-            _ => None,
-        }
-    }
-
-    /// Return a single input unit that can absorb one suffix unit.
-    fn single_absorber(hir: &Hir) -> Option<&Hir> {
-        ReverseSuffix::unit_absorber(hir)
-    }
-
-    fn split_trailing_unit_absorber(hir: &Hir) -> Option<(Hir, Hir)> {
-        if ReverseSuffix::unit_absorber(hir).is_some() {
-            return Some((Hir::empty(), hir.clone()));
-        }
-        match hir.kind() {
-            HirKind::Concat(hirs) => {
-                let (last, init) = hirs.split_last()?;
-                let (last_rest, absorber) =
-                    ReverseSuffix::split_trailing_unit_absorber(last)?;
-                let mut rest = init.to_vec();
-                if !matches!(last_rest.kind(), HirKind::Empty) {
-                    rest.push(last_rest);
-                }
-                Some((Hir::concat(rest), absorber))
-            }
-            HirKind::Capture(capture) => {
-                let (rest, absorber) =
-                    ReverseSuffix::split_trailing_unit_absorber(&capture.sub)?;
-                Some((rest, absorber))
-            }
-            _ => None,
-        }
-    }
-
-    /// Return a single input unit that can be repeated as an absorber.
-    fn unit_absorber(hir: &Hir) -> Option<&Hir> {
-        match hir.kind() {
-            HirKind::Class(_) => Some(hir),
-            HirKind::Capture(capture) => {
-                ReverseSuffix::unit_absorber(&capture.sub)
-            }
-            _ => None,
-        }
-    }
-
-    fn absorber_covers_first_literal_unit(
-        absorber: &Hir,
-        literal: &[u8],
-    ) -> bool {
-        ReverseSuffix::absorber_covers_first_unit_len(absorber, literal)
-            .is_some()
-    }
-
-    fn absorber_covers_first_unit_len(
-        absorber: &Hir,
-        literal: &[u8],
-    ) -> Option<usize> {
-        match absorber.kind() {
-            HirKind::Class(Class::Bytes(cls)) => {
-                let &byte = literal.first()?;
-                ReverseInner::byte_class_contains(cls, byte).then_some(1)
-            }
-            HirKind::Class(Class::Unicode(cls)) => {
-                let mut chars = match core::str::from_utf8(literal) {
-                    Err(_) => return None,
-                    Ok(s) => s.chars(),
-                };
-                let ch = match chars.next() {
-                    None => return None,
-                    Some(ch) => ch,
-                };
-                ReverseInner::unicode_class_contains(cls, ch)
-                    .then_some(ch.len_utf8())
-            }
-            _ => None,
-        }
-    }
-
-    /// Return true when every unit consumed by `hir` is accepted by
-    /// `absorber`.
-    ///
-    /// This is a byte/character coverage check, not a language equivalence
-    /// check. It is only used after `trailing_absorber` has found an
-    /// unbounded class repetition at the end of the prefix.
-    fn absorber_covers_hir(absorber: &Hir, hir: &Hir) -> bool {
-        if absorber == hir {
-            return true;
-        }
-        match hir.kind() {
-            HirKind::Empty => true,
-            HirKind::Literal(lit) => {
-                ReverseSuffix::absorber_covers_literal(absorber, &lit.0)
-            }
-            HirKind::Class(cls) => {
-                ReverseSuffix::absorber_covers_class(absorber, cls)
-            }
-            HirKind::Repetition(rep) => {
-                ReverseSuffix::absorber_covers_hir(absorber, &rep.sub)
-            }
-            HirKind::Capture(capture) => {
-                ReverseSuffix::absorber_covers_hir(absorber, &capture.sub)
-            }
-            HirKind::Concat(hirs) | HirKind::Alternation(hirs) => hirs
-                .iter()
-                .all(|hir| ReverseSuffix::absorber_covers_hir(absorber, hir)),
-            HirKind::Look(_) => false,
-        }
-    }
-
-    fn absorber_covers_literal(absorber: &Hir, literal: &[u8]) -> bool {
-        match absorber.kind() {
-            HirKind::Class(Class::Bytes(cls)) => literal
-                .iter()
-                .all(|&byte| ReverseInner::byte_class_contains(cls, byte)),
-            HirKind::Class(Class::Unicode(cls)) => {
-                core::str::from_utf8(literal).map_or(false, |s| {
-                    s.chars().all(|ch| {
-                        ReverseInner::unicode_class_contains(cls, ch)
-                    })
-                })
-            }
-            _ => false,
-        }
-    }
-
-    fn absorber_covers_class(absorber: &Hir, class: &Class) -> bool {
-        match (absorber.kind(), class) {
-            (HirKind::Class(Class::Bytes(absorber)), Class::Bytes(cls)) => {
-                cls.ranges().iter().all(|range| {
-                    (range.start()..=range.end()).all(|byte| {
-                        ReverseInner::byte_class_contains(absorber, byte)
-                    })
-                })
-            }
-            (
-                HirKind::Class(Class::Unicode(absorber)),
-                Class::Unicode(cls),
-            ) => absorber == cls,
-            _ => false,
-        }
+        let literals = LiteralSet::one(suffix);
+        PrefixSafety::has_absorbing_prefix(&prefix, &literals)
     }
 
     fn has_guarded_internal_suffix(hirs: &[&Hir], suffix: &[u8]) -> bool {
@@ -1850,6 +1579,479 @@ enum WordKind {
     Unicode,
 }
 
+#[derive(Clone, Debug)]
+struct LiteralSet<'a> {
+    lits: Vec<&'a [u8]>,
+}
+
+impl<'a> LiteralSet<'a> {
+    fn one(lit: &'a [u8]) -> LiteralSet<'a> {
+        LiteralSet { lits: vec![lit] }
+    }
+
+    fn many(lits: &'a [Literal]) -> LiteralSet<'a> {
+        LiteralSet { lits: lits.iter().map(|lit| lit.as_bytes()).collect() }
+    }
+
+    fn is_empty(&self) -> bool {
+        self.lits.is_empty()
+    }
+
+    fn any_empty(&self) -> bool {
+        self.lits.iter().any(|lit| lit.is_empty())
+    }
+
+    fn all_empty(&self) -> bool {
+        self.lits.iter().all(|lit| lit.is_empty())
+    }
+
+    fn without_empty(&self) -> LiteralSet<'a> {
+        LiteralSet {
+            lits: self
+                .lits
+                .iter()
+                .copied()
+                .filter(|lit| !lit.is_empty())
+                .collect(),
+        }
+    }
+
+    fn all(&self, mut predicate: impl FnMut(&[u8]) -> bool) -> bool {
+        self.lits.iter().copied().all(|lit| predicate(lit))
+    }
+
+    fn strip_first_units(&self, absorber: &Hir) -> Option<LiteralSet<'a>> {
+        let mut lits = Vec::with_capacity(self.lits.len());
+        for &lit in self.lits.iter() {
+            let len =
+                PrefixSafety::absorber_covers_first_unit_len(absorber, lit)?;
+            lits.push(&lit[len..]);
+        }
+        Some(LiteralSet { lits })
+    }
+}
+
+/// Cheap HIR proofs that literal candidate order is compatible with regex
+/// match order.
+///
+/// The reverse suffix and reverse inner strategies both scan for a required
+/// literal before confirming the surrounding regex. These proofs are all
+/// conservative. If they cannot establish that the first confirmed candidate
+/// is the match the regex engine would report, then the corresponding reverse
+/// strategy is not used.
+struct PrefixSafety;
+
+impl PrefixSafety {
+    fn is_safe(prefix: &Hir, literals: &LiteralSet<'_>) -> bool {
+        if literals.is_empty() || literals.any_empty() {
+            return false;
+        }
+        PrefixSafety::hir_cannot_contain_literals(prefix, literals)
+            || PrefixSafety::hir_has_fixed_length(prefix)
+            || PrefixSafety::has_disjoint_trailing_prefix(prefix, literals)
+            || PrefixSafety::has_disjoint_nullable_trailing_prefix(
+                prefix, literals,
+            )
+            || PrefixSafety::has_absorbing_prefix(prefix, literals)
+    }
+
+    fn is_safe_after_absorption(
+        prefix: &Hir,
+        literals: &LiteralSet<'_>,
+    ) -> bool {
+        if literals.all_empty() {
+            return true;
+        }
+        if literals.any_empty() {
+            return PrefixSafety::is_safe(prefix, &literals.without_empty());
+        }
+        PrefixSafety::is_safe(prefix, literals)
+    }
+
+    /// Return true when `hir` cannot match any string containing every byte in
+    /// each literal.
+    ///
+    /// This is deliberately low precision. If every byte in a literal can be
+    /// consumed somewhere in the HIR, this gives up and reports that the
+    /// literal might occur internally.
+    fn hir_cannot_contain_literals(
+        hir: &Hir,
+        literals: &LiteralSet<'_>,
+    ) -> bool {
+        literals.all(|lit| {
+            !lit.is_empty()
+                && lit.iter().any(|&byte| {
+                    !PrefixSafety::hir_can_consume_byte(hir, byte)
+                })
+        })
+    }
+
+    fn hir_has_fixed_length(hir: &Hir) -> bool {
+        let props = hir.properties();
+        props.minimum_len().is_some()
+            && props.minimum_len() == props.maximum_len()
+    }
+
+    /// Return true when the literals are preceded by a required component that
+    /// cannot consume any byte from any of the literals.
+    ///
+    /// This is enough to prove that an earlier occurrence of a literal inside
+    /// the prefix cannot be the match to report. Any actual full match ending
+    /// at a later literal must pass through this required component
+    /// immediately before it, and that component acts as a separator from the
+    /// prior prefix.
+    fn has_disjoint_trailing_prefix(
+        prefix: &Hir,
+        literals: &LiteralSet<'_>,
+    ) -> bool {
+        let component = match PrefixSafety::trailing_required_component(prefix)
+        {
+            None => return false,
+            Some(component) => component,
+        };
+        literals.all(|lit| {
+            lit.iter().all(|&byte| {
+                !PrefixSafety::hir_can_consume_byte(component, byte)
+            })
+        })
+    }
+
+    /// Return the final required component in `hir`.
+    ///
+    /// Empty HIRs and look-around assertions consume nothing, so they may be
+    /// skipped at the very end. Nullable consuming HIRs are not skipped: if a
+    /// nullable component sits between the required component and the literal,
+    /// then that nullable component might itself consume part of the literal.
+    fn trailing_required_component(hir: &Hir) -> Option<&Hir> {
+        match hir.kind() {
+            HirKind::Capture(capture) => {
+                PrefixSafety::trailing_required_component(&capture.sub)
+            }
+            HirKind::Concat(hirs) => {
+                let last = hirs.iter().rev().find(|hir| {
+                    !matches!(hir.kind(), HirKind::Empty | HirKind::Look(_))
+                })?;
+                PrefixSafety::trailing_required_component(last)
+            }
+            HirKind::Empty | HirKind::Look(_) => None,
+            _ if hir
+                .properties()
+                .minimum_len()
+                .map_or(false, |len| len > 0) =>
+            {
+                Some(hir)
+            }
+            _ => None,
+        }
+    }
+
+    fn has_absorbing_prefix(prefix: &Hir, literals: &LiteralSet<'_>) -> bool {
+        if let Some(absorber) = PrefixSafety::trailing_absorber(prefix) {
+            if literals.all(|lit| {
+                PrefixSafety::absorber_covers_literal(absorber, lit)
+            }) && PrefixSafety::absorber_covers_hir(absorber, prefix)
+            {
+                return true;
+            }
+        }
+        let (rest, absorber) =
+            match PrefixSafety::split_trailing_unit_absorber(prefix) {
+                None => return false,
+                Some(x) => x,
+            };
+        let literals = match literals.strip_first_units(&absorber) {
+            None => return false,
+            Some(literals) => literals,
+        };
+        PrefixSafety::is_safe_after_absorption(&rest, &literals)
+    }
+
+    /// Return true when the prefix ends with a nullable component that cannot
+    /// begin consuming any of the required literals, and the rest of the
+    /// prefix is safe.
+    ///
+    /// This lets the reverse inner proof look through things like `\s*` in
+    /// `\w+\s*Holmes`: the optional spaces cannot consume the `H`, so they
+    /// cannot be responsible for an internal `Holmes` occurrence.
+    fn has_disjoint_nullable_trailing_prefix(
+        prefix: &Hir,
+        literals: &LiteralSet<'_>,
+    ) -> bool {
+        let (rest, tail) = match PrefixSafety::split_trailing_component(prefix)
+        {
+            None => return false,
+            Some(x) => x,
+        };
+        if !tail.properties().minimum_len().map_or(false, |len| len == 0) {
+            return false;
+        }
+        if !literals.all(|lit| {
+            lit.first().map_or(false, |&byte| {
+                !PrefixSafety::hir_can_consume_byte(&tail, byte)
+            })
+        }) {
+            return false;
+        }
+        PrefixSafety::is_safe(&rest, literals)
+    }
+
+    /// Return a trailing unbounded repetition body that can absorb more input.
+    ///
+    /// This intentionally only recognizes single-unit character classes as
+    /// absorbers. For example, the `\pL` in `\pL{50,}ABC` qualifies, but an
+    /// arbitrary repeated sub-expression does not. That keeps the proof
+    /// simple: once the prefix has reached this repetition, every extra unit
+    /// accepted by the absorber can be folded into the same match.
+    fn trailing_absorber(hir: &Hir) -> Option<&Hir> {
+        match hir.kind() {
+            HirKind::Repetition(rep) if rep.max.is_none() => {
+                PrefixSafety::unit_absorber(&rep.sub)
+            }
+            HirKind::Capture(capture) => {
+                PrefixSafety::trailing_absorber(&capture.sub)
+            }
+            HirKind::Concat(hirs) => hirs
+                .iter()
+                .rev()
+                .find(|hir| !matches!(hir.kind(), HirKind::Empty))
+                .and_then(PrefixSafety::trailing_absorber),
+            HirKind::Alternation(hirs) => {
+                let mut alts = hirs.iter();
+                let first = PrefixSafety::trailing_absorber(alts.next()?)?;
+                if alts.all(|hir| {
+                    PrefixSafety::trailing_absorber(hir)
+                        .map_or(false, |absorber| absorber == first)
+                }) {
+                    Some(first)
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }
+    }
+
+    fn split_trailing_unit_absorber(hir: &Hir) -> Option<(Hir, Hir)> {
+        if PrefixSafety::unit_absorber(hir).is_some() {
+            return Some((Hir::empty(), hir.clone()));
+        }
+        match hir.kind() {
+            HirKind::Repetition(rep) => {
+                let absorber = PrefixSafety::unit_absorber(&rep.sub)?;
+                if rep.max == Some(0) {
+                    return None;
+                }
+                let rest = PrefixSafety::decrement_repetition(rep);
+                Some((rest, absorber.clone()))
+            }
+            HirKind::Concat(hirs) => {
+                let (last, init) = hirs.split_last()?;
+                let (last_rest, absorber) =
+                    PrefixSafety::split_trailing_unit_absorber(last)?;
+                let mut rest = init.to_vec();
+                if !matches!(last_rest.kind(), HirKind::Empty) {
+                    rest.push(last_rest);
+                }
+                Some((Hir::concat(rest), absorber))
+            }
+            HirKind::Capture(capture) => {
+                let (rest, absorber) =
+                    PrefixSafety::split_trailing_unit_absorber(&capture.sub)?;
+                Some((rest, absorber))
+            }
+            HirKind::Alternation(hirs) => {
+                let mut rests = Vec::with_capacity(hirs.len());
+                let mut absorber = None;
+                for hir in hirs.iter() {
+                    let (rest, got) =
+                        PrefixSafety::split_trailing_unit_absorber(hir)?;
+                    if absorber.as_ref().map_or(false, |set| set != &got) {
+                        return None;
+                    }
+                    absorber = Some(got);
+                    rests.push(rest);
+                }
+                Some((Hir::alternation(rests), absorber?))
+            }
+            _ => None,
+        }
+    }
+
+    fn split_trailing_component(hir: &Hir) -> Option<(Hir, Hir)> {
+        match hir.kind() {
+            HirKind::Capture(capture) => {
+                PrefixSafety::split_trailing_component(&capture.sub)
+            }
+            HirKind::Concat(hirs) => {
+                let (last, init) = hirs.split_last()?;
+                if matches!(last.kind(), HirKind::Empty | HirKind::Look(_)) {
+                    return None;
+                }
+                Some((Hir::concat(init.to_vec()), last.clone()))
+            }
+            HirKind::Empty | HirKind::Look(_) => None,
+            _ => Some((Hir::empty(), hir.clone())),
+        }
+    }
+
+    fn decrement_repetition(rep: &regex_syntax::hir::Repetition) -> Hir {
+        let max = rep.max.map(|max| max.saturating_sub(1));
+        if max == Some(0) {
+            return Hir::empty();
+        }
+        Hir::repetition(regex_syntax::hir::Repetition {
+            min: rep.min.saturating_sub(1),
+            max,
+            greedy: rep.greedy,
+            sub: rep.sub.clone(),
+        })
+    }
+
+    /// Return a single input unit that can be repeated as an absorber.
+    fn unit_absorber(hir: &Hir) -> Option<&Hir> {
+        match hir.kind() {
+            HirKind::Class(_) => Some(hir),
+            HirKind::Capture(capture) => {
+                PrefixSafety::unit_absorber(&capture.sub)
+            }
+            _ => None,
+        }
+    }
+
+    fn absorber_covers_first_unit_len(
+        absorber: &Hir,
+        literal: &[u8],
+    ) -> Option<usize> {
+        match absorber.kind() {
+            HirKind::Class(Class::Bytes(cls)) => {
+                let &byte = literal.first()?;
+                PrefixSafety::byte_class_contains(cls, byte).then_some(1)
+            }
+            HirKind::Class(Class::Unicode(cls)) => {
+                let mut chars = match core::str::from_utf8(literal) {
+                    Err(_) => return None,
+                    Ok(s) => s.chars(),
+                };
+                let ch = match chars.next() {
+                    None => return None,
+                    Some(ch) => ch,
+                };
+                PrefixSafety::unicode_class_contains(cls, ch)
+                    .then_some(ch.len_utf8())
+            }
+            _ => None,
+        }
+    }
+
+    /// Return true when every unit consumed by `hir` is accepted by
+    /// `absorber`.
+    ///
+    /// This is a byte/character coverage check, not a language equivalence
+    /// check. It is only used after `trailing_absorber` has found an
+    /// unbounded class repetition at the end of the prefix.
+    fn absorber_covers_hir(absorber: &Hir, hir: &Hir) -> bool {
+        if absorber == hir {
+            return true;
+        }
+        match hir.kind() {
+            HirKind::Empty => true,
+            HirKind::Literal(lit) => {
+                PrefixSafety::absorber_covers_literal(absorber, &lit.0)
+            }
+            HirKind::Class(cls) => {
+                PrefixSafety::absorber_covers_class(absorber, cls)
+            }
+            HirKind::Repetition(rep) => {
+                PrefixSafety::absorber_covers_hir(absorber, &rep.sub)
+            }
+            HirKind::Capture(capture) => {
+                PrefixSafety::absorber_covers_hir(absorber, &capture.sub)
+            }
+            HirKind::Concat(hirs) | HirKind::Alternation(hirs) => hirs
+                .iter()
+                .all(|hir| PrefixSafety::absorber_covers_hir(absorber, hir)),
+            HirKind::Look(_) => false,
+        }
+    }
+
+    fn absorber_covers_literal(absorber: &Hir, literal: &[u8]) -> bool {
+        match absorber.kind() {
+            HirKind::Class(Class::Bytes(cls)) => literal
+                .iter()
+                .all(|&byte| PrefixSafety::byte_class_contains(cls, byte)),
+            HirKind::Class(Class::Unicode(cls)) => {
+                core::str::from_utf8(literal).map_or(false, |s| {
+                    s.chars().all(|ch| {
+                        PrefixSafety::unicode_class_contains(cls, ch)
+                    })
+                })
+            }
+            _ => false,
+        }
+    }
+
+    fn absorber_covers_class(absorber: &Hir, class: &Class) -> bool {
+        match (absorber.kind(), class) {
+            (HirKind::Class(Class::Bytes(absorber)), Class::Bytes(cls)) => {
+                cls.ranges().iter().all(|range| {
+                    (range.start()..=range.end()).all(|byte| {
+                        PrefixSafety::byte_class_contains(absorber, byte)
+                    })
+                })
+            }
+            (
+                HirKind::Class(Class::Unicode(absorber)),
+                Class::Unicode(cls),
+            ) => absorber == cls,
+            _ => false,
+        }
+    }
+
+    fn hir_can_consume_byte(hir: &Hir, byte: u8) -> bool {
+        match hir.kind() {
+            HirKind::Empty | HirKind::Look(_) => false,
+            HirKind::Literal(lit) => lit.0.contains(&byte),
+            HirKind::Class(Class::Bytes(cls)) => {
+                PrefixSafety::byte_class_contains(cls, byte)
+            }
+            HirKind::Class(Class::Unicode(cls)) => {
+                if byte > 0x7F {
+                    return true;
+                }
+                let ch = char::from(byte);
+                PrefixSafety::unicode_class_contains(cls, ch)
+            }
+            HirKind::Repetition(rep) => {
+                PrefixSafety::hir_can_consume_byte(&rep.sub, byte)
+            }
+            HirKind::Capture(capture) => {
+                PrefixSafety::hir_can_consume_byte(&capture.sub, byte)
+            }
+            HirKind::Concat(hirs) | HirKind::Alternation(hirs) => hirs
+                .iter()
+                .any(|hir| PrefixSafety::hir_can_consume_byte(hir, byte)),
+        }
+    }
+
+    fn byte_class_contains(
+        cls: &regex_syntax::hir::ClassBytes,
+        byte: u8,
+    ) -> bool {
+        cls.ranges()
+            .iter()
+            .any(|range| range.start() <= byte && byte <= range.end())
+    }
+
+    fn unicode_class_contains(
+        cls: &regex_syntax::hir::ClassUnicode,
+        ch: char,
+    ) -> bool {
+        cls.ranges()
+            .iter()
+            .any(|range| range.start() <= ch && ch <= range.end())
+    }
+}
+
 impl Strategy for ReverseSuffix {
     fn name(&self) -> Cow<'static, str> {
         Cow::Borrowed("reverse suffix")
@@ -2061,11 +2263,6 @@ struct ReverseInner {
 }
 
 impl ReverseInner {
-    // The reverse inner early-return proof can get expensive when it explores
-    // prefixes with large bounded repeats over broad classes. Small bounded
-    // repeats are cheap enough to leave to the precise NFA product analysis.
-    const ABSORBING_BOUNDED_REPEAT_LIMIT: u32 = 32;
-
     fn new(core: Core, hirs: &[&Hir]) -> Result<ReverseInner, Core> {
         if !core.info.config().get_auto_prefilter() {
             debug!(
@@ -2138,7 +2335,6 @@ impl ReverseInner {
             None => return Err(core),
         };
         if !ReverseInner::is_early_return_safe(
-            &core.info,
             &prefilter.prefix,
             &prefilter.literals,
         ) {
@@ -2190,195 +2386,63 @@ impl ReverseInner {
     }
 
     fn is_early_return_safe(
-        info: &RegexInfo,
         concat_prefix: &Hir,
         inner_literals: &[Literal],
     ) -> bool {
-        if ReverseInner::prefix_cannot_consume_inner_literals(
+        let literals = LiteralSet::many(inner_literals);
+        if literals.is_empty() || literals.any_empty() {
+            debug!(
+                "reverse inner is not early return safe because \
+                 no non-empty inner literals were found"
+            );
+            return false;
+        }
+        let prefix_cannot_contain = PrefixSafety::hir_cannot_contain_literals(
             concat_prefix,
-            inner_literals,
-        ) {
+            &literals,
+        );
+        debug!(
+            "reverse inner prefix cannot contain inner literals? \
+             {prefix_cannot_contain}"
+        );
+        if prefix_cannot_contain {
             return true;
         }
-        if ReverseInner::has_absorbing_bounded_repeat(
+
+        let fixed_length = PrefixSafety::hir_has_fixed_length(concat_prefix);
+        debug!("reverse inner has fixed length prefix? {fixed_length}");
+        if fixed_length {
+            return true;
+        }
+
+        let disjoint_trailing = PrefixSafety::has_disjoint_trailing_prefix(
             concat_prefix,
-            inner_literals,
-        ) {
-            return false;
+            &literals,
+        );
+        debug!(
+            "reverse inner has disjoint trailing prefix? {disjoint_trailing}"
+        );
+        if disjoint_trailing {
+            return true;
         }
-        let mut lookm = LookMatcher::new();
-        lookm.set_line_terminator(info.config().get_line_terminator());
-        // The proof below starts every prefix run at a candidate match start.
-        // For an earlier real match, leading look-around assertions have
-        // already been satisfied. For later suffix candidates, dropping them
-        // can only add candidates to check, which is conservative.
-        let concat_prefix = ReverseInner::strip_leading_looks(concat_prefix);
-        let thompson_config = info
-            .config()
-            .to_thompson_config()
-            .which_captures(WhichCaptures::None);
-        let prefix_nfa = match thompson::Compiler::new()
-            .configure(thompson_config)
-            .build_from_hir(&concat_prefix)
-        {
-            Err(_) => return false,
-            Ok(prefix_nfa) => prefix_nfa,
-        };
-        overlap::reverse_inner_is_safe(&prefix_nfa, inner_literals)
-    }
 
-    fn has_absorbing_bounded_repeat(hir: &Hir, literals: &[Literal]) -> bool {
-        match hir.kind() {
-            HirKind::Repetition(rep) => {
-                if let Some(max) = rep.max.filter(|&max| {
-                    max >= ReverseInner::ABSORBING_BOUNDED_REPEAT_LIMIT
-                }) {
-                    if let Some(cls) = ReverseInner::class(&rep.sub) {
-                        if literals.iter().any(|lit| {
-                            ReverseInner::class_can_consume_literal(
-                                cls, max, lit,
-                            )
-                        }) {
-                            return true;
-                        }
-                    }
-                }
-                ReverseInner::has_absorbing_bounded_repeat(&rep.sub, literals)
-            }
-            HirKind::Capture(capture) => {
-                ReverseInner::has_absorbing_bounded_repeat(
-                    &capture.sub,
-                    literals,
-                )
-            }
-            HirKind::Concat(hirs) | HirKind::Alternation(hirs) => {
-                hirs.iter().any(|hir| {
-                    ReverseInner::has_absorbing_bounded_repeat(hir, literals)
-                })
-            }
-            HirKind::Empty
-            | HirKind::Literal(_)
-            | HirKind::Class(_)
-            | HirKind::Look(_) => false,
+        let disjoint_nullable_trailing =
+            PrefixSafety::has_disjoint_nullable_trailing_prefix(
+                concat_prefix,
+                &literals,
+            );
+        debug!(
+            "reverse inner has disjoint nullable trailing prefix? \
+             {disjoint_nullable_trailing}"
+        );
+        if disjoint_nullable_trailing {
+            return true;
         }
-    }
 
-    fn prefix_cannot_consume_inner_literals(
-        hir: &Hir,
-        literals: &[Literal],
-    ) -> bool {
-        literals.iter().all(|lit| {
-            !lit.is_empty()
-                && lit.as_bytes().iter().any(|&byte| {
-                    !ReverseInner::hir_can_consume_byte(hir, byte)
-                })
-        })
-    }
-
-    fn hir_can_consume_byte(hir: &Hir, byte: u8) -> bool {
-        match hir.kind() {
-            HirKind::Empty | HirKind::Look(_) => false,
-            HirKind::Literal(lit) => lit.0.contains(&byte),
-            HirKind::Class(Class::Bytes(cls)) => {
-                ReverseInner::byte_class_contains(cls, byte)
-            }
-            HirKind::Class(Class::Unicode(cls)) => {
-                if byte > 0x7F {
-                    return true;
-                }
-                let ch = char::from(byte);
-                ReverseInner::unicode_class_contains(cls, ch)
-            }
-            HirKind::Repetition(rep) => {
-                ReverseInner::hir_can_consume_byte(&rep.sub, byte)
-            }
-            HirKind::Capture(capture) => {
-                ReverseInner::hir_can_consume_byte(&capture.sub, byte)
-            }
-            HirKind::Concat(hirs) | HirKind::Alternation(hirs) => hirs
-                .iter()
-                .any(|hir| ReverseInner::hir_can_consume_byte(hir, byte)),
-        }
-    }
-
-    fn class(hir: &Hir) -> Option<&Class> {
-        match hir.kind() {
-            HirKind::Class(cls) => Some(cls),
-            HirKind::Capture(capture) => ReverseInner::class(&capture.sub),
-            _ => None,
-        }
-    }
-
-    fn class_can_consume_literal(
-        cls: &Class,
-        max: u32,
-        lit: &Literal,
-    ) -> bool {
-        let lit = lit.as_bytes();
-        if lit.is_empty() {
-            return false;
-        }
-        match *cls {
-            Class::Bytes(ref cls) => {
-                let len = match u32::try_from(lit.len()) {
-                    Err(_) => return false,
-                    Ok(len) => len,
-                };
-                len <= max
-                    && lit.iter().all(|&byte| {
-                        ReverseInner::byte_class_contains(cls, byte)
-                    })
-            }
-            Class::Unicode(ref cls) => {
-                let lit = match core::str::from_utf8(lit) {
-                    Err(_) => return false,
-                    Ok(lit) => lit,
-                };
-                let len = match u32::try_from(lit.chars().count()) {
-                    Err(_) => return false,
-                    Ok(len) => len,
-                };
-                len <= max
-                    && lit.chars().all(|ch| {
-                        ReverseInner::unicode_class_contains(cls, ch)
-                    })
-            }
-        }
-    }
-
-    fn byte_class_contains(
-        cls: &regex_syntax::hir::ClassBytes,
-        byte: u8,
-    ) -> bool {
-        cls.ranges()
-            .iter()
-            .any(|range| range.start() <= byte && byte <= range.end())
-    }
-
-    fn unicode_class_contains(
-        cls: &regex_syntax::hir::ClassUnicode,
-        ch: char,
-    ) -> bool {
-        cls.ranges()
-            .iter()
-            .any(|range| range.start() <= ch && ch <= range.end())
-    }
-
-    fn strip_leading_looks(hir: &Hir) -> Hir {
-        match hir.kind() {
-            HirKind::Concat(hirs) => {
-                let hirs = hirs
-                    .iter()
-                    .skip_while(|hir| {
-                        matches!(hir.kind(), HirKind::Empty | HirKind::Look(_))
-                    })
-                    .cloned()
-                    .collect();
-                Hir::concat(hirs)
-            }
-            HirKind::Empty | HirKind::Look(_) => Hir::empty(),
-            _ => hir.clone(),
-        }
+        let absorbing =
+            PrefixSafety::has_absorbing_prefix(concat_prefix, &literals);
+        debug!("reverse inner has absorbing prefix? {absorbing}");
+        absorbing
     }
 
     #[cfg_attr(feature = "perf-inline", inline(always))]
@@ -2968,6 +3032,14 @@ mod which_strategy_tests {
             "reverse suffix",
             &[r"\pL{50,}ABCDEFGHIJKLMNOPQRSTUVWXYZ"],
         );
+        assert_absorbing_prefix(true, r"[a-z]\d{50,}123", b"123");
+        assert_strategy("reverse suffix", &[r"[a-z]\d{50,}123"]);
+    }
+
+    #[test]
+    fn reverse_suffix_accepts_absorbing_then_disjoint_prefix() {
+        assert_absorbing_prefix(true, r"\w+\s+.Holmes", b"Holmes");
+        assert_strategy("reverse suffix", &[r"\w+\s+.Holmes"]);
     }
 
     #[test]
@@ -2978,7 +3050,7 @@ mod which_strategy_tests {
 
     #[test]
     fn reverse_suffix_absorbing_prefix_is_conservative() {
-        assert_absorbing_prefix(false, r"foo\d{50,}123", b"123");
+        assert_absorbing_prefix(true, r"foo\d{50,}123", b"123");
         assert_absorbing_prefix(false, r"\pL{50,}\bABC", b"ABC");
         assert_internal_suffix(true, r"foo\d{50,}123", b"123");
     }
@@ -2995,7 +3067,7 @@ mod which_strategy_tests {
         assert_disjoint_trailing_prefix(false, r"\s+\w*Holmes", b"Holmes");
         assert_disjoint_trailing_prefix(false, r"H[^H]+Holmes", b"Holmes");
         assert_strategy("reverse inner", &[r"\w+\s*Holmes"]);
-        assert_strategy("reverse inner", &[r"\s+\w*Holmes"]);
+        assert_strategy("reverse suffix", &[r"\s+\w*Holmes"]);
     }
 
     #[test]
@@ -3083,6 +3155,16 @@ mod which_strategy_tests {
     }
 
     #[test]
+    fn reverse_inner_accepts_fixed_length_prefix() {
+        assert_strategy("reverse inner", &[r"[A-Z][0-9]@(foo|bar)"]);
+    }
+
+    #[test]
+    fn reverse_inner_accepts_disjoint_nullable_trailing_prefix() {
+        assert_strategy("reverse inner", &[r"\w+\s*Holmes"]);
+    }
+
+    #[test]
     fn reverse_inner_rejects_auto_prefilter_disabled() {
         assert_strategy_with(
             "core",
@@ -3135,8 +3217,12 @@ mod which_strategy_tests {
     }
 
     #[test]
-    fn reverse_inner_rejects_absorbing_bounded_repeat() {
-        assert_strategy("core", &[r"[\s\S]{0,100}@\w+"]);
+    fn reverse_inner_accepts_absorbing_bounded_repeat() {
+        assert_strategy("reverse inner", &[r"[\s\S]{0,100}@\w+"]);
+        assert_strategy(
+            "reverse inner",
+            &[r".{2,4}(Tom|Sawyer|Huckleberry|Finn)"],
+        );
     }
 
     #[test]

@@ -61,12 +61,9 @@ pub(crate) struct InnerPrefilter {
     pub(crate) pre: Prefilter,
     /// The actual literals extracted and used to build `pre`.
     ///
-    /// These are used for overlap analysis to determine whether the inner
-    /// prefilter can actually be used or not.
-    ///
-    /// At present, this analysis is pretty expensive and is only done after
-    /// the literals are selected. In theory, if the overlap analysis fails,
-    /// we could try extracting a different set of literals. But we don't
+    /// These are used by the meta strategy to prove that the inner prefilter
+    /// can return after the first confirmed candidate. If that proof fails, we
+    /// could try extracting a different set of literals. But we don't
     /// currently do that.
     pub(crate) literals: Vec<Literal>,
 }
