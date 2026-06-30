@@ -1465,27 +1465,136 @@ impl ReverseSuffix {
     }
 
     fn strip_literal_suffix(hir: &Hir, suffix: &[u8]) -> Option<Hir> {
+        let (prefix, suffix_end) =
+            ReverseSuffix::strip_literal_suffix_at(hir, suffix, suffix.len())?;
+        if suffix_end == 0 {
+            Some(prefix)
+        } else {
+            None
+        }
+    }
+
+    /// Strip `suffix[..suffix_end]` from the end of `hir`.
+    ///
+    /// This peels a required literal suffix from right-to-left without
+    /// expanding repetitions. When it returns with a non-zero suffix end, the
+    /// returned HIR must not be able to consume anything. This permits callers
+    /// to continue stripping from the previous concatenation child while
+    /// preserving adjacency.
+    fn strip_literal_suffix_at(
+        hir: &Hir,
+        suffix: &[u8],
+        suffix_end: usize,
+    ) -> Option<(Hir, usize)> {
+        if suffix_end == 0 {
+            return Some((hir.clone(), 0));
+        }
         match hir.kind() {
             HirKind::Literal(lit) => {
                 let bytes = &lit.0;
-                let prefix_len = bytes.len().checked_sub(suffix.len())?;
-                if !bytes[prefix_len..].eq(suffix) {
+                let mut len = 0;
+                while len < bytes.len()
+                    && len < suffix_end
+                    && bytes[bytes.len() - len - 1]
+                        == suffix[suffix_end - len - 1]
+                {
+                    len += 1;
+                }
+                if len == 0 || (len < bytes.len() && len < suffix_end) {
                     return None;
                 }
-                Some(Hir::literal(bytes[..prefix_len].to_vec()))
+                Some((
+                    Hir::literal(bytes[..bytes.len() - len].to_vec()),
+                    suffix_end - len,
+                ))
             }
             HirKind::Capture(capture) => {
-                ReverseSuffix::strip_literal_suffix(&capture.sub, suffix)
+                ReverseSuffix::strip_literal_suffix_at(
+                    &capture.sub,
+                    suffix,
+                    suffix_end,
+                )
             }
             HirKind::Concat(hirs) => {
-                let (last, init) = hirs.split_last()?;
-                let last = ReverseSuffix::strip_literal_suffix(last, suffix)?;
-                let mut prefix = init.to_vec();
-                prefix.push(last);
-                Some(Hir::concat(prefix))
+                let mut prefix = hirs.to_vec();
+                let mut end = suffix_end;
+                for i in (0..prefix.len()).rev() {
+                    let before = end;
+                    let (stripped, after) =
+                        ReverseSuffix::strip_literal_suffix_at(
+                            &prefix[i], suffix, end,
+                        )?;
+                    if after == before {
+                        return None;
+                    }
+                    if after > 0
+                        && !ReverseSuffix::matches_empty_only(&stripped)
+                    {
+                        return None;
+                    }
+                    prefix[i] = stripped;
+                    end = after;
+                    if end == 0 {
+                        break;
+                    }
+                }
+                Some((Hir::concat(prefix), end))
+            }
+            HirKind::Repetition(rep) => {
+                ReverseSuffix::strip_repetition_literal_suffix(
+                    rep, suffix, suffix_end,
+                )
             }
             _ => None,
         }
+    }
+
+    fn strip_repetition_literal_suffix(
+        rep: &regex_syntax::hir::Repetition,
+        suffix: &[u8],
+        suffix_end: usize,
+    ) -> Option<(Hir, usize)> {
+        let mut min = rep.min;
+        let mut max = rep.max;
+        let mut end = suffix_end;
+        let mut tail = Vec::new();
+        while end > 0 {
+            if min == 0 {
+                return None;
+            }
+            let before = end;
+            let (stripped, after) =
+                ReverseSuffix::strip_literal_suffix_at(&rep.sub, suffix, end)?;
+            if after == before {
+                return None;
+            }
+            min = min.saturating_sub(1);
+            max = max.map(|max| max.saturating_sub(1));
+            if after > 0 && !ReverseSuffix::matches_empty_only(&stripped) {
+                return None;
+            }
+            if !matches!(stripped.kind(), HirKind::Empty) {
+                tail.insert(0, stripped);
+            }
+            end = after;
+        }
+
+        let rest = Hir::repetition(regex_syntax::hir::Repetition {
+            min,
+            max,
+            greedy: rep.greedy,
+            sub: rep.sub.clone(),
+        });
+        let mut prefix = Vec::with_capacity(tail.len() + 1);
+        if !matches!(rest.kind(), HirKind::Empty) {
+            prefix.push(rest);
+        }
+        prefix.extend(tail);
+        Some((Hir::concat(prefix), 0))
+    }
+
+    fn matches_empty_only(hir: &Hir) -> bool {
+        hir.properties().maximum_len() == Some(0)
     }
 
     #[cfg_attr(feature = "perf-inline", inline(always))]
@@ -3037,6 +3146,12 @@ mod which_strategy_tests {
     }
 
     #[test]
+    fn reverse_suffix_accepts_absorbing_prefix_after_required_repetition() {
+        assert_absorbing_prefix(true, r"(.*?,){13}z", b",z");
+        assert_strategy("reverse suffix", &[r"(.*?,){13}z"]);
+    }
+
+    #[test]
     fn reverse_suffix_accepts_absorbing_then_disjoint_prefix() {
         assert_absorbing_prefix(true, r"\w+\s+.Holmes", b"Holmes");
         assert_strategy("reverse suffix", &[r"\w+\s+.Holmes"]);
@@ -3051,6 +3166,7 @@ mod which_strategy_tests {
     #[test]
     fn reverse_suffix_absorbing_prefix_is_conservative() {
         assert_absorbing_prefix(true, r"foo\d{50,}123", b"123");
+        assert_absorbing_prefix(false, r"(.*?,)*z", b",z");
         assert_absorbing_prefix(false, r"\pL{50,}\bABC", b"ABC");
         assert_internal_suffix(true, r"foo\d{50,}123", b"123");
     }
@@ -3257,5 +3373,6 @@ mod which_strategy_tests {
         assert_strategy("reverse inner", &[r"\pL+herloc\pL+|\pL+olme\pL+"]);
         assert_strategy("reverse inner", &[r"[A-Z].*bcdefghijklmnopq[a-z]+"]);
         assert_strategy("reverse suffix", &[r"[a-q][^u-z]{23}x"]);
+        assert_strategy("reverse suffix", &[r"(.*?,){13}z"]);
     }
 }
