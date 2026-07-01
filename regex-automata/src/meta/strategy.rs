@@ -1229,38 +1229,7 @@ impl ReverseSuffix {
             );
             return Err(core);
         }
-        let has_internal_suffix = || {
-            let yes =
-                ReverseSuffix::has_internal_suffix(hirs, &lcs).unwrap_or(true);
-            debug!("reverse suffix has internal suffix? {yes}");
-            yes
-        };
-        let has_guarded_internal_suffix = || {
-            let yes = ReverseSuffix::has_guarded_internal_suffix(hirs, &lcs);
-            debug!("reverse suffix has guarded internal suffix? {yes}");
-            yes
-        };
-        let has_fixed_length_prefix = || {
-            let yes = ReverseSuffix::has_fixed_length_prefix(hirs, &lcs);
-            debug!("reverse suffix has fixed length prefix? {yes}");
-            yes
-        };
-        let has_disjoint_trailing_prefix = || {
-            let yes = ReverseSuffix::has_disjoint_trailing_prefix(hirs, &lcs);
-            debug!("reverse suffix has disjoint trailing prefix? {yes}");
-            yes
-        };
-        let has_absorbing_prefix = || {
-            let yes = ReverseSuffix::has_absorbing_prefix(hirs, &lcs);
-            debug!("reverse suffix has absorbing prefix? {yes}");
-            yes
-        };
-        if !has_fixed_length_prefix()
-            && !has_disjoint_trailing_prefix()
-            && !has_absorbing_prefix()
-            && !has_guarded_internal_suffix()
-            && has_internal_suffix()
-        {
+        if !ReverseSuffix::is_early_return_safe(hirs, &lcs) {
             debug!(
                 "skipping reverse suffix optimization because \
                  an earlier suffix match could be a complete match \
@@ -1271,77 +1240,9 @@ impl ReverseSuffix {
         Ok(ReverseSuffix { core, pre })
     }
 
-    fn has_internal_suffix(hirs: &[&Hir], suffix: &[u8]) -> Option<bool> {
-        if hirs.len() != 1 || suffix.is_empty() {
-            return None;
-        }
-        let prefix = ReverseSuffix::strip_literal_suffix(hirs[0], suffix)?;
-        let literals = LiteralSet::one(suffix);
-        Some(!PrefixSafety::hir_cannot_contain_literals(&prefix, &literals))
-    }
-
-    fn has_fixed_length_prefix(hirs: &[&Hir], suffix: &[u8]) -> bool {
-        if hirs.len() != 1 || suffix.is_empty() {
-            return false;
-        }
-        let prefix = match ReverseSuffix::strip_literal_suffix(hirs[0], suffix)
-        {
-            None => return false,
-            Some(prefix) => prefix,
-        };
-        PrefixSafety::hir_has_fixed_length(&prefix)
-    }
-
-    fn has_disjoint_trailing_prefix(hirs: &[&Hir], suffix: &[u8]) -> bool {
-        if hirs.len() != 1 || suffix.is_empty() {
-            return false;
-        }
-        let prefix = match ReverseSuffix::strip_literal_suffix(hirs[0], suffix)
-        {
-            None => return false,
-            Some(prefix) => prefix,
-        };
-        let literals = LiteralSet::one(suffix);
-        PrefixSafety::has_disjoint_trailing_prefix(&prefix, &literals)
-    }
-
-    fn has_absorbing_prefix(hirs: &[&Hir], suffix: &[u8]) -> bool {
-        if hirs.len() != 1 || suffix.is_empty() {
-            return false;
-        }
-        let prefix = match ReverseSuffix::strip_literal_suffix(hirs[0], suffix)
-        {
-            None => return false,
-            Some(prefix) => prefix,
-        };
-        let literals = LiteralSet::one(suffix);
-        PrefixSafety::has_absorbing_prefix(&prefix, &literals)
-    }
-
-    fn has_guarded_internal_suffix(hirs: &[&Hir], suffix: &[u8]) -> bool {
-        if hirs.len() != 1 || suffix.is_empty() {
-            return false;
-        }
-        let (core, looks) = match ReverseSuffix::strip_trailing_looks(hirs[0])
-        {
-            None => return false,
-            Some(x) => x,
-        };
-        let word = match looks
-            .iter()
-            .find_map(|&look| ReverseSuffix::look_word_kind(look))
-        {
-            None => return false,
-            Some(word) => word,
-        };
-        if !ReverseSuffix::literal_is_word(suffix, word) {
-            return false;
-        }
-        let prefix = match ReverseSuffix::strip_literal_suffix(&core, suffix) {
-            None => return false,
-            Some(prefix) => prefix,
-        };
-        ReverseSuffix::hir_consumes_only_word(&prefix, word)
+    fn is_early_return_safe(hirs: &[&Hir], suffix: &[u8]) -> bool {
+        ReverseSuffixSafety::new(hirs, suffix)
+            .map_or(false, |safety| safety.is_early_return_safe())
     }
 
     fn strip_trailing_looks(hir: &Hir) -> Option<(Hir, Vec<HirLook>)> {
@@ -1574,7 +1475,7 @@ impl ReverseSuffix {
                 return None;
             }
             if !matches!(stripped.kind(), HirKind::Empty) {
-                tail.insert(0, stripped);
+                tail.push(stripped);
             }
             end = after;
         }
@@ -1589,6 +1490,7 @@ impl ReverseSuffix {
         if !matches!(rest.kind(), HirKind::Empty) {
             prefix.push(rest);
         }
+        tail.reverse();
         prefix.extend(tail);
         Some((Hir::concat(prefix), 0))
     }
@@ -1686,6 +1588,110 @@ impl ReverseSuffix {
 enum WordKind {
     Ascii,
     Unicode,
+}
+
+#[derive(Clone, Debug)]
+struct ReverseSuffixSafety<'a> {
+    hir: &'a Hir,
+    suffix: &'a [u8],
+    literals: LiteralSet<'a>,
+    prefix: Option<Hir>,
+}
+
+impl<'a> ReverseSuffixSafety<'a> {
+    fn new(hirs: &[&'a Hir], suffix: &'a [u8]) -> Option<Self> {
+        if hirs.len() != 1 || suffix.is_empty() {
+            return None;
+        }
+        let hir = hirs[0];
+        let prefix = ReverseSuffix::strip_literal_suffix(hir, suffix);
+        let literals = LiteralSet::one(suffix);
+        Some(ReverseSuffixSafety { hir, suffix, literals, prefix })
+    }
+
+    fn is_early_return_safe(&self) -> bool {
+        let fixed_length = self.has_fixed_length_prefix();
+        debug!("reverse suffix has fixed length prefix? {fixed_length}");
+        if fixed_length {
+            return true;
+        }
+
+        let disjoint_trailing = self.has_disjoint_trailing_prefix();
+        debug!(
+            "reverse suffix has disjoint trailing prefix? {disjoint_trailing}"
+        );
+        if disjoint_trailing {
+            return true;
+        }
+
+        let absorbing = self.has_absorbing_prefix();
+        debug!("reverse suffix has absorbing prefix? {absorbing}");
+        if absorbing {
+            return true;
+        }
+
+        let guarded = self.has_guarded_internal_suffix();
+        debug!("reverse suffix has guarded internal suffix? {guarded}");
+        if guarded {
+            return true;
+        }
+
+        let internal = self.has_internal_suffix().unwrap_or(true);
+        debug!("reverse suffix has internal suffix? {internal}");
+        !internal
+    }
+
+    fn prefix(&self) -> Option<&Hir> {
+        self.prefix.as_ref()
+    }
+
+    fn has_internal_suffix(&self) -> Option<bool> {
+        let prefix = self.prefix()?;
+        Some(!PrefixSafety::hir_cannot_contain_literals(
+            prefix,
+            &self.literals,
+        ))
+    }
+
+    fn has_fixed_length_prefix(&self) -> bool {
+        self.prefix().map_or(false, PrefixSafety::hir_has_fixed_length)
+    }
+
+    fn has_disjoint_trailing_prefix(&self) -> bool {
+        self.prefix().map_or(false, |prefix| {
+            PrefixSafety::has_disjoint_trailing_prefix(prefix, &self.literals)
+        })
+    }
+
+    fn has_absorbing_prefix(&self) -> bool {
+        self.prefix().map_or(false, |prefix| {
+            PrefixSafety::has_absorbing_prefix(prefix, &self.literals)
+        })
+    }
+
+    fn has_guarded_internal_suffix(&self) -> bool {
+        let (core, looks) = match ReverseSuffix::strip_trailing_looks(self.hir)
+        {
+            None => return false,
+            Some(x) => x,
+        };
+        let word = match looks
+            .iter()
+            .find_map(|&look| ReverseSuffix::look_word_kind(look))
+        {
+            None => return false,
+            Some(word) => word,
+        };
+        if !ReverseSuffix::literal_is_word(self.suffix, word) {
+            return false;
+        }
+        let prefix =
+            match ReverseSuffix::strip_literal_suffix(&core, self.suffix) {
+                None => return false,
+                Some(prefix) => prefix,
+            };
+        ReverseSuffix::hir_consumes_only_word(&prefix, word)
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -2884,14 +2890,16 @@ mod which_strategy_tests {
     fn assert_absorbing_prefix(yes: bool, pattern: &str, suffix: &[u8]) {
         let hirs = syntax::parse_many(&[pattern]).unwrap();
         let hirs: Vec<&Hir> = hirs.iter().collect();
-        assert_eq!(yes, ReverseSuffix::has_absorbing_prefix(&hirs, suffix));
+        let safety = ReverseSuffixSafety::new(&hirs, suffix);
+        assert_eq!(yes, safety.map_or(false, |s| s.has_absorbing_prefix()));
     }
 
     #[track_caller]
     fn assert_fixed_length_prefix(yes: bool, pattern: &str, suffix: &[u8]) {
         let hirs = syntax::parse_many(&[pattern]).unwrap();
         let hirs: Vec<&Hir> = hirs.iter().collect();
-        assert_eq!(yes, ReverseSuffix::has_fixed_length_prefix(&hirs, suffix));
+        let safety = ReverseSuffixSafety::new(&hirs, suffix);
+        assert_eq!(yes, safety.map_or(false, |s| s.has_fixed_length_prefix()));
     }
 
     #[track_caller]
@@ -2902,9 +2910,10 @@ mod which_strategy_tests {
     ) {
         let hirs = syntax::parse_many(&[pattern]).unwrap();
         let hirs: Vec<&Hir> = hirs.iter().collect();
+        let safety = ReverseSuffixSafety::new(&hirs, suffix);
         assert_eq!(
             yes,
-            ReverseSuffix::has_disjoint_trailing_prefix(&hirs, suffix)
+            safety.map_or(false, |s| s.has_disjoint_trailing_prefix())
         );
     }
 
@@ -2912,9 +2921,10 @@ mod which_strategy_tests {
     fn assert_internal_suffix(yes: bool, pattern: &str, suffix: &[u8]) {
         let hirs = syntax::parse_many(&[pattern]).unwrap();
         let hirs: Vec<&Hir> = hirs.iter().collect();
+        let safety = ReverseSuffixSafety::new(&hirs, suffix);
         assert_eq!(
             yes,
-            ReverseSuffix::has_internal_suffix(&hirs, suffix).unwrap_or(true)
+            safety.and_then(|s| s.has_internal_suffix()).unwrap_or(true)
         );
     }
 
