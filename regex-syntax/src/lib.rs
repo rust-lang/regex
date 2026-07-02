@@ -162,6 +162,8 @@ The following features are available:
   [`arbitrary`](https://crates.io/crates/arbitrary)
   crate. Namely, it implements the `Arbitrary` trait from that crate for the
   [`Ast`](crate::ast::Ast) type. This feature is disabled by default.
+* **look-behinds** -
+  Enable support for look-behind expressions. This feature is disabled by default.
 */
 
 #![no_std]
