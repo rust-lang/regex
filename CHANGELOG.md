@@ -1,4 +1,37 @@
-1.12.4 (2025-06-09)
+1.13.0 (2026-07-09)
+===================
+This release includes a new API, a `regex!` macro, for lazy compilation of
+a regex from a string literal. If you use regexes a lot, it's likely you've
+already written one exactly like it. The new macro can be used like this:
+
+```rust
+use regex::regex;
+
+fn is_match(line: &str) -> bool {
+    // The regex will be compiled approximately once and reused automatically.
+    // This avoids the footgun of using `Regex::new` here, which would
+    // guarantee that it would be compiled every time this routine is called.
+    // This would likely make this routine much slower than it needs to be.
+    regex!(r"bar|baz").is_match(line)
+}
+
+let hay = "\
+path/to/foo:54:Blue Harvest
+path/to/bar:90:Something, Something, Something, Dark Side
+path/to/baz:3:It's a Trap!
+";
+
+let matches = hay.lines().filter(|line| is_match(line)).count();
+assert_eq!(matches, 2);
+```
+
+Improvements:
+
+* [#709](https://github.com/rust-lang/regex/issues/709):
+Add a new `regex!` macro for efficient and automatic reuse of a compiled regex.
+
+
+1.12.4 (2026-06-09)
 ===================
 This release includes a performance optimization for compilation of regexes
 with very large character classes.
@@ -9,7 +42,7 @@ Improvements:
 Avoid re-canonicalizing the entire interval set when pushing new class ranges.
 
 
-1.12.3 (2025-02-03)
+1.12.3 (2026-02-03)
 ===================
 This release excludes some unnecessary things from the archive published to
 crates.io. Specifically, fuzzing data and various shell scripts are now
