@@ -59,3 +59,20 @@ fn fail_branch_prevents_match() {
     let re = Regex::new(pat).unwrap();
     assert!(re.is_match(hay));
 }
+
+// This was caught by a differential fuzzer (REAL-regex vs this crate), and
+// then minimized by hand.
+//
+// The reverse suffix optimization processes suffix-prefilter candidates in
+// order of match *end*. When one alternation branch's entire match (an exact
+// suffix literal) is a proper suffix of another branch's suffix, a match can
+// be nested inside the tail of an overlapping match that ends later but
+// starts *earlier*. Yielding the first confirmed candidate then skips the
+// true leftmost match, and the anti-quadratic clamp makes the miss permanent.
+#[test]
+fn reverse_suffix_nested_overlap_misses_leftmost() {
+    let re = Regex::new("a|.aa").unwrap();
+    let spans: Vec<(usize, usize)> =
+        re.find_iter("-#aa").map(|m| (m.start(), m.end())).collect();
+    assert_eq!(spans, vec![(1, 4)]);
+}

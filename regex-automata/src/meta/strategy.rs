@@ -1168,6 +1168,35 @@ impl ReverseSuffix {
         }
         let kind = core.info.config().get_match_kind();
         let suffixes = crate::util::prefilter::suffixes(kind, hirs);
+        // An exact suffix literal that is also a proper suffix of another
+        // suffix literal means one alternation branch's complete match can be
+        // nested inside the tail of another branch's match. Candidate *ends*
+        // are then not ordered like match *starts*: the first confirmed
+        // candidate can yield a match that starts *later* than a still
+        // undiscovered overlapping match ending further right, violating
+        // leftmost-first. (Repro: `a|.aa` on `-#aa` reported [(2,3),(3,4)]
+        // instead of [(1,4)].) Decline the optimization in that case.
+        if let Some(lits) = suffixes.literals() {
+            for (i, a) in lits.iter().enumerate() {
+                if !a.is_exact() {
+                    continue;
+                }
+                for (j, b) in lits.iter().enumerate() {
+                    if i != j
+                        && b.as_bytes().len() > a.as_bytes().len()
+                        && b.as_bytes().ends_with(a.as_bytes())
+                    {
+                        debug!(
+                            "skipping reverse suffix optimization because \
+                             an exact suffix literal is a proper suffix of \
+                             another suffix literal (nested-end overlaps \
+                             defeat leftmost-first candidate ordering)"
+                        );
+                        return Err(core);
+                    }
+                }
+            }
+        }
         let lcs = match suffixes.longest_common_suffix() {
             None => {
                 debug!(
