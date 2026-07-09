@@ -1706,6 +1706,8 @@ impl Regex {
     /// available and a few cases where it is not.
     ///
     /// ```
+    /// # if cfg!(miri) { return Ok(()); } // miri takes too long
+    ///
     /// use regex_automata::meta::Regex;
     ///
     /// let len = |pattern| {
@@ -1731,6 +1733,8 @@ impl Regex {
     /// every pattern must have the same static number.
     ///
     /// ```
+    /// # if cfg!(miri) { return Ok(()); } // miri takes too long
+    ///
     /// use regex_automata::meta::Regex;
     ///
     /// let len = |patterns| {
