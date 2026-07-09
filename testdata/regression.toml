@@ -828,3 +828,17 @@ name = 'improper-reverse-suffix-optimization'
 regex = '(\\N\{[^}]+})|([{}])'
 haystack = 'hiya \N{snowman} bye'
 matches = [[[5, 16], [5, 16], []]]
+
+# Regression test for the meta engine's reverse-suffix (and reverse-inner)
+# optimization returning a non-leftmost match. The first occurrence of the
+# suffix literal ':' is at offset 2, but the leftmost-first match uses the
+# second ':' at offset 4 because the optional group '(?:\([^()]*\))?' can
+# absorb '(:)'. The loop in try_search_half_start used to return on the first
+# successful reverse search, missing the strictly-earlier start.
+#
+# See: https://github.com/rust-lang/regex/issues/1345
+[[test]]
+name = 'non-monotonic-reverse-suffix'
+regex = '[^()]*(?:\([^()]*\))?[^()]*:'
+haystack = '$(:):'
+matches = [[0, 5]]

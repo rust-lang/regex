@@ -1214,10 +1214,17 @@ impl ReverseSuffix {
         input: &Input<'_>,
     ) -> Result<Option<HalfMatch>, RetryError> {
         let mut span = input.get_span();
-        let mut min_start = 0;
+        let mut best: Option<HalfMatch> = None;
         loop {
+            // We can't possibly improve on a match that already starts at the
+            // very beginning of the search span.
+            if let Some(b) = best {
+                if b.offset() == input.start() {
+                    return Ok(best);
+                }
+            }
             let litmatch = match self.pre.find(input.haystack(), span) {
-                None => return Ok(None),
+                None => break,
                 Some(span) => span,
             };
             trace!("reverse suffix scan found suffix match at {litmatch:?}");
@@ -1225,20 +1232,33 @@ impl ReverseSuffix {
                 .clone()
                 .anchored(Anchored::Yes)
                 .span(input.start()..litmatch.end);
+            // We bound the reverse scan by the current best start position:
+            // any match at a position >= best.offset() can't improve on the
+            // current candidate, and if the reverse DFA would need to scan
+            // past best.offset() to find a strictly-better start, it returns
+            // Quadratic, which propagates to the caller and falls back to the
+            // core engine. This preserves leftmost-first semantics without
+            // unbounded re-scanning: if the prefix matching is "monotonic" in
+            // the suffix end (the common case), the first iteration's reverse
+            // search already finds the leftmost start and we early-exit;
+            // otherwise we fall back to the core engine.
+            let min_start = best.map_or(input.start(), |b| b.offset());
             match self
                 .try_search_half_rev_limited(cache, &revinput, min_start)?
             {
-                None => {
-                    if span.start >= span.end {
-                        break;
+                None => {}
+                Some(hm) => {
+                    if best.map_or(true, |b| hm.offset() < b.offset()) {
+                        best = Some(hm);
                     }
-                    span.start = litmatch.start.checked_add(1).unwrap();
                 }
-                Some(hm) => return Ok(Some(hm)),
             }
-            min_start = litmatch.end;
+            if span.start >= span.end {
+                break;
+            }
+            span.start = litmatch.start.checked_add(1).unwrap();
         }
-        Ok(None)
+        Ok(best)
     }
 
     #[cfg_attr(feature = "perf-inline", inline(always))]
@@ -1622,11 +1642,18 @@ impl ReverseInner {
         input: &Input<'_>,
     ) -> Result<Option<Match>, RetryError> {
         let mut span = input.get_span();
-        let mut min_match_start = 0;
         let mut min_pre_start = 0;
+        let mut best: Option<Match> = None;
         loop {
+            // We can't possibly improve on a match that already starts at the
+            // very beginning of the search span.
+            if let Some(b) = best {
+                if b.start() == input.start() {
+                    return Ok(best);
+                }
+            }
             let litmatch = match self.preinner.find(input.haystack(), span) {
-                None => return Ok(None),
+                None => break,
                 Some(span) => span,
             };
             if litmatch.start < min_pre_start {
@@ -1642,6 +1669,16 @@ impl ReverseInner {
                 .clone()
                 .anchored(Anchored::Yes)
                 .span(input.start()..litmatch.start);
+            // We bound the reverse scan by the current best match's start: any
+            // match at a position >= best.start() can't improve on the current
+            // candidate, and if the reverse DFA would need to scan past
+            // best.start() to find a strictly-better start, it returns
+            // Quadratic, which propagates to the caller and falls back to the
+            // core engine. This preserves leftmost-first semantics for
+            // patterns where the prefix is non-monotonic in the inner literal
+            // position (i.e., where a later inner-literal occurrence can yield
+            // a strictly-earlier overall start).
+            let min_match_start = best.map_or(0, |m| m.start());
             // Note that in addition to the literal search above scanning past
             // our minimum start point, this routine can also return an error
             // as a result of detecting possible quadratic behavior if the
@@ -1653,12 +1690,7 @@ impl ReverseInner {
                 &revinput,
                 min_match_start,
             )? {
-                None => {
-                    if span.start >= span.end {
-                        break;
-                    }
-                    span.start = litmatch.start.checked_add(1).unwrap();
-                }
+                None => {}
                 Some(hm_start) => {
                     let fwdinput = input
                         .clone()
@@ -1667,21 +1699,27 @@ impl ReverseInner {
                     match self.try_search_half_fwd_stopat(cache, &fwdinput)? {
                         Err(stopat) => {
                             min_pre_start = stopat;
-                            span.start =
-                                litmatch.start.checked_add(1).unwrap();
                         }
                         Ok(hm_end) => {
-                            return Ok(Some(Match::new(
+                            let candidate = Match::new(
                                 hm_start.pattern(),
                                 hm_start.offset()..hm_end.offset(),
-                            )))
+                            );
+                            if best.map_or(true, |b| {
+                                candidate.start() < b.start()
+                            }) {
+                                best = Some(candidate);
+                            }
                         }
                     }
                 }
             }
-            min_match_start = litmatch.end;
+            if span.start >= span.end {
+                break;
+            }
+            span.start = litmatch.start.checked_add(1).unwrap();
         }
-        Ok(None)
+        Ok(best)
     }
 
     #[cfg_attr(feature = "perf-inline", inline(always))]
