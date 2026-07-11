@@ -1590,9 +1590,9 @@ impl ReverseInner {
                  use reverse inner prefilter"
             );
         }
-        let (concat_prefix, preinner) = match reverse_inner::extract(hirs) {
-            Some(x) => x,
-            // N.B. the 'extract' function emits debug messages explaining
+        let prefilter = match reverse_inner::InnerPrefilter::new(hirs) {
+            Some(prefilter) => prefilter,
+            // N.B. the 'new' function emits debug messages explaining
             // why we bailed out here.
             None => return Err(core),
         };
@@ -1605,7 +1605,7 @@ impl ReverseInner {
             .which_captures(WhichCaptures::None);
         let result = thompson::Compiler::new()
             .configure(thompson_config)
-            .build_from_hir(&concat_prefix);
+            .build_from_hir(&prefilter.prefix);
         let nfarev = match result {
             Ok(nfarev) => nfarev,
             Err(_err) => {
@@ -1634,7 +1634,13 @@ impl ReverseInner {
         } else {
             wrappers::ReverseHybrid::new(&core.info, &nfarev)
         };
-        Ok(ReverseInner { core, preinner, nfarev, hybrid, dfa })
+        Ok(ReverseInner {
+            core,
+            preinner: prefilter.pre,
+            nfarev,
+            hybrid,
+            dfa,
+        })
     }
 
     #[cfg_attr(feature = "perf-inline", inline(always))]
