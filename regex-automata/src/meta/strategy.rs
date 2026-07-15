@@ -1633,13 +1633,7 @@ impl ReverseInner {
         } else {
             wrappers::ReverseHybrid::new(&core.info, &nfarev)
         };
-        Ok(ReverseInner {
-            core,
-            preinner: prefilter.pre,
-            nfarev,
-            hybrid,
-            dfa,
-        })
+        Ok(ReverseInner { core, preinner: prefilter.pre, nfarev, hybrid, dfa })
     }
 
     #[cfg_attr(feature = "perf-inline", inline(always))]
@@ -1887,7 +1881,7 @@ impl Strategy for ReverseInner {
         };
         trace!(
             "match found at {}..{} in capture search, \
-		  	 using another engine to find captures",
+             using another engine to find captures",
             m.start(),
             m.end(),
         );
