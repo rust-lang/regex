@@ -1238,7 +1238,7 @@ impl ReverseSuffix {
         let mut min_start = 0;
         loop {
             let litmatch = match self.pre.find(input.haystack(), span) {
-                None => return Ok(None),
+                None => break,
                 Some(span) => span,
             };
             trace!("reverse suffix scan found suffix match at {litmatch:?}");
@@ -1246,17 +1246,16 @@ impl ReverseSuffix {
                 .clone()
                 .anchored(Anchored::Yes)
                 .span(input.start()..litmatch.end);
-            match self
-                .try_search_half_rev_limited(cache, &revinput, min_start)?
+            if let Some(hm) =
+                self.try_search_half_rev_limited(cache, &revinput, min_start)?
             {
-                None => {
-                    if span.start >= span.end {
-                        break;
-                    }
-                    span.start = litmatch.start.checked_add(1).unwrap();
-                }
-                Some(hm) => return Ok(Some(hm)),
+                return Ok(Some(hm));
             }
+
+            if span.start >= span.end {
+                break;
+            }
+            span.start = litmatch.start.checked_add(1).unwrap();
             min_start = litmatch.end;
         }
         Ok(None)
@@ -1654,7 +1653,7 @@ impl ReverseInner {
         let mut min_pre_start = 0;
         loop {
             let litmatch = match self.preinner.find(input.haystack(), span) {
-                None => return Ok(None),
+                None => break,
                 Some(span) => span,
             };
             if litmatch.start < min_pre_start {
@@ -1676,37 +1675,33 @@ impl ReverseInner {
             // reverse scan goes past the minimum start point. That is, the
             // literal search might not, but the reverse regex search for the
             // prefix might!
-            match self.try_search_half_rev_limited(
+            if let Some(hm_start) = self.try_search_half_rev_limited(
                 cache,
                 &revinput,
                 min_match_start,
             )? {
-                None => {
-                    if span.start >= span.end {
-                        break;
+                let fwdinput = input
+                    .clone()
+                    .anchored(Anchored::Pattern(hm_start.pattern()))
+                    .span(hm_start.offset()..input.end());
+                match self.try_search_half_fwd_stopat(cache, &fwdinput)? {
+                    Err(stopat) => {
+                        min_pre_start = stopat;
+                        span.start = litmatch.start.checked_add(1).unwrap();
                     }
-                    span.start = litmatch.start.checked_add(1).unwrap();
-                }
-                Some(hm_start) => {
-                    let fwdinput = input
-                        .clone()
-                        .anchored(Anchored::Pattern(hm_start.pattern()))
-                        .span(hm_start.offset()..input.end());
-                    match self.try_search_half_fwd_stopat(cache, &fwdinput)? {
-                        Err(stopat) => {
-                            min_pre_start = stopat;
-                            span.start =
-                                litmatch.start.checked_add(1).unwrap();
-                        }
-                        Ok(hm_end) => {
-                            return Ok(Some(Match::new(
-                                hm_start.pattern(),
-                                hm_start.offset()..hm_end.offset(),
-                            )))
-                        }
+                    Ok(hm_end) => {
+                        return Ok(Some(Match::new(
+                            hm_start.pattern(),
+                            hm_start.offset()..hm_end.offset(),
+                        )));
                     }
                 }
             }
+
+            if span.start >= span.end {
+                break;
+            }
+            span.start = litmatch.start.checked_add(1).unwrap();
             min_match_start = litmatch.end;
         }
         Ok(None)
