@@ -141,7 +141,7 @@ pub fn parse_many_with<P: AsRef<str>>(
 /// These options are defined as a group since they apply to every regex engine
 /// in this crate. Instead of re-defining them on every engine's builder, they
 /// are instead provided here as one cohesive unit.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Config {
     case_insensitive: bool,
     multi_line: bool,
