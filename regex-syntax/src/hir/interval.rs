@@ -374,24 +374,28 @@ impl<I: Interval> IntervalSet<I> {
         self.ranges.sort();
         assert!(!self.ranges.is_empty());
 
-        // Is there a way to do this in-place with constant memory? I couldn't
-        // figure out a way to do it. So just append the canonicalization to
-        // the end of this range, and then drain it before we're done.
-        let drain_end = self.ranges.len();
-        for oldi in 0..drain_end {
-            // If we've added at least one new range, then check if we can
-            // merge this range in the previously added range.
-            if self.ranges.len() > drain_end {
-                let (last, rest) = self.ranges.split_last_mut().unwrap();
-                if let Some(union) = last.union(&rest[oldi]) {
-                    *last = union;
-                    continue;
+        // `canonical_index` points to the last index of the canonicalized
+        // portion of the vector
+        let mut canonical_index = 0;
+        // `next_index` points to the next element we either merge into the
+        // last canonicalized element or move into the next canonicalized slot.
+        for next_index in 1..self.ranges.len() {
+            let (before, after) = self.ranges.split_at_mut(next_index);
+            let canonical = &mut before[canonical_index];
+            let next = &after[0];
+
+            if let Some(union) = canonical.union(next) {
+                *canonical = union;
+            } else {
+                canonical_index += 1;
+                // If we have merged a previous pair of ranges we fill in the gap caused
+                // by any such merges
+                if canonical_index != next_index {
+                    before[canonical_index] = *next;
                 }
             }
-            let range = self.ranges[oldi];
-            self.ranges.push(range);
         }
-        self.ranges.drain(..drain_end);
+        self.ranges.truncate(canonical_index + 1);
     }
 
     /// Returns true if and only if this class is in a canonical ordering.
