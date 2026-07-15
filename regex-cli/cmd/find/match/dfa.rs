@@ -43,7 +43,7 @@ OPTIONS:
         ],
     )?;
 
-    let pats = patterns.get()?;
+    let pats = patterns.get(&syntax)?;
     let mut table = Table::empty();
     let (asts, time) = util::timeitr(|| syntax.asts(&pats))?;
     table.add("parse time", time);
@@ -124,7 +124,7 @@ OPTIONS:
         ],
     )?;
 
-    let pats = patterns.get()?;
+    let pats = patterns.get(&syntax)?;
     let mut table = Table::empty();
     let (asts, time) = util::timeitr(|| syntax.asts(&pats))?;
     table.add("parse time", time);
@@ -202,7 +202,7 @@ OPTIONS:
         ],
     )?;
 
-    let pats = patterns.get()?;
+    let pats = patterns.get(&syntax)?;
     let mut table = Table::empty();
     let (asts, time) = util::timeitr(|| syntax.asts(&pats))?;
     table.add("parse time", time);
@@ -281,7 +281,7 @@ OPTIONS:
         ],
     )?;
 
-    let pats = patterns.get()?;
+    let pats = patterns.get(&syntax)?;
     let mut table = Table::empty();
     let (asts, time) = util::timeitr(|| syntax.asts(&pats))?;
     table.add("parse time", time);

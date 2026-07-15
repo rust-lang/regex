@@ -79,7 +79,7 @@ OPTIONS:
         ],
     )?;
 
-    let pats = patterns.get()?;
+    let pats = patterns.get(&syntax)?;
     let asts = syntax.asts(&pats)?;
     let hirs = syntax.hirs(&pats, &asts)?;
     let nfa = thompson.from_hirs(&hirs)?;
@@ -125,7 +125,7 @@ OPTIONS:
         ],
     )?;
 
-    let pats = patterns.get()?;
+    let pats = patterns.get(&syntax)?;
     let asts = syntax.asts(&pats)?;
     let hirs = syntax.hirs(&pats, &asts)?;
     let nfafwd = thompson.from_hirs(&hirs)?;
@@ -191,7 +191,7 @@ OPTIONS:
         ],
     )?;
 
-    let pats = patterns.get()?;
+    let pats = patterns.get(&syntax)?;
     let asts = syntax.asts(&pats)?;
     let hirs = syntax.hirs(&pats, &asts)?;
     let nfa = thompson.from_hirs(&hirs)?;
@@ -237,7 +237,7 @@ OPTIONS:
         ],
     )?;
 
-    let pats = patterns.get()?;
+    let pats = patterns.get(&syntax)?;
     let asts = syntax.asts(&pats)?;
     let hirs = syntax.hirs(&pats, &asts)?;
     let nfafwd = thompson.from_hirs(&hirs)?;
