@@ -465,6 +465,15 @@ regex = '(?:[a-z]cb|c)[a-z]*b'
 haystack = '!acbzb'
 matches = [[1, 6]]
 
+# Rejecting the reverse suffix strategy falls back to Core. Its automatic
+# prefix prefilter must not skip the leftmost match.
+[[test]]
+name = 'reverse-suffix-rejected-fallback-prefilter-010'
+regex = '(?:ab|c)*c'
+haystack = 'cabac'
+matches = [[0, 1]]
+match-limit = 1
+
 # A required character-class separator lets the reverse suffix scan reject an
 # earlier literal occurrence inside the prefix without rescanning the haystack.
 [[test]]
@@ -869,6 +878,15 @@ name = 'reverse-inner-start-of-match-failure-020'
 regex = '(?:[ac-z]{3}|[ac-z])(?:aba|baa)'
 haystack = '!aaabaa'
 matches = [[1, 7]]
+
+# Rejecting the reverse inner strategy falls back to Core. Its automatic
+# prefix prefilter must not skip the leftmost match.
+[[test]]
+name = 'reverse-inner-rejected-fallback-prefilter-010'
+regex = '(?:ab|c)*c[de]*'
+haystack = 'cabac'
+matches = [[0, 1]]
+match-limit = 1
 
 # A required class separator prevents the first inner literal occurrence from
 # confirming inside the prefix.
