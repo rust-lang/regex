@@ -373,6 +373,14 @@ impl Hir {
         Hir { kind: HirKind::Look(look), props }
     }
 
+    /// Creates a look-around subexpression HIR expression.
+    #[inline]
+    #[cfg(feature = "look-behinds")]
+    pub fn lookaround(lookaround: LookAround) -> Hir {
+        let props = Properties::lookaround(&lookaround);
+        Hir { kind: HirKind::LookAround(lookaround), props }
+    }
+
     /// Creates a repetition HIR expression.
     #[inline]
     pub fn repetition(mut rep: Repetition) -> Hir {
@@ -728,6 +736,9 @@ pub enum HirKind {
     Class(Class),
     /// A look-around assertion. A look-around match always has zero length.
     Look(Look),
+    /// A look-around subexpression.
+    #[cfg(feature = "look-behinds")]
+    LookAround(LookAround),
     /// A repetition operation applied to a sub-expression.
     Repetition(Repetition),
     /// A capturing group, which contains a sub-expression.
@@ -761,6 +772,8 @@ impl HirKind {
             | HirKind::Literal(_)
             | HirKind::Class(_)
             | HirKind::Look(_) => &[],
+            #[cfg(feature = "look-behinds")]
+            HirKind::LookAround(ref lookaround) => from_ref(lookaround.sub()),
             HirKind::Repetition(Repetition { ref sub, .. }) => from_ref(sub),
             HirKind::Capture(Capture { ref sub, .. }) => from_ref(sub),
             HirKind::Concat(ref subs) => subs,
@@ -1786,6 +1799,54 @@ impl Look {
     }
 }
 
+/// Represents a general look-around assertion.
+///
+/// Currently, only lookbehind assertions are supported.
+/// Furthermore, capture groups inside assertions are not supported.
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg(feature = "look-behinds")]
+pub enum LookAround {
+    /// A positive lookbehind assertion.
+    PositiveLookBehind(Box<Hir>),
+    /// A negative lookbehind assertion.
+    NegativeLookBehind(Box<Hir>),
+}
+
+#[cfg(feature = "look-behinds")]
+impl LookAround {
+    /// Returns a reference to the inner expression that must match for this
+    /// look-around assertion to hold.
+    pub fn sub(&self) -> &Hir {
+        match self {
+            Self::PositiveLookBehind(sub) | Self::NegativeLookBehind(sub) => {
+                sub
+            }
+        }
+    }
+
+    /// Returns a mutable reference to the inner expression.
+    pub fn sub_mut(&mut self) -> &mut Hir {
+        match self {
+            Self::PositiveLookBehind(sub) | Self::NegativeLookBehind(sub) => {
+                sub
+            }
+        }
+    }
+
+    /// Returns a new look-around of the same kind, but with its
+    /// sub-expression replaced with the one given.
+    pub fn with(&self, sub: Hir) -> LookAround {
+        match self {
+            Self::PositiveLookBehind(_) => {
+                Self::PositiveLookBehind(Box::new(sub))
+            }
+            Self::NegativeLookBehind(_) => {
+                Self::NegativeLookBehind(Box::new(sub))
+            }
+        }
+    }
+}
+
 /// The high-level intermediate representation for a capturing group.
 ///
 /// A capturing group always has an index and a child expression. It may
@@ -1920,6 +1981,10 @@ impl Drop for Hir {
             | HirKind::Class(_)
             | HirKind::Look(_) => return,
             HirKind::Capture(ref x) if x.sub.kind.subs().is_empty() => return,
+            #[cfg(feature = "look-behinds")]
+            HirKind::LookAround(ref x) if x.sub().kind.subs().is_empty() => {
+                return
+            }
             HirKind::Repetition(ref x) if x.sub.kind.subs().is_empty() => {
                 return
             }
@@ -1935,6 +2000,10 @@ impl Drop for Hir {
                 | HirKind::Literal(_)
                 | HirKind::Class(_)
                 | HirKind::Look(_) => {}
+                #[cfg(feature = "look-behinds")]
+                HirKind::LookAround(ref mut x) => {
+                    stack.push(mem::replace(x.sub_mut(), Hir::empty()));
+                }
                 HirKind::Capture(ref mut x) => {
                     stack.push(mem::replace(&mut x.sub, Hir::empty()));
                 }
@@ -1979,6 +2048,8 @@ struct PropertiesI {
     look_set_suffix: LookSet,
     look_set_prefix_any: LookSet,
     look_set_suffix_any: LookSet,
+    #[cfg(feature = "look-behinds")]
+    contains_lookaround_expr: bool,
     utf8: bool,
     explicit_captures_len: usize,
     static_explicit_captures_len: Option<usize>,
@@ -2070,6 +2141,16 @@ impl Properties {
     #[inline]
     pub fn look_set_suffix_any(&self) -> LookSet {
         self.0.look_set_suffix_any
+    }
+
+    /// Returns whether there are any look-around expressions in this HIR value.
+    ///
+    /// Only returns true for [`HirKind::LookAround`] and not for
+    /// [`HirKind::Look`], which can be queried by [`look_set`](Properties::look_set) instead.
+    #[inline]
+    #[cfg(feature = "look-behinds")]
+    pub fn contains_lookaround_expr(&self) -> bool {
+        self.0.contains_lookaround_expr
     }
 
     /// Return true if and only if the corresponding HIR will always match
@@ -2341,6 +2422,8 @@ impl Properties {
             look_set_suffix: fix,
             look_set_prefix_any: LookSet::empty(),
             look_set_suffix_any: LookSet::empty(),
+            #[cfg(feature = "look-behinds")]
+            contains_lookaround_expr: false,
             utf8: true,
             explicit_captures_len: 0,
             static_explicit_captures_len,
@@ -2356,6 +2439,12 @@ impl Properties {
             props.look_set_suffix.set_intersect(p.look_set_suffix());
             props.look_set_prefix_any.set_union(p.look_set_prefix_any());
             props.look_set_suffix_any.set_union(p.look_set_suffix_any());
+            #[cfg(feature = "look-behinds")]
+            {
+                props.contains_lookaround_expr = props
+                    .contains_lookaround_expr
+                    || p.contains_lookaround_expr();
+            }
             props.utf8 = props.utf8 && p.is_utf8();
             props.explicit_captures_len = props
                 .explicit_captures_len
@@ -2403,6 +2492,8 @@ impl Properties {
             look_set_suffix: LookSet::empty(),
             look_set_prefix_any: LookSet::empty(),
             look_set_suffix_any: LookSet::empty(),
+            #[cfg(feature = "look-behinds")]
+            contains_lookaround_expr: false,
             // It is debatable whether an empty regex always matches at valid
             // UTF-8 boundaries. Strictly speaking, at a byte oriented view,
             // it is clearly false. There are, for example, many empty strings
@@ -2439,6 +2530,8 @@ impl Properties {
             look_set_suffix: LookSet::empty(),
             look_set_prefix_any: LookSet::empty(),
             look_set_suffix_any: LookSet::empty(),
+            #[cfg(feature = "look-behinds")]
+            contains_lookaround_expr: false,
             utf8: core::str::from_utf8(&lit.0).is_ok(),
             explicit_captures_len: 0,
             static_explicit_captures_len: Some(0),
@@ -2458,6 +2551,8 @@ impl Properties {
             look_set_suffix: LookSet::empty(),
             look_set_prefix_any: LookSet::empty(),
             look_set_suffix_any: LookSet::empty(),
+            #[cfg(feature = "look-behinds")]
+            contains_lookaround_expr: false,
             utf8: class.is_utf8(),
             explicit_captures_len: 0,
             static_explicit_captures_len: Some(0),
@@ -2477,6 +2572,10 @@ impl Properties {
             look_set_suffix: LookSet::singleton(look),
             look_set_prefix_any: LookSet::singleton(look),
             look_set_suffix_any: LookSet::singleton(look),
+            // Note, this field represents _general_ lookarounds (ones using
+            // LookAround) and not assertions (using Look).
+            #[cfg(feature = "look-behinds")]
+            contains_lookaround_expr: false,
             // This requires a little explanation. Basically, we don't consider
             // matching an empty string to be equivalent to matching invalid
             // UTF-8, even though technically matching every empty string will
@@ -2495,6 +2594,25 @@ impl Properties {
             static_explicit_captures_len: Some(0),
             literal: false,
             alternation_literal: false,
+        };
+        Properties(Box::new(inner))
+    }
+
+    /// Create a new set of HIR properties for a look-around.
+    #[cfg(feature = "look-behinds")]
+    fn lookaround(lookaround: &LookAround) -> Properties {
+        let sub_p = lookaround.sub().properties();
+        let inner = PropertiesI {
+            minimum_len: Some(0),
+            maximum_len: Some(0),
+            literal: false,
+            alternation_literal: false,
+            contains_lookaround_expr: true,
+            // We do not want look-around subexpressions to influence matching
+            // of the main expression when they contain anchors, so we clear the set.
+            look_set_prefix: LookSet::empty(),
+            look_set_suffix: LookSet::empty(),
+            ..*sub_p.0.clone()
         };
         Properties(Box::new(inner))
     }
@@ -2520,6 +2638,8 @@ impl Properties {
             look_set_suffix: LookSet::empty(),
             look_set_prefix_any: p.look_set_prefix_any(),
             look_set_suffix_any: p.look_set_suffix_any(),
+            #[cfg(feature = "look-behinds")]
+            contains_lookaround_expr: p.contains_lookaround_expr(),
             utf8: p.is_utf8(),
             explicit_captures_len: p.explicit_captures_len(),
             static_explicit_captures_len: p.static_explicit_captures_len(),
@@ -2581,6 +2701,8 @@ impl Properties {
             look_set_suffix: LookSet::empty(),
             look_set_prefix_any: LookSet::empty(),
             look_set_suffix_any: LookSet::empty(),
+            #[cfg(feature = "look-behinds")]
+            contains_lookaround_expr: false,
             utf8: true,
             explicit_captures_len: 0,
             static_explicit_captures_len: Some(0),
@@ -2592,6 +2714,12 @@ impl Properties {
             let p = x.properties();
             props.look_set.set_union(p.look_set());
             props.utf8 = props.utf8 && p.is_utf8();
+            #[cfg(feature = "look-behinds")]
+            {
+                props.contains_lookaround_expr = props
+                    .contains_lookaround_expr
+                    || p.contains_lookaround_expr();
+            }
             props.explicit_captures_len = props
                 .explicit_captures_len
                 .saturating_add(p.explicit_captures_len());
