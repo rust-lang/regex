@@ -208,6 +208,21 @@ impl BoundedBacktrackerEngine {
                 .configure(backtrack_config)
                 .build_from_nfa(nfa.clone())
                 .map_err(BuildError::nfa)?;
+            // If the backtracker can't even search an empty haystack, then
+            // don't use it at all. `max_haystack_len` saturates to `0` in that
+            // case, which the length check in `get` below can't distinguish
+            // from "an empty haystack is fine."
+            let nfa_state_len = engine.get_nfa().states().len();
+            let max_capacity = 8 * engine.get_config().get_visited_capacity();
+            if nfa_state_len > max_capacity {
+                debug!(
+                    "BoundedBacktracker not used because it needs at least \
+                     {:?} bits of visited capacity to search even an empty \
+                     haystack, but only has {:?} bits",
+                    nfa_state_len, max_capacity,
+                );
+                return Ok(None);
+            }
             debug!(
                 "BoundedBacktracker built (max haystack length: {:?})",
                 engine.max_haystack_len()
