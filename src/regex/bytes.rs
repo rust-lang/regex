@@ -1485,8 +1485,8 @@ impl Regex {
 
     /// Return the total approximate heap memory, in bytes, used by this `Regex`.
     ///
-    /// Note that this value is unrelated to [`RegexBuilder::size_limit`], and can
-    /// in many cases exceed it.
+    /// Note that this value does not have a defined relationship to
+    ///  to [`RegexBuilder::size_limit`].
     #[inline]
     pub fn memory_usage(&self) -> usize {
         self.meta.memory_usage() + self.pattern.len()
