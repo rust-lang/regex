@@ -31,18 +31,11 @@ pub(crate) fn find_fwd(
     // beneficial in ad hoc benchmarks. To see these differences, you often
     // need a query with a high match count. In other words, specializing these
     // four routines *tends* to help latency more than throughput.
-    if pre.is_some() {
-        if input.get_earliest() {
-            find_fwd_imp(dfa, cache, input, pre, true)
-        } else {
-            find_fwd_imp(dfa, cache, input, pre, false)
-        }
-    } else {
-        if input.get_earliest() {
-            find_fwd_imp(dfa, cache, input, None, true)
-        } else {
-            find_fwd_imp(dfa, cache, input, None, false)
-        }
+    match (pre.is_some(), input.get_earliest()) {
+        (true, true) => find_fwd_imp(dfa, cache, input, pre, true),
+        (true, false) => find_fwd_imp(dfa, cache, input, pre, false),
+        (false, true) => find_fwd_imp(dfa, cache, input, None, true),
+        (false, false) => find_fwd_imp(dfa, cache, input, None, false),
     }
 }
 
