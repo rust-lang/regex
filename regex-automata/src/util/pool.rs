@@ -193,10 +193,16 @@ impl<T, F> Pool<T, F> {
     pub fn with_available_parallelism_capacity(create: F) -> Pool<T, F> {
         #[cfg(feature = "std")]
         {
-            let Ok(n) = std::thread::available_parallelism() else {
+            use crate::util::lazy::Lazy;
+
+            static AVAILABLE_PARALLELISM: Lazy<Option<usize>> =
+                Lazy::new(|| {
+                    std::thread::available_parallelism().map(|n| n.get()).ok()
+                });
+            let &Some(n) = Lazy::get(&AVAILABLE_PARALLELISM) else {
                 return Pool::new(create);
             };
-            Pool::with_capacity(n.get(), create)
+            Pool::with_capacity(n, create)
         }
         #[cfg(not(feature = "std"))]
         {

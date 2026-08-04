@@ -3238,9 +3238,14 @@ impl Config {
         self.pool_capacity.unwrap_or_else(|| {
             #[cfg(feature = "std")]
             {
-                std::thread::available_parallelism()
-                    .map(|n| n.get())
-                    .unwrap_or(DEFAULT_POOL_CAPACITY)
+                use crate::util::lazy::Lazy;
+
+                static AVAILABLE_PARALLELISM: Lazy<usize> = Lazy::new(|| {
+                    std::thread::available_parallelism()
+                        .map(|n| n.get())
+                        .unwrap_or(DEFAULT_POOL_CAPACITY)
+                });
+                *Lazy::get(&AVAILABLE_PARALLELISM)
             }
             #[cfg(not(feature = "std"))]
             {
