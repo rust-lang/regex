@@ -854,8 +854,11 @@ impl Span {
             start: self
                 .start
                 .checked_add(offset)
-                .expect("invalid start+offset"),
-            end: self.end.checked_add(offset).expect("invalid end+offset"),
+                .expect("Span::offset: start+offset overflowed usize"),
+            end: self
+                .end
+                .checked_add(offset)
+                .expect("Span::offset: end+offset overflowed usize"),
         }
     }
 }
@@ -1949,6 +1952,15 @@ impl core::fmt::Display for MatchError {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
+    #[test]
+    #[should_panic(expected = "overflowed usize")]
+    fn span_offset_overflow_panics() {
+        let s = Span { start: usize::MAX, end: usize::MAX };
+        let _ = s.offset(1);
+    }
+
     use super::*;
 
     // We test that our 'MatchError' type is the size we expect. This isn't an
