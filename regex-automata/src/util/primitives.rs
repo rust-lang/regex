@@ -148,12 +148,11 @@ impl SmallIndex {
     #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
     pub const MAX: SmallIndex =
         // FIXME: Use as_usize() once const functions in traits are stable.
-        SmallIndex::new_unchecked(core::i32::MAX as usize - 1);
+        SmallIndex::new_unchecked(i32::MAX as usize - 1);
 
     /// The maximum index value.
     #[cfg(target_pointer_width = "16")]
-    pub const MAX: SmallIndex =
-        SmallIndex::new_unchecked(core::isize::MAX - 1);
+    pub const MAX: SmallIndex = SmallIndex::new_unchecked(isize::MAX - 1);
 
     /// The total number of values that can be represented as a small index.
     pub const LIMIT: usize = SmallIndex::MAX.as_usize() + 1;
