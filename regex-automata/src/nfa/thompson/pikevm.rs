@@ -66,6 +66,21 @@ std::thread_local! {
 pub struct Config {
     match_kind: Option<MatchKind>,
     pre: Option<Option<Prefilter>>,
+    pre_strategy: Option<PrefilterStrategy>,
+}
+
+/// The strategy for using a prefilter during PikeVM execution.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum PrefilterStrategy {
+    /// Use the prefilter whenever the PikeVM runs out of states to explore.
+    #[default]
+    OnEmptyStates,
+    /// Use the prefilter in advance to know which positions to skip exploring.
+    /// This leads to matching doing less work in total, but it requires doing
+    /// some work upfront which might go to waste if we find a match before
+    /// reaching the precomputed position from the prefilter. This makes
+    /// matching non-streaming, but on average faster.
+    OneAhead,
 }
 
 impl Config {
@@ -161,6 +176,15 @@ impl Config {
         self
     }
 
+    /// Set the strategy for using a prefilter during PikeVM execution.
+    pub fn prefilter_strategy(
+        mut self,
+        strategy: PrefilterStrategy,
+    ) -> Config {
+        self.pre_strategy = Some(strategy);
+        self
+    }
+
     /// Returns the match semantics set in this configuration.
     pub fn get_match_kind(&self) -> MatchKind {
         self.match_kind.unwrap_or(MatchKind::LeftmostFirst)
@@ -171,6 +195,11 @@ impl Config {
         self.pre.as_ref().unwrap_or(&None).as_ref()
     }
 
+    /// Returns the prefilter strategy set in this configuration, if one at all.
+    pub fn get_prefilter_strategy(&self) -> Option<PrefilterStrategy> {
+        self.pre_strategy
+    }
+
     /// Overwrite the default configuration such that the options in `o` are
     /// always used. If an option in `o` is not set, then the corresponding
     /// option in `self` is used. If it's not set in `self` either, then it
@@ -179,6 +208,7 @@ impl Config {
         Config {
             match_kind: o.match_kind.or(self.match_kind),
             pre: o.pre.or_else(|| self.pre.clone()),
+            pre_strategy: o.pre_strategy.or(self.pre_strategy),
         }
     }
 }
@@ -1227,7 +1257,26 @@ impl PikeVM {
         input: &Input<'_>,
         slots: &mut [Option<NonMaxUsize>],
     ) -> Option<HalfMatch> {
-        cache.setup_search(slots.len());
+        match self.config.get_prefilter_strategy().unwrap_or_default() {
+            PrefilterStrategy::OnEmptyStates => {
+                self.search_imp_strategy::<false>(cache, input, slots)
+            }
+            PrefilterStrategy::OneAhead => {
+                self.search_imp_strategy::<true>(cache, input, slots)
+            }
+        }
+    }
+
+    /// [`search_imp`] with the specialization to the [`PrefilterStrategy`]. We do
+    /// so to allow the compiler to specialize the function for a particular strategy
+    /// reducing any overhead of checking the strategy on every iteration of the search loop.
+    fn search_imp_strategy<const ONE_AHEAD: bool>(
+        &self,
+        cache: &mut Cache,
+        input: &Input<'_>,
+        slots: &mut [Option<NonMaxUsize>],
+    ) -> Option<HalfMatch> {
+        cache.setup_search(slots.len(), input);
         if input.is_done() {
             return None;
         }
@@ -1254,7 +1303,12 @@ impl PikeVM {
 
         let pre =
             if anchored { None } else { self.get_config().get_prefilter() };
-        let Cache { ref mut stack, ref mut curr, ref mut next } = cache;
+        let Cache {
+            ref mut stack,
+            ref mut curr,
+            ref mut next,
+            ref mut next_matching_pre,
+        } = cache;
         let mut hm = None;
         // Yes, our search doesn't end at input.end(), but includes it. This
         // is necessary because matches are delayed by one byte, just like
@@ -1269,6 +1323,42 @@ impl PikeVM {
         // match state.)
         let mut at = input.start();
         while at <= input.end() {
+            if ONE_AHEAD {
+                if let Some(pre) = pre {
+                    // If the position which we have computed is in the past,
+                    // we recompute a new value. Otherwise, we leave it untouched.
+                    // When we are out of states to explore, in the `OneAhead`
+                    // strategy we will use this position to accelerate to.
+                    match *next_matching_pre {
+                        Some(NextMatchingPre {
+                            pos: NextMatchingPrePos::Nowhere,
+                            ..
+                        }) => {}
+                        Some(NextMatchingPre {
+                            pos: NextMatchingPrePos::At(pos),
+                            ..
+                        }) if pos >= at => {}
+                        Some(NextMatchingPre {
+                            pos: NextMatchingPrePos::At(_),
+                            ..
+                        })
+                        | None => {
+                            let span = Span::from(at..input.end());
+                            *next_matching_pre = Some(NextMatchingPre {
+                                found_at: at,
+                                found_for: input.haystack().as_ptr() as _,
+                                pos: match pre.find(input.haystack(), span) {
+                                    None => NextMatchingPrePos::Nowhere,
+                                    Some(ref span) => {
+                                        NextMatchingPrePos::At(span.start)
+                                    }
+                                },
+                            });
+                        }
+                    }
+                }
+            }
+
             // If we have no states left to visit, then there are some cases
             // where we know we can quit early or even skip ahead.
             if curr.set.is_empty() {
@@ -1291,13 +1381,50 @@ impl PikeVM {
                 // ahead until we find something that we know might advance us
                 // forward.
                 if let Some(pre) = pre {
-                    let span = Span::from(at..input.end());
-                    match pre.find(input.haystack(), span) {
-                        None => break,
-                        Some(ref span) => at = span.start,
+                    if ONE_AHEAD {
+                        let next_pos = next_matching_pre.expect("in OneAhead strategy the next matching should be Some");
+
+                        match next_pos {
+                            NextMatchingPre {
+                                pos: NextMatchingPrePos::Nowhere,
+                                ..
+                            } => break,
+                            NextMatchingPre {
+                                pos: NextMatchingPrePos::At(pos),
+                                ..
+                            } => at = pos,
+                        }
+                    } else {
+                        let span = Span::from(at..input.end());
+                        match pre.find(input.haystack(), span) {
+                            None => break,
+                            Some(ref span) => {
+                                at = span.start;
+                            }
+                        }
                     }
                 }
             }
+
+            // If we precomputed the next position returned by the the prefilter,
+            // we know if a match can potentially start here. If not, we skip the
+            // epsilon closure computation which follows. This can potentially save
+            // save us from exploring this position completely.
+            let match_can_start_here = if ONE_AHEAD {
+                if let Some(next_matching_pre) = *next_matching_pre {
+                    matches!(
+                        next_matching_pre,
+                        NextMatchingPre {
+                            pos: NextMatchingPrePos::At(pos),
+                            ..
+                        } if pos == at,
+                    )
+                } else {
+                    true
+                }
+            } else {
+                true
+            };
             // Instead of using the NFA's unanchored start state, we actually
             // always use its anchored starting state. As a result, when doing
             // an unanchored search, we need to simulate our own '(?s-u:.)*?'
@@ -1346,6 +1473,7 @@ impl PikeVM {
             // an anchored search.
             if (hm.is_none() || allmatches)
                 && (!anchored || at == input.start())
+                && match_can_start_here
             {
                 // Since we are adding to the 'curr' active states and since
                 // this is for the start ID, we use a slots slice that is
@@ -1408,7 +1536,7 @@ impl PikeVM {
         // and composition, so it seems like good sense to have the PikeVM
         // match that behavior.
 
-        cache.setup_search(0);
+        cache.setup_search(0, input);
         if input.is_done() {
             return;
         }
@@ -1425,7 +1553,12 @@ impl PikeVM {
             Some(config) => config,
         };
 
-        let Cache { ref mut stack, ref mut curr, ref mut next } = cache;
+        let Cache {
+            ref mut stack,
+            ref mut curr,
+            ref mut next,
+            next_matching_pre: _,
+        } = cache;
         for at in input.start()..=input.end() {
             let any_matches = !patset.is_empty();
             if curr.set.is_empty() {
@@ -1863,6 +1996,39 @@ impl<'r, 'c, 'h> Iterator for CapturesMatches<'r, 'c, 'h> {
     }
 }
 
+/// The next input position where the prefilter matched.
+/// Used for the `[PrefilterStrategy::OneAhead]` strategy.
+#[derive(Copy, Clone, Debug)]
+enum NextMatchingPrePos {
+    /// The prefilter matched at this position.
+    At(usize),
+    /// The prefilter did not match anywhere in the haystack after the current
+    /// position.
+    Nowhere,
+}
+
+/// Extra metadata about the next position where the prefilter matched.
+/// The extra metadata is used to determine the validity of the computed
+/// position for a given search.
+#[derive(Copy, Clone, Debug)]
+struct NextMatchingPre {
+    /// At what position in the haystack the prefilter search was performed.
+    found_at: usize,
+    /// The pointer value of the haystack `&[u8]` for which the prefilter search was performed.
+    found_for: usize,
+    /// The next position where the prefilter matched.
+    pos: NextMatchingPrePos,
+}
+
+impl NextMatchingPre {
+    /// Whether the computed position is valid for a search with the given input.
+    /// It is valid if the haystack pointers are the same and the position is in the past.
+    fn is_valid_for(&self, input: &Input<'_>) -> bool {
+        self.found_for == input.haystack().as_ptr() as _
+            && self.found_at <= input.start()
+    }
+}
+
 /// A cache represents mutable state that a [`PikeVM`] requires during a
 /// search.
 ///
@@ -1886,6 +2052,9 @@ pub struct Cache {
     /// The next set of states we're building that will be explored for the
     /// next byte in the haystack.
     next: ActiveStates,
+    /// The next input position where the prefilter matched.
+    /// Used for the `[PrefilterStrategy::OneAhead]` strategy.
+    next_matching_pre: Option<NextMatchingPre>,
 }
 
 impl Cache {
@@ -1902,6 +2071,7 @@ impl Cache {
             stack: vec![],
             curr: ActiveStates::new(re),
             next: ActiveStates::new(re),
+            next_matching_pre: None,
         }
     }
 
@@ -1945,6 +2115,7 @@ impl Cache {
     pub fn reset(&mut self, re: &PikeVM) {
         self.curr.reset(re);
         self.next.reset(re);
+        self.next_matching_pre = None;
     }
 
     /// Returns the heap memory usage, in bytes, of this cache.
@@ -1968,10 +2139,15 @@ impl Cache {
     /// of possible slots, e.g., when one only wants to track overall match
     /// offsets. This in turn permits less copying of capturing group spans
     /// in the PikeVM.
-    fn setup_search(&mut self, captures_slot_len: usize) {
+    fn setup_search(&mut self, captures_slot_len: usize, input: &Input<'_>) {
         self.stack.clear();
         self.curr.setup_search(captures_slot_len);
         self.next.setup_search(captures_slot_len);
+        if let Some(next_matching_pre) = self.next_matching_pre {
+            if !next_matching_pre.is_valid_for(input) {
+                self.next_matching_pre = None;
+            }
+        }
     }
 }
 
