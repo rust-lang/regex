@@ -24,7 +24,9 @@ use crate::{
         pool::{Pool, PoolGuard},
         prefilter::Prefilter,
         primitives::{NonMaxUsize, PatternID},
-        search::{HalfMatch, Input, Match, MatchKind, PatternSet, Span},
+        search::{
+            HalfMatch, Input, Match, MatchError, MatchKind, PatternSet, Span,
+        },
     },
 };
 
@@ -538,6 +540,61 @@ impl Regex {
         // See 'Regex::search' for why we put the guard back explicitly.
         PoolGuard::put(guard);
         result
+    }
+
+    /// Executes a leftmost is-match search, returning an error instead of
+    /// falling back to the PikeVM.
+    ///
+    /// This is like [`Regex::is_match`], but for a `Regex` built with
+    /// [`Config::pikevm`] disabled. The meta regex engine's fast engines (the
+    /// DFAs) can give up on a search, either because a lazy DFA's cache is
+    /// being used ineffectively or because a Unicode word boundary was seen
+    /// alongside a non-ASCII byte. The engines with bounded runtime (the
+    /// one-pass DFA and the bounded backtracker) still pick those up, and with
+    /// the PikeVM disabled the backtracker is given every search it can serve
+    /// rather than only the short haystacks it is normally reserved for. Only
+    /// once nothing is left to run does this routine report a [`MatchError`],
+    /// which is to say only when the haystack outgrows the backtracker's
+    /// visited bitset (see [`Config::backtrack_visited_capacity`]).
+    ///
+    /// A `Regex` built with the PikeVM enabled (the default) never returns an
+    /// error here.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use regex_automata::meta::Regex;
+    ///
+    /// let re = Regex::builder()
+    ///     .configure(Regex::config().pikevm(false))
+    ///     .build(r"\b\w+\b")?;
+    /// let mut cache = re.create_cache();
+    ///
+    /// assert_eq!(Ok(true), re.try_is_match_with(&mut cache, "quux"));
+    /// // A Unicode word boundary against a non-ASCII haystack makes the lazy
+    /// // DFA quit, but the backtracker still answers it.
+    /// let haystack = "☃".repeat(100);
+    /// assert_eq!(Ok(false), re.try_is_match_with(&mut cache, &haystack));
+    /// // Past the backtracker's bound there is no engine left to run.
+    /// let haystack = "☃".repeat(10_000);
+    /// assert!(re.try_is_match_with(&mut cache, &haystack).is_err());
+    ///
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
+    #[inline]
+    pub fn try_is_match_with<'h, I: Into<Input<'h>>>(
+        &self,
+        cache: &mut Cache,
+        input: I,
+    ) -> Result<bool, MatchError> {
+        let input = input.into().earliest(true);
+        if self.imp.info.is_impossible(&input) {
+            return Ok(false);
+        }
+        self.imp
+            .strat
+            .try_is_match(cache, &input)
+            .map_err(|err| MatchError::no_engine(err.offset()))
     }
 
     /// Executes a leftmost search and returns the first match that is found,
@@ -1257,6 +1314,30 @@ impl Regex {
         self.imp.strat.search(cache, input)
     }
 
+    /// This is like [`Regex::search_with`], but returns an error instead of
+    /// falling back to the PikeVM.
+    ///
+    /// A `Regex` built with [`Config::pikevm`] disabled has no engine left
+    /// once the DFAs and the bounded engines have all given up on a search.
+    /// This routine reports that as a [`MatchError`], where the infallible
+    /// variants panic. A `Regex` built with the PikeVM enabled (the default)
+    /// never returns an error here.
+    pub fn try_search_with(
+        &self,
+        cache: &mut Cache,
+        input: &Input<'_>,
+    ) -> Result<Option<Match>, MatchError> {
+        if self.imp.info.captures_disabled()
+            || self.imp.info.is_impossible(input)
+        {
+            return Ok(None);
+        }
+        self.imp
+            .strat
+            .try_search(cache, input)
+            .map_err(|err| MatchError::no_engine(err.offset()))
+    }
+
     /// This is like [`Regex::search_half`], but requires the caller to
     /// explicitly pass a [`Cache`].
     ///
@@ -1299,6 +1380,30 @@ impl Regex {
             return None;
         }
         self.imp.strat.search_half(cache, input)
+    }
+
+    /// This is like [`Regex::search_half_with`], but returns an error instead of
+    /// falling back to the PikeVM.
+    ///
+    /// A `Regex` built with [`Config::pikevm`] disabled has no engine left
+    /// once the DFAs and the bounded engines have all given up on a search.
+    /// This routine reports that as a [`MatchError`], where the infallible
+    /// variants panic. A `Regex` built with the PikeVM enabled (the default)
+    /// never returns an error here.
+    pub fn try_search_half_with(
+        &self,
+        cache: &mut Cache,
+        input: &Input<'_>,
+    ) -> Result<Option<HalfMatch>, MatchError> {
+        if self.imp.info.captures_disabled()
+            || self.imp.info.is_impossible(input)
+        {
+            return Ok(None);
+        }
+        self.imp
+            .strat
+            .try_search_half(cache, input)
+            .map_err(|err| MatchError::no_engine(err.offset()))
     }
 
     /// This is like [`Regex::search_captures`], but requires the caller to
@@ -1394,6 +1499,27 @@ impl Regex {
         caps.set_pattern(pid);
     }
 
+    /// This is like [`Regex::search_captures_with`], but returns an error instead of
+    /// falling back to the PikeVM.
+    ///
+    /// A `Regex` built with [`Config::pikevm`] disabled has no engine left
+    /// once the DFAs and the bounded engines have all given up on a search.
+    /// This routine reports that as a [`MatchError`], where the infallible
+    /// variants panic. A `Regex` built with the PikeVM enabled (the default)
+    /// never returns an error here.
+    pub fn try_search_captures_with(
+        &self,
+        cache: &mut Cache,
+        input: &Input<'_>,
+        caps: &mut Captures,
+    ) -> Result<(), MatchError> {
+        caps.set_pattern(None);
+        let pid =
+            self.try_search_slots_with(cache, input, caps.slots_mut())?;
+        caps.set_pattern(pid);
+        Ok(())
+    }
+
     /// This is like [`Regex::search_slots`], but requires the caller to
     /// explicitly pass a [`Cache`].
     ///
@@ -1456,6 +1582,31 @@ impl Regex {
         self.imp.strat.search_slots(cache, input, slots)
     }
 
+    /// This is like [`Regex::search_slots_with`], but returns an error instead of
+    /// falling back to the PikeVM.
+    ///
+    /// A `Regex` built with [`Config::pikevm`] disabled has no engine left
+    /// once the DFAs and the bounded engines have all given up on a search.
+    /// This routine reports that as a [`MatchError`], where the infallible
+    /// variants panic. A `Regex` built with the PikeVM enabled (the default)
+    /// never returns an error here.
+    pub fn try_search_slots_with(
+        &self,
+        cache: &mut Cache,
+        input: &Input<'_>,
+        slots: &mut [Option<NonMaxUsize>],
+    ) -> Result<Option<PatternID>, MatchError> {
+        if self.imp.info.captures_disabled()
+            || self.imp.info.is_impossible(input)
+        {
+            return Ok(None);
+        }
+        self.imp
+            .strat
+            .try_search_slots(cache, input, slots)
+            .map_err(|err| MatchError::no_engine(err.offset()))
+    }
+
     /// This is like [`Regex::which_overlapping_matches`], but requires the
     /// caller to explicitly pass a [`Cache`].
     ///
@@ -1503,6 +1654,29 @@ impl Regex {
             return;
         }
         self.imp.strat.which_overlapping_matches(cache, input, patset)
+    }
+
+    /// This is like [`Regex::which_overlapping_matches_with`], but returns an error instead of
+    /// falling back to the PikeVM.
+    ///
+    /// A `Regex` built with [`Config::pikevm`] disabled has no engine left
+    /// once the DFAs and the bounded engines have all given up on a search.
+    /// This routine reports that as a [`MatchError`], where the infallible
+    /// variants panic. A `Regex` built with the PikeVM enabled (the default)
+    /// never returns an error here.
+    pub fn try_which_overlapping_matches_with(
+        &self,
+        cache: &mut Cache,
+        input: &Input<'_>,
+        patset: &mut PatternSet,
+    ) -> Result<(), MatchError> {
+        if self.imp.info.is_impossible(input) {
+            return Ok(());
+        }
+        self.imp
+            .strat
+            .try_which_overlapping_matches(cache, input, patset)
+            .map_err(|err| MatchError::no_engine(err.offset()))
     }
 }
 
@@ -2484,6 +2658,8 @@ pub struct Config {
     dfa_state_limit: Option<Option<usize>>,
     onepass: Option<bool>,
     backtrack: Option<bool>,
+    backtrack_visited_capacity: Option<usize>,
+    pikevm: Option<bool>,
     byte_classes: Option<bool>,
     line_terminator: Option<u8>,
     pool_capacity: Option<usize>,
@@ -3112,6 +3288,39 @@ impl Config {
         Config { backtrack: Some(yes), ..self }
     }
 
+    /// Sets the visited capacity, in bytes, used by the bounded backtracker.
+    ///
+    /// The backtracker refuses to run when the haystack is longer than its
+    /// visited bitset can track, which is roughly this capacity divided by the
+    /// number of NFA states. Raising it lets the backtracker serve longer
+    /// haystacks, which matters when [`Config::pikevm`] is disabled and the
+    /// backtracker is the last engine standing.
+    ///
+    /// When unset, the backtracker's own default is used.
+    pub fn backtrack_visited_capacity(self, capacity: usize) -> Config {
+        Config { backtrack_visited_capacity: Some(capacity), ..self }
+    }
+
+    /// Whether to permit the use of the PikeVM.
+    ///
+    /// The PikeVM is the meta regex engine's engine of last resort: it can
+    /// handle any regex against any haystack, but its NFA simulation can be
+    /// orders of magnitude slower than the DFAs. It is what makes the
+    /// infallible search routines infallible.
+    ///
+    /// Disabling it turns this into a regex engine that can fail: a search
+    /// that the faster engines give up on has nothing left to run it. The
+    /// `try_` search routines report that condition as a [`MatchError`] with
+    /// a [`MatchErrorKind::NoEngine`](crate::MatchErrorKind::NoEngine) kind,
+    /// while the infallible routines panic. This is useful for rejecting a
+    /// pathological regex outright rather than paying for it.
+    ///
+    /// This is enabled by default, and when it is, no search routine can
+    /// fail or panic.
+    pub fn pikevm(self, yes: bool) -> Config {
+        Config { pikevm: Some(yes), ..self }
+    }
+
     /// Returns the match kind on this configuration, as set by
     /// [`Config::match_kind`].
     ///
@@ -3314,6 +3523,18 @@ impl Config {
         }
     }
 
+    /// Returns the backtracker's visited capacity, as set by
+    /// [`Config::backtrack_visited_capacity`]. `None` means the backtracker's
+    /// own default is used.
+    pub fn get_backtrack_visited_capacity(&self) -> Option<usize> {
+        self.backtrack_visited_capacity
+    }
+
+    /// Returns whether the PikeVM may be used, as set by [`Config::pikevm`].
+    pub fn get_pikevm(&self) -> bool {
+        self.pikevm.unwrap_or(true)
+    }
+
     /// Returns a "baseline" Thompson configuration for constructing NFAs based
     /// on this configuration.
     ///
@@ -3359,6 +3580,10 @@ impl Config {
             dfa_state_limit: o.dfa_state_limit.or(self.dfa_state_limit),
             onepass: o.onepass.or(self.onepass),
             backtrack: o.backtrack.or(self.backtrack),
+            backtrack_visited_capacity: o
+                .backtrack_visited_capacity
+                .or(self.backtrack_visited_capacity),
+            pikevm: o.pikevm.or(self.pikevm),
             byte_classes: o.byte_classes.or(self.byte_classes),
             line_terminator: o.line_terminator.or(self.line_terminator),
             pool_capacity: o.pool_capacity.or(self.pool_capacity),

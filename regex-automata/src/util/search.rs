@@ -1820,6 +1820,12 @@ impl MatchError {
         MatchError::new(MatchErrorKind::GaveUp { offset })
     }
 
+    /// Create a new "no engine" error. The given `offset` corresponds to the
+    /// place in the haystack at which the search stopped.
+    pub fn no_engine(offset: usize) -> MatchError {
+        MatchError::new(MatchErrorKind::NoEngine { offset })
+    }
+
     /// Create a new "haystack too long" error. The given `len` corresponds to
     /// the length of the haystack that was problematic.
     ///
@@ -1876,6 +1882,21 @@ pub enum MatchErrorKind {
         /// The length of the haystack that exceeded the limit.
         len: usize,
     },
+    /// The search stopped because no regex engine was available to continue
+    /// it.
+    ///
+    /// This can only occur in the meta regex engine, and only when the PikeVM
+    /// has been disabled via
+    /// [`meta::Config::pikevm`](crate::meta::Config::pikevm). The PikeVM is
+    /// the meta regex engine's only engine that can handle every regex on
+    /// every haystack, so without it, a search that the other engines quit
+    /// on or gave up on has nothing left to run it. (It will not return this
+    /// error by default.)
+    NoEngine {
+        /// The offset at which the search stopped. This corresponds to the
+        /// position immediately following the last byte scanned.
+        offset: usize,
+    },
     /// An error indicating that a particular type of anchored search was
     /// requested, but that the regex engine does not support it.
     ///
@@ -1915,6 +1936,9 @@ impl core::fmt::Display for MatchError {
             }
             MatchErrorKind::HaystackTooLong { len } => {
                 write!(f, "haystack of length {len} is too long")
+            }
+            MatchErrorKind::NoEngine { offset } => {
+                write!(f, "no regex engine available at offset {offset}")
             }
             MatchErrorKind::UnsupportedAnchored { mode: Anchored::Yes } => {
                 write!(f, "anchored searches are not supported or enabled")
