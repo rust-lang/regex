@@ -74,7 +74,7 @@ impl Builder {
             .clone()
             .match_kind(MatchKind::LeftmostFirst)
             .utf8_empty(true);
-        let syntaxc = self.syntaxc.clone().utf8(true);
+        let syntaxc = self.syntaxc.utf8(true);
         let pattern = Arc::from(self.pats[0].as_str());
         meta::Builder::new()
             .configure(metac)
@@ -91,7 +91,7 @@ impl Builder {
             .clone()
             .match_kind(MatchKind::LeftmostFirst)
             .utf8_empty(false);
-        let syntaxc = self.syntaxc.clone().utf8(false);
+        let syntaxc = self.syntaxc.utf8(false);
         let pattern = Arc::from(self.pats[0].as_str());
         meta::Builder::new()
             .configure(metac)
@@ -108,7 +108,7 @@ impl Builder {
             .match_kind(MatchKind::All)
             .utf8_empty(true)
             .which_captures(WhichCaptures::None);
-        let syntaxc = self.syntaxc.clone().utf8(true);
+        let syntaxc = self.syntaxc.utf8(true);
         let patterns = Arc::from(self.pats.as_slice());
         meta::Builder::new()
             .configure(metac)
@@ -125,7 +125,7 @@ impl Builder {
             .match_kind(MatchKind::All)
             .utf8_empty(false)
             .which_captures(WhichCaptures::None);
-        let syntaxc = self.syntaxc.clone().utf8(false);
+        let syntaxc = self.syntaxc.utf8(false);
         let patterns = Arc::from(self.pats.as_slice());
         meta::Builder::new()
             .configure(metac)
