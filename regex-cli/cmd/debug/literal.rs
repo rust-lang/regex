@@ -43,7 +43,7 @@ OPTIONS:
         &mut [&mut common, &mut patterns, &mut syntax, &mut literal],
     )?;
 
-    let pats = patterns.get()?;
+    let pats = patterns.get(&syntax)?;
     anyhow::ensure!(
         pats.len() == 1,
         "only one pattern is allowed, but {} were given",
