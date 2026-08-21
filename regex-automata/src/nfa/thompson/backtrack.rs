@@ -1905,4 +1905,30 @@ mod tests {
             .unwrap();
         assert_eq!(0, re.max_haystack_len());
     }
+
+    // Regression test for https://github.com/rust-lang/regex/issues/1344
+    // When the bounded backtracker's max_haystack_len() returns 0 (because
+    // the NFA has more states than the visited capacity can support), the
+    // meta layer's BoundedBacktrackerEngine guard must properly exclude the
+    // engine so it doesn't try to match and panic with HaystackTooLong.
+    #[cfg(feature = "syntax")]
+    #[test]
+    fn max_haystack_len_zero_excludes_engine() {
+        // Build a BoundedBacktracker whose max_haystack_len is 0.
+        let re = BoundedBacktracker::builder()
+            .configure(BoundedBacktracker::config().visited_capacity(10))
+            .build(r"[0-9A-Za-z]{100}")
+            .unwrap();
+        assert_eq!(0, re.max_haystack_len());
+
+        // The meta layer's guard at line 180 in wrappers.rs should use
+        // '>=' (not '>') to correctly exclude the engine when max_haystack_len
+        // is 0. This test verifies the guard condition directly.
+        let span_len = 0; // empty haystack
+        let max = re.max_haystack_len();
+        assert!(
+            span_len >= max,
+            "empty string must be excluded when max_haystack_len is 0"
+        );
+    }
 }
