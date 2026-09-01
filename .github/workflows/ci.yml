@@ -130,6 +130,36 @@ jobs:
     - name: Run regex-lite tests
       run: cross test --verbose -p regex-lite --lib --target ${{ matrix.target }}
 
+  # This job checks WebAssembly builds and runs the portable test suites.
+  # The unknown-unknown target covers browser-oriented builds, while WASI
+  # provides the host interfaces needed to execute Rust test binaries.
+  wasm:
+    runs-on: ubuntu-latest
+    env:
+      CARGO_TARGET_WASM32_WASIP1_RUNNER: wasmtime
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v5
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: stable
+        targets: wasm32-unknown-unknown,wasm32-wasip1
+    - name: Install Wasmtime
+      uses: bytecodealliance/actions/wasmtime/setup@v1
+      with:
+        version: 48.0.1
+    - name: Build browser target
+      run: cargo build --workspace --exclude rure --verbose --target wasm32-unknown-unknown
+    - name: Run WASI tests
+      run: |
+        cargo test --verbose --target wasm32-wasip1 --test integration
+        cargo test --verbose -p regex-syntax --lib --target wasm32-wasip1
+        cargo test --verbose -p regex-automata --test integration --target wasm32-wasip1
+        cargo test --verbose -p regex-lite --lib --target wasm32-wasip1
+    - name: Run WASI doc tests
+      run: cargo test --verbose --target wasm32-wasip1 --doc
+
   # This job runs a stripped down version of CI to test the MSRV. The specific
   # reason for doing this is that the regex crate's dev-dependencies tend to
   # evolve more quickly. There isn't as tight of a control on them because,
