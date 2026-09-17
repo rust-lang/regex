@@ -61,3 +61,19 @@ fn parse_huge(b: &mut Bencher) {
         Parser::new().parse(re).unwrap()
     });
 }
+
+#[bench]
+fn parse_full_folding(b: &mut Bencher) {
+    b.iter(|| {
+        let re = r"(?i)[_a-z\x7F-\x{10FFFF}]";
+        Parser::new().parse(re).unwrap()
+    });
+}
+
+#[bench]
+fn parse_simple_folding(b: &mut Bencher) {
+    b.iter(|| {
+        let re = r"(?i)abc";
+        Parser::new().parse(re).unwrap()
+    });
+}
