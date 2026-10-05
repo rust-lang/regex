@@ -983,3 +983,28 @@ name = 'improper-reverse-suffix-optimization'
 regex = '(\\N\{[^}]+})|([{}])'
 haystack = 'hiya \N{snowman} bye'
 matches = [[[5, 16], [5, 16], []]]
+
+# This is a regression test for negating a Unicode class with ranges on either
+# side of the surrogate codepoints. Negation computed the gap between
+# `..=\u{D7FF}` and `\u{E000}..` as an inverted range and then "corrected" it
+# to `\u{D7FF}..=\u{E000}`, so both codepoints ended up matching their own
+# negation.
+#
+# See: https://github.com/rust-lang/regex/issues/1397
+[[test]]
+name = "negated-class-across-surrogate-gap"
+regex = '^[^\x{D7FF}\x{E000}\n]$'
+haystack = "\uD7FF"
+matches = []
+
+[[test]]
+name = "negated-class-across-surrogate-gap-upper"
+regex = '^[^\x{D7FF}\x{E000}\n]$'
+haystack = "\uE000"
+matches = []
+
+[[test]]
+name = "negated-class-across-surrogate-gap-neighbor"
+regex = '^[^\x{D7FF}\x{E000}\n]$'
+haystack = "\uD7FE"
+matches = [[0, 3]]

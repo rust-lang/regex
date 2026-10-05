@@ -3450,6 +3450,23 @@ mod tests {
         let cls = uclass(&[('\u{E001}', '\u{10FFFF}')]);
         let expected = uclass(&[('\x00', '\u{E000}')]);
         assert_eq!(expected, unegate(&cls));
+
+        // Ranges on either side of the surrogate codepoints have nothing
+        // between them, so negation must not produce a range for the gap.
+        // See: https://github.com/rust-lang/regex/issues/1397
+        let cls =
+            uclass(&[('\u{D7FF}', '\u{D7FF}'), ('\u{E000}', '\u{E000}')]);
+        let expected =
+            uclass(&[('\x00', '\u{D7FE}'), ('\u{E001}', '\u{10FFFF}')]);
+        assert_eq!(expected, unegate(&cls));
+
+        let cls = uclass(&[('\x00', '\u{D7FF}'), ('\u{E000}', '\u{10FFFF}')]);
+        let expected = uclass(&[]);
+        assert_eq!(expected, unegate(&cls));
+
+        let cls = uclass(&[('a', '\u{D7FF}'), ('\u{E000}', '\u{E010}')]);
+        let expected = uclass(&[('\x00', '`'), ('\u{E011}', '\u{10FFFF}')]);
+        assert_eq!(expected, unegate(&cls));
     }
 
     #[test]
