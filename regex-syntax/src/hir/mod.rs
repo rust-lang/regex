@@ -3017,6 +3017,12 @@ fn singleton_bytes(hirs: &[Hir]) -> Option<Vec<u8>> {
 /// is found, then an equivalent but (hopefully) simplified Hir is returned.
 /// Otherwise, the original given list of branches is returned unmodified.
 ///
+/// The prefix only includes literals, classes and look-around assertions,
+/// since each of those can match at most one way. Lifting anything else, such
+/// as a repetition, changes which branch is preferred under leftmost-first
+/// semantics: 'ab*b|ab*c' matches 'abb' in 'abbc', but 'ab*(?:b|c)' matches
+/// 'abbc'.
+///
 /// This is not quite as good as it could be. Right now, it requires that
 /// all branches are 'Concat' expressions. It also doesn't do well with
 /// literals. For example, given 'foofoo|foobar', it will not refactor it to
@@ -3043,7 +3049,15 @@ fn lift_common_prefix(hirs: Vec<Hir>) -> Result<Hir, Vec<Hir>> {
         let common_len = prefix
             .iter()
             .zip(concat.iter())
-            .take_while(|(x, y)| x == y)
+            .take_while(|(x, y)| {
+                x == y
+                    && matches!(
+                        x.kind(),
+                        HirKind::Literal(_)
+                            | HirKind::Class(_)
+                            | HirKind::Look(_)
+                    )
+            })
             .count();
         prefix = &prefix[..common_len];
         if prefix.is_empty() {
