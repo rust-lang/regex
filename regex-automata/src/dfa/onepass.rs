@@ -1982,10 +1982,13 @@ impl DFA {
         }
         // See PikeVM::try_search_slots for why we do this.
         let min = self.get_nfa().group_info().implicit_slot_len();
-        if slots.len() >= min {
+        // We can only use `try_search_slots_imp` when we have sufficient
+        // slots. And in particular, the one-pass DFA always requires two slots
+        // when `utf8empty` is `true`.
+        if slots.len() >= min && min >= 2 {
             return self.try_search_slots_imp(cache, input, slots);
         }
-        if self.get_nfa().pattern_len() == 1 {
+        if self.get_nfa().pattern_len() <= 1 {
             let mut enough = [None, None];
             let got = self.try_search_slots_imp(cache, input, &mut enough)?;
             // This is OK because we know `enough_slots` is strictly bigger
