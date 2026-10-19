@@ -54,6 +54,11 @@ pub struct IterCaptureNames {
     name_ptrs: Vec<*mut c_char>,
 }
 
+pub struct IterSplit {
+    split: bytes::Split<'static, 'static>,
+    split_ptrs: Vec<*mut c_char>,
+}
+
 impl Deref for Regex {
     type Target = bytes::Regex;
     fn deref(&self) -> &bytes::Regex {
@@ -296,6 +301,59 @@ ffi_fn! {
             let ptr = cs.into_raw();
             it.name_ptrs.push(ptr);
             *capture_name = ptr;
+        }
+        true
+
+    }
+}
+
+ffi_fn! {
+    fn rure_iter_split_new(
+        re: *const Regex,
+        haystack: *const u8,
+        len: size_t,
+    ) -> *mut IterSplit {
+        let re = unsafe { &*re };
+        let haystack = unsafe { slice::from_raw_parts(haystack, len) };
+        Box::into_raw(Box::new(IterSplit {
+            split: re.re.split(haystack),
+            split_ptrs: Vec::new(),
+        }))
+    }
+}
+
+ffi_fn! {
+    fn rure_iter_split_free(it: *mut IterSplit) {
+        unsafe {
+            let it = &mut *it;
+            while let Some(ptr) = it.split_ptrs.pop() {
+                drop(CString::from_raw(ptr));
+            }
+            drop(Box::from_raw(it));
+        }
+    }
+}
+
+ffi_fn! {
+    fn rure_iter_split_next(
+        it: *mut IterSplit,
+        next: *mut *const c_char,
+    ) -> bool {
+        let it = unsafe { &mut *it };
+        let s = match it.split.next() {
+            // Matches exhausted
+            None => return false,
+            Some(val) => val
+        };
+
+        unsafe {
+            let cs = match CString::new(s) {
+                Result::Ok(val) => val,
+                Result::Err(_) => return false
+            };
+            let ptr = cs.into_raw();
+            it.split_ptrs.push(ptr);
+            *next = ptr;
         }
         true
 
