@@ -1213,6 +1213,70 @@ impl Regex {
 /// Lower level search routines that give more control, and require the caller
 /// to provide an explicit [`Cache`] parameter.
 impl Regex {
+    /// This is like [`Regex::is_match`], but requires the caller to
+    /// explicitly pass a [`Cache`].
+    ///
+    /// # Why pass a `Cache` explicitly?
+    ///
+    /// Passing a `Cache` explicitly will bypass the use of an internal memory
+    /// pool used by `Regex` to get a `Cache` for a search. The use of this
+    /// pool can be slower in some cases when a `Regex` is used from multiple
+    /// threads simultaneously. Typically, performance only becomes an issue
+    /// when there is heavy contention, which in turn usually only occurs
+    /// when each thread's primary unit of work is a regex search on a small
+    /// haystack.
+    ///
+    /// Owning the `Cache` also lets the caller decide how long it lives and
+    /// how much memory it may use, for example by keeping a bounded number of
+    /// caches per thread instead of one per thread per regex in the pool.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use regex_automata::{meta::Regex, Input};
+    ///
+    /// let re = Regex::new(r"Samwise|Sam")?;
+    /// let mut cache = re.create_cache();
+    /// let input = Input::new(
+    ///     "one of the chief characters, Samwise the Brave",
+    /// );
+    /// assert!(re.is_match_with(&mut cache, &input));
+    ///
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
+    ///
+    /// # Example: capture groups are disabled
+    ///
+    /// Unlike the other search routines in this group, this one still works
+    /// when capture groups are disabled via
+    /// [`Config::which_captures`](crate::meta::Config::which_captures), since
+    /// it doesn't need to report match offsets:
+    ///
+    /// ```
+    /// use regex_automata::{meta::Regex, nfa::thompson::WhichCaptures, Input};
+    ///
+    /// let re = Regex::builder()
+    ///     .configure(Regex::config().which_captures(WhichCaptures::None))
+    ///     .build(r"Samwise|Sam")?;
+    /// let mut cache = re.create_cache();
+    /// let input = Input::new(
+    ///     "one of the chief characters, Samwise the Brave",
+    /// );
+    /// assert!(re.is_match_with(&mut cache, &input));
+    /// // Routines that report match offsets require capture groups.
+    /// assert_eq!(None, re.search_half_with(&mut cache, &input));
+    ///
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
+    #[inline]
+    pub fn is_match_with(&self, cache: &mut Cache, input: &Input<'_>) -> bool {
+        let input = input.clone().earliest(true);
+        if self.imp.info.is_impossible(&input) {
+            return false;
+        }
+        self.imp.strat.is_match(cache, &input)
+    }
+
     /// This is like [`Regex::search`], but requires the caller to
     /// explicitly pass a [`Cache`].
     ///
