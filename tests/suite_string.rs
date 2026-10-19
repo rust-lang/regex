@@ -31,7 +31,7 @@ fn run_test(re: &Regex, test: &RegexTest) -> TestResult {
         "is_match" => TestResult::matched(re.is_match(hay)),
         "find" => TestResult::matches(
             re.find_iter(hay)
-                .take(test.match_limit().unwrap_or(std::usize::MAX))
+                .take(test.match_limit().unwrap_or(usize::MAX))
                 .map(|m| Match {
                     id: 0,
                     span: Span { start: m.start(), end: m.end() },
@@ -40,7 +40,7 @@ fn run_test(re: &Regex, test: &RegexTest) -> TestResult {
         "captures" => {
             let it = re
                 .captures_iter(hay)
-                .take(test.match_limit().unwrap_or(std::usize::MAX))
+                .take(test.match_limit().unwrap_or(usize::MAX))
                 .map(|caps| testify_captures(&caps));
             TestResult::captures(it)
         }
