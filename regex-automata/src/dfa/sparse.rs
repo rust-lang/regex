@@ -1483,7 +1483,7 @@ impl<T: AsRef<[u8]>> Transitions<T> {
     fn as_ref(&self) -> Transitions<&'_ [u8]> {
         Transitions {
             sparse: self.sparse(),
-            classes: self.classes.clone(),
+            classes: self.classes,
             state_len: self.state_len,
             pattern_len: self.pattern_len,
         }
@@ -1494,7 +1494,7 @@ impl<T: AsRef<[u8]>> Transitions<T> {
     fn to_owned(&self) -> Transitions<alloc::vec::Vec<u8>> {
         Transitions {
             sparse: self.sparse().to_vec(),
-            classes: self.classes.clone(),
+            classes: self.classes,
             state_len: self.state_len,
             pattern_len: self.pattern_len,
         }
