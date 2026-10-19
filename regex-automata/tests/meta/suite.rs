@@ -2,6 +2,7 @@ use {
     anyhow::Result,
     regex_automata::{
         meta::{self, Regex},
+        nfa::thompson::WhichCaptures,
         util::syntax,
         MatchKind, PatternSet,
     },
@@ -32,7 +33,9 @@ fn default() -> Result<()> {
     let builder = Regex::builder();
     let mut runner = TestRunner::new()?;
     runner
-        .expand(&["is_match", "find", "captures"], |test| test.compiles())
+        .expand(&["is_match", "is_match_with", "find", "captures"], |test| {
+            test.compiles()
+        })
         .blacklist_iter(BLACKLIST)
         .test_iter(suite()?.iter(), compiler(builder))
         .assert();
@@ -46,7 +49,9 @@ fn no_dfa() -> Result<()> {
     builder.configure(Regex::config().dfa(false));
     let mut runner = TestRunner::new()?;
     runner
-        .expand(&["is_match", "find", "captures"], |test| test.compiles())
+        .expand(&["is_match", "is_match_with", "find", "captures"], |test| {
+            test.compiles()
+        })
         .blacklist_iter(BLACKLIST)
         .test_iter(suite()?.iter(), compiler(builder))
         .assert();
@@ -60,7 +65,9 @@ fn no_dfa_hybrid() -> Result<()> {
     builder.configure(Regex::config().dfa(false).hybrid(false));
     let mut runner = TestRunner::new()?;
     runner
-        .expand(&["is_match", "find", "captures"], |test| test.compiles())
+        .expand(&["is_match", "is_match_with", "find", "captures"], |test| {
+            test.compiles()
+        })
         .blacklist_iter(BLACKLIST)
         .test_iter(suite()?.iter(), compiler(builder))
         .assert();
@@ -75,7 +82,9 @@ fn no_dfa_hybrid_onepass() -> Result<()> {
     builder.configure(Regex::config().dfa(false).hybrid(false).onepass(false));
     let mut runner = TestRunner::new()?;
     runner
-        .expand(&["is_match", "find", "captures"], |test| test.compiles())
+        .expand(&["is_match", "is_match_with", "find", "captures"], |test| {
+            test.compiles()
+        })
         .blacklist_iter(BLACKLIST)
         .test_iter(suite()?.iter(), compiler(builder))
         .assert();
@@ -96,7 +105,25 @@ fn no_dfa_hybrid_onepass_backtrack() -> Result<()> {
     );
     let mut runner = TestRunner::new()?;
     runner
-        .expand(&["is_match", "find", "captures"], |test| test.compiles())
+        .expand(&["is_match", "is_match_with", "find", "captures"], |test| {
+            test.compiles()
+        })
+        .blacklist_iter(BLACKLIST)
+        .test_iter(suite()?.iter(), compiler(builder))
+        .assert();
+    Ok(())
+}
+
+/// Tests the default configuration with capture groups disabled. Routines that
+/// report match offsets never match in this configuration, so only the ones
+/// that report whether a match exists are tested.
+#[test]
+fn no_captures() -> Result<()> {
+    let mut builder = Regex::builder();
+    builder.configure(Regex::config().which_captures(WhichCaptures::None));
+    let mut runner = TestRunner::new()?;
+    runner
+        .expand(&["is_match", "is_match_with"], |test| test.compiles())
         .blacklist_iter(BLACKLIST)
         .test_iter(suite()?.iter(), compiler(builder))
         .assert();
@@ -121,6 +148,10 @@ fn run_test(re: &Regex, test: &RegexTest) -> TestResult {
     let input = create_input(test);
     match test.additional_name() {
         "is_match" => TestResult::matched(re.is_match(input)),
+        "is_match_with" => {
+            let mut cache = re.create_cache();
+            TestResult::matched(re.is_match_with(&mut cache, &input))
+        }
         "find" => match test.search_kind() {
             SearchKind::Earliest => TestResult::matches(
                 re.find_iter(input.earliest(true))
