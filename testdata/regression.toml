@@ -983,3 +983,24 @@ name = 'improper-reverse-suffix-optimization'
 regex = '(\\N\{[^}]+})|([{}])'
 haystack = 'hiya \N{snowman} bye'
 matches = [[[5, 16], [5, 16], []]]
+
+# This is a regression test for lifting a common prefix out of an alternation
+# when that prefix can match more than one way. Lifting 'ab*' out of
+# 'ab*b|ab*c' gives 'ab*(?:b|c)', which prefers 'abbc' over the first branch's
+# 'abb'.
+#
+# See: https://github.com/rust-lang/regex/issues/1400
+[[test]]
+name = "lift-common-prefix-greedy-repetition"
+regex = 'ab*b|ab*c'
+haystack = "abbc"
+matches = [[0, 3]]
+
+# Same as above, but with a lazy repetition.
+#
+# See: https://github.com/rust-lang/regex/issues/1400
+[[test]]
+name = "lift-common-prefix-lazy-repetition"
+regex = 'a*?b|a*?a'
+haystack = "ab"
+matches = [[0, 2]]
