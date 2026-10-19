@@ -344,7 +344,16 @@ impl<I: Interval> IntervalSet<I> {
         for i in 1..drain_end {
             let lower = self.ranges[i - 1].upper().increment();
             let upper = self.ranges[i].lower().decrement();
-            self.ranges.push(I::create(lower, upper));
+            // Two canonical ranges are never adjacent in terms of their
+            // integer values, but they may still be adjacent in terms of
+            // their bounds. For example, the ranges `..=\u{D7FF}` and
+            // `\u{E000}..` have nothing between them, since the surrogate
+            // codepoints are not valid bounds. In that case, `lower > upper`
+            // and there is no range to add. (`create` would swap the bounds
+            // and produce a range that contains both.)
+            if lower <= upper {
+                self.ranges.push(I::create(lower, upper));
+            }
         }
         if self.ranges[drain_end - 1].upper() < I::Bound::max_value() {
             let lower = self.ranges[drain_end - 1].upper().increment();
