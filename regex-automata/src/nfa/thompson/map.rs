@@ -48,6 +48,13 @@ use crate::{
 const PRIME: u64 = 1099511628211;
 const INIT: u64 = 14695981039346656037;
 
+/// The number of hash buckets allocated together in a map chunk.
+///
+/// Keeping this reasonably small avoids initializing all (for example) 10,000
+/// buckets for a small Unicode class, while amortizing allocation for larger
+/// classes.
+const UTF8_BOUND_MAP_CHUNK_LEN: usize = 64;
+
 /// A bounded hash map where the key is a sequence of NFA transitions and the
 /// value is a pre-existing NFA state ID.
 ///
@@ -77,6 +84,13 @@ const INIT: u64 = 14695981039346656037;
 /// Instead, ad hoc experiments suggest that it is "good enough." Additional
 /// smarts (such as an LRU eviction policy) have to be weighed against the
 /// amount of extra time they cost.
+///
+/// This cache is stored on the compiler instead of in thread-local storage.
+/// Thread-local storage could reuse it across compiler instances, but would
+/// also retain a potentially large cache for every thread that compiles a
+/// Unicode regex and would require a separate path for no-std builds anyway.
+/// The chunked representation below makes first use cheap while keeping
+/// ownership and reclamation tied to the compiler.
 #[derive(Clone, Debug)]
 pub struct Utf8BoundedMap {
     /// The current version of this map. Only entries with matching versions
@@ -88,9 +102,9 @@ pub struct Utf8BoundedMap {
     version: u16,
     /// The total number of entries this map can store.
     capacity: usize,
-    /// The actual entries, keyed by hash. Collisions between different states
-    /// result in the old state being dropped.
-    map: Vec<Utf8BoundedEntry>,
+    /// The entries, keyed by hash and allocated in chunks. Collisions between
+    /// different states result in the old state being dropped.
+    map: Vec<Vec<Utf8BoundedEntry>>,
 }
 
 /// An entry in this map.
@@ -127,14 +141,18 @@ impl Utf8BoundedMap {
     /// This must be called before the map can be used.
     pub fn clear(&mut self) {
         if self.map.is_empty() {
-            self.map = vec![Utf8BoundedEntry::default(); self.capacity];
+            let chunk_len =
+                1 + ((self.capacity - 1) / UTF8_BOUND_MAP_CHUNK_LEN);
+            self.map = vec![vec![]; chunk_len];
         } else {
             self.version = self.version.wrapping_add(1);
-            // If we loop back to version 0, then we forcefully clear the
-            // entire map. Otherwise, it might be possible to incorrectly
+            // If we loop back to version 0, then we forcefully clear every
+            // allocated chunk. Otherwise, it might be possible to incorrectly
             // match entries used to generate other NFAs.
             if self.version == 0 {
-                self.map = vec![Utf8BoundedEntry::default(); self.capacity];
+                for chunk in &mut self.map {
+                    chunk.fill(Utf8BoundedEntry::default());
+                }
             }
         }
     }
@@ -147,7 +165,7 @@ impl Utf8BoundedMap {
             h = (h ^ u64::from(t.end)).wrapping_mul(PRIME);
             h = (h ^ t.next.as_u64()).wrapping_mul(PRIME);
         }
-        (h % self.map.len().as_u64()).as_usize()
+        (h % self.capacity.as_u64()).as_usize()
     }
 
     /// Retrieve the cached state ID corresponding to the given key. The hash
@@ -156,7 +174,11 @@ impl Utf8BoundedMap {
     /// If there is no cached state with the given transitions, then None is
     /// returned.
     pub fn get(&mut self, key: &[Transition], hash: usize) -> Option<StateID> {
-        let entry = &self.map[hash];
+        let chunk = &self.map[hash / UTF8_BOUND_MAP_CHUNK_LEN];
+        if chunk.is_empty() {
+            return None;
+        }
+        let entry = &chunk[hash % UTF8_BOUND_MAP_CHUNK_LEN];
         if entry.version != self.version {
             return None;
         }
@@ -179,7 +201,22 @@ impl Utf8BoundedMap {
         hash: usize,
         state_id: StateID,
     ) {
-        self.map[hash] =
+        let chunk = hash / UTF8_BOUND_MAP_CHUNK_LEN;
+        let offset = hash % UTF8_BOUND_MAP_CHUNK_LEN;
+        // When we don't yet have a chunk for this particular key,
+        // lazily allocate.
+        if self.map[chunk].is_empty() {
+            let start = chunk * UTF8_BOUND_MAP_CHUNK_LEN;
+            let len = core::cmp::min(
+                UTF8_BOUND_MAP_CHUNK_LEN,
+                // Careful to avoid exceeding our configured capacity.
+                // This can only be smaller than the chunk length
+                // on the last chunk.
+                self.capacity - start,
+            );
+            self.map[chunk] = vec![Utf8BoundedEntry::default(); len];
+        }
+        self.map[chunk][offset] =
             Utf8BoundedEntry { version: self.version, key, val: state_id };
     }
 }
@@ -292,5 +329,115 @@ impl Utf8SuffixMap {
     pub fn set(&mut self, key: Utf8SuffixKey, hash: usize, state_id: StateID) {
         self.map[hash] =
             Utf8SuffixEntry { version: self.version, key, val: state_id };
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn key(byte: u8) -> Vec<Transition> {
+        vec![Transition {
+            start: byte,
+            end: byte,
+            next: StateID::must(usize::from(byte) + 1),
+        }]
+    }
+
+    fn key_with_hash(
+        map: &Utf8BoundedMap,
+        expected: usize,
+    ) -> Vec<Transition> {
+        for byte in 0..=u8::MAX {
+            let key = key(byte);
+            if map.hash(&key) == expected {
+                return key;
+            }
+        }
+        panic!("could not find key for hash bucket {expected}");
+    }
+
+    #[test]
+    fn bounded_map_allocates_entries_lazily() {
+        let mut map = Utf8BoundedMap::new(10_000);
+        assert!(map.map.is_empty());
+
+        map.clear();
+        assert_eq!(
+            map.map.len(),
+            1 + ((10_000 - 1) / UTF8_BOUND_MAP_CHUNK_LEN),
+        );
+        assert!(map.map.iter().all(Vec::is_empty));
+
+        let key = key(b'a');
+        let hash = map.hash(&key);
+        map.set(key.clone(), hash, StateID::must(1));
+        assert_eq!(
+            map.map.iter().filter(|chunk| !chunk.is_empty()).count(),
+            1
+        );
+        let chunk = hash / UTF8_BOUND_MAP_CHUNK_LEN;
+        assert_eq!(
+            map.map[chunk].len(),
+            core::cmp::min(
+                UTF8_BOUND_MAP_CHUNK_LEN,
+                map.capacity - (chunk * UTF8_BOUND_MAP_CHUNK_LEN),
+            ),
+        );
+        assert_eq!(map.get(&key, hash), Some(StateID::must(1)));
+    }
+
+    #[test]
+    fn bounded_map_replaces_collisions() {
+        let mut map = Utf8BoundedMap::new(1);
+        map.clear();
+        let key1 = key(b'a');
+        let key2 = key(b'b');
+        let hash = map.hash(&key1);
+        assert_eq!(hash, map.hash(&key2));
+
+        map.set(key1.clone(), hash, StateID::must(1));
+        map.set(key2.clone(), hash, StateID::must(2));
+        assert_eq!(map.map[0].len(), 1);
+        assert_eq!(map.get(&key1, hash), None);
+        assert_eq!(map.get(&key2, hash), Some(StateID::must(2)));
+    }
+
+    #[test]
+    fn bounded_map_clear_invalidates_entries() {
+        let mut map = Utf8BoundedMap::new(2);
+        map.clear();
+        let key0 = key_with_hash(&map, 0);
+        let key1 = key_with_hash(&map, 1);
+        map.set(key0.clone(), 0, StateID::must(1));
+        map.set(key1.clone(), 1, StateID::must(2));
+        assert_eq!(map.map[0].len(), 2);
+
+        map.clear();
+        assert_eq!(map.get(&key0, 0), None);
+        assert_eq!(map.get(&key1, 1), None);
+        assert_eq!(map.map[0].len(), 2);
+
+        map.set(key1.clone(), 1, StateID::must(3));
+        assert_eq!(map.get(&key1, 1), Some(StateID::must(3)));
+    }
+
+    #[test]
+    fn bounded_map_version_wrap_invalidates_entries() {
+        let mut map = Utf8BoundedMap::new(1);
+        map.clear();
+        let key = key(b'a');
+        let hash = map.hash(&key);
+        map.set(key.clone(), hash, StateID::must(1));
+
+        // Simulate enough clears to wrap the version back to the version used
+        // by the existing entry. The wrap must forcefully reset that entry.
+        map.version = u16::MAX;
+        map.clear();
+        assert_eq!(map.version, 0);
+        assert_eq!(map.get(&key, hash), None);
+
+        map.set(key.clone(), hash, StateID::must(2));
+        assert_eq!(map.get(&key, hash), Some(StateID::must(2)));
     }
 }
