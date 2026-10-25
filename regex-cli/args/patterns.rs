@@ -175,14 +175,9 @@ pattern regexes, even when they generally match the same thing.
 /// positional arguments as patterns or not.
 ///
 /// The default is to only parse patterns from flags.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 enum Mode {
     Positional,
+    #[default]
     OnlyFlags,
-}
-
-impl Default for Mode {
-    fn default() -> Mode {
-        Mode::OnlyFlags
-    }
 }
