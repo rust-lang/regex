@@ -69,13 +69,13 @@ pub(crate) fn dfa_try_search_half_fwd(
                 }
                 if dfa.is_accel_state(sid) {
                     let needs = dfa.accelerator(sid);
-                    at = accel::find_fwd(needs, input.haystack(), at)
+                    at = accel::find_fwd(needs, input.haystack(), at + 1)
                         .unwrap_or(input.end());
                     continue;
                 }
             } else if dfa.is_accel_state(sid) {
                 let needs = dfa.accelerator(sid);
-                at = accel::find_fwd(needs, input.haystack(), at)
+                at = accel::find_fwd(needs, input.haystack(), at + 1)
                     .unwrap_or(input.end());
                 continue;
             } else if dfa.is_dead_state(sid) {
