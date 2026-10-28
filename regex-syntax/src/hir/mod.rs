@@ -3013,6 +3013,37 @@ fn singleton_bytes(hirs: &[Hir]) -> Option<Vec<u8>> {
     Some(singletons)
 }
 
+/// Returns true if the given HIR can match in more than one way, where a
+/// "way" corresponds to a distinct sequence of matching choices (for example,
+/// how many times a repetition matches, or which branch of an alternation
+/// matches). When this returns false, the expression matches in exactly one
+/// way (or not at all), and re-associating it with a continuation cannot
+/// change leftmost-first preference order.
+///
+/// This is conservative: it may return true for expressions that in fact
+/// match in only one way.
+fn is_multi_way(hir: &Hir) -> bool {
+    match *hir.kind() {
+        HirKind::Empty
+        | HirKind::Literal(_)
+        | HirKind::Class(_)
+        | HirKind::Look(_) => false,
+        HirKind::Capture(ref cap) => is_multi_way(&cap.sub),
+        HirKind::Concat(ref xs) => xs.iter().any(is_multi_way),
+        HirKind::Alternation(ref xs) => {
+            xs.iter().any(is_multi_way) || xs.len() > 1
+        }
+        HirKind::Repetition(ref rep) => {
+            if rep.max == Some(0) {
+                false
+            } else {
+                rep.min != rep.max.unwrap_or(u32::MAX)
+                    || is_multi_way(&rep.sub)
+            }
+        }
+    }
+}
+
 /// Looks for a common prefix in the list of alternation branches given. If one
 /// is found, then an equivalent but (hopefully) simplified Hir is returned.
 /// Otherwise, the original given list of branches is returned unmodified.
@@ -3052,6 +3083,15 @@ fn lift_common_prefix(hirs: Vec<Hir>) -> Result<Hir, Vec<Hir>> {
     }
     let len = prefix.len();
     assert_ne!(0, len);
+    // Lifting the prefix is only preference-order preserving when the prefix
+    // can match in exactly one way. Otherwise, in XA|XB where X matches in
+    // more than one way, a preferred way of matching X followed by B can
+    // complete before a less preferred way of matching X followed by A,
+    // whereas the unlifted form prefers every way of matching XA over every
+    // way of matching XB.
+    if is_multi_way(&Hir::concat(prefix.to_vec())) {
+        return Err(hirs);
+    }
     let mut prefix_concat = vec![];
     let mut suffix_alts = vec![];
     for h in hirs {
@@ -3869,5 +3909,40 @@ mod tests {
         assert_eq!("∅", res);
         let res = format!("{:?}", LookSet::full());
         assert_eq!("Az^$rRbB𝛃𝚩<>〈〉◁▷◀▶", res);
+    }
+
+    #[test]
+    fn alternation_does_not_lift_multi_way_prefix() {
+        // See https://github.com/rust-lang/regex/issues/1400
+        //
+        // Lifting the common prefix `a+` out of `a+a|a+b` changes
+        // leftmost-first preference order: the unlifted form matches "aa",
+        // while the lifted form matches "aab".
+        let hir = crate::parse("a+a|a+b").unwrap();
+        match hir.kind() {
+            HirKind::Alternation(subs) => {
+                assert_eq!(
+                    2,
+                    subs.len(),
+                    "common prefix should not be lifted"
+                );
+            }
+            kind => panic!("expected alternation, got {kind:?}"),
+        }
+        // The single-way prefix case should still be lifted. Note that
+        // pure literal prefixes like "ab|ac" are single Literal HIR values
+        // and are never lifted (branches must be Concat values), so use a
+        // byte class prefix.
+        let hir = crate::parse("[ab]c|[ab]d").unwrap();
+        match hir.kind() {
+            HirKind::Concat(xs) => {
+                assert_eq!(
+                    2,
+                    xs.len(),
+                    "single-way prefix should be lifted, got {xs:?}"
+                );
+            }
+            kind => panic!("expected concat, got {kind:?}"),
+        }
     }
 }

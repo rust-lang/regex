@@ -6,6 +6,20 @@ macro_rules! regex {
     };
 }
 
+// See: https://github.com/rust-lang/regex/issues/1400
+#[test]
+fn regression_alternation_lift_common_prefix_preference() {
+    // The unlifted form matches "aa"; the lifted form incorrectly matches
+    // "aab" by preferring the greedy repetition followed by the second
+    // branch over backtracking into the repetition followed by the first
+    // branch.
+    let re = regex!("a+a|a+b");
+    assert_eq!(Some(0..2), re.find("aab").map(|m| m.range()));
+
+    let re = regex!("(ba)?a");
+    assert_eq!(Some(1..4), re.find("xbaa").map(|m| m.range()));
+}
+
 // See: https://github.com/rust-lang/regex/issues/48
 #[test]
 fn invalid_regexes_no_crash() {
