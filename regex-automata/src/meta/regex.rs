@@ -3298,24 +3298,7 @@ impl Config {
         // usage with runtime performance. In practice, with `std` enabled,
         // we choose a value that matches the total number of CPUs.
         const DEFAULT_POOL_CAPACITY: usize = 8;
-
-        self.pool_capacity.unwrap_or_else(|| {
-            #[cfg(feature = "std")]
-            {
-                use crate::util::lazy::Lazy;
-
-                static AVAILABLE_PARALLELISM: Lazy<usize> = Lazy::new(|| {
-                    std::thread::available_parallelism()
-                        .map(|n| n.get())
-                        .unwrap_or(DEFAULT_POOL_CAPACITY)
-                });
-                *Lazy::get(&AVAILABLE_PARALLELISM)
-            }
-            #[cfg(not(feature = "std"))]
-            {
-                DEFAULT_POOL_CAPACITY
-            }
-        })
+        self.pool_capacity.unwrap_or(DEFAULT_POOL_CAPACITY)
     }
 
     /// Returns whether the hybrid NFA/DFA regex engine may be used, as set by
