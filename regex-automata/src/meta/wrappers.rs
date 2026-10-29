@@ -598,7 +598,6 @@ impl HybridEngine {
             let result = hybrid::dfa::Builder::new()
                 .configure(
                     dfa_config
-                        .clone()
                         .match_kind(MatchKind::All)
                         .prefilter(None)
                         .specialize_start_states(false),
@@ -892,7 +891,6 @@ impl DFAEngine {
             let result = dfa::dense::Builder::new()
                 .configure(
                     dfa_config
-                        .clone()
                         // We never need unanchored reverse searches, so
                         // there's no point in building it into the DFA, which
                         // WILL take more space. (This isn't done for the lazy
