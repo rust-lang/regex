@@ -42,6 +42,14 @@ fn default() -> Result<()> {
     Ok(())
 }
 
+#[test]
+fn backtracker_zero_max_haystack_len() -> Result<()> {
+    let config = Regex::config().nfa_size_limit(Some(1_000_000_000));
+    let re = Regex::builder().configure(config).build(r"^.{0,404600}$")?;
+    assert!(re.is_match(""));
+    Ok(())
+}
+
 /// Tests the default configuration minus the full DFA.
 #[test]
 fn no_dfa() -> Result<()> {
