@@ -62,7 +62,7 @@ OPTIONS:
     let mut syntax = args::syntax::Config::default();
     args::configure(p, USAGE, &mut [&mut common, &mut patterns, &mut syntax])?;
 
-    let pats = patterns.get()?;
+    let pats = patterns.get(&syntax)?;
     anyhow::ensure!(
         pats.len() == 1,
         "only one pattern is allowed, but {} were given",
@@ -104,7 +104,7 @@ OPTIONS:
     let mut syntax = args::syntax::Config::default();
     args::configure(p, USAGE, &mut [&mut common, &mut patterns, &mut syntax])?;
 
-    let pats = patterns.get()?;
+    let pats = patterns.get(&syntax)?;
     anyhow::ensure!(
         pats.len() == 1,
         "only one pattern is allowed, but {} were given",
@@ -159,7 +159,7 @@ OPTIONS:
         ],
     )?;
 
-    let pats = patterns.get()?;
+    let pats = patterns.get(&syntax)?;
     let mut table = Table::empty();
     let (asts, time) = util::timeitr(|| syntax.asts(&pats))?;
     table.add("parse time", time);
@@ -210,7 +210,7 @@ OPTIONS:
         &mut [&mut common, &mut patterns, &mut syntax, &mut thompson],
     )?;
 
-    let pats = patterns.get()?;
+    let pats = patterns.get(&syntax)?;
     let mut table = Table::empty();
     let (asts, time) = util::timeitr(|| syntax.asts(&pats))?;
     table.add("parse time", time);
