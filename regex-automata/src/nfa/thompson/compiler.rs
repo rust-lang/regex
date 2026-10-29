@@ -543,10 +543,11 @@ impl Config {
 /// which capture states are compiled into a Thompson NFA.
 ///
 /// The default configuration is [`WhichCaptures::All`].
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 pub enum WhichCaptures {
     /// All capture states, including those corresponding to both implicit and
     /// explicit capture groups, are included in the Thompson NFA.
+    #[default]
     All,
     /// Only capture states corresponding to implicit capture groups are
     /// included. Implicit capture groups appear in every pattern implicitly
@@ -586,12 +587,6 @@ pub enum WhichCaptures {
     /// Indeed, `meta::Regex::find` will always return `None` when configured
     /// with this option.
     None,
-}
-
-impl Default for WhichCaptures {
-    fn default() -> WhichCaptures {
-        WhichCaptures::All
-    }
 }
 
 impl WhichCaptures {

@@ -636,9 +636,10 @@ impl Default for Extractor {
 ///
 /// The default extraction kind is `Prefix`.
 #[non_exhaustive]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub enum ExtractKind {
     /// Extracts only prefix literals from a regex.
+    #[default]
     Prefix,
     /// Extracts only suffix literals from a regex.
     ///
@@ -657,12 +658,6 @@ impl ExtractKind {
     /// Returns true if this kind is the `Suffix` variant.
     pub fn is_suffix(&self) -> bool {
         matches!(*self, ExtractKind::Suffix)
-    }
-}
-
-impl Default for ExtractKind {
-    fn default() -> ExtractKind {
-        ExtractKind::Prefix
     }
 }
 
