@@ -57,9 +57,9 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
     - name: Install Rust
-      uses: dtolnay/rust-toolchain@master
-      with:
-        toolchain: ${{ matrix.rust }}
+      run: rustup install ${TOOLCHAIN} && rustup default ${TOOLCHAIN}
+      env:
+        TOOLCHAIN: ${{ matrix.rust }}
     - name: Show CPU info for debugging
       if: matrix.os == 'ubuntu-latest'
       run: lscpu
@@ -144,9 +144,9 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
     - name: Install Rust
-      uses: dtolnay/rust-toolchain@master
-      with:
-        toolchain: 1.65.0
+      run: rustup install ${TOOLCHAIN} && rustup default ${TOOLCHAIN}
+      env:
+        TOOLCHAIN: 1.65.0
     - name: Basic build
       run: cargo build --verbose
     - name: Build docs
@@ -164,9 +164,9 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
     - name: Install Rust
-      uses: dtolnay/rust-toolchain@master
-      with:
-        toolchain: nightly
+      run: rustup install ${TOOLCHAIN} && rustup default ${TOOLCHAIN}
+      env:
+        TOOLCHAIN: nightly
     - name: Build docs
       run: cargo doc --verbose --workspace --all-features
 
@@ -183,9 +183,9 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
     - name: Install Rust
-      uses: dtolnay/rust-toolchain@master
-      with:
-        toolchain: stable
+      run: rustup install ${TOOLCHAIN} && rustup default ${TOOLCHAIN}
+      env:
+        TOOLCHAIN: stable
     - name: Run full test suite
       run: ./test
 
@@ -196,9 +196,9 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
     - name: Install Rust
-      uses: dtolnay/rust-toolchain@master
-      with:
-        toolchain: stable
+      run: rustup install ${TOOLCHAIN} && rustup default ${TOOLCHAIN}
+      env:
+        TOOLCHAIN: stable
     - name: Run full test suite
       run: ./regex-automata/test
 
@@ -209,9 +209,9 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
     - name: Install Rust
-      uses: dtolnay/rust-toolchain@master
-      with:
-        toolchain: stable
+      run: rustup install ${TOOLCHAIN} && rustup default ${TOOLCHAIN}
+      env:
+        TOOLCHAIN: stable
     - name: Run full test suite
       run: ./regex-syntax/test
 
@@ -222,9 +222,9 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
     - name: Install Rust
-      uses: dtolnay/rust-toolchain@master
-      with:
-        toolchain: stable
+      run: rustup install ${TOOLCHAIN} && rustup default ${TOOLCHAIN}
+      env:
+        TOOLCHAIN: stable
     - name: Run full test suite
       run: ./regex-capi/test
 
@@ -237,13 +237,13 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
     - name: Install Rust
-      uses: dtolnay/rust-toolchain@master
-      with:
+      run: rustup install ${TOOLCHAIN} -c ${COMPONENTS} && rustup default ${TOOLCHAIN}
+      env:
         # We use nightly here so that we can use miri I guess?
         # It caught me by surprise that miri seems to only be
         # available on nightly.
-        toolchain: nightly
-        components: miri
+        TOOLCHAIN: nightly
+        COMPONENTS: miri
     - name: Run full test suite
       run: cargo miri test -p regex-automata
 
@@ -254,10 +254,10 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
     - name: Install Rust
-      uses: dtolnay/rust-toolchain@master
-      with:
-        toolchain: stable
-        components: rustfmt
+      run: rustup install ${TOOLCHAIN} -c ${COMPONENTS} && rustup default ${TOOLCHAIN}
+      env:
+        TOOLCHAIN: stable
+        COMPONENTS: rustfmt
     - name: Check formatting
       run: |
         cargo fmt --all -- --check
