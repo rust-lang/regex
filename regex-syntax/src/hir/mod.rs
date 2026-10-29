@@ -1908,44 +1908,105 @@ pub enum Dot {
     AnyByteExceptCRLF,
 }
 
+#[cfg(all(debug_assertions, feature = "std"))]
+std::thread_local! {
+    static NO_RECURSE_GUARD: std::cell::Cell<bool> = const{std::cell::Cell::new(false)};
+}
+
 /// A custom `Drop` impl is used for `HirKind` such that it uses constant stack
 /// space but heap space proportional to the depth of the total `Hir`.
 impl Drop for Hir {
     fn drop(&mut self) {
         use core::mem;
 
-        match *self.kind() {
-            HirKind::Empty
-            | HirKind::Literal(_)
-            | HirKind::Class(_)
-            | HirKind::Look(_) => return,
-            HirKind::Capture(ref x) if x.sub.kind.subs().is_empty() => return,
-            HirKind::Repetition(ref x) if x.sub.kind.subs().is_empty() => {
-                return
-            }
-            HirKind::Concat(ref x) if x.is_empty() => return,
-            HirKind::Alternation(ref x) if x.is_empty() => return,
-            _ => {}
+        if matches!(self, Hir { kind: HirKind::Empty, .. }) {
+            // Currently, it's imposible to destructure a struct if the
+            // struct has a custom drop implementation. This means that
+            // `Hir::into_kind` still calls into `Hir::drop`. To prevent
+            // this from causing an infine loop, we have an early return here.
+            // TODO: Either make `Hir::into_kind` not call us, or remove
+            // all calls to it from us.
+            return;
         }
 
-        let mut stack = vec![mem::replace(self, Hir::empty())];
-        while let Some(mut expr) = stack.pop() {
-            match expr.kind {
-                HirKind::Empty
-                | HirKind::Literal(_)
-                | HirKind::Class(_)
-                | HirKind::Look(_) => {}
-                HirKind::Capture(ref mut x) => {
-                    stack.push(mem::replace(&mut x.sub, Hir::empty()));
+        #[cfg(all(debug_assertions, feature = "std"))]
+        if NO_RECURSE_GUARD.replace(true) {
+            panic!(
+            "regex_syntax::hir::Hir::drop() called from within itself \n\
+             Please raise an issue at https://github.com/10-hard-problems/regex"
+        )
+        };
+
+        /// Sometimes a simple loop is enough to destroy a `HirKind`.
+        /// If so, we do it here.
+        fn try_simple_drop(mut this: HirKind) -> Option<Vec<Hir>> {
+            loop {
+                let mut subs;
+                match this {
+                    HirKind::Empty
+                    | HirKind::Literal(_)
+                    | HirKind::Class(_)
+                    | HirKind::Look(_) => {
+                        return None;
+                    }
+                    HirKind::Capture(x) => {
+                        this = x.sub.into_kind();
+                        continue;
+                    }
+                    HirKind::Repetition(x) => {
+                        this = x.sub.into_kind();
+                        continue;
+                    }
+                    HirKind::Concat(subs_) | HirKind::Alternation(subs_) => {
+                        subs = subs_
+                    }
+                };
+                match subs.len() {
+                    0 => return None,
+                    1 => {
+                        this = subs.pop().unwrap().into_kind();
+                        continue;
+                    }
+                    2.. => return Some(subs),
+                };
+            }
+        }
+
+        let this = mem::replace(&mut self.kind, HirKind::Empty);
+        let Some(children) = try_simple_drop(this) else {
+            #[cfg(all(debug_assertions, feature = "std"))]
+            NO_RECURSE_GUARD.set(false);
+            return;
+        };
+
+        let mut curr = children;
+        let mut target = curr.pop().unwrap().into_kind();
+        loop {
+            match try_simple_drop(target) {
+                Some(mut children) => {
+                    // Minor subtlety: We must pop the next value
+                    // before we do the tree rotation to guarantee
+                    // the vec will have enough capacity.
+                    let mut interm = children.pop().unwrap();
+                    mem::swap(&mut curr, &mut children);
+
+                    // Reusing properties for an unrelated Hir node
+                    // is fine here; we're in the destructor, so no
+                    // other code can observe the broken invarient.
+                    target = mem::replace(
+                        &mut interm.kind,
+                        HirKind::Alternation(children),
+                    );
+
+                    curr.insert(0, interm);
                 }
-                HirKind::Repetition(ref mut x) => {
-                    stack.push(mem::replace(&mut x.sub, Hir::empty()));
-                }
-                HirKind::Concat(ref mut x) => {
-                    stack.extend(x.drain(..));
-                }
-                HirKind::Alternation(ref mut x) => {
-                    stack.extend(x.drain(..));
+                None => {
+                    let Some(target_) = curr.pop() else {
+                        #[cfg(all(debug_assertions, feature = "std"))]
+                        NO_RECURSE_GUARD.set(false);
+                        return;
+                    };
+                    target = target_.into_kind();
                 }
             }
         }
