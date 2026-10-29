@@ -124,15 +124,25 @@ jobs:
         curl -LO "https://github.com/cross-rs/cross/releases/download/$CROSS_VERSION/cross-x86_64-unknown-linux-musl.tar.gz"
         tar xf cross-x86_64-unknown-linux-musl.tar.gz
     - name: Basic build
-      run: cross build --all --verbose --target ${{ matrix.target }}
+      run: cross build --all --verbose --target ${TARGET}
+      env:
+        TARGET: ${{ matrix.target }}
     - name: Run subset of tests
-      run: cross test --verbose --test integration --target ${{ matrix.target }}
+      run: cross test --verbose --test integration --target ${TARGET}
+      env:
+        TARGET: ${{ matrix.target }}
     - name: Run subset of regex-syntax tests
-      run: cross test --verbose -p regex-syntax --lib --target ${{ matrix.target }}
+      run: cross test --verbose -p regex-syntax --lib --target ${TARGET}
+      env:
+        TARGET: ${{ matrix.target }}
     - name: Run subset of regex-automata tests
-      run: cross test --verbose -p regex-automata --lib --target ${{ matrix.target }}
+      run: cross test --verbose -p regex-automata --lib --target ${TARGET}
+      env:
+        TARGET: ${{ matrix.target }}
     - name: Run regex-lite tests
-      run: cross test --verbose -p regex-lite --lib --target ${{ matrix.target }}
+      run: cross test --verbose -p regex-lite --lib --target ${TARGET}
+      env:
+        TARGET: ${{ matrix.target }}
 
   # This job runs a stripped down version of CI to test the MSRV. The specific
   # reason for doing this is that the regex crate's dev-dependencies tend to
