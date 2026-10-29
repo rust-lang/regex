@@ -64,19 +64,13 @@ impl core::fmt::Display for UnicodeWordError {
     }
 }
 
-/// A state oriented traverser of the simple case folding table.
+/// A simple case folding table.
 ///
 /// A case folder can be constructed via `SimpleCaseFolder::new()`, which will
 /// return an error if the underlying case folding table is unavailable.
 ///
-/// After construction, it is expected that callers will use
-/// `SimpleCaseFolder::mapping` by calling it with codepoints in strictly
-/// increasing order. For example, calling it on `b` and then on `a` is illegal
-/// and will result in a panic.
-///
-/// The main idea of this type is that it tries hard to make mapping lookups
-/// fast by exploiting the structure of the underlying table, and the ordering
-/// assumption enables this.
+/// Since the table is sorted, [`SimpleCaseFolder::mapping_in_range`] finds the
+/// first entry and then returns only entries contained in the range.
 #[derive(Debug)]
 pub struct SimpleCaseFolder {
     /// The simple case fold table. It's a sorted association list, where the
@@ -84,12 +78,6 @@ pub struct SimpleCaseFolder {
     /// equivalence class (not including the key) of the "simple" case folded
     /// Unicode scalar values.
     table: &'static [(char, &'static [char])],
-    /// The last codepoint that was used for a lookup.
-    last: Option<char>,
-    /// The index to the entry in `table` corresponding to the smallest key `k`
-    /// such that `k > k0`, where `k0` is the most recent key lookup. Note that
-    /// in particular, `k0` may not be in the table!
-    next: usize,
 }
 
 impl SimpleCaseFolder {
@@ -104,99 +92,40 @@ impl SimpleCaseFolder {
         {
             Ok(SimpleCaseFolder {
                 table: crate::unicode_tables::case_folding_simple::CASE_FOLDING_SIMPLE,
-                last: None,
-                next: 0,
             })
         }
     }
 
-    /// Return the equivalence class of case folded codepoints for the given
-    /// codepoint. The equivalence class returned never includes the codepoint
-    /// given. If the given codepoint has no case folded codepoints (i.e.,
-    /// no entry in the underlying case folding table), then this returns an
-    /// empty slice.
+    /// Return an iterator to every entry in the simple fold table where the
+    /// key is in the inclusive range `[start, end]`.
     ///
     /// # Panics
     ///
-    /// This panics when called with a `c` that is less than or equal to the
-    /// previous call. In other words, callers need to use this method with
-    /// strictly increasing values of `c`.
-    pub fn mapping(&mut self, c: char) -> &'static [char] {
-        if let Some(last) = self.last {
-            assert!(
-                last < c,
-                "got codepoint U+{:X} which occurs before \
-                 last codepoint U+{:X}",
-                u32::from(c),
-                u32::from(last),
-            );
-        }
-        self.last = Some(c);
-        if self.next >= self.table.len() {
-            return &[];
-        }
-        let (k, v) = self.table[self.next];
-        if k == c {
-            self.next += 1;
-            return v;
-        }
-        match self.get(c) {
-            Err(i) => {
-                self.next = i;
-                &[]
-            }
-            Ok(i) => {
-                // Since we require lookups to proceed
-                // in order, anything we find should be
-                // after whatever we thought might be
-                // next. Otherwise, the caller is either
-                // going out of order or we would have
-                // found our next key at 'self.next'.
-                assert!(i > self.next);
-                self.next = i + 1;
-                self.table[i].1
-            }
-        }
+    /// This panics when `end < start`.
+    pub fn mapping_in_range(
+        &self,
+        start: char,
+        end: char,
+    ) -> impl Iterator<Item = &'static [char]> {
+        assert!(
+            start <= end,
+            "tried to get a mapping but end is before start"
+        );
+        let i = self.table.partition_point(|&(c, _)| c < start);
+        self.table[i..]
+            .iter()
+            .take_while(move |&&(c, _)| c <= end)
+            .map(|&(_, folded)| folded)
     }
 
-    /// Returns true if and only if the given range overlaps with any region
-    /// of the underlying case folding table. That is, when true, there exists
-    /// at least one codepoint in the inclusive range `[start, end]` that has
-    /// a non-trivial equivalence class of case folded codepoints. Conversely,
-    /// when this returns false, all codepoints in the range `[start, end]`
-    /// correspond to the trivial equivalence class of case folded codepoints,
-    /// i.e., itself.
-    ///
-    /// This is useful to call before iterating over the codepoints in the
-    /// range and looking up the mapping for each. If you know none of the
-    /// mappings will return anything, then you might be able to skip doing it
-    /// altogether.
+    /// Returns true if and only if at least one codepoint in the
+    /// inclusive range `[start, end]` has a non-trivial simple case folding.
     ///
     /// # Panics
     ///
     /// This panics when `end < start`.
     pub fn overlaps(&self, start: char, end: char) -> bool {
-        use core::cmp::Ordering;
-
-        assert!(start <= end);
-        self.table
-            .binary_search_by(|&(c, _)| {
-                if start <= c && c <= end {
-                    Ordering::Equal
-                } else if c > end {
-                    Ordering::Greater
-                } else {
-                    Ordering::Less
-                }
-            })
-            .is_ok()
-    }
-
-    /// Returns the index at which `c` occurs in the simple case fold table. If
-    /// `c` does not occur, then this returns an `i` such that `table[i-1].0 <
-    /// c` and `table[i].0 > c`.
-    fn get(&self, c: char) -> Result<usize, usize> {
-        self.table.binary_search_by_key(&c, |&(c1, _)| c1)
+        self.mapping_in_range(start, end).next().is_some()
     }
 }
 
@@ -950,7 +879,10 @@ mod tests {
 
     #[cfg(feature = "unicode-case")]
     fn simple_fold_ok(c: char) -> impl Iterator<Item = char> {
-        SimpleCaseFolder::new().unwrap().mapping(c).iter().copied()
+        SimpleCaseFolder::new()
+            .unwrap()
+            .mapping_in_range(c, c)
+            .flat_map(|folded| folded.iter().copied())
     }
 
     #[cfg(feature = "unicode-case")]
