@@ -55,7 +55,7 @@ jobs:
           rust: stable-x86_64-gnu
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v5
+      uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
     - name: Install Rust
       uses: dtolnay/rust-toolchain@master
       with:
@@ -107,7 +107,7 @@ jobs:
         - s390x-unknown-linux-gnu
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v5
+      uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
     - name: Install and configure Cross
       run: |
         # In the past, new releases of 'cross' have broken CI. So for now, we
@@ -142,7 +142,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v5
+      uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
     - name: Install Rust
       uses: dtolnay/rust-toolchain@master
       with:
@@ -162,7 +162,7 @@ jobs:
       RUSTDOCFLAGS: "-D rustdoc::broken_intra_doc_links --cfg docsrs_regex"
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v5
+      uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
     - name: Install Rust
       uses: dtolnay/rust-toolchain@master
       with:
@@ -181,7 +181,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v5
+      uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
     - name: Install Rust
       uses: dtolnay/rust-toolchain@master
       with:
@@ -194,7 +194,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v5
+      uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
     - name: Install Rust
       uses: dtolnay/rust-toolchain@master
       with:
@@ -207,7 +207,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v5
+      uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
     - name: Install Rust
       uses: dtolnay/rust-toolchain@master
       with:
@@ -220,7 +220,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v5
+      uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
     - name: Install Rust
       uses: dtolnay/rust-toolchain@master
       with:
@@ -235,7 +235,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v5
+      uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
     - name: Install Rust
       uses: dtolnay/rust-toolchain@master
       with:
@@ -252,7 +252,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v5
+      uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
     - name: Install Rust
       uses: dtolnay/rust-toolchain@master
       with:
