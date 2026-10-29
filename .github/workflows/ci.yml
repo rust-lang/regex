@@ -56,6 +56,8 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      with:
+        persist-credentials: false
     - name: Install Rust
       run: rustup install ${TOOLCHAIN} && rustup default ${TOOLCHAIN}
       env:
@@ -108,6 +110,8 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      with:
+        persist-credentials: false
     - name: Install and configure Cross
       run: |
         # In the past, new releases of 'cross' have broken CI. So for now, we
@@ -143,6 +147,8 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      with:
+        persist-credentials: false
     - name: Install Rust
       run: rustup install ${TOOLCHAIN} && rustup default ${TOOLCHAIN}
       env:
@@ -163,6 +169,8 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      with:
+        persist-credentials: false
     - name: Install Rust
       run: rustup install ${TOOLCHAIN} && rustup default ${TOOLCHAIN}
       env:
@@ -182,6 +190,8 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      with:
+        persist-credentials: false
     - name: Install Rust
       run: rustup install ${TOOLCHAIN} && rustup default ${TOOLCHAIN}
       env:
@@ -195,6 +205,8 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      with:
+        persist-credentials: false
     - name: Install Rust
       run: rustup install ${TOOLCHAIN} && rustup default ${TOOLCHAIN}
       env:
@@ -208,6 +220,8 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      with:
+        persist-credentials: false
     - name: Install Rust
       run: rustup install ${TOOLCHAIN} && rustup default ${TOOLCHAIN}
       env:
@@ -221,6 +235,8 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      with:
+        persist-credentials: false
     - name: Install Rust
       run: rustup install ${TOOLCHAIN} && rustup default ${TOOLCHAIN}
       env:
@@ -236,6 +252,8 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      with:
+        persist-credentials: false
     - name: Install Rust
       run: rustup install ${TOOLCHAIN} -c ${COMPONENTS} && rustup default ${TOOLCHAIN}
       env:
@@ -253,6 +271,8 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      with:
+        persist-credentials: false
     - name: Install Rust
       run: rustup install ${TOOLCHAIN} -c ${COMPONENTS} && rustup default ${TOOLCHAIN}
       env:
