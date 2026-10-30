@@ -1479,6 +1479,7 @@ impl PikeVM {
         for sid in set.iter() {
             pid = match self.next(stack, slot_table, next, input, at, sid) {
                 None => continue,
+                Some(_) if at < input.get_min_match_end() => continue,
                 Some(pid) => Some(pid),
             };
             slots.copy_from_slice(slot_table.for_state(sid));
