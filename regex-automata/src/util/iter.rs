@@ -153,6 +153,7 @@ pub struct Searcher<'h> {
     /// handle a corner case for preventing empty matches from overlapping with
     /// the ending bounds of a prior match.
     last_match_end: Option<usize>,
+    retry_empty_matches: bool,
 }
 
 impl<'h> Searcher<'h> {
@@ -163,7 +164,12 @@ impl<'h> Searcher<'h> {
     /// engine. The closure may borrow any additional state that is needed,
     /// such as a prefilter scanner.
     pub fn new(input: Input<'h>) -> Searcher<'h> {
-        Searcher { input, last_match_end: None }
+        Searcher { input, last_match_end: None, retry_empty_matches: false }
+    }
+
+    pub(crate) fn retry_empty_matches(mut self, yes: bool) -> Searcher<'h> {
+        self.retry_empty_matches = yes;
+        self
     }
 
     /// Returns the current `Input` used by this searcher.
@@ -622,12 +628,19 @@ impl<'h> Searcher<'h> {
     #[inline(never)]
     fn handle_overlapping_empty_half_match<F>(
         &mut self,
-        _: HalfMatch,
+        m: HalfMatch,
         mut finder: F,
     ) -> Result<Option<HalfMatch>, MatchError>
     where
         F: FnMut(&Input<'_>) -> Result<Option<HalfMatch>, MatchError>,
     {
+        if self.retry_empty_matches {
+            let input = self
+                .input
+                .clone()
+                .min_match_end(m.offset().checked_add(1).unwrap());
+            return finder(&input);
+        }
         // Since we are only here when 'm.offset()' matches the offset of the
         // last match, it follows that this must have been an empty match.
         // Since we both need to make progress *and* prevent overlapping
@@ -673,6 +686,13 @@ impl<'h> Searcher<'h> {
         F: FnMut(&Input<'_>) -> Result<Option<Match>, MatchError>,
     {
         assert!(m.is_empty());
+        if self.retry_empty_matches {
+            let input = self
+                .input
+                .clone()
+                .min_match_end(m.end().checked_add(1).unwrap());
+            return finder(&input);
+        }
         self.input.set_start(self.input.start().checked_add(1).unwrap());
         finder(&self.input)
     }

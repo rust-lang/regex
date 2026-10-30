@@ -613,7 +613,7 @@ impl Regex {
         input: I,
     ) -> FindMatches<'r, 'h> {
         let cache = self.pool.get();
-        let it = iter::Searcher::new(input.into());
+        let it = iter::Searcher::new(input.into()).retry_empty_matches(true);
         FindMatches { re: self, cache, it }
     }
 
@@ -655,7 +655,7 @@ impl Regex {
     ) -> CapturesMatches<'r, 'h> {
         let cache = self.pool.get();
         let caps = self.create_captures();
-        let it = iter::Searcher::new(input.into());
+        let it = iter::Searcher::new(input.into()).retry_empty_matches(true);
         CapturesMatches { re: self, cache, caps, it }
     }
 
@@ -1318,6 +1318,17 @@ impl Regex {
         {
             return None;
         }
+        if input.get_min_match_end() > input.start() {
+            let engine = self.imp.strat.pikevm()?.get();
+            let caps = &mut cache.capmatches;
+            let pid = engine.search_slots(
+                &mut cache.pikevm,
+                input,
+                caps.slots_mut(),
+            );
+            caps.set_pattern(pid);
+            return caps.get_match();
+        }
         self.imp.strat.search(cache, input)
     }
 
@@ -1361,6 +1372,11 @@ impl Regex {
             || self.imp.info.is_impossible(input)
         {
             return None;
+        }
+        if input.get_min_match_end() > input.start() {
+            return self
+                .search_with(cache, input)
+                .map(|m| HalfMatch::new(m.pattern(), m.end()));
         }
         self.imp.strat.search_half(cache, input)
     }
@@ -1516,6 +1532,13 @@ impl Regex {
             || self.imp.info.is_impossible(input)
         {
             return None;
+        }
+        if input.get_min_match_end() > input.start() {
+            return self.imp.strat.pikevm()?.get().search_slots(
+                &mut cache.pikevm,
+                input,
+                slots,
+            );
         }
         self.imp.strat.search_slots(cache, input, slots)
     }

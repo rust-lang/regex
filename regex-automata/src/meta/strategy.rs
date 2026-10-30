@@ -45,6 +45,10 @@ pub(super) trait Strategy:
 
     fn group_info(&self) -> &GroupInfo;
 
+    fn pikevm(&self) -> Option<&wrappers::PikeVM> {
+        None
+    }
+
     fn create_cache(&self) -> Cache;
 
     fn reset_cache(&self, cache: &mut Cache);
@@ -667,6 +671,10 @@ impl Core {
 }
 
 impl Strategy for Core {
+    fn pikevm(&self) -> Option<&wrappers::PikeVM> {
+        Some(&self.pikevm)
+    }
+
     fn name(&self) -> Cow<'static, str> {
         Cow::Borrowed("core")
     }
@@ -986,6 +994,10 @@ impl ReverseAnchored {
 // Thus, in this impl, we can actually assume that the end position in 'input'
 // is equivalent to the length of the haystack.
 impl Strategy for ReverseAnchored {
+    fn pikevm(&self) -> Option<&wrappers::PikeVM> {
+        self.core.pikevm()
+    }
+
     fn name(&self) -> Cow<'static, str> {
         Cow::Borrowed("reverse anchored")
     }
@@ -1322,6 +1334,10 @@ impl ReverseSuffix {
 }
 
 impl Strategy for ReverseSuffix {
+    fn pikevm(&self) -> Option<&wrappers::PikeVM> {
+        self.core.pikevm()
+    }
+
     fn name(&self) -> Cow<'static, str> {
         Cow::Borrowed("reverse suffix")
     }
@@ -1776,6 +1792,10 @@ impl ReverseInner {
 }
 
 impl Strategy for ReverseInner {
+    fn pikevm(&self) -> Option<&wrappers::PikeVM> {
+        self.core.pikevm()
+    }
+
     fn name(&self) -> Cow<'static, str> {
         Cow::Borrowed("reverse inner")
     }

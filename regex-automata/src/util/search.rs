@@ -104,6 +104,7 @@ pub struct Input<'h> {
     span: Span,
     anchored: Anchored,
     earliest: bool,
+    min_match_end: usize,
 }
 
 impl<'h> Input<'h> {
@@ -120,7 +121,19 @@ impl<'h> Input<'h> {
             span: Span { start: 0, end: haystack.len() },
             anchored: Anchored::No,
             earliest: false,
+            min_match_end: 0,
         }
+    }
+
+    #[inline]
+    pub(crate) fn min_match_end(mut self, end: usize) -> Input<'h> {
+        self.min_match_end = end;
+        self
+    }
+
+    #[inline]
+    pub(crate) fn get_min_match_end(&self) -> usize {
+        self.min_match_end
     }
 
     /// Set the span for this search.
