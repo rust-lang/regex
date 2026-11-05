@@ -17,8 +17,15 @@ jobs:
           persist-credentials: false
       - uses: rust-lang/crates-io-auth-action@3268eb413133e2960fa4ae0e963ca76380c54cd9 # v1.0.6
         id: auth
+        # Publish packages individually to avoid failure if any of the crates are already published
       - name: Publish to crates.io
         run: |
-          cargo publish --workspace
+          cargo publish -p regex-automata || true
+          cargo publish -p rure || true
+          cargo publish -p regex-lite || true
+          cargo publish -p regex-cli || true
+          cargo publish -p regex-syntax || true
+          cargo publish -p regex-test || true
+          cargo publish -p regex || true
         env:
           CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
