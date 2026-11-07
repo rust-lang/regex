@@ -264,6 +264,69 @@ done:
     return passed;
 }
 
+bool test_iter_split() {
+    bool passed = true;
+
+    rure *re = rure_compile_must("[ \t]+");
+
+    const uint8_t *haystack = (const uint8_t *)"   \t   a b \t              c\td    e";
+    size_t haystack_len = strlen((const char *)haystack);
+
+    rure_iter_split *it = rure_iter_split_new(re, haystack, haystack_len);
+
+    char *match;
+    bool result = rure_iter_split_next(it, &match);
+    if (!result) {
+        if (DEBUG) {
+            fprintf(stderr,
+                    "[test_iter_split] expected a match, "
+                    "but got none\n");
+        }
+        passed = false;
+        goto done;
+    }
+
+    result = rure_iter_split_next(it, &match);
+    passed = (strcmp(match, "a") == 0);
+    if (!passed) {
+        goto done;
+    }
+
+    result = rure_iter_split_next(it, &match);
+    passed = (strcmp(match, "b") == 0);
+    if (!passed) {
+        goto done;
+    }
+
+    result = rure_iter_split_next(it, &match);
+    passed = (strcmp(match, "c") == 0);
+    if (!passed) {
+        goto done;
+    }
+
+    result = rure_iter_split_next(it, &match);
+    passed = (strcmp(match, "d") == 0);
+    if (!passed) {
+        goto done;
+    }
+
+    result = rure_iter_split_next(it, &match);
+    passed = (strcmp(match, "e") == 0);
+    if (!passed) {
+        goto done;
+    }
+
+    result = rure_iter_split_next(it, &match);
+    passed = !result;
+    if (!passed) {
+        goto done;
+    }
+done:
+    rure_iter_split_free(it);
+    rure_free(re);
+    return passed;
+}
+
 /*
  * This tests whether we can set the flags correctly. In this case, we disable
  * all flags, which includes disabling Unicode mode. When we disable Unicode
@@ -574,6 +637,7 @@ int main() {
     run_test(test_captures, "test_captures", &passed);
     run_test(test_iter, "test_iter", &passed);
     run_test(test_iter_capture_names, "test_iter_capture_names", &passed);
+    run_test(test_iter_split, "test_iter_split", &passed);
     run_test(test_flags, "test_flags", &passed);
     run_test(test_compile_error, "test_compile_error", &passed);
     run_test(test_compile_error_size_limit, "test_compile_error_size_limit",
