@@ -205,6 +205,10 @@ impl RetryFailError {
     pub(crate) fn from_offset(offset: usize) -> RetryFailError {
         RetryFailError { offset }
     }
+
+    pub(crate) fn offset(&self) -> usize {
+        self.offset
+    }
 }
 
 #[cfg(feature = "std")]
@@ -233,7 +237,9 @@ impl From<MatchError> for RetryFailError {
             // or with higher level control flow logic. For example, the
             // backtracker's wrapper will never hand out a backtracker engine
             // when the haystack would be too long.
-            HaystackTooLong { .. } | UnsupportedAnchored { .. } => {
+            HaystackTooLong { .. }
+            | UnsupportedAnchored { .. }
+            | NoEngine { .. } => {
                 unreachable!("found impossible error in meta engine: {merr}")
             }
         }

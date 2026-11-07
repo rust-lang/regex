@@ -46,7 +46,7 @@ use crate::hybrid;
 use crate::nfa::thompson::backtrack;
 
 #[derive(Debug)]
-pub(crate) struct PikeVM(PikeVMEngine);
+pub(crate) struct PikeVM(Option<PikeVMEngine>);
 
 impl PikeVM {
     pub(crate) fn new(
@@ -54,7 +54,11 @@ impl PikeVM {
         pre: Option<Prefilter>,
         nfa: &NFA,
     ) -> Result<PikeVM, BuildError> {
-        PikeVMEngine::new(info, pre, nfa).map(PikeVM)
+        if !info.config().get_pikevm() {
+            debug!("PikeVM disabled by config");
+            return Ok(PikeVM(None));
+        }
+        PikeVMEngine::new(info, pre, nfa).map(|e| PikeVM(Some(e)))
     }
 
     pub(crate) fn create_cache(&self) -> PikeVMCache {
@@ -62,8 +66,8 @@ impl PikeVM {
     }
 
     #[cfg_attr(feature = "perf-inline", inline(always))]
-    pub(crate) fn get(&self) -> &PikeVMEngine {
-        &self.0
+    pub(crate) fn get(&self) -> Option<&PikeVMEngine> {
+        self.0.as_ref()
     }
 }
 
@@ -126,7 +130,9 @@ impl PikeVMCache {
     }
 
     pub(crate) fn reset(&mut self, builder: &PikeVM) {
-        self.get(&builder.get().0).reset(&builder.get().0);
+        if let Some(e) = builder.get() {
+            self.get(&e.0).reset(&e.0);
+        }
     }
 
     pub(crate) fn memory_usage(&self) -> usize {
@@ -139,7 +145,11 @@ impl PikeVMCache {
 }
 
 #[derive(Debug)]
-pub(crate) struct BoundedBacktracker(Option<BoundedBacktrackerEngine>);
+pub(crate) struct BoundedBacktracker(
+    Option<BoundedBacktrackerEngine>,
+    // Whether the PikeVM is available to defer to.
+    bool,
+);
 
 impl BoundedBacktracker {
     pub(crate) fn new(
@@ -147,7 +157,8 @@ impl BoundedBacktracker {
         pre: Option<Prefilter>,
         nfa: &NFA,
     ) -> Result<BoundedBacktracker, BuildError> {
-        BoundedBacktrackerEngine::new(info, pre, nfa).map(BoundedBacktracker)
+        let engine = BoundedBacktrackerEngine::new(info, pre, nfa)?;
+        Ok(BoundedBacktracker(engine, info.config().get_pikevm()))
     }
 
     pub(crate) fn create_cache(&self) -> BoundedBacktrackerCache {
@@ -172,7 +183,11 @@ impl BoundedBacktracker {
         // Now, if the haystack is really short already, then we allow the
         // backtracker to run. (This hasn't been litigated quantitatively with
         // benchmarks. Just a hunch.)
-        if input.get_earliest() && input.haystack().len() > 128 {
+        //
+        // This only holds while there is another engine to wait for. With the
+        // PikeVM disabled the backtracker is the last one standing, so running
+        // it beats giving up.
+        if self.1 && input.get_earliest() && input.haystack().len() > 128 {
             return None;
         }
         // If the backtracker is just going to return an error because the
@@ -203,7 +218,12 @@ impl BoundedBacktrackerEngine {
             {
                 return Ok(None);
             }
-            let backtrack_config = backtrack::Config::new().prefilter(pre);
+            let mut backtrack_config = backtrack::Config::new().prefilter(pre);
+            if let Some(capacity) =
+                info.config().get_backtrack_visited_capacity()
+            {
+                backtrack_config = backtrack_config.visited_capacity(capacity);
+            }
             let engine = backtrack::Builder::new()
                 .configure(backtrack_config)
                 .build_from_nfa(nfa.clone())
