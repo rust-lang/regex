@@ -113,7 +113,7 @@ fn run_test(
                         Ok(caps.get_match())
                     })
                     .infallible()
-                    .take(test.match_limit().unwrap_or(std::usize::MAX))
+                    .take(test.match_limit().unwrap_or(usize::MAX))
                     .map(|m| Match {
                         id: m.pattern().as_usize(),
                         span: Span { start: m.start(), end: m.end() },
@@ -138,7 +138,7 @@ fn run_test(
                         re.try_search(cache, input, caps)
                     })
                     .infallible()
-                    .take(test.match_limit().unwrap_or(std::usize::MAX))
+                    .take(test.match_limit().unwrap_or(usize::MAX))
                     .map(|caps| testify_captures(&caps));
                 TestResult::captures(it)
             }

@@ -207,7 +207,7 @@ fn run_test(
                     input.earliest(test.search_kind() == SearchKind::Earliest);
                 TestResult::matches(
                     re.find_iter(cache, input)
-                        .take(test.match_limit().unwrap_or(std::usize::MAX))
+                        .take(test.match_limit().unwrap_or(usize::MAX))
                         .map(|m| Match {
                             id: m.pattern().as_usize(),
                             span: Span { start: m.start(), end: m.end() },

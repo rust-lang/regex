@@ -77,7 +77,7 @@ fn run_test(
             SearchKind::Earliest => {
                 let it = re
                     .find_iter(cache, input.earliest(true))
-                    .take(test.match_limit().unwrap_or(std::usize::MAX))
+                    .take(test.match_limit().unwrap_or(usize::MAX))
                     .map(|m| Match {
                         id: m.pattern().as_usize(),
                         span: Span { start: m.start(), end: m.end() },
@@ -87,7 +87,7 @@ fn run_test(
             SearchKind::Leftmost => {
                 let it = re
                     .find_iter(cache, input)
-                    .take(test.match_limit().unwrap_or(std::usize::MAX))
+                    .take(test.match_limit().unwrap_or(usize::MAX))
                     .map(|m| Match {
                         id: m.pattern().as_usize(),
                         span: Span { start: m.start(), end: m.end() },
@@ -104,14 +104,14 @@ fn run_test(
             SearchKind::Earliest => {
                 let it = re
                     .captures_iter(cache, input.earliest(true))
-                    .take(test.match_limit().unwrap_or(std::usize::MAX))
+                    .take(test.match_limit().unwrap_or(usize::MAX))
                     .map(|caps| testify_captures(&caps));
                 TestResult::captures(it)
             }
             SearchKind::Leftmost => {
                 let it = re
                     .captures_iter(cache, input)
-                    .take(test.match_limit().unwrap_or(std::usize::MAX))
+                    .take(test.match_limit().unwrap_or(usize::MAX))
                     .map(|caps| testify_captures(&caps));
                 TestResult::captures(it)
             }

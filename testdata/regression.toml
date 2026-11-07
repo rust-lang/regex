@@ -1004,3 +1004,21 @@ name = "lift-common-prefix-lazy-repetition"
 regex = 'a*?b|a*?a'
 haystack = "ab"
 matches = [[0, 2]]
+
+# See: https://github.com/rust-lang/regex/issues/1406
+[[test]]
+name = "reverse-inner-full-dfa-accel-false-positive"
+regex = 'b?a[^a]*a'
+haystack = "ab"
+matches = []
+unicode = false
+utf8 = false
+
+# See: https://github.com/rust-lang/regex/issues/1406
+[[test]]
+name = "reverse-inner-full-dfa-accel-false-negative"
+regex = ' ?a[^a]*b'
+haystack = "ab"
+matches = [[0, 2]]
+unicode = false
+utf8 = false

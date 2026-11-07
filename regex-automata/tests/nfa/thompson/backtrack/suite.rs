@@ -134,7 +134,7 @@ fn run_test(
             }
             SearchKind::Leftmost => TestResult::matches(
                 re.try_find_iter(cache, input)
-                    .take(test.match_limit().unwrap_or(std::usize::MAX))
+                    .take(test.match_limit().unwrap_or(usize::MAX))
                     .map(|result| result.unwrap())
                     .map(|m| Match {
                         id: m.pattern().as_usize(),
@@ -148,7 +148,7 @@ fn run_test(
             }
             SearchKind::Leftmost => TestResult::captures(
                 re.try_captures_iter(cache, input)
-                    .take(test.match_limit().unwrap_or(std::usize::MAX))
+                    .take(test.match_limit().unwrap_or(usize::MAX))
                     .map(|result| result.unwrap())
                     .map(|caps| testify_captures(&caps)),
             ),
