@@ -84,7 +84,7 @@ OPTIONS:
         ],
     )?;
 
-    let pats = patterns.get()?;
+    let pats = patterns.get(&syntax)?;
     let syn = syntax.syntax()?;
     let mut table = Table::empty();
     let (re, time) = util::timeitr(|| api.from_patterns(&syn, &pats))?;
@@ -185,7 +185,7 @@ OPTIONS:
         ],
     )?;
 
-    let pats = patterns.get()?;
+    let pats = patterns.get(&syntax)?;
     let mut table = Table::empty();
 
     let re = if meta.build_from_patterns() {
@@ -263,7 +263,7 @@ OPTIONS:
         ],
     )?;
 
-    let pats = patterns.get()?;
+    let pats = patterns.get(&syntax)?;
     let syn = syntax.syntax()?;
     let mut table = Table::empty();
     let (re, time) = util::timeitr(|| lite.from_patterns(&syn, &pats))?;
