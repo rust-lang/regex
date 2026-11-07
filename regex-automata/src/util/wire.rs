@@ -116,8 +116,7 @@ impl core::fmt::Display for SerializeError {
     }
 }
 
-#[cfg(feature = "std")]
-impl std::error::Error for SerializeError {}
+impl core::error::Error for SerializeError {}
 
 /// An error that occurs when deserializing an object defined in this crate.
 ///
@@ -211,8 +210,7 @@ impl DeserializeError {
     }
 }
 
-#[cfg(feature = "std")]
-impl std::error::Error for DeserializeError {}
+impl core::error::Error for DeserializeError {}
 
 impl core::fmt::Display for DeserializeError {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {

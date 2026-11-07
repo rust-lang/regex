@@ -53,8 +53,7 @@ impl Error {
     }
 }
 
-#[cfg(feature = "std")]
-impl std::error::Error for Error {
+impl core::error::Error for Error {
     // TODO: Remove this method entirely on the next breaking semver release.
     #[allow(deprecated)]
     fn description(&self) -> &str {
