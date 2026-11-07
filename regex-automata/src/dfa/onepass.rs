@@ -553,7 +553,7 @@ impl<'a> InternalBuilder<'a> {
             // than it. In the case of a one-pass DFA with no match states, the
             // min_match_id will keep this sentinel value.
             min_match_id: StateID::MAX,
-            classes: classes.clone(),
+            classes: classes,
             alphabet_len,
             stride2,
             pateps_offset: alphabet_len,
