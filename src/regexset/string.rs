@@ -131,6 +131,12 @@ use crate::{Error, RegexSetBuilder};
 #[derive(Clone)]
 pub struct RegexSet {
     pub(crate) meta: meta::Regex,
+    pub(crate) info: alloc::sync::Arc<RegexSetInfo>,
+}
+
+#[derive(PartialEq)]
+pub(crate) struct RegexSetInfo {
+    pub(crate) syntax_config: regex_automata::util::syntax::Config,
     pub(crate) patterns: alloc::sync::Arc<[String]>,
 }
 
@@ -442,7 +448,32 @@ impl RegexSet {
     /// ```
     #[inline]
     pub fn patterns(&self) -> &[String] {
-        &self.patterns
+        &self.info.patterns
+    }
+
+    /// Compares the source strings and syntax compile options of two regex,
+    /// sets returning true iff both are equal.
+    /// Such result implies equivalence of the regex sets, but the contrary
+    /// provides no information about their equivalence.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use regex::{RegexSet, RegexSetBuilder};
+    ///
+    /// let r1 = RegexSet::new([r"a+", r"aa*"]).unwrap();
+    /// let r2 = RegexSet::new([r"aa*", r"a+"]).unwrap();
+    /// assert!(!r1.source_and_options_equals(&r2));
+    ///
+    /// let r3 = RegexSetBuilder::new([r"a+", r"aa*"])
+    ///     .case_insensitive(true)
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(!r1.source_and_options_equals(&r3));
+    /// ```
+    #[inline]
+    pub fn source_and_options_equals(&self, other: &Self) -> bool {
+        self.info == other.info
     }
 }
 
