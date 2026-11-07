@@ -695,6 +695,94 @@ impl Regex {
         SplitN { haystack, it: self.meta.splitn(haystack, limit) }
     }
 
+    /// Searches for the first match of this regex in the haystack given, and if
+    /// found, returns a tuple with the substring preceding the match and the
+    /// substring following it. If no match is found, then `None` is returned.
+    ///
+    /// The matched substring itself is not returned as part of either
+    /// substring in the returned tuple.
+    ///
+    /// # Example
+    ///
+    /// To split off the first string delimited by arbitrary amounts of spaces
+    /// or tabs:
+    ///
+    /// ```
+    /// use regex::Regex;
+    ///
+    /// let re = Regex::new(r"[ \t]+").unwrap();
+    /// let hay = "a b \t  c\td    e";
+    /// let got = re.split_once(hay);
+    /// assert_eq!(got, Some(("a", "b \t  c\td    e")));
+    /// ```
+    ///
+    /// # Example: more cases
+    ///
+    /// Basic usage:
+    ///
+    /// ```
+    /// use regex::Regex;
+    ///
+    /// let re = Regex::new(r" ").unwrap();
+    /// let hay = "Mary had a little lamb";
+    /// let got = re.split_once(hay);
+    /// assert_eq!(got, Some(("Mary", "had a little lamb")));
+    ///
+    /// let re = Regex::new(r"X").unwrap();
+    /// let hay = "";
+    /// let got = re.split_once(hay);
+    /// assert_eq!(got, None);
+    ///
+    /// let re = Regex::new(r"X").unwrap();
+    /// let hay = "lionXXtigerXleopard";
+    /// let got = re.split_once(hay);
+    /// assert_eq!(got, Some(("lion", "XtigerXleopard")));
+    ///
+    /// let re = Regex::new(r"::").unwrap();
+    /// let hay = "lion::tiger::leopard";
+    /// let got = re.split_once(hay);
+    /// assert_eq!(got, Some(("lion", "tiger::leopard")));
+    /// ```
+    ///
+    /// If the first match is at the start or end of a haystack, the
+    /// corresponding substring is empty.
+    ///
+    /// ```
+    /// use regex::Regex;
+    ///
+    /// let re = Regex::new(r"0").unwrap();
+    /// let hay = "01";
+    /// let got = re.split_once(hay);
+    /// assert_eq!(got, Some(("", "1")));
+    ///
+    /// let re = Regex::new(r"0").unwrap();
+    /// let hay = "10";
+    /// let got = re.split_once(hay);
+    /// assert_eq!(got, Some(("1", "")));
+    /// ```
+    ///
+    /// When the empty string is used as a regex, the resulting tuple consists
+    /// of the empty string followed by the complete haystack:
+    ///
+    /// ```
+    /// use regex::Regex;
+    ///
+    /// let re = Regex::new(r"").unwrap();
+    /// let hay = "rust";
+    /// let got = re.split_once(hay);
+    /// assert_eq!(got, Some(("", "rust")));
+    /// ```
+    #[inline]
+    pub fn split_once<'h>(
+        &self,
+        haystack: &'h [u8],
+    ) -> Option<(&'h [u8], &'h [u8])> {
+        let m = self.find(haystack)?;
+        let preceding = &haystack[..m.start()];
+        let succeeding = &haystack[m.end()..];
+        Some((preceding, succeeding))
+    }
+
     /// Replaces the leftmost-first match in the given haystack with the
     /// replacement provided. The replacement can be a regular string (where
     /// `$N` and `$name` are expanded to match capture groups) or a function
