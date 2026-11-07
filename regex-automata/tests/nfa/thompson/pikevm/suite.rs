@@ -3,7 +3,7 @@ use {
     regex_automata::{
         nfa::thompson::{
             self,
-            pikevm::{self, PikeVM},
+            pikevm::{self, PikeVM, PrefilterStrategy},
         },
         util::{prefilter::Prefilter, syntax},
         PatternSet,
@@ -29,24 +29,34 @@ fn default() -> Result<()> {
 /// Tests the PikeVM with prefilters enabled.
 #[test]
 fn prefilter() -> Result<()> {
-    let my_compiler = |test: &RegexTest, regexes: &[String]| {
-        // Parse regexes as HIRs so we can get literals to build a prefilter.
-        let mut hirs = vec![];
-        for pattern in regexes.iter() {
-            hirs.push(syntax::parse_with(pattern, &config_syntax(test))?);
-        }
-        let kind = match untestify_kind(test.match_kind()) {
-            None => return Ok(CompiledRegex::skip()),
-            Some(kind) => kind,
+    let my_compiler =
+        |test: &RegexTest, regexes: &[String], strategy: PrefilterStrategy| {
+            // Parse regexes as HIRs so we can get literals to build a prefilter.
+            let mut hirs = vec![];
+            for pattern in regexes.iter() {
+                hirs.push(syntax::parse_with(pattern, &config_syntax(test))?);
+            }
+            let kind = match untestify_kind(test.match_kind()) {
+                None => return Ok(CompiledRegex::skip()),
+                Some(kind) => kind,
+            };
+            let pre = Prefilter::from_hirs_prefix(kind, &hirs);
+            let mut builder = PikeVM::builder();
+            builder.configure(
+                PikeVM::config().prefilter(pre).prefilter_strategy(strategy),
+            );
+            compiler(builder)(test, regexes)
         };
-        let pre = Prefilter::from_hirs_prefix(kind, &hirs);
-        let mut builder = PikeVM::builder();
-        builder.configure(PikeVM::config().prefilter(pre));
-        compiler(builder)(test, regexes)
-    };
     let mut runner = TestRunner::new()?;
     runner.expand(&["is_match", "find", "captures"], |test| test.compiles());
-    runner.test_iter(suite()?.iter(), my_compiler).assert();
+    runner
+        .test_iter(suite()?.iter(), |t, r| {
+            my_compiler(t, r, PrefilterStrategy::OnEmptyStates)
+        })
+        .test_iter(suite()?.iter(), |t, r| {
+            my_compiler(t, r, PrefilterStrategy::OneAhead)
+        })
+        .assert();
     Ok(())
 }
 
