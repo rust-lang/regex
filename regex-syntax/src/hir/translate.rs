@@ -3645,6 +3645,12 @@ mod tests {
                 hir_alt(vec![hir_lit("foo"), hir_lit("foobar")]),
             ]),
         );
+        // Tests that we don't lift a common prefix that can match more than
+        // one way, since that changes which branch leftmost-first prefers. A
+        // literal before it is still lifted.
+        assert_eq!(t("ab*b|ab*c"), t("a(?:b*b|b*c)"));
+        assert_ne!(t("ab*b|ab*c"), t("ab*(?:b|c)"));
+        assert_ne!(t("a*?b|a*?a"), t("a*?(?:b|a)"));
     }
 
     #[test]

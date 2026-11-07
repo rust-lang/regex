@@ -6,6 +6,9 @@ Bug fixes:
 
 * [#1333](https://github.com/rust-lang/regex/issues/1333):
 Fix a glob syntax error in `package.include`.
+* [#1400](https://github.com/rust-lang/regex/issues/1400):
+Fix incorrect match offsets for alternations whose branches start with the
+same repetition.
 
 
 1.13.1 (2026-07-15)
