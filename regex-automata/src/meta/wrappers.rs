@@ -489,7 +489,11 @@ impl OnePassCache {
     pub(crate) fn reset(&mut self, builder: &OnePass) {
         #[cfg(feature = "dfa-onepass")]
         if let Some(ref e) = builder.0 {
-            self.0.as_mut().unwrap().reset(&e.0);
+            if let Some(ref mut cache) = self.0 {
+                cache.reset(&e.0);
+            } else {
+                self.0 = Some(e.0.create_cache());
+            }
         }
     }
 
@@ -781,7 +785,11 @@ impl HybridCache {
     pub(crate) fn reset(&mut self, builder: &Hybrid) {
         #[cfg(feature = "hybrid")]
         if let Some(ref e) = builder.0 {
-            self.0.as_mut().unwrap().reset(&e.0);
+            if let Some(ref mut cache) = self.0 {
+                cache.reset(&e.0);
+            } else {
+                self.0 = Some(e.0.create_cache());
+            }
         }
     }
 
@@ -1186,7 +1194,11 @@ impl ReverseHybridCache {
     pub(crate) fn reset(&mut self, builder: &ReverseHybrid) {
         #[cfg(feature = "hybrid")]
         if let Some(ref e) = builder.0 {
-            self.0.as_mut().unwrap().reset(&e.0);
+            if let Some(ref mut cache) = self.0 {
+                cache.reset(&e.0);
+            } else {
+                self.0 = Some(e.0.create_cache());
+            }
         }
     }
 
