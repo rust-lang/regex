@@ -176,8 +176,11 @@ impl BoundedBacktracker {
             return None;
         }
         // If the backtracker is just going to return an error because the
-        // haystack is too long, then obviously do not use it.
-        if input.get_span().len() > engine.max_haystack_len() {
+        // haystack is too long, then obviously do not use it. Note that
+        // we use '>=' here because when max_haystack_len() returns 0,
+        // the backtracker cannot handle any haystack (including the empty
+        // string with length 0).
+        if input.get_span().len() >= engine.max_haystack_len() {
             return None;
         }
         Some(engine)
