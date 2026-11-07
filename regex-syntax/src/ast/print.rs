@@ -80,6 +80,8 @@ impl<W: fmt::Write> Visitor for Writer<W> {
     fn visit_pre(&mut self, ast: &Ast) -> fmt::Result {
         match *ast {
             Ast::Group(ref x) => self.fmt_group_pre(x),
+            #[cfg(feature = "look-behinds")]
+            Ast::LookAround(ref x) => self.fmt_lookaround_pre(x),
             Ast::ClassBracketed(ref x) => self.fmt_class_bracketed_pre(x),
             _ => Ok(()),
         }
@@ -92,6 +94,8 @@ impl<W: fmt::Write> Visitor for Writer<W> {
             Ast::Literal(ref x) => self.fmt_literal(x),
             Ast::Dot(_) => self.wtr.write_str("."),
             Ast::Assertion(ref x) => self.fmt_assertion(x),
+            #[cfg(feature = "look-behinds")]
+            Ast::LookAround(ref x) => self.fmt_lookaround_post(x),
             Ast::ClassPerl(ref x) => self.fmt_class_perl(x),
             Ast::ClassUnicode(ref x) => self.fmt_class_unicode(x),
             Ast::ClassBracketed(ref x) => self.fmt_class_bracketed_post(x),
@@ -171,6 +175,20 @@ impl<W: fmt::Write> Writer<W> {
     }
 
     fn fmt_group_post(&mut self, _ast: &ast::Group) -> fmt::Result {
+        self.wtr.write_str(")")
+    }
+
+    #[cfg(feature = "look-behinds")]
+    fn fmt_lookaround_pre(&mut self, ast: &ast::LookAround) -> fmt::Result {
+        use crate::ast::LookAroundKind::*;
+        match ast.kind {
+            PositiveLookBehind => self.wtr.write_str("(?<="),
+            NegativeLookBehind => self.wtr.write_str("(?<!"),
+        }
+    }
+
+    #[cfg(feature = "look-behinds")]
+    fn fmt_lookaround_post(&mut self, _ast: &ast::LookAround) -> fmt::Result {
         self.wtr.write_str(")")
     }
 
@@ -509,6 +527,13 @@ mod tests {
         roundtrip("(?P<foo>a)");
         roundtrip("(?<foo>a)");
         roundtrip("(a)");
+    }
+
+    #[cfg(feature = "look-behinds")]
+    #[test]
+    fn print_lookaround() {
+        roundtrip("(?<=a)");
+        roundtrip("(?<!a)");
     }
 
     #[test]

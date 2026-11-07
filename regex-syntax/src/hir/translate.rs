@@ -212,6 +212,14 @@ enum HirFrame {
     /// This sentinel only exists to stop other things (like flattening
     /// literals) from reaching across repetition operators.
     Repetition,
+    /// This is pushed whenever a look-around expression is observed. After
+    /// visiting the sub-expression in the look-around, the translator's stack
+    /// is expected to have this sentinel at the top.
+    ///
+    /// This sentinel only exists to stop other things (like flattening
+    /// literals) from reaching across look-around operators.
+    #[cfg(feature = "look-behinds")]
+    LookAround,
     /// This is pushed on to the stack upon first seeing any kind of capture,
     /// indicated by parentheses (including non-capturing groups). It is popped
     /// upon leaving a group.
@@ -297,6 +305,19 @@ impl HirFrame {
         }
     }
 
+    #[cfg(feature = "look-behinds")]
+    fn unwrap_lookaround(self) {
+        match self {
+            HirFrame::LookAround => {}
+            _ => {
+                panic!(
+                    "tried to unwrap look-around from HirFrame, got: {:?}",
+                    self
+                )
+            }
+        }
+    }
+
     /// Assert that the current stack frame is a group indicator and return
     /// its corresponding flags (the flags that were active at the time the
     /// group was entered).
@@ -359,6 +380,8 @@ impl<'t, 'p> Visitor for TranslatorI<'t, 'p> {
                     self.push(HirFrame::AlternationBranch);
                 }
             }
+            #[cfg(feature = "look-behinds")]
+            Ast::LookAround(_) => self.push(HirFrame::LookAround),
             _ => {}
         }
         Ok(())
@@ -441,6 +464,19 @@ impl<'t, 'p> Visitor for TranslatorI<'t, 'p> {
                 let old_flags = self.pop().unwrap().unwrap_group();
                 self.trans().flags.set(old_flags);
                 self.push(HirFrame::Expr(self.hir_capture(x, expr)));
+            }
+            #[cfg(feature = "look-behinds")]
+            Ast::LookAround(ref x) => {
+                let expr = Box::new(self.pop().unwrap().unwrap_expr());
+                self.pop().unwrap().unwrap_lookaround();
+                self.push(HirFrame::Expr(Hir::lookaround(match x.kind {
+                    ast::LookAroundKind::PositiveLookBehind => {
+                        hir::LookAround::PositiveLookBehind(expr)
+                    }
+                    ast::LookAroundKind::NegativeLookBehind => {
+                        hir::LookAround::NegativeLookBehind(expr)
+                    }
+                })));
             }
             Ast::Concat(_) => {
                 let mut exprs = vec![];
@@ -755,6 +791,10 @@ impl<'t, 'p> TranslatorI<'t, 'p> {
             HirFrame::AlternationBranch => {
                 unreachable!("expected expr or concat, got alt branch marker")
             }
+            #[cfg(feature = "look-behinds")]
+            HirFrame::LookAround => {
+                unreachable!("expected expr or concat, got look-around")
+            }
         }
     }
 
@@ -785,6 +825,10 @@ impl<'t, 'p> TranslatorI<'t, 'p> {
             }
             HirFrame::AlternationBranch => {
                 unreachable!("expected expr or alt, got alt branch marker")
+            }
+            #[cfg(feature = "look-behinds")]
+            HirFrame::LookAround => {
+                unreachable!("expected expr or alt, got look-around")
             }
         }
     }
@@ -1597,6 +1641,16 @@ mod tests {
         Hir::look(look)
     }
 
+    #[cfg(feature = "look-behinds")]
+    fn hir_lookbehind(expr: Hir, positive: bool) -> Hir {
+        let lookaround = if positive {
+            hir::LookAround::PositiveLookBehind(Box::new(expr))
+        } else {
+            hir::LookAround::NegativeLookBehind(Box::new(expr))
+        };
+        Hir::lookaround(lookaround)
+    }
+
     #[test]
     fn empty() {
         assert_eq!(t(""), Hir::empty());
@@ -1818,6 +1872,45 @@ mod tests {
         assert_eq!(t(r"\B"), hir_look(hir::Look::WordUnicodeNegate));
         assert_eq!(t(r"(?-u)\b"), hir_look(hir::Look::WordAscii));
         assert_eq!(t(r"(?-u)\B"), hir_look(hir::Look::WordAsciiNegate));
+    }
+
+    #[cfg(feature = "look-behinds")]
+    #[test]
+    fn lookarounds() {
+        assert_eq!(t("(?<=a)"), hir_lookbehind(hir_lit("a"), true));
+        assert_eq!(t("(?<!a)"), hir_lookbehind(hir_lit("a"), false));
+        assert_eq!(t("(?<!)"), hir_lookbehind(Hir::empty(), false));
+        assert_eq!(
+            t("(?<=a|b)"),
+            hir_lookbehind(hir_alt(vec![hir_lit("a"), hir_lit("b")]), true)
+        );
+        assert_eq!(
+            t("(?<=a)|(?<!b)"),
+            hir_alt(vec![
+                hir_lookbehind(hir_lit("a"), true),
+                hir_lookbehind(hir_lit("b"), false)
+            ])
+        );
+        assert_eq!(
+            t("(?<=a)(?<!b)"),
+            hir_cat(vec![
+                hir_lookbehind(hir_lit("a"), true),
+                hir_lookbehind(hir_lit("b"), false)
+            ])
+        );
+        assert_eq!(
+            t("a(?<=ba(?<!c))"),
+            hir_cat(vec![
+                hir_lit("a"),
+                hir_lookbehind(
+                    hir_cat(vec![
+                        hir_lit("ba"),
+                        hir_lookbehind(hir_lit("c"), false)
+                    ]),
+                    true
+                )
+            ])
+        );
     }
 
     #[test]
