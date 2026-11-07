@@ -55,11 +55,13 @@ jobs:
           rust: stable-x86_64-gnu
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v5
-    - name: Install Rust
-      uses: dtolnay/rust-toolchain@master
+      uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       with:
-        toolchain: ${{ matrix.rust }}
+        persist-credentials: false
+    - name: Install Rust
+      run: rustup install ${TOOLCHAIN} && rustup default ${TOOLCHAIN}
+      env:
+        TOOLCHAIN: ${{ matrix.rust }}
     - name: Show CPU info for debugging
       if: matrix.os == 'ubuntu-latest'
       run: lscpu
@@ -107,7 +109,9 @@ jobs:
         - s390x-unknown-linux-gnu
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v5
+      uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      with:
+        persist-credentials: false
     - name: Install and configure Cross
       run: |
         # In the past, new releases of 'cross' have broken CI. So for now, we
@@ -120,15 +124,25 @@ jobs:
         curl -LO "https://github.com/cross-rs/cross/releases/download/$CROSS_VERSION/cross-x86_64-unknown-linux-musl.tar.gz"
         tar xf cross-x86_64-unknown-linux-musl.tar.gz
     - name: Basic build
-      run: cross build --all --verbose --target ${{ matrix.target }}
+      run: cross build --all --verbose --target ${TARGET}
+      env:
+        TARGET: ${{ matrix.target }}
     - name: Run subset of tests
-      run: cross test --verbose --test integration --target ${{ matrix.target }}
+      run: cross test --verbose --test integration --target ${TARGET}
+      env:
+        TARGET: ${{ matrix.target }}
     - name: Run subset of regex-syntax tests
-      run: cross test --verbose -p regex-syntax --lib --target ${{ matrix.target }}
+      run: cross test --verbose -p regex-syntax --lib --target ${TARGET}
+      env:
+        TARGET: ${{ matrix.target }}
     - name: Run subset of regex-automata tests
-      run: cross test --verbose -p regex-automata --lib --target ${{ matrix.target }}
+      run: cross test --verbose -p regex-automata --lib --target ${TARGET}
+      env:
+        TARGET: ${{ matrix.target }}
     - name: Run regex-lite tests
-      run: cross test --verbose -p regex-lite --lib --target ${{ matrix.target }}
+      run: cross test --verbose -p regex-lite --lib --target ${TARGET}
+      env:
+        TARGET: ${{ matrix.target }}
 
   # This job runs a stripped down version of CI to test the MSRV. The specific
   # reason for doing this is that the regex crate's dev-dependencies tend to
@@ -142,11 +156,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v5
-    - name: Install Rust
-      uses: dtolnay/rust-toolchain@master
+      uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       with:
-        toolchain: 1.65.0
+        persist-credentials: false
+    - name: Install Rust
+      run: rustup install ${TOOLCHAIN} && rustup default ${TOOLCHAIN}
+      env:
+        TOOLCHAIN: 1.65.0
     - name: Basic build
       run: cargo build --verbose
     - name: Build docs
@@ -162,11 +178,13 @@ jobs:
       RUSTDOCFLAGS: "-D rustdoc::broken_intra_doc_links --cfg docsrs_regex"
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v5
-    - name: Install Rust
-      uses: dtolnay/rust-toolchain@master
+      uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       with:
-        toolchain: nightly
+        persist-credentials: false
+    - name: Install Rust
+      run: rustup install ${TOOLCHAIN} && rustup default ${TOOLCHAIN}
+      env:
+        TOOLCHAIN: nightly
     - name: Build docs
       run: cargo doc --verbose --workspace --all-features
 
@@ -181,11 +199,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v5
-    - name: Install Rust
-      uses: dtolnay/rust-toolchain@master
+      uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       with:
-        toolchain: stable
+        persist-credentials: false
+    - name: Install Rust
+      run: rustup install ${TOOLCHAIN} && rustup default ${TOOLCHAIN}
+      env:
+        TOOLCHAIN: stable
     - name: Run full test suite
       run: ./test
 
@@ -194,11 +214,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v5
-    - name: Install Rust
-      uses: dtolnay/rust-toolchain@master
+      uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       with:
-        toolchain: stable
+        persist-credentials: false
+    - name: Install Rust
+      run: rustup install ${TOOLCHAIN} && rustup default ${TOOLCHAIN}
+      env:
+        TOOLCHAIN: stable
     - name: Run full test suite
       run: ./regex-automata/test
 
@@ -207,11 +229,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v5
-    - name: Install Rust
-      uses: dtolnay/rust-toolchain@master
+      uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       with:
-        toolchain: stable
+        persist-credentials: false
+    - name: Install Rust
+      run: rustup install ${TOOLCHAIN} && rustup default ${TOOLCHAIN}
+      env:
+        TOOLCHAIN: stable
     - name: Run full test suite
       run: ./regex-syntax/test
 
@@ -220,11 +244,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v5
-    - name: Install Rust
-      uses: dtolnay/rust-toolchain@master
+      uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       with:
-        toolchain: stable
+        persist-credentials: false
+    - name: Install Rust
+      run: rustup install ${TOOLCHAIN} && rustup default ${TOOLCHAIN}
+      env:
+        TOOLCHAIN: stable
     - name: Run full test suite
       run: ./regex-capi/test
 
@@ -235,15 +261,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v5
-    - name: Install Rust
-      uses: dtolnay/rust-toolchain@master
+      uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       with:
+        persist-credentials: false
+    - name: Install Rust
+      run: rustup install ${TOOLCHAIN} -c ${COMPONENTS} && rustup default ${TOOLCHAIN}
+      env:
         # We use nightly here so that we can use miri I guess?
         # It caught me by surprise that miri seems to only be
         # available on nightly.
-        toolchain: nightly
-        components: miri
+        TOOLCHAIN: nightly
+        COMPONENTS: miri
     - name: Run full test suite
       run: cargo miri test -p regex-automata
 
@@ -252,12 +280,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v5
-    - name: Install Rust
-      uses: dtolnay/rust-toolchain@master
+      uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       with:
-        toolchain: stable
-        components: rustfmt
+        persist-credentials: false
+    - name: Install Rust
+      run: rustup install ${TOOLCHAIN} -c ${COMPONENTS} && rustup default ${TOOLCHAIN}
+      env:
+        TOOLCHAIN: stable
+        COMPONENTS: rustfmt
     - name: Check formatting
       run: |
         cargo fmt --all -- --check
