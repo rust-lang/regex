@@ -1390,7 +1390,7 @@ impl MaybeSpan {
 /// The match semantics to use for a search.
 ///
 /// When not specified in a test, the default is `MatchKind::LeftmostFirst`.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "kebab-case")]
 pub enum MatchKind {
     /// All possible matches should be reported.
@@ -1405,6 +1405,7 @@ pub enum MatchKind {
     ///
     /// This typically corresponds to the semantics implemented by backtracking
     /// engines.
+    #[default]
     LeftmostFirst,
     /// Report only the leftmost match. When there are multiple leftmost
     /// matches that start at the same position, prefer the one the longest
@@ -1415,16 +1416,10 @@ pub enum MatchKind {
     LeftmostLongest,
 }
 
-impl Default for MatchKind {
-    fn default() -> MatchKind {
-        MatchKind::LeftmostFirst
-    }
-}
-
 /// Represents the type of search to perform.
 ///
 /// When not specified in a test, the default is `SearchKind::Leftmost`.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "kebab-case")]
 pub enum SearchKind {
     /// Report matches as soon as they are found.
@@ -1437,16 +1432,11 @@ pub enum SearchKind {
     /// A standard leftmost search, returning either the leftmost-first or
     /// leftmost-longest match. Generally speaking, it doesn't make sense to
     /// use this type of search in combination with [`MatchKind::All`].
+    #[default]
     Leftmost,
     /// Return all possible matches, including ones that overlap. Typically
     /// this search kind is used in combination with [`MatchKind::All`].
     Overlapping,
-}
-
-impl Default for SearchKind {
-    fn default() -> SearchKind {
-        SearchKind::Leftmost
-    }
 }
 
 /// Read the environment variable given. If it doesn't exist, then return an
