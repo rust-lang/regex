@@ -1,0 +1,32 @@
+on:
+  push:
+    tags:
+      - "*"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: publish
+    permissions:
+      id-token: write     # Required for OIDC token exchange
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: rust-lang/crates-io-auth-action@3268eb413133e2960fa4ae0e963ca76380c54cd9 # v1.0.6
+        id: auth
+        # Publish packages individually to avoid failure if any of the crates are already published
+      - name: Publish to crates.io
+        run: |
+          cargo publish -p regex-lite || true
+          cargo publish -p regex-syntax || true
+          cargo publish -p regex-automata || true
+          cargo publish -p regex-test || true
+          cargo publish -p regex || true
+          cargo publish -p regex-cli || true
+          cargo publish -p rure || true
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
