@@ -5279,4 +5279,25 @@ mod tests {
         let (buf, _) = dfa.to_bytes_native_endian();
         DFA::from_bytes(&buf).unwrap_err();
     }
+
+    // The quit set is consulted directly when computing a start state from a
+    // look-behind byte, so it has to survive a serialization round trip. The
+    // high half of the set (bytes 0x80-0xFF) used to be read from the same
+    // offset as the low half, so a deserialized DFA built with the Unicode
+    // word boundary heuristic did not report a quit error here.
+    #[test]
+    fn roundtrip_quitset() {
+        let dfa = DFA::builder()
+            .configure(DFA::config().unicode_word_boundary(true))
+            .build(r"\bfoo")
+            .unwrap();
+        let (buf, _) = dfa.to_bytes_native_endian();
+        let (dfa2, _) = DFA::from_bytes(&buf).unwrap();
+
+        let input = Input::new("éfoo").range(2..);
+        let expected = MatchError::quit(0xA9, 1);
+        assert_eq!(Err(expected.clone()), dfa.try_search_fwd(&input));
+        assert_eq!(Err(expected), dfa2.try_search_fwd(&input));
+        assert_eq!(dfa.quitset(), dfa2.quitset());
+    }
 }
