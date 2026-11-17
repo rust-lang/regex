@@ -199,3 +199,21 @@ fn unicode_word_implicitly_works() -> Result<(), Box<dyn Error>> {
     );
     Ok(())
 }
+
+// Using a cache with a lazy DFA other than the one it was created for isn't
+// allowed, but it must not lead to undefined behavior. Here, the second DFA
+// has a much bigger stride than the first, so following its transitions
+// through the first DFA's cache would read past the end of the cache's
+// transition table.
+#[test]
+#[should_panic(expected = "lazy DFA cache was created for a different")]
+fn cache_from_dfa_with_different_stride_panics() {
+    let small = DFA::new("a").unwrap();
+    let big = DFA::builder()
+        .configure(DFA::config().byte_classes(false))
+        .build("b")
+        .unwrap();
+    let mut cache = small.create_cache();
+    let _ = small.try_search_fwd(&mut cache, &Input::new("x"));
+    let _ = big.try_search_fwd(&mut cache, &Input::new(&[0xFF; 64][..]));
+}

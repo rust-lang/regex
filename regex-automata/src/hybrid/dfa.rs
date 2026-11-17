@@ -1557,6 +1557,13 @@ impl DFA {
         config: &start::Config,
     ) -> Result<LazyStateID, StartError> {
         let lazy = LazyRef::new(self, cache);
+        // Every search starts here, and the search routines follow
+        // transitions without bounds checks. That's only sound if the cache
+        // was laid out for this DFA's stride.
+        assert!(
+            lazy.is_stride_consistent(),
+            "lazy DFA cache was created for a different lazy DFA",
+        );
         let anchored = config.get_anchored();
         let start = match config.get_look_behind() {
             None => Start::Text,
@@ -2287,6 +2294,13 @@ impl<'i, 'c> Lazy<'i, 'c> {
         state: State,
         idmap: impl Fn(LazyStateID) -> LazyStateID,
     ) -> Result<LazyStateID, CacheError> {
+        // This is the only place where the transition table grows, so
+        // checking here guarantees that it never holds states of different
+        // strides. See 'LazyRef::is_stride_consistent'.
+        assert!(
+            self.as_ref().is_stride_consistent(),
+            "lazy DFA cache was created for a different lazy DFA",
+        );
         if !self.as_ref().state_fits_in_cache(&state) {
             self.try_clear_cache()?;
         }
@@ -2766,6 +2780,19 @@ impl<'i, 'c> LazyRef<'i, 'c> {
     fn is_valid(&self, id: LazyStateID) -> bool {
         let id = id.as_usize_untagged();
         id < self.cache.trans.len() && id % self.dfa.stride() == 0
+    }
+
+    /// Returns true if and only if the cache's transition table is laid out
+    /// using this DFA's stride.
+    ///
+    /// Every state in a cache takes up exactly one stride's worth of
+    /// transitions, so this fails when the cache was created (or last reset)
+    /// for a lazy DFA with a different stride. Using such a cache is a
+    /// caller error, but since the search routines elide bounds checks
+    /// based on the stride, it has to result in a panic rather than an out
+    /// of bounds read.
+    fn is_stride_consistent(&self) -> bool {
+        self.cache.trans.len() == self.cache.states.len() << self.dfa.stride2()
     }
 
     /// Returns true if adding the state given would fit in this cache.
