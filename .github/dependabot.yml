@@ -1,0 +1,14 @@
+version: 2
+
+updates:
+  - package-ecosystem: github-actions
+    cooldown:
+      default-days: 7
+    directory: /
+    schedule:
+      interval: weekly
+      time: "06:00"
+      timezone: "Etc/UTC"
+    commit-message:
+      prefix: ci
+      include: scope
