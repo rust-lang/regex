@@ -381,10 +381,13 @@ impl Parser {
         // These settings should be in line with the construction
         // in `ParserBuilder::build`.
         self.pos.set(Position { offset: 0, line: 1, column: 1 });
+        self.capture_index.set(0);
         self.ignore_whitespace.set(self.initial_ignore_whitespace);
         self.comments.borrow_mut().clear();
         self.stack_group.borrow_mut().clear();
         self.stack_class.borrow_mut().clear();
+        self.capture_names.borrow_mut().clear();
+        self.scratch.borrow_mut().clear();
     }
 }
 
@@ -980,7 +983,7 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
     /// Parse the regular expression and return an abstract syntax tree with
     /// all of the comments found in the pattern.
     fn parse_with_comments(&self) -> Result<ast::WithComments> {
-        assert_eq!(self.offset(), 0, "parser can only be used once");
+        // Reset before reading parser state so a Parser can be reused.
         self.parser().reset();
         let mut concat = ast::Concat { span: self.span(), asts: vec![] };
         loop {
@@ -2629,6 +2632,24 @@ mod tests {
                 items,
             },
         })
+    }
+
+    #[test]
+    fn parser_can_be_reused() {
+        let mut p = Parser::new();
+        assert!(p.parse("a").is_ok());
+        assert!(p.parse("a").is_ok());
+        assert!(p.parse("b+").is_ok());
+
+        // Capture indices must restart at 1 on each parse.
+        let first = p.parse("(a)").unwrap();
+        let second = p.parse("(a)").unwrap();
+        assert_eq!(first, second);
+
+        // Named groups from a previous parse must not count as duplicates.
+        assert!(p.parse("(?P<foo>a)").is_ok());
+        assert!(p.parse("(?P<foo>a)").is_ok());
+        assert!(p.parse("(?<bar>a)").is_ok());
     }
 
     #[test]
