@@ -2670,4 +2670,23 @@ mod tests {
         let buf = dfa.to_bytes_native_endian();
         crate::dfa::sparse::DFA::from_bytes(&buf).unwrap_err();
     }
+
+    // See the test of the same name in src/dfa/dense.rs.
+    #[test]
+    fn roundtrip_quitset() {
+        let dfa = DFA::builder()
+            .configure(DFA::config().unicode_word_boundary(true))
+            .build(r"\bfoo")
+            .unwrap()
+            .to_sparse()
+            .unwrap();
+        let buf = dfa.to_bytes_native_endian();
+        let (dfa2, _) = crate::dfa::sparse::DFA::from_bytes(&buf).unwrap();
+
+        let input = Input::new("éfoo").range(2..);
+        let expected = MatchError::quit(0xA9, 1);
+        assert_eq!(Err(expected.clone()), dfa.try_search_fwd(&input));
+        assert_eq!(Err(expected), dfa2.try_search_fwd(&input));
+        assert_eq!(dfa.quitset, dfa2.quitset);
+    }
 }

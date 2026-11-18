@@ -814,7 +814,8 @@ impl ByteSet {
         let mut nread = 0;
         let (low, nr) = wire::try_read_u128(slice, "byte set low bucket")?;
         nread += nr;
-        let (high, nr) = wire::try_read_u128(slice, "byte set high bucket")?;
+        let (high, nr) =
+            wire::try_read_u128(&slice[nread..], "byte set high bucket")?;
         nread += nr;
         Ok((ByteSet { bits: BitSet([low, high]) }, nread))
     }
