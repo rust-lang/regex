@@ -1961,8 +1961,6 @@ mod tests {
         let _ = s.offset(1);
     }
 
-    use super::*;
-
     // We test that our 'MatchError' type is the size we expect. This isn't an
     // API guarantee, but if the size increases, we really want to make sure we
     // decide to do that intentionally. So this should be a speed bump. And in
