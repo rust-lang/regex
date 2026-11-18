@@ -21,6 +21,7 @@ jobs:
         # Publish packages individually to avoid failure if any of the crates are already published
       - name: Publish to crates.io
         run: |
+            # To yank, see: https://forge.rust-lang.org/triagebot/crate-yanking.html
           cargo publish -p regex-lite || true
           cargo publish -p regex-syntax || true
           cargo publish -p regex-automata || true
