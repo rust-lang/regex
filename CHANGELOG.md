@@ -1,14 +1,45 @@
-1.13.2 (TBD)
-============
-TODO
-
+1.13.2 (2026-11-17)
+===================
 Bug fixes:
 
 * [#1333](https://github.com/rust-lang/regex/issues/1333):
 Fix a glob syntax error in `package.include`.
+* [#1388](https://github.com/rust-lang/regex/issues/1388), [#1344](https://github.com/rust-lang/regex/issues/1344):
+Panic in `BoundedBacktracker` when haystack length exceeds capacity.
+* [#1389](https://github.com/rust-lang/regex/issues/1389):
+Revert default pool capacity change.
+* [#1394](https://github.com/rust-lang/regex/issues/1394), [#1392](https://github.com/rust-lang/regex/issues/1392):
+Allow Parser to be reused in `regex-syntax`.
+* [#1395](https://github.com/rust-lang/regex/issues/1395), [#1393](https://github.com/rust-lang/regex/issues/1393):
+Make Position's Ord match Eq in `regex-syntax`.
 * [#1400](https://github.com/rust-lang/regex/issues/1400):
 Fix incorrect match offsets for alternations whose branches start with the
 same repetition.
+* [#1415](https://github.com/rust-lang/regex/issues/1415):
+Avoid PikeVM panic with excess capture slots.
+* [#1417](https://github.com/rust-lang/regex/issues/1417):
+The `Pattern` trait now requires `unsafe`.
+* [#1419](https://github.com/rust-lang/regex/issues/1419):
+Read the high half of a serialized `ByteSet` from the right offset.
+* [a1e367b](https://github.com/rust-lang/regex/commit/a1e367bbb6a51aaad2d0b23a74608c09a3a50b87):
+Fix a bug when `WhichCaptures::None` is used.
+* [#1406](https://github.com/rust-lang/regex/issues/1406):
+Fix off-by-one error.
+
+Enhancements:
+
+* [80b9d14](https://github.com/rust-lang/regex/commit/80b9d14e4be9f0b703a742d11c064abce05f210b):
+Add is_match_with to `regex-automata::meta::Regex`.
+
+Performance:
+
+* [#1352](https://github.com/rust-lang/regex/issues/1352):
+Do codepoint range canonicalization in-place.
+
+Documentation:
+
+* [#1380](https://github.com/rust-lang/regex/issues/1380):
+Document overflow for `Span::offset`.
 
 
 1.13.1 (2026-07-15)
