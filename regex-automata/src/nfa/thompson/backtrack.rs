@@ -1831,7 +1831,7 @@ impl Visited {
 
     /// Reset this visited set to work with the given bounded backtracker.
     fn reset(&mut self, _: &BoundedBacktracker) {
-        self.bitset.truncate(0);
+        self.bitset.clear();
     }
 
     /// Setup this visited set to work for a search using the given NFA
