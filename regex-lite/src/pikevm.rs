@@ -89,7 +89,7 @@ impl PikeVM {
         // isize, and so this assert should always pass. But we put it here to
         // make our assumption explicit.
         assert!(
-            haystack.len() < core::usize::MAX,
+            haystack.len() < usize::MAX,
             "byte slice lengths must be less than usize MAX",
         );
 

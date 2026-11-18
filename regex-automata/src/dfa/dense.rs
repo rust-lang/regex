@@ -5166,7 +5166,7 @@ impl core::fmt::Display for BuildError {
                 // only way this error can occur). Thus, the total number of
                 // patterns that can fit in the table is `stride` less than
                 // what we can allocate.
-                let max = usize::try_from(core::isize::MAX).unwrap();
+                let max = usize::try_from(isize::MAX).unwrap();
                 let limit = (max - stride) / stride;
                 write!(
                     f,
