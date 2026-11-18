@@ -27,6 +27,26 @@ const BLACKLIST: &[&str] = &[
     "earliest/",
 ];
 
+// Regression test for https://github.com/rust-lang/regex/issues/1413.
+#[test]
+fn too_many_slots() -> Result<()> {
+    use regex_automata::{util::primitives::NonMaxUsize, Input, PatternID};
+
+    let re = Regex::new(r"\A(.*?)z")?;
+    // A long haystack forces capture extraction to fall back to the PikeVM.
+    for len in [3, 400_000] {
+        let haystack = format!("{}z", "y".repeat(len));
+        let mut slots = [None; 32];
+        assert_eq!(
+            re.search_slots(&Input::new(&haystack), &mut slots),
+            Some(PatternID::ZERO),
+        );
+        assert_eq!(&slots[..4], &[0, len + 1, 0, len].map(NonMaxUsize::new));
+        assert!(slots[4..].iter().all(Option::is_none));
+    }
+    Ok(())
+}
+
 /// Tests the default configuration of the meta regex engine.
 #[test]
 fn default() -> Result<()> {
