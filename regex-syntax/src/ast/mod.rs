@@ -345,7 +345,7 @@ impl PartialOrd for Span {
 ///
 /// A position encodes one half of a span, and include the byte offset, line
 /// number and column number.
-#[derive(Clone, Copy, Eq, PartialEq)]
+#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct Position {
     /// The absolute offset of this position, starting at `0` from the
@@ -364,18 +364,6 @@ impl core::fmt::Debug for Position {
             "Position(o: {:?}, l: {:?}, c: {:?})",
             self.offset, self.line, self.column
         )
-    }
-}
-
-impl Ord for Position {
-    fn cmp(&self, other: &Position) -> Ordering {
-        self.offset.cmp(&other.offset)
-    }
-}
-
-impl PartialOrd for Position {
-    fn partial_cmp(&self, other: &Position) -> Option<Ordering> {
-        Some(self.cmp(other))
     }
 }
 
@@ -1752,6 +1740,19 @@ mod tests {
     // for Ast can handle arbitrarily sized expressions in constant stack
     // space. In case we run on a platform without threads (WASM?), we limit
     // this test to Windows/Unix.
+    #[test]
+    fn position_ord_is_consistent_with_eq() {
+        let a = Position::new(0, 1, 1);
+        let b = Position::new(0, 9, 9);
+        assert_ne!(a, b);
+        assert_ne!(a.cmp(&b), core::cmp::Ordering::Equal);
+
+        let mut set = alloc::collections::BTreeSet::new();
+        set.insert(a);
+        set.insert(b);
+        assert_eq!(set.len(), 2);
+    }
+
     #[test]
     #[cfg(any(unix, windows))]
     fn no_stack_overflow_on_drop() {
