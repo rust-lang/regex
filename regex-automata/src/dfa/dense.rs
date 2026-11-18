@@ -919,21 +919,21 @@ impl Config {
     ///     Anchored, Input,
     /// };
     ///
-    /// // 200KB isn't enough!
+    /// // 300KB isn't enough!
     /// dense::Builder::new()
     ///     .configure(dense::Config::new()
-    ///         .determinize_size_limit(Some(200_000))
+    ///         .determinize_size_limit(Some(300_000))
     ///         .start_kind(StartKind::Anchored)
     ///     )
     ///     .build(r"\w{20}")
     ///     .unwrap_err();
     ///
-    /// // ... but 300KB probably is!
+    /// // ... but 400KB probably is!
     /// // (Note that auxiliary storage sizes aren't necessarily stable between
     /// // releases.)
     /// let dfa = dense::Builder::new()
     ///     .configure(dense::Config::new()
-    ///         .determinize_size_limit(Some(300_000))
+    ///         .determinize_size_limit(Some(400_000))
     ///         .start_kind(StartKind::Anchored)
     ///     )
     ///     .build(r"\w{20}")?;
