@@ -10,7 +10,7 @@ pub struct RegexSearcher<'r, 't> {
     next_match: Option<(usize, usize)>,
 }
 
-impl<'r> Pattern for &'r Regex {
+unsafe impl<'r> Pattern for &'r Regex {
     type Searcher<'t> = RegexSearcher<'r, 't>;
 
     fn into_searcher<'t>(self, haystack: &'t str) -> RegexSearcher<'r, 't> {
