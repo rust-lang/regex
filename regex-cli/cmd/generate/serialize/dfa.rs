@@ -366,18 +366,13 @@ formatting may be arbitrarily bad.
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 enum RustKind {
+    #[default]
     RegexAutomata,
     OnceCell,
     LazyStatic,
     None,
-}
-
-impl Default for RustKind {
-    fn default() -> RustKind {
-        RustKind::RegexAutomata
-    }
 }
 
 impl std::str::FromStr for RustKind {
