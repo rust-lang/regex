@@ -2114,8 +2114,7 @@ impl StartError {
     }
 }
 
-#[cfg(feature = "std")]
-impl std::error::Error for StartError {}
+impl core::error::Error for StartError {}
 
 impl core::fmt::Display for StartError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
