@@ -199,3 +199,50 @@ fn unicode_word_implicitly_works() -> Result<(), Box<dyn Error>> {
     );
     Ok(())
 }
+
+// Tests that reverse overlapping searches report multiple patterns matching
+// the same match state at the same offset (and not one byte early).
+//
+// See: https://github.com/rust-lang/regex/issues/1418
+#[test]
+fn overlapping_rev_match_state_offsets() -> Result<(), Box<dyn Error>> {
+    use regex_automata::MatchKind;
+
+    let dfa = DFA::builder()
+        .configure(DFA::config().match_kind(MatchKind::All))
+        .thompson(thompson::Config::new().reverse(true))
+        .build_many(&["a", "[ab]"])?;
+    let mut cache = dfa.create_cache();
+
+    let haystacks_and_expected: &[(&str, &[(usize, usize)])] = &[
+        ("a", &[(0, 0), (1, 0)]),
+        ("xa", &[(0, 1), (1, 1)]),
+        ("xba", &[(0, 2), (1, 2), (1, 1)]),
+    ];
+
+    for &(haystack, expected) in haystacks_and_expected {
+        let mut state = OverlappingState::start();
+        let mut matches = vec![];
+        loop {
+            dfa.try_search_overlapping_rev(
+                &mut cache,
+                &Input::new(haystack),
+                &mut state,
+            )?;
+            match state.get_match() {
+                None => break,
+                Some(hm) => {
+                    matches.push((hm.pattern().as_usize(), hm.offset()))
+                }
+            }
+        }
+        assert_eq!(
+            expected,
+            matches.as_slice(),
+            "unexpected matches for haystack {:?}",
+            haystack,
+        );
+    }
+
+    Ok(())
+}

@@ -160,3 +160,56 @@ fn universal_start_search() -> Result<(), Box<dyn Error>> {
 
     Ok(())
 }
+
+// Tests that reverse overlapping searches report multiple patterns matching
+// the same match state at the same offset (and not one byte early).
+//
+// See: https://github.com/rust-lang/regex/issues/1418
+#[test]
+fn overlapping_rev_match_state_offsets() -> Result<(), Box<dyn Error>> {
+    use regex_automata::{
+        dfa::{dense, Automaton},
+        MatchKind,
+    };
+
+    fn check<A: Automaton>(dfa: A) -> Result<(), Box<dyn Error>> {
+        let haystacks_and_expected: &[(&str, &[(usize, usize)])] = &[
+            ("a", &[(0, 0), (1, 0)]),
+            ("xa", &[(0, 1), (1, 1)]),
+            ("xba", &[(0, 2), (1, 2), (1, 1)]),
+        ];
+
+        for &(haystack, expected) in haystacks_and_expected {
+            let mut state = OverlappingState::start();
+            let mut matches = vec![];
+            loop {
+                dfa.try_search_overlapping_rev(
+                    &Input::new(haystack),
+                    &mut state,
+                )?;
+                match state.get_match() {
+                    None => break,
+                    Some(hm) => {
+                        matches.push((hm.pattern().as_usize(), hm.offset()))
+                    }
+                }
+            }
+            assert_eq!(
+                expected,
+                matches.as_slice(),
+                "unexpected matches for haystack {:?}",
+                haystack,
+            );
+        }
+        Ok(())
+    }
+
+    let dfa = dense::Builder::new()
+        .configure(dense::Config::new().match_kind(MatchKind::All))
+        .thompson(thompson::Config::new().reverse(true))
+        .build_many(&["a", "[ab]"])?;
+    check(&dfa)?;
+    check(dfa.to_sparse()?)?;
+
+    Ok(())
+}
