@@ -556,6 +556,30 @@ matches = []
 match-kind = "all"
 search-kind = "overlapping"
 
+# These test anchored multi-regex searches. A regex that can only match after
+# the start of the search must not be reported, even when another regex is
+# still active at that position.
+
+[[test]]
+name = "anchored10"
+regex = ["ab", "b"]
+haystack = "ab"
+matches = [
+  { id = 0, span = [0, 2] },
+]
+match-kind = "all"
+search-kind = "overlapping"
+anchored = true
+
+[[test]]
+name = "anchored20"
+regex = ['[a-z]+0', "b"]
+haystack = "xb"
+matches = []
+match-kind = "leftmost-first"
+search-kind = "overlapping"
+anchored = true
+
 # These test multi-regex searches with capture groups.
 #
 # NOTE: I wrote these tests in the course of developing a first class API for

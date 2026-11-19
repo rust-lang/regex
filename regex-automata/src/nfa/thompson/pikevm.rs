@@ -1441,7 +1441,9 @@ impl PikeVM {
                     break;
                 }
             }
-            if !any_matches || allmatches {
+            if (!any_matches || allmatches)
+                && (!anchored || at == input.start())
+            {
                 let slots = &mut [];
                 self.epsilon_closure(stack, slots, curr, input, at, start_id);
             }
