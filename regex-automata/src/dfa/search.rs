@@ -476,7 +476,9 @@ pub(crate) fn find_overlapping_rev<A: Automaton + ?Sized>(
                 if match_index < match_len {
                     state.next_match_index = Some(match_index + 1);
                     let pattern = dfa.match_pattern(sid, match_index);
-                    state.mat = Some(HalfMatch::new(pattern, state.at));
+                    let offset =
+                        if state.rev_eoi { state.at } else { state.at + 1 };
+                    state.mat = Some(HalfMatch::new(pattern, offset));
                     return Ok(());
                 }
             }
