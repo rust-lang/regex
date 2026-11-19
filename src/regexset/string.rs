@@ -237,7 +237,7 @@ impl RegexSet {
     /// let hay = "foobar";
     /// // We get a match here, but it's probably not intended.
     /// assert!(set.is_match(&hay[3..]));
-    /// // No match because the  assertions take the context into account.
+    /// // No match because the assertions take the context into account.
     /// assert!(!set.is_match_at(hay, 3));
     /// ```
     #[inline]
