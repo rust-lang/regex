@@ -1537,8 +1537,7 @@ impl<T: AsRef<[u8]>> Transitions<T> {
     ///
     /// Note that this only verifies that this state is decodable and that
     /// all of its data is consistent. It does not verify that its state ID
-    /// transitions point to valid states themselves, nor does it verify that
-    /// every pattern ID is valid.
+    /// transitions point to valid states themselves.
     fn try_state(
         &self,
         sp: &Special,
@@ -1627,10 +1626,15 @@ impl<T: AsRef<[u8]>> Transitions<T> {
             )?;
             let (pattern_ids, state) = state.split_at(pattern_ids_len);
             for patbytes in pattern_ids.chunks(PatternID::SIZE) {
-                wire::read_pattern_id(
+                let (pid, _) = wire::read_pattern_id(
                     patbytes,
                     "sparse pattern ID in try_state",
                 )?;
+                if pid.as_usize() >= self.pattern_len {
+                    return Err(DeserializeError::generic(
+                        "sparse pattern ID is not less than pattern length",
+                    ));
+                }
             }
             (pattern_ids, state)
         } else {
@@ -2667,6 +2671,20 @@ mod tests {
         for entry in dfa.st.table.chunks_mut(StateID::SIZE) {
             entry.copy_from_slice(&min_match);
         }
+        let buf = dfa.to_bytes_native_endian();
+        crate::dfa::sparse::DFA::from_bytes(&buf).unwrap_err();
+    }
+
+    // The dense DFA rejects a serialized match state whose pattern ID is
+    // not less than the DFA's pattern length, but the sparse DFA only
+    // checked each pattern ID against PatternID::LIMIT. A deserialized
+    // sparse DFA could then report a match for a pattern ID that
+    // `pattern_len` says does not exist.
+    #[test]
+    fn regression_pattern_id_in_range() {
+        let mut dfa =
+            DFA::new_many(&["a", "b", "c"]).unwrap().to_sparse().unwrap();
+        dfa.tt.pattern_len = 2;
         let buf = dfa.to_bytes_native_endian();
         crate::dfa::sparse::DFA::from_bytes(&buf).unwrap_err();
     }
