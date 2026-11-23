@@ -4171,7 +4171,7 @@ impl<T: AsRef<[u32]>> StartTable<T> {
                 "found invalid universal anchored starting state ID",
             ));
         }
-        for &id in self.table() {
+        for (id, anchored, _) in self.iter() {
             if !tt.is_valid(id) {
                 return Err(DeserializeError::generic(
                     "found invalid starting state ID",
@@ -4180,6 +4180,19 @@ impl<T: AsRef<[u32]>> StartTable<T> {
             if dfa.special.is_match_state(id) {
                 return Err(DeserializeError::generic(
                     "start states cannot be match states",
+                ));
+            }
+            // A universal start state must be the start state for every
+            // look-behind context. Searches rely on this to skip recomputing
+            // the start state after a prefilter candidate.
+            let universal = match anchored {
+                Anchored::No => self.universal_start_unanchored,
+                Anchored::Yes => self.universal_start_anchored,
+                Anchored::Pattern(_) => None,
+            };
+            if universal.map_or(false, |sid| sid != id) {
+                return Err(DeserializeError::generic(
+                    "universal start state does not match start table",
                 ));
             }
         }
@@ -5276,6 +5289,21 @@ mod tests {
         for id in dfa.st.table_mut() {
             *id = min_match;
         }
+        let (buf, _) = dfa.to_bytes_native_endian();
+        DFA::from_bytes(&buf).unwrap_err();
+    }
+
+    // When a DFA has a universal start state, the search routines do not
+    // recompute the start state after a prefilter candidate. So `from_bytes`
+    // must reject a universal start state that disagrees with the start
+    // table. Otherwise, the DFA below with a prefilter for `foo` attached
+    // reports a match ending at 4 in `xfoo foo` instead of 8.
+    #[test]
+    fn regression_universal_start_mismatch() {
+        let mut dfa = DFA::new(r"(?-u:\b)foo").unwrap();
+        assert_eq!(None, dfa.universal_start_state(Anchored::No));
+        let sid = dfa.st.start(Anchored::No, Start::Text).unwrap();
+        dfa.st.universal_start_unanchored = Some(sid);
         let (buf, _) = dfa.to_bytes_native_endian();
         DFA::from_bytes(&buf).unwrap_err();
     }

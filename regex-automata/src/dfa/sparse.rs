@@ -2039,7 +2039,7 @@ impl<T: AsRef<[u8]>> StartTable<T> {
         sp: &Special,
         seen: &Seen,
     ) -> Result<(), DeserializeError> {
-        for (id, _, _) in self.iter() {
+        for (id, anchored, _) in self.iter() {
             if !seen.contains(&id) {
                 return Err(DeserializeError::generic(
                     "found invalid starting state ID",
@@ -2048,6 +2048,17 @@ impl<T: AsRef<[u8]>> StartTable<T> {
             if sp.is_match_state(id) {
                 return Err(DeserializeError::generic(
                     "start states cannot be match states",
+                ));
+            }
+            // See the corresponding check in the dense start table.
+            let universal = match anchored {
+                Anchored::No => self.universal_start_unanchored,
+                Anchored::Yes => self.universal_start_anchored,
+                Anchored::Pattern(_) => None,
+            };
+            if universal.map_or(false, |sid| sid != id) {
+                return Err(DeserializeError::generic(
+                    "universal start state does not match start table",
                 ));
             }
         }
@@ -2667,6 +2678,20 @@ mod tests {
         for entry in dfa.st.table.chunks_mut(StateID::SIZE) {
             entry.copy_from_slice(&min_match);
         }
+        let buf = dfa.to_bytes_native_endian();
+        crate::dfa::sparse::DFA::from_bytes(&buf).unwrap_err();
+    }
+
+    // The universal start state IDs were not validated at all, so this one,
+    // which points into the middle of the dead state, was accepted and
+    // following a transition out of it panicked. See the test of the same
+    // name in src/dfa/dense.rs.
+    #[test]
+    fn regression_universal_start_mismatch() {
+        use crate::util::primitives::StateID;
+
+        let mut dfa = DFA::new("abc").unwrap().to_sparse().unwrap();
+        dfa.st.universal_start_unanchored = Some(StateID::new(1).unwrap());
         let buf = dfa.to_bytes_native_endian();
         crate::dfa::sparse::DFA::from_bytes(&buf).unwrap_err();
     }
